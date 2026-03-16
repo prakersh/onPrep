@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,118 +7,78 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
     tailwind.config = {
-        theme: {
-            extend: {
-                colors: {
-                    surface: { 50: '#f8fafc', 100: '#f1f5f9', 800: '#0f172a', 900: '#020617', 950: '#010313' },
-                    accent: { 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5' },
-                    mint: { 400: '#34d399', 500: '#22c55e' },
-                },
-                fontFamily: {
-                    display: ['"Fira Code"', 'monospace'],
-                    body: ['"Fira Sans"', 'system-ui', 'sans-serif'],
-                },
-            }
-        }
+        darkMode: 'class',
+        theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'], mono: ['"Fira Code"', 'monospace'] } } }
     }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" id="hljs-dark">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" id="hljs-light" disabled>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
+    <!-- Theme init before paint -->
+    <script>
+    (function(){var s=localStorage.getItem('theme');if(s==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark')})();
+    </script>
     <style>
-        body { font-family: 'Fira Sans', system-ui, sans-serif; }
-        code, pre, .font-mono { font-family: 'Fira Code', monospace; }
-
-        /* Glow effects */
-        .glow-text { text-shadow: 0 0 20px rgba(99,102,241,0.3); }
-        .glow-border { box-shadow: 0 0 15px -3px rgba(99,102,241,0.15); }
-
-        /* Subtle noise texture overlay */
-        .noise::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            opacity: 0.015;
-            pointer-events: none;
-            z-index: 9999;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-        }
-
-        /* Custom scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #020617; }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #334155; }
-
-        /* Smooth page transitions */
-        @media (prefers-reduced-motion: no-preference) {
-            .fade-in { animation: fadeIn 0.3s ease-out; }
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-            .stagger > * { animation: fadeIn 0.3s ease-out both; }
-            .stagger > *:nth-child(1) { animation-delay: 0ms; }
-            .stagger > *:nth-child(2) { animation-delay: 50ms; }
-            .stagger > *:nth-child(3) { animation-delay: 100ms; }
-            .stagger > *:nth-child(4) { animation-delay: 150ms; }
-            .stagger > *:nth-child(5) { animation-delay: 200ms; }
-            .stagger > *:nth-child(6) { animation-delay: 250ms; }
-            .stagger > *:nth-child(7) { animation-delay: 300ms; }
-            .stagger > *:nth-child(8) { animation-delay: 350ms; }
-        }
-
-        /* Progress bar animation */
-        .progress-fill { transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-
-        /* Code block styling */
-        pre code.hljs { background: #0d1117 !important; border-radius: 0.75rem; padding: 1.25rem !important; font-size: 0.8125rem; line-height: 1.6; }
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:transparent}
+        .dark ::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+        html:not(.dark) ::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:2px}
+        .progress-fill{transition:width .5s cubic-bezier(.22,1,.36,1)}
+        pre code.hljs{border-radius:.5rem;padding:.875rem !important;font-size:.8rem;line-height:1.7}
+        .dark pre code.hljs{background:#0d1117 !important}
+        html:not(.dark) pre code.hljs{background:#f8fafc !important;border:1px solid #e2e8f0}
+        .prose-md p{margin-bottom:.625rem;line-height:1.7}
+        .prose-md strong{font-weight:600}
+        .prose-md code{font-size:.8rem;padding:.1rem .35rem;border-radius:.2rem}
+        .dark .prose-md code{background:rgba(255,255,255,.07);color:#e2e8f0}
+        html:not(.dark) .prose-md code{background:#f1f5f9;color:#334155}
+        .prose-md ul,.prose-md ol{margin:.375rem 0;padding-left:1.25rem}
+        .prose-md li{margin-bottom:.2rem;line-height:1.6}
+        .prose-md ul{list-style:disc}
+        .prose-md ol{list-style:decimal}
+        .prose-md h1,.prose-md h2,.prose-md h3{font-weight:600;margin:.75rem 0 .375rem}
+        @media(prefers-reduced-motion:no-preference){.fade-in{animation:fi .2s ease-out}@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1}}}
     </style>
 </head>
-<body class="bg-surface-950 text-surface-50 min-h-screen noise">
-    <!-- Navbar -->
-    <nav class="fixed top-0 left-0 right-0 z-50 bg-surface-900/80 backdrop-blur-xl border-b border-white/5">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <a href="/" class="flex items-center gap-2.5 group cursor-pointer" aria-label="onPrep Home">
-                <div class="w-8 h-8 rounded-lg bg-accent-500/20 border border-accent-500/30 flex items-center justify-center group-hover:bg-accent-500/30 transition-colors duration-200">
-                    <svg class="w-4 h-4 text-accent-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
-                    </svg>
-                </div>
-                <span class="font-display font-bold text-lg tracking-tight">onPrep</span>
+<body class="bg-white dark:bg-[#0a0a0f] text-slate-800 dark:text-slate-200 font-sans antialiased min-h-screen">
+    <!-- Skip link -->
+    <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg">Skip to content</a>
+
+    <!-- Navbar - thin, minimal -->
+    <nav class="fixed top-0 inset-x-0 z-50 h-12 bg-white/90 dark:bg-[#0a0a0f]/90 backdrop-blur-md border-b border-slate-100 dark:border-white/[.06]">
+        <div class="h-full px-4 flex items-center justify-between max-w-[1400px] mx-auto">
+            <a href="/" class="flex items-center gap-2 cursor-pointer">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342"/></svg>
+                <span class="font-semibold text-sm">onPrep</span>
             </a>
-            <div class="flex items-center gap-1">
-                <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-surface-50/60 hover:text-surface-50 hover:bg-white/5 transition-all duration-200 cursor-pointer">
-                    Dashboard
-                </a>
-                <a href="/study/languages" class="px-3 py-2 rounded-lg text-sm font-medium text-surface-50/60 hover:text-surface-50 hover:bg-white/5 transition-all duration-200 cursor-pointer">
-                    Study
-                </a>
-                <a href="/planner/setup" class="px-3 py-2 rounded-lg text-sm font-medium text-surface-50/60 hover:text-surface-50 hover:bg-white/5 transition-all duration-200 cursor-pointer">
-                    Planner
-                </a>
+            <div class="flex items-center gap-0.5">
+                <a href="/" class="px-2.5 py-1 rounded text-[13px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">Dashboard</a>
+                <a href="/study/languages" class="px-2.5 py-1 rounded text-[13px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">Study</a>
+                <a href="/planner/setup" class="px-2.5 py-1 rounded text-[13px] text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer">Planner</a>
+                <button onclick="toggleTheme()" class="ml-1.5 w-7 h-7 rounded flex items-center justify-center hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer" aria-label="Toggle theme">
+                    <svg class="w-3.5 h-3.5 hidden dark:block text-slate-400" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"/></svg>
+                    <svg class="w-3.5 h-3.5 block dark:hidden text-slate-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
+                </button>
             </div>
         </div>
     </nav>
 
-    <!-- Main content with navbar offset -->
-    <main class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16 fade-in">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="mb-6 px-4 py-3 rounded-xl text-sm font-medium border
-            {% if category == 'error' %}bg-red-500/10 border-red-500/20 text-red-300
-            {% else %}bg-mint-500/10 border-mint-500/20 text-mint-400{% endif %}"
-            role="alert">
-            {{ message }}
-        </div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
+    <main id="main" class="{% block main_class %}pt-16 pb-12 px-4 sm:px-6 max-w-[1400px] mx-auto{% endblock %} fade-in">
+        {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}
+        <div class="mb-4 px-3 py-2 rounded-lg text-sm border {% if category == 'error' %}bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-600 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-300{% endif %}" role="alert">{{ message }}</div>
+        {% endfor %}{% endif %}{% endwith %}
         {% block content %}{% endblock %}
     </main>
 
-    <script>hljs.highlightAll();</script>
+    <script>
+    function toggleTheme(){var h=document.documentElement,d=h.classList.contains('dark');h.classList.toggle('dark');localStorage.setItem('theme',d?'light':'dark');document.getElementById('hljs-dark').disabled=d;document.getElementById('hljs-light').disabled=!d;hljs.highlightAll()}
+    (function(){var d=document.documentElement.classList.contains('dark');document.getElementById('hljs-dark').disabled=!d;document.getElementById('hljs-light').disabled=d})();
+    hljs.highlightAll();
+    </script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

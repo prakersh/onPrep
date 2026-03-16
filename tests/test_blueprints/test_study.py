@@ -20,13 +20,13 @@ class TestStudyConceptDetail:
     def test_detailed_view_default(self, client, db, sample_language, sample_concept, sample_question, sample_answers):
         resp = client.get('/study/python/data-types-variables')
         assert resp.status_code == 200
-        assert b'Quick Recap' in resp.data
         assert b'basic data types' in resp.data
+        assert b'Detailed' in resp.data
 
     def test_quick_view(self, client, db, sample_language, sample_concept, sample_question, sample_answers):
         resp = client.get('/study/python/data-types-variables?mode=quick')
         assert resp.status_code == 200
-        assert b'Full Detail' in resp.data
+        assert b'Quick' in resp.data
 
     def test_invalid_concept_404(self, client, db, sample_language):
         resp = client.get('/study/python/nonexistent')

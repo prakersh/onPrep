@@ -1,6 +1,10 @@
+from markupsafe import Markup
 from flask import Flask
+import mistune
 from app.config import config
 from app.extensions import db, migrate
+
+_markdown = mistune.create_markdown(escape=False)
 
 
 def create_app(config_name='development'):
@@ -24,5 +28,11 @@ def create_app(config_name='development'):
 
     from app.cli import register_cli
     register_cli(app)
+
+    @app.template_filter('markdown')
+    def markdown_filter(text):
+        if not text:
+            return ''
+        return Markup(_markdown(text))
 
     return app

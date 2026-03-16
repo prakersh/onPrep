@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+{% block title %}{{ concept.title }} — onPrep{% endblock %}
+
+{% block main_class %}pt-12{% endblock %}
+
+{% block content %}
+<div class="flex h-[calc(100vh-3rem)]">
+
+    <!-- LEFT SIDEBAR — Question list (hidden on mobile, toggle with button) -->
+    <aside id="sidebar" class="hidden lg:flex flex-col w-64 xl:w-72 shrink-0 border-r border-slate-100 dark:border-white/[.06] bg-slate-50/50 dark:bg-white/[.01] overflow-hidden">
+        <!-- Header -->
+        <div class="p-3 border-b border-slate-100 dark:border-white/[.06]">
+            <a href="/study/{{ language.slug }}" class="text-[11px] text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">&larr; {{ language.name }}</a>
+            <h2 class="text-sm font-semibold mt-1 truncate">{{ concept.title }}</h2>
+            <div class="flex items-center gap-2 mt-1.5">
+                <button onclick="setMode('detailed')" id="btn-detailed"
+                    class="text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer">Detailed</button>
+                <button onclick="setMode('quick')" id="btn-quick"
+                    class="text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer">Quick</button>
+            </div>
+        </div>
+        <!-- Question list -->
+        <nav class="flex-1 overflow-y-auto p-2 space-y-0.5" aria-label="Questions">
+            {% for q in concept.questions %}
+            <button onclick="showQuestion({{ q.id }}, this)"
+                data-qid="{{ q.id }}"
+                class="sidebar-q w-full text-left px-2.5 py-2 rounded-md text-[13px] leading-snug cursor-pointer truncate hover:bg-white dark:hover:bg-white/[.04] text-slate-600 dark:text-slate-400">
+                <span class="text-slate-300 dark:text-slate-600 font-mono text-[11px] mr-1.5">{{ q.display_order }}.</span>{{ q.title }}
+            </button>
+            {% endfor %}
+        </nav>
+        <!-- Related concepts -->
+        {% if related_concepts %}
+        <div class="p-3 border-t border-slate-100 dark:border-white/[.06]">
+            <div class="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Related</div>
+            <div class="flex flex-wrap gap-1">
+                {% for rc in related_concepts %}
+                <a href="/study/{{ language.slug }}/{{ rc.slug }}" class="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-white/[.04] text-slate-500 dark:text-slate-400 hover:text-indigo-500 cursor-pointer">{{ rc.title }}</a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </aside>
+
+    <!-- RIGHT CONTENT PANEL -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <!-- Mobile header -->
+        <div class="lg:hidden flex items-center gap-2 px-4 py-2 border-b border-slate-100 dark:border-white/[.06] bg-slate-50/50 dark:bg-white/[.01]">
+            <button onclick="toggleSidebar()" class="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer" aria-label="Toggle sidebar">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+            </button>
+            <a href="/study/{{ language.slug }}" class="text-[11px] text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">&larr;</a>
+            <span class="text-sm font-medium truncate">{{ concept.title }}</span>
+            <div class="ml-auto flex gap-1">
+                <button onclick="setMode('detailed')" id="btn-detailed-m" class="text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer">Detailed</button>
+                <button onclick="setMode('quick')" id="btn-quick-m" class="text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer">Quick</button>
+            </div>
+        </div>
+
+        <!-- Content area -->
+        <div id="content-area" class="flex-1 overflow-y-auto">
+            <!-- Welcome state - shown when no question selected -->
+            <div id="welcome-state" class="flex flex-col items-center justify-center h-full text-center px-4">
+                <svg class="w-10 h-10 text-slate-200 dark:text-slate-700 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"/></svg>
+                <p class="text-sm text-slate-400 dark:text-slate-500 max-w-xs">Select a question from the sidebar to start studying.</p>
+                <p class="text-xs text-slate-300 dark:text-slate-600 mt-2">{{ concept.questions|length }} questions available</p>
+                <!-- Mobile: show all questions as list -->
+                <div class="lg:hidden mt-6 w-full max-w-md space-y-1 text-left">
+                    {% for q in concept.questions %}
+                    <button onclick="showQuestion({{ q.id }}, null)"
+                        class="sidebar-q w-full text-left px-3 py-2.5 rounded-lg text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[.03] border border-transparent hover:border-slate-100 dark:hover:border-white/[.06]">
+                        <span class="text-slate-300 dark:text-slate-600 font-mono text-xs mr-1.5">{{ q.display_order }}.</span>{{ q.title }}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Question content (populated by JS) -->
+            {% for q in concept.questions %}
+            <article id="q-{{ q.id }}" class="q-panel hidden">
+                <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6 sm:py-8">
+                    <!-- Question header -->
+                    <div class="flex items-start justify-between gap-3 mb-6">
+                        <div>
+                            <div class="text-[11px] font-mono text-slate-300 dark:text-slate-600 mb-1">Question {{ q.display_order }} of {{ concept.questions|length }}</div>
+                            <h1 class="text-lg sm:text-xl font-semibold leading-snug">{{ q.title }}</h1>
+                        </div>
+                        <button onclick="markDone({{ q.id }}, this)" class="shrink-0 text-[12px] font-medium px-2.5 py-1 rounded-md border cursor-pointer
+                            {% if q.progress and q.progress.status == 'completed' %}bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400
+                            {% else %}border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 hover:border-emerald-300 dark:hover:border-emerald-500/30 hover:text-emerald-500{% endif %}">
+                            {% if q.progress and q.progress.status == 'completed' %}Done{% else %}Mark done{% endif %}
+                        </button>
+                    </div>
+
+                    <!-- DETAILED answer -->
+                    {% for a in q.answers if a.mode == 'detailed' %}
+                    <div class="answer-detailed">
+                        <div class="prose-md text-sm text-slate-600 dark:text-slate-300 mb-5">{{ a.explanation|markdown }}</div>
+
+                        {% if a.pseudo_code %}
+                        <div class="mb-5">
+                            <div class="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Pseudo Code</div>
+                            <pre><code class="language-text">{{ a.pseudo_code }}</code></pre>
+                        </div>
+                        {% endif %}
+
+                        {% if a.actual_code %}
+                        <div class="mb-5">
+                            <div class="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Code</div>
+                            <pre><code class="language-{{ a.code_language }}">{{ a.actual_code }}</code></pre>
+                        </div>
+                        {% endif %}
+
+                        {% if a.key_points %}
+                        <div class="mb-5">
+                            <div class="text-[10px] font-medium text-indigo-500/70 uppercase tracking-wider mb-2">Key Points</div>
+                            <ul class="space-y-1">{% for p in a.key_points %}<li class="flex gap-2 text-sm text-slate-500 dark:text-slate-400"><span class="text-indigo-400 mt-1.5 text-[6px]">&#9679;</span>{{ p }}</li>{% endfor %}</ul>
+                        </div>
+                        {% endif %}
+
+                        {% if a.gotchas %}
+                        <div class="rounded-lg border border-amber-200/50 dark:border-amber-500/10 bg-amber-50/50 dark:bg-amber-500/[.03] p-3.5">
+                            <div class="text-[10px] font-medium text-amber-600 dark:text-amber-400/70 uppercase tracking-wider mb-2">Gotchas</div>
+                            <ul class="space-y-1">{% for g in a.gotchas %}<li class="flex gap-2 text-sm text-amber-700/70 dark:text-amber-300/60"><span class="mt-1.5 text-[6px]">&#9679;</span>{{ g }}</li>{% endfor %}</ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <!-- QUICK answer -->
+                    {% for a in q.answers if a.mode == 'quick' %}
+                    <div class="answer-quick hidden">
+                        <div class="prose-md text-sm text-slate-600 dark:text-slate-300 mb-4">{{ a.explanation|markdown }}</div>
+
+                        {% if a.key_points %}
+                        <ul class="space-y-1 mb-4">{% for p in a.key_points %}<li class="flex gap-2 text-sm text-slate-500 dark:text-slate-400"><span class="text-indigo-400 mt-1.5 text-[6px]">&#9679;</span>{{ p }}</li>{% endfor %}</ul>
+                        {% endif %}
+
+                        {% if a.actual_code %}
+                        <pre class="mb-4"><code class="language-{{ a.code_language }}">{{ a.actual_code }}</code></pre>
+                        {% endif %}
+
+                        {% if a.gotchas %}
+                        <div class="flex flex-wrap gap-1.5 mt-3">
+                            {% for g in a.gotchas %}
+                            <span class="text-[11px] text-amber-600/70 dark:text-amber-400/50 bg-amber-50 dark:bg-amber-500/[.05] px-2 py-0.5 rounded-md border border-amber-200/50 dark:border-amber-500/10">{{ g }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    <!-- Navigation -->
+                    <div class="flex items-center justify-between mt-8 pt-4 border-t border-slate-100 dark:border-white/[.06]">
+                        {% if not loop.first %}
+                        <button onclick="showQuestion({{ concept.questions[loop.index0 - 1].id }})" class="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">&larr; Previous</button>
+                        {% else %}<span></span>{% endif %}
+                        {% if not loop.last %}
+                        <button onclick="showQuestion({{ concept.questions[loop.index0 + 1].id }})" class="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">Next &rarr;</button>
+                        {% else %}<span></span>{% endif %}
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Mobile sidebar overlay -->
+<div id="sidebar-overlay" class="hidden fixed inset-0 z-40 lg:hidden" onclick="toggleSidebar()">
+    <div class="absolute inset-0 bg-black/20 dark:bg-black/50"></div>
+</div>
+<div id="sidebar-mobile" class="hidden fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-[#0f0f17] border-r border-slate-100 dark:border-white/[.06] lg:hidden overflow-y-auto">
+    <div class="p-3 border-b border-slate-100 dark:border-white/[.06] flex items-center justify-between">
+        <h2 class="text-sm font-semibold truncate">{{ concept.title }}</h2>
+        <button onclick="toggleSidebar()" class="w-7 h-7 rounded flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/5 cursor-pointer" aria-label="Close sidebar">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+        </button>
+    </div>
+    <nav class="p-2 space-y-0.5">
+        {% for q in concept.questions %}
+        <button onclick="showQuestion({{ q.id }}, this); toggleSidebar()"
+            data-qid="{{ q.id }}"
+            class="sidebar-q w-full text-left px-2.5 py-2 rounded-md text-[13px] leading-snug cursor-pointer truncate hover:bg-slate-50 dark:hover:bg-white/[.04] text-slate-600 dark:text-slate-400">
+            <span class="text-slate-300 dark:text-slate-600 font-mono text-[11px] mr-1.5">{{ q.display_order }}.</span>{{ q.title }}
+        </button>
+        {% endfor %}
+    </nav>
+    {% if related_concepts %}
+    <div class="p-3 border-t border-slate-100 dark:border-white/[.06]">
+        <div class="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Related</div>
+        <div class="flex flex-wrap gap-1">
+            {% for rc in related_concepts %}
+            <a href="/study/{{ language.slug }}/{{ rc.slug }}" class="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-white/[.04] text-slate-500 dark:text-slate-400 hover:text-indigo-500 cursor-pointer">{{ rc.title }}</a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentMode = '{{ mode }}';
+let currentQId = null;
+
+function setMode(mode) {
+    currentMode = mode;
+    // Update buttons
+    const states = {active: 'bg-indigo-500 text-white', inactive: 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5'};
+    ['', '-m'].forEach(suffix => {
+        const dBtn = document.getElementById('btn-detailed' + suffix);
+        const qBtn = document.getElementById('btn-quick' + suffix);
+        if (dBtn) { dBtn.className = 'text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer ' + (mode === 'detailed' ? states.active : states.inactive); }
+        if (qBtn) { qBtn.className = 'text-[11px] font-medium px-2 py-0.5 rounded cursor-pointer ' + (mode === 'quick' ? states.active : states.inactive); }
+    });
+    // Toggle answer visibility
+    document.querySelectorAll('.answer-detailed').forEach(el => el.classList.toggle('hidden', mode !== 'detailed'));
+    document.querySelectorAll('.answer-quick').forEach(el => el.classList.toggle('hidden', mode !== 'quick'));
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('mode', mode);
+    history.replaceState(null, '', url);
+}
+
+function showQuestion(qid, btn) {
+    currentQId = qid;
+    // Hide welcome, show target
+    document.getElementById('welcome-state').classList.add('hidden');
+    document.querySelectorAll('.q-panel').forEach(el => el.classList.add('hidden'));
+    const panel = document.getElementById('q-' + qid);
+    if (panel) { panel.classList.remove('hidden'); }
+    // Highlight sidebar
+    document.querySelectorAll('.sidebar-q').forEach(el => {
+        const isActive = el.dataset.qid == qid;
+        el.classList.toggle('bg-indigo-50', isActive && !document.documentElement.classList.contains('dark'));
+        el.classList.toggle('dark:bg-indigo-500/10', isActive);
+        el.classList.toggle('text-indigo-600', isActive && !document.documentElement.classList.contains('dark'));
+        el.classList.toggle('dark:text-indigo-300', isActive);
+        el.classList.toggle('font-medium', isActive);
+    });
+    // Re-highlight code
+    panel.querySelectorAll('pre code:not(.hljs)').forEach(block => hljs.highlightElement(block));
+    // Scroll content to top
+    document.getElementById('content-area').scrollTop = 0;
+    // Update URL
+    const url = new URL(window.location);
+    url.searchParams.set('q', qid);
+    history.replaceState(null, '', url);
+}
+
+function markDone(qid, btn) {
+    fetch('/api/progress', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question_id: qid, status: 'completed'})
+    }).then(r => r.json()).then(data => {
+        if (data.status === 'ok') {
+            btn.textContent = 'Done';
+            btn.className = 'shrink-0 text-[12px] font-medium px-2.5 py-1 rounded-md border cursor-pointer bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400';
+        }
+    });
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar-overlay').classList.toggle('hidden');
+    document.getElementById('sidebar-mobile').classList.toggle('hidden');
+}
+
+// Init
+setMode(currentMode);
+{% if active_q %}showQuestion({{ active_q }});{% elif concept.questions %}showQuestion({{ concept.questions[0].id }});{% endif %}
+</script>
+{% endblock %}

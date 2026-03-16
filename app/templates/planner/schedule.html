@@ -1,53 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Schedule — onPrep{% endblock %}
 {% block content %}
-
 {% if not deadline %}
-<div class="flex flex-col items-center justify-center py-24 text-center">
-    <div class="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-6">
-        <svg class="w-8 h-8 text-surface-50/20" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-        </svg>
-    </div>
-    <h2 class="text-xl font-display font-bold text-surface-50/40 mb-2">No active schedule</h2>
-    <p class="text-surface-50/20 text-sm mb-6">Set an interview date to generate your study plan</p>
-    <a href="/planner/setup" class="bg-accent-500 hover:bg-accent-600 text-white px-6 py-3 rounded-xl font-medium transition-colors cursor-pointer">Set a Deadline</a>
+<div class="flex flex-col items-center justify-center min-h-[50vh] text-center">
+    <svg class="w-10 h-10 text-slate-200 dark:text-slate-700 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">No active schedule</p>
+    <a href="/planner/setup" class="bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2 rounded-lg cursor-pointer">Set a Deadline</a>
 </div>
-
 {% else %}
-<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+<div class="mt-2 mb-6 flex items-center justify-between">
     <div>
-        <h1 class="font-display text-2xl font-bold tracking-tight">Study Schedule</h1>
-        <p class="text-surface-50/30 text-sm mt-1">
-            Interview on <span class="text-surface-50/60 font-medium">{{ deadline.interview_date.strftime('%B %d, %Y') }}</span>
-        </p>
+        <h1 class="text-xl font-semibold">Study Schedule</h1>
+        <p class="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Interview on {{ deadline.interview_date.strftime('%b %d, %Y') }}</p>
     </div>
-    <a href="/planner/setup" class="inline-flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 px-4 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer">
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182" />
-        </svg>
-        Change Deadline
-    </a>
+    <a href="/planner/setup" class="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">Change &rarr;</a>
 </div>
 
+<div class="max-w-2xl">
 {% set ns = namespace(current_date=None) %}
-<div class="space-y-1">
 {% for item in items %}
     {% if item.scheduled_date != ns.current_date %}
-        {% set ns.current_date = item.scheduled_date %}
-        <div class="{% if not loop.first %}mt-6{% endif %} mb-2 flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                <span class="font-display text-xs text-surface-50/30">{{ item.scheduled_date.strftime('%d') }}</span>
-            </div>
-            <h2 class="text-sm font-semibold text-surface-50/50">{{ item.scheduled_date.strftime('%A, %B %d') }}</h2>
-        </div>
+    {% set ns.current_date = item.scheduled_date %}
+    <div class="{% if not loop.first %}mt-5{% endif %} mb-1.5">
+        <div class="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">{{ item.scheduled_date.strftime('%A, %b %d') }}</div>
+    </div>
     {% endif %}
-    <a href="/study/{{ deadline.language.slug }}/{{ item.concept.slug }}"
-       class="flex items-center justify-between ml-11 bg-surface-800/30 rounded-xl p-4 border border-white/5 hover:border-accent-500/20 hover:bg-surface-800/50 transition-all duration-200 cursor-pointer">
-        <span class="text-sm text-surface-50/70">{{ item.concept.title }}</span>
-        {% if item.is_review %}
-        <span class="text-[10px] font-semibold text-amber-400/70 bg-amber-400/10 px-2 py-0.5 rounded-md uppercase tracking-wider">Review</span>
-        {% endif %}
+    <a href="/study/{{ deadline.language.slug }}/{{ item.concept.slug }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[.03] cursor-pointer group">
+        <span class="text-sm group-hover:text-indigo-500">{{ item.concept.title }}</span>
+        {% if item.is_review %}<span class="text-[10px] font-medium text-amber-500 uppercase tracking-wider">Review</span>{% endif %}
     </a>
 {% endfor %}
 </div>

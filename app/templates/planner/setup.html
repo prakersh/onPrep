@@ -1,42 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Set Deadline — onPrep{% endblock %}
 {% block content %}
-<div class="max-w-lg mx-auto">
-    <div class="text-center mb-10">
-        <div class="w-16 h-16 rounded-2xl bg-accent-500/10 border border-accent-500/20 flex items-center justify-center mx-auto mb-5">
-            <svg class="w-8 h-8 text-accent-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-            </svg>
-        </div>
-        <h1 class="font-display text-3xl font-bold tracking-tight glow-text">Plan Your Prep</h1>
-        <p class="text-surface-50/30 mt-2 text-sm">Set your interview date and we'll create a study schedule</p>
+<div class="max-w-sm mx-auto mt-12">
+    <div class="text-center mb-8">
+        <svg class="w-10 h-10 text-indigo-500/40 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
+        <h1 class="text-xl font-semibold">Set Interview Date</h1>
+        <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">We'll generate a study schedule for you</p>
     </div>
 
-    <form method="POST" action="/planner/setup" class="bg-surface-800/40 rounded-2xl p-8 border border-white/5">
-        <div class="mb-6">
-            <label for="language_id" class="block text-sm font-medium text-surface-50/60 mb-2.5">Language</label>
-            <select name="language_id" id="language_id"
-                    class="w-full bg-surface-900/80 border border-white/10 rounded-xl px-4 py-3 text-surface-50 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/40 transition-all cursor-pointer">
-                {% for lang in languages %}
-                <option value="{{ lang.id }}">{{ lang.name }}</option>
-                {% endfor %}
+    <form method="POST" action="/planner/setup" class="space-y-4">
+        <div>
+            <label for="language_id" class="block text-sm font-medium mb-1.5">Language</label>
+            <select name="language_id" id="language_id" class="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50 cursor-pointer">
+                {% for lang in languages %}<option value="{{ lang.id }}">{{ lang.name }}</option>{% endfor %}
             </select>
         </div>
-
-        <div class="mb-8">
-            <label for="interview_date" class="block text-sm font-medium text-surface-50/60 mb-2.5">Interview Date</label>
-            <input type="date" name="interview_date" id="interview_date"
-                   class="w-full bg-surface-900/80 border border-white/10 rounded-xl px-4 py-3 text-surface-50 focus:outline-none focus:ring-2 focus:ring-accent-500/40 focus:border-accent-500/40 transition-all"
-                   required>
+        <div>
+            <label for="interview_date" class="block text-sm font-medium mb-1.5">Interview Date</label>
+            <input type="date" name="interview_date" id="interview_date" required
+                class="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500/50">
         </div>
-
-        <button type="submit"
-                class="w-full bg-accent-500 hover:bg-accent-600 text-white py-3.5 rounded-xl font-semibold transition-colors duration-200 cursor-pointer flex items-center justify-center gap-2">
-            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 0 0-2.455 2.456Z" />
-            </svg>
-            Generate Schedule
-        </button>
+        <button type="submit" class="w-full bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium py-2.5 rounded-lg cursor-pointer">Generate Schedule</button>
     </form>
 </div>
 {% endblock %}

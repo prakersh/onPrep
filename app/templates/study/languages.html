@@ -1,26 +1,21 @@
 {% extends "base.html" %}
 {% block title %}Languages — onPrep{% endblock %}
 {% block content %}
-<div class="mb-8">
-    <h1 class="font-display text-3xl font-bold tracking-tight glow-text">Choose a Language</h1>
-    <p class="text-surface-50/40 mt-2">Select a language to start your preparation</p>
+<div class="mt-2 mb-6">
+    <h1 class="text-xl font-semibold">Choose a Language</h1>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">Pick a topic to begin studying</p>
 </div>
-
-<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 stagger">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
     {% for lang in languages %}
     <a href="{% if lang.is_active %}/study/{{ lang.slug }}{% else %}#{% endif %}"
-       class="group relative bg-surface-800/40 rounded-2xl p-8 border border-white/5 transition-all duration-300 cursor-pointer
-              {% if lang.is_active %}hover:border-accent-500/30 hover:bg-surface-800/60 hover:shadow-lg hover:shadow-accent-500/5{% else %}opacity-40 cursor-not-allowed{% endif %}"
+       class="group rounded-xl border border-slate-100 dark:border-white/[.06] p-5 cursor-pointer
+              {% if lang.is_active %}bg-slate-50/50 dark:bg-white/[.02] hover:border-indigo-200 dark:hover:border-indigo-500/20{% else %}opacity-40 cursor-not-allowed{% endif %}"
        {% if not lang.is_active %}aria-disabled="true"{% endif %}>
-        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-accent-500/20 to-accent-600/10 border border-accent-500/20 flex items-center justify-center mb-5 group-hover:from-accent-500/30 group-hover:to-accent-600/20 transition-all">
-            <svg class="w-7 h-7 text-accent-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5" />
-            </svg>
-        </div>
-        <h2 class="text-xl font-display font-bold mb-1.5">{{ lang.name }}</h2>
-        <p class="text-surface-50/30 text-sm">{{ lang.concepts|length }} concepts</p>
+        <svg class="w-8 h-8 text-indigo-500/50 mb-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
+        <div class="font-semibold">{{ lang.name }}</div>
+        <div class="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{{ lang.concepts|length }} concepts</div>
         {% if not lang.is_active %}
-        <span class="absolute top-4 right-4 text-[10px] font-medium uppercase tracking-widest text-surface-50/20 bg-white/5 px-2.5 py-1 rounded-full">Coming Soon</span>
+        <span class="inline-block mt-2 text-[10px] font-medium text-slate-400 dark:text-slate-600 uppercase tracking-wider">Coming Soon</span>
         {% endif %}
     </a>
     {% endfor %}

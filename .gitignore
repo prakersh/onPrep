@@ -22,3 +22,4 @@ node_modules/
 app/static/css/output.css
 .env
 .DS_Store
+screenshots/

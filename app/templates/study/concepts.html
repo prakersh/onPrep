@@ -1,62 +1,40 @@
 {% extends "base.html" %}
 {% block title %}{{ language.name }} — onPrep{% endblock %}
 {% block content %}
-<div class="flex items-center gap-3 mb-1">
-    <a href="/study/languages" class="text-surface-50/30 hover:text-surface-50/60 transition-colors text-sm cursor-pointer">&larr; Languages</a>
+<div class="mt-2 mb-1">
+    <a href="/study/languages" class="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">&larr; Languages</a>
 </div>
-<div class="flex items-center justify-between mb-8">
-    <div>
-        <h1 class="font-display text-3xl font-bold tracking-tight">{{ language.name }}</h1>
-        <p class="text-surface-50/30 text-sm mt-1">{{ language.concepts|length }} concepts &middot; Beginner to Advanced</p>
-    </div>
+<div class="mb-6">
+    <h1 class="text-xl font-semibold">{{ language.name }}</h1>
+    <p class="text-sm text-slate-400 dark:text-slate-500 mt-0.5">{{ language.concepts|length }} concepts</p>
 </div>
 
-<div class="space-y-3 stagger">
+<div class="space-y-1.5">
     {% for item in concept_list %}
     {% set c = item.concept %}
     <a href="/study/{{ language.slug }}/{{ c.slug }}"
-       class="group flex items-center gap-5 bg-surface-800/30 rounded-2xl p-5 border border-white/5 hover:border-accent-500/20 hover:bg-surface-800/50 transition-all duration-200 cursor-pointer">
-
-        <!-- Order number -->
-        <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-            <span class="font-display text-sm font-semibold text-surface-50/40">{{ c.display_order }}</span>
-        </div>
-
+       class="group flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-white/[.03] cursor-pointer border border-transparent hover:border-slate-100 dark:hover:border-white/[.06]">
+        <!-- Number -->
+        <span class="text-xs font-mono text-slate-300 dark:text-slate-600 w-5 text-right shrink-0">{{ c.display_order }}</span>
         <!-- Info -->
         <div class="flex-1 min-w-0">
-            <h2 class="font-semibold text-surface-50/90 group-hover:text-surface-50 transition-colors truncate">{{ c.title }}</h2>
-            <div class="flex items-center gap-3 mt-1.5">
-                <span class="inline-flex items-center text-[11px] font-medium uppercase tracking-wider px-2 py-0.5 rounded-md
-                    {% if c.difficulty == 'beginner' %}bg-mint-500/10 text-mint-400
-                    {% elif c.difficulty == 'intermediate' %}bg-amber-500/10 text-amber-400
-                    {% else %}bg-red-500/10 text-red-400{% endif %}">
-                    {{ c.difficulty }}
-                </span>
-                <span class="text-surface-50/20 text-xs">{{ c.estimated_minutes }} min</span>
-                <span class="text-surface-50/20 text-xs">{{ c.questions|length }} questions</span>
+            <div class="text-sm font-medium truncate group-hover:text-indigo-500">{{ c.title }}</div>
+            <div class="flex items-center gap-2 mt-0.5">
+                <span class="text-[10px] font-medium uppercase tracking-wider
+                    {% if c.difficulty == 'beginner' %}text-emerald-500{% elif c.difficulty == 'intermediate' %}text-amber-500{% else %}text-red-400{% endif %}">{{ c.difficulty }}</span>
+                <span class="text-[10px] text-slate-300 dark:text-slate-600">&middot;</span>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">{{ c.estimated_minutes }}m</span>
+                <span class="text-[10px] text-slate-300 dark:text-slate-600">&middot;</span>
+                <span class="text-[10px] text-slate-400 dark:text-slate-500">{{ c.questions|length }}q</span>
             </div>
         </div>
-
         <!-- Progress -->
-        <div class="text-right shrink-0 w-24">
-            <div class="font-display text-lg font-bold
-                {% if item.progress_pct == 100 %}text-mint-400
-                {% elif item.progress_pct > 0 %}text-accent-400
-                {% else %}text-surface-50/15{% endif %}">
-                {{ item.progress_pct }}%
-            </div>
-            <div class="w-full h-1 bg-white/5 rounded-full mt-2 overflow-hidden">
-                <div class="h-full rounded-full progress-fill
-                    {% if item.progress_pct == 100 %}bg-mint-400
-                    {% else %}bg-accent-500{% endif %}"
-                    style="width: {{ item.progress_pct }}%"></div>
+        <div class="flex items-center gap-2 shrink-0">
+            <span class="text-xs font-mono {% if item.progress_pct == 100 %}text-emerald-500{% elif item.progress_pct > 0 %}text-indigo-500{% else %}text-slate-300 dark:text-slate-600{% endif %}">{{ item.progress_pct }}%</span>
+            <div class="w-12 h-1 bg-slate-100 dark:bg-white/[.06] rounded-full overflow-hidden">
+                <div class="h-full rounded-full progress-fill {% if item.progress_pct == 100 %}bg-emerald-500{% else %}bg-indigo-500{% endif %}" style="width:{{ item.progress_pct }}%"></div>
             </div>
         </div>
-
-        <!-- Arrow -->
-        <svg class="w-4 h-4 text-surface-50/10 group-hover:text-surface-50/30 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-        </svg>
     </a>
     {% endfor %}
 </div>
