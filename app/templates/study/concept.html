@@ -6,7 +6,7 @@
 <div class="flex h-[calc(100vh-3rem)]">
 
     <!-- SIDEBAR -->
-    <aside id="sidebar" class="hidden lg:flex flex-col w-72 xl:w-80 shrink-0 border-r border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.02] overflow-hidden">
+    <aside id="sidebar" class="hidden lg:flex flex-col w-[22vw] min-w-[280px] max-w-[380px] shrink-0 border-r border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.02] overflow-hidden">
         <div class="px-4 pt-4 pb-3 border-b border-slate-200/80 dark:border-white/[.06]">
             <a href="/study/{{ language.slug }}" class="text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-500 cursor-pointer">&larr; {{ language.name }}</a>
             <h2 class="text-[15px] font-semibold mt-1.5 leading-snug">{{ concept.title }}</h2>
@@ -71,7 +71,7 @@
             <!-- Question panels -->
             {% for q in concept.questions %}
             <article id="q-{{ q.id }}" class="q-panel hidden">
-                <div class="px-6 sm:px-10 lg:px-12 py-8 max-w-[900px]">
+                <div class="px-6 sm:px-10 lg:px-12 xl:px-16 py-8">
                     <!-- Header -->
                     <div class="flex items-start justify-between gap-4 mb-6">
                         <div>
