@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Set Deadline — onPrep{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">Plan Your Preparation</h1>
+
+<form method="POST" action="/planner/setup" class="bg-gray-900 rounded-xl p-8 border border-gray-800 max-w-lg">
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-300 mb-2">Language</label>
+        <select name="language_id" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-100">
+            {% for lang in languages %}
+            <option value="{{ lang.id }}">{{ lang.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-6">
+        <label class="block text-sm font-medium text-gray-300 mb-2">Interview Date</label>
+        <input type="date" name="interview_date"
+               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-gray-100"
+               required>
+    </div>
+
+    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 py-3 rounded-lg font-medium">
+        Generate Schedule
+    </button>
+</form>
+{% endblock %}

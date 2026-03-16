@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ concept.title }} — onPrep{% endblock %}
+{% block content %}
+<div class="flex items-center gap-3 mb-4">
+    <a href="/study/{{ language.slug }}" class="text-gray-400 hover:text-gray-200">← {{ language.name }}</a>
+</div>
+
+<div class="flex items-center justify-between mb-8">
+    <h1 class="text-3xl font-bold">{{ concept.title }}</h1>
+    <a href="/study/{{ language.slug }}/{{ concept.slug }}?mode=quick"
+       class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm font-medium">
+        Switch to Quick Recap
+    </a>
+</div>
+
+{% if concept.description %}
+<p class="text-gray-400 mb-8">{{ concept.description }}</p>
+{% endif %}
+
+<div class="space-y-8">
+    {% for question in concept.questions %}
+    <div class="bg-gray-900 rounded-xl p-6 border border-gray-800" id="q-{{ question.id }}">
+        <div class="flex items-start justify-between mb-4">
+            <h2 class="text-xl font-semibold">Q{{ question.display_order }}: {{ question.title }}</h2>
+            <div class="flex gap-2 ml-4 shrink-0">
+                <button onclick="updateProgress({{ question.id }}, 'completed')"
+                        class="text-xs bg-green-900 hover:bg-green-800 text-green-300 px-3 py-1 rounded">
+                    Mark Done
+                </button>
+            </div>
+        </div>
+
+        {% for answer in question.answers if answer.mode == 'detailed' %}
+        <div class="prose prose-invert max-w-none">
+            <div class="mb-4">{{ answer.explanation }}</div>
+
+            {% if answer.pseudo_code %}
+            <h3 class="text-sm font-semibold text-gray-400 uppercase mt-6 mb-2">Pseudo Code</h3>
+            <pre><code class="language-text">{{ answer.pseudo_code }}</code></pre>
+            {% endif %}
+
+            {% if answer.actual_code %}
+            <h3 class="text-sm font-semibold text-gray-400 uppercase mt-6 mb-2">Code</h3>
+            <pre><code class="language-{{ answer.code_language }}">{{ answer.actual_code }}</code></pre>
+            {% endif %}
+
+            {% if answer.key_points %}
+            <h3 class="text-sm font-semibold text-gray-400 uppercase mt-6 mb-2">Key Points</h3>
+            <ul class="list-disc list-inside text-gray-300">
+                {% for point in answer.key_points %}
+                <li>{{ point }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if answer.gotchas %}
+            <h3 class="text-sm font-semibold text-yellow-400 uppercase mt-6 mb-2">Gotchas</h3>
+            <ul class="list-disc list-inside text-yellow-300">
+                {% for gotcha in answer.gotchas %}
+                <li>{{ gotcha }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+{% if related_concepts %}
+<div class="mt-12">
+    <h2 class="text-xl font-semibold mb-4">Related Concepts</h2>
+    <div class="flex flex-wrap gap-3">
+        {% for rc in related_concepts %}
+        <a href="/study/{{ language.slug }}/{{ rc.slug }}"
+           class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm">
+            {{ rc.title }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function updateProgress(questionId, status) {
+    fetch('/api/progress', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question_id: questionId, status: status})
+    }).then(r => r.json()).then(data => {
+        if (data.status === 'ok') {
+            const btn = event.target;
+            btn.textContent = 'Done!';
+            btn.classList.remove('bg-green-900');
+            btn.classList.add('bg-green-700');
+        }
+    });
+}
+</script>
+{% endblock %}

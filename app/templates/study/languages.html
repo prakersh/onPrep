@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Languages — onPrep{% endblock %}
+{% block content %}
+<h1 class="text-3xl font-bold mb-8">Choose a Language</h1>
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+    {% for lang in languages %}
+    <a href="/study/{{ lang.slug }}"
+       class="bg-gray-900 rounded-xl p-8 border border-gray-800 hover:border-indigo-600 transition
+              {% if not lang.is_active %}opacity-50 pointer-events-none{% endif %}">
+        <h2 class="text-2xl font-bold mb-2">{{ lang.name }}</h2>
+        <p class="text-gray-400">{{ lang.concepts|length }} concepts</p>
+        {% if not lang.is_active %}
+        <span class="inline-block mt-3 text-xs bg-gray-800 text-gray-500 px-2 py-1 rounded">Coming Soon</span>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}

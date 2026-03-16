@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}{{ concept.title }} (Quick) — onPrep{% endblock %}
+{% block content %}
+<div class="flex items-center gap-3 mb-4">
+    <a href="/study/{{ language.slug }}" class="text-gray-400 hover:text-gray-200">← {{ language.name }}</a>
+</div>
+
+<div class="flex items-center justify-between mb-8">
+    <h1 class="text-3xl font-bold">{{ concept.title }}</h1>
+    <a href="/study/{{ language.slug }}/{{ concept.slug }}?mode=detailed"
+       class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-medium">
+        Switch to Detailed
+    </a>
+</div>
+
+<div class="space-y-4">
+    {% for question in concept.questions %}
+    <div class="bg-gray-900 rounded-xl p-5 border border-gray-800">
+        <h3 class="font-semibold mb-3">{{ question.title }}</h3>
+        {% for answer in question.answers if answer.mode == 'quick' %}
+        <p class="text-gray-300 text-sm mb-3">{{ answer.explanation }}</p>
+
+        {% if answer.key_points %}
+        <ul class="list-disc list-inside text-sm text-gray-400 mb-3">
+            {% for point in answer.key_points %}
+            <li>{{ point }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if answer.actual_code %}
+        <pre class="text-xs"><code class="language-{{ answer.code_language }}">{{ answer.actual_code }}</code></pre>
+        {% endif %}
+
+        {% if answer.gotchas %}
+        <div class="mt-2 text-xs text-yellow-400">
+            {% for gotcha in answer.gotchas %}
+            <span class="inline-block mr-3">⚡ {{ gotcha }}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endfor %}
+</div>
+
+{% if related_concepts %}
+<div class="mt-8">
+    <h2 class="text-lg font-semibold mb-3">Related</h2>
+    <div class="flex flex-wrap gap-2">
+        {% for rc in related_concepts %}
+        <a href="/study/{{ language.slug }}/{{ rc.slug }}?mode=quick"
+           class="bg-gray-800 hover:bg-gray-700 px-3 py-1 rounded text-sm">{{ rc.title }}</a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
