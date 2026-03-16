@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ concept.title }} — onPrep{% endblock %}
 {% block main_class %}pt-12{% endblock %}
+{% block footer %}{% endblock %}
 
 {% block content %}
 <div class="flex h-[calc(100vh-3rem)]">
@@ -253,6 +254,8 @@ function showQuestion(qid, btn) {
     panel.querySelectorAll('pre code:not(.hljs)').forEach(block => hljs.highlightElement(block));
     document.getElementById('content-area').scrollTop = 0;
     const url = new URL(window.location); url.searchParams.set('q', qid); history.replaceState(null, '', url);
+    // Track view
+    fetch('/api/view', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({question_id: qid}) });
 }
 
 function markDone(qid, btn) {

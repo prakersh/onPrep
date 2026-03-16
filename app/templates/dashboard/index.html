@@ -11,10 +11,9 @@
 {% else %}
 
 <!-- Header -->
-<div class="mt-4 mb-6 flex items-end justify-between">
+<div class="mt-4 mb-5 flex items-end justify-between">
     <div>
         <h1 class="text-2xl font-semibold">Dashboard</h1>
-        <p class="text-base text-slate-500 dark:text-slate-400 mt-0.5">Your interview prep at a glance</p>
     </div>
     <a href="/planner/setup" class="bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium px-4 py-2 rounded-lg cursor-pointer flex items-center gap-1.5">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
@@ -22,167 +21,135 @@
     </a>
 </div>
 
-<!-- Row 1: Overall stats -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Completed</div>
-        <div class="text-3xl font-bold text-indigo-600 dark:text-indigo-400">{{ completed }}</div>
-        <div class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">of {{ total_questions }} questions</div>
-    </div>
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">In Progress</div>
-        <div class="text-3xl font-bold text-amber-500">{{ in_progress }}</div>
-        <div class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">questions started</div>
-    </div>
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Progress</div>
-        <div class="text-3xl font-bold text-emerald-500">{{ progress_pct }}%</div>
-        <div class="mt-2 h-2 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
-            <div class="h-full bg-emerald-500 rounded-full progress-fill" style="width:{{ progress_pct }}%"></div>
+<!-- Row 1: Quick stats + Languages side by side -->
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-5">
+    <!-- Stats (2 cols) -->
+    <div class="lg:col-span-2 grid grid-cols-2 gap-3">
+        <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+            <div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Completed</div>
+            <div class="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{{ completed }}<span class="text-sm font-normal text-slate-400 dark:text-slate-500">/{{ total_questions }}</span></div>
+        </div>
+        <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+            <div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Progress</div>
+            <div class="text-2xl font-bold text-emerald-500">{{ progress_pct }}%</div>
+            <div class="mt-1.5 h-1.5 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded-full progress-fill" style="width:{{ progress_pct }}%"></div>
+            </div>
+        </div>
+        <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+            <div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">In Progress</div>
+            <div class="text-2xl font-bold text-amber-500">{{ in_progress }}</div>
+        </div>
+        <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+            <div class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-1">Interviews</div>
+            <div class="text-2xl font-bold text-violet-500">{{ deadline_data|length }}</div>
         </div>
     </div>
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <div class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-2">Interviews</div>
-        <div class="text-3xl font-bold text-violet-500">{{ deadline_data|length }}</div>
-        <div class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">upcoming</div>
+
+    <!-- Languages (3 cols) -->
+    <div class="lg:col-span-3 grid grid-cols-1 sm:grid-cols-{{ [language_stats|length, 3]|min }} gap-3">
+        {% for ls in language_stats %}
+        <a href="/study/{{ ls.language.slug }}" class="group rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4 hover:border-indigo-300 dark:hover:border-indigo-500/20 cursor-pointer">
+            <div class="flex items-center gap-2.5 mb-2">
+                <div class="w-8 h-8 rounded-md bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
+                </div>
+                <div>
+                    <div class="text-sm font-semibold group-hover:text-indigo-500">{{ ls.language.name }}</div>
+                    <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ ls.concept_count }} concepts &middot; {{ ls.total }} questions</div>
+                </div>
+            </div>
+            <div class="flex items-center justify-between text-xs mb-1">
+                <span class="text-slate-400 dark:text-slate-500">{{ ls.done }} done</span>
+                <span class="font-semibold {% if ls.pct == 100 %}text-emerald-500{% else %}text-indigo-500{% endif %}">{{ ls.pct }}%</span>
+            </div>
+            <div class="h-1 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
+                <div class="h-full rounded-full progress-fill {% if ls.pct == 100 %}bg-emerald-500{% else %}bg-indigo-500{% endif %}" style="width:{{ ls.pct }}%"></div>
+            </div>
+        </a>
+        {% endfor %}
     </div>
 </div>
 
-<!-- Row 2: Upcoming interviews + Today's plan -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <!-- Upcoming interviews (spans 2 cols) -->
-    <div class="lg:col-span-2 rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <div class="flex items-center justify-between mb-4">
-            <h2 class="text-base font-semibold">Upcoming Interviews</h2>
-            <a href="/planner/setup" class="text-xs text-indigo-500 hover:text-indigo-600 cursor-pointer">Manage &rarr;</a>
+<!-- Row 2: Interviews + Difficulty + Today + Recent — all compact in one row -->
+<div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">
+    <!-- Upcoming interviews -->
+    <div class="lg:col-span-2 rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold">Upcoming Interviews</h2>
+            <a href="/planner/setup" class="text-[11px] text-indigo-500 hover:text-indigo-600 cursor-pointer">Manage</a>
         </div>
         {% if deadline_data %}
-        <div class="space-y-3">
-            {% for dd in deadline_data %}
+        <div class="space-y-2">
+            {% for dd in deadline_data[:4] %}
             {% set d = dd.deadline %}
-            {% set days = dd.days_remaining %}
-            <a href="/planner/schedule/{{ d.id }}" class="flex items-center gap-4 p-3 rounded-lg hover:bg-white dark:hover:bg-white/[.03] border border-transparent hover:border-slate-200/80 dark:hover:border-white/[.06] cursor-pointer group">
-                <!-- Color bar -->
-                <div class="w-1 h-12 rounded-full bg-{{ d.color }}-500 shrink-0"></div>
+            <a href="/planner/schedule/{{ d.id }}" class="flex items-center gap-3 py-1.5 hover:text-indigo-500 cursor-pointer group">
+                <div class="w-1 h-8 rounded-full bg-{{ d.color }}-500 shrink-0"></div>
                 <div class="flex-1 min-w-0">
-                    <div class="text-[15px] font-medium text-slate-800 dark:text-slate-200 group-hover:text-indigo-500">{{ d.company_name }}</div>
-                    <div class="flex items-center gap-2 mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-                        {% if d.role %}<span>{{ d.role }}</span><span>&middot;</span>{% endif %}
-                        <span>{{ d.language.name }}</span>
-                        <span>&middot;</span>
-                        <span>{{ d.interview_date.strftime('%b %d, %Y') }}</span>
-                    </div>
+                    <div class="text-sm font-medium truncate">{{ d.company_name }}</div>
+                    <div class="text-[11px] text-slate-400 dark:text-slate-500">{% if d.role %}{{ d.role }} &middot; {% endif %}{{ d.interview_date.strftime('%b %d') }}</div>
                 </div>
-                <div class="text-right shrink-0">
-                    <div class="text-xl font-bold {% if days <= 3 %}text-red-500{% elif days <= 7 %}text-amber-500{% else %}text-emerald-500{% endif %}">{{ days }}d</div>
-                    <div class="text-[11px] text-slate-400 dark:text-slate-500">remaining</div>
-                </div>
+                <div class="text-base font-bold shrink-0 {% if dd.days_remaining <= 3 %}text-red-500{% elif dd.days_remaining <= 7 %}text-amber-500{% else %}text-emerald-500{% endif %}">{{ dd.days_remaining }}d</div>
             </a>
             {% endfor %}
         </div>
         {% else %}
-        <div class="flex flex-col items-center py-8 text-center">
-            <svg class="w-10 h-10 text-slate-200 dark:text-slate-700 mb-3" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
-            <p class="text-sm text-slate-400 dark:text-slate-500 mb-3">No interviews scheduled yet</p>
-            <a href="/planner/setup" class="text-sm text-indigo-500 hover:text-indigo-600 font-medium cursor-pointer">Add your first interview &rarr;</a>
-        </div>
+        <p class="text-sm text-slate-400 dark:text-slate-500 py-3 text-center">No interviews yet. <a href="/planner/setup" class="text-indigo-500 cursor-pointer">Add one</a></p>
         {% endif %}
     </div>
 
     <!-- Today's plan -->
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <h2 class="text-base font-semibold mb-4">Today's Plan</h2>
+    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+        <h2 class="text-sm font-semibold mb-3">Today</h2>
         {% if today_items %}
-        <div class="space-y-2">
-            {% for ti in today_items %}
-            <a href="/study/{{ ti.item.concept.language.slug }}/{{ ti.item.concept.slug }}" class="flex items-center gap-3 p-2 rounded-lg hover:bg-white dark:hover:bg-white/[.03] cursor-pointer group">
-                <div class="w-1.5 h-1.5 rounded-full bg-{{ ti.deadline.color }}-500 shrink-0"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 truncate">{{ ti.item.concept.title }}</div>
-                    <div class="text-[11px] text-slate-400 dark:text-slate-500">{{ ti.deadline.company_name }}{% if ti.item.is_review %} &middot; Review{% endif %}</div>
-                </div>
+        <div class="space-y-1.5">
+            {% for ti in today_items[:5] %}
+            <a href="/study/{{ ti.item.concept.language.slug }}/{{ ti.item.concept.slug }}" class="flex items-center gap-2 py-1 hover:text-indigo-500 cursor-pointer">
+                <span class="w-1.5 h-1.5 rounded-full bg-{{ ti.deadline.color }}-500 shrink-0"></span>
+                <span class="text-sm truncate">{{ ti.item.concept.title }}</span>
             </a>
             {% endfor %}
         </div>
         {% else %}
-        <div class="flex flex-col items-center py-6 text-center">
-            <svg class="w-8 h-8 text-slate-200 dark:text-slate-700 mb-2" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-            <p class="text-sm text-slate-400 dark:text-slate-500">Nothing scheduled today</p>
-        </div>
+        <p class="text-sm text-slate-400 dark:text-slate-500 py-3 text-center">Nothing today</p>
         {% endif %}
-    </div>
-</div>
-
-<!-- Row 3: Difficulty breakdown + Recently studied -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <!-- Difficulty breakdown -->
-    <div class="lg:col-span-2 rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <h2 class="text-base font-semibold mb-4">Progress by Difficulty</h2>
-        <div class="space-y-4">
-            {% for ds in difficulty_stats %}
-            <div>
-                <div class="flex items-center justify-between mb-1.5">
-                    <span class="text-sm font-medium capitalize
-                        {% if ds.difficulty == 'beginner' %}text-emerald-600 dark:text-emerald-400{% elif ds.difficulty == 'intermediate' %}text-amber-600 dark:text-amber-400{% else %}text-red-500 dark:text-red-400{% endif %}">{{ ds.difficulty }}</span>
-                    <span class="text-sm text-slate-500 dark:text-slate-400">{{ ds.done }}/{{ ds.total }} <span class="text-slate-400 dark:text-slate-500">({{ ds.pct }}%)</span></span>
-                </div>
-                <div class="h-2.5 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
-                    <div class="h-full rounded-full progress-fill
-                        {% if ds.difficulty == 'beginner' %}bg-emerald-500{% elif ds.difficulty == 'intermediate' %}bg-amber-500{% else %}bg-red-500{% endif %}"
-                        style="width:{{ ds.pct }}%"></div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
     </div>
 
     <!-- Recently studied -->
-    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5">
-        <h2 class="text-base font-semibold mb-4">Recently Studied</h2>
+    <div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4">
+        <h2 class="text-sm font-semibold mb-3">Recently Viewed</h2>
         {% if recent %}
-        <div class="space-y-2.5">
+        <div class="space-y-1.5">
             {% for p in recent %}
-            <a href="/study/{{ p.question.concept.language.slug }}/{{ p.question.concept.slug }}?q={{ p.question_id }}" class="block group cursor-pointer">
-                <div class="text-sm text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 leading-snug">{{ p.question.title|truncate(60) }}</div>
-                <div class="flex items-center gap-2 mt-0.5">
-                    <span class="text-[11px] {% if p.status == 'completed' %}text-emerald-500{% else %}text-amber-500{% endif %}">{{ p.status }}</span>
-                    {% if p.confidence %}<span class="text-[11px] text-slate-400 dark:text-slate-500">&middot; confidence {{ p.confidence }}/5</span>{% endif %}
-                </div>
+            <a href="/study/{{ p.question.concept.language.slug }}/{{ p.question.concept.slug }}?q={{ p.question_id }}" class="block group cursor-pointer py-1">
+                <div class="text-sm text-slate-700 dark:text-slate-300 group-hover:text-indigo-500 truncate">{{ p.question.title|truncate(45) }}</div>
+                <span class="text-[11px] {% if p.status == 'completed' %}text-emerald-500{% else %}text-amber-500{% endif %}">{{ p.status }}</span>
             </a>
             {% endfor %}
         </div>
         {% else %}
-        <p class="text-sm text-slate-400 dark:text-slate-500 py-4 text-center">Start studying to see your history</p>
+        <p class="text-sm text-slate-400 dark:text-slate-500 py-3 text-center">Start studying</p>
         {% endif %}
     </div>
 </div>
 
-<!-- Row 4: Languages -->
-<div class="mb-6">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-base font-semibold">Languages</h2>
-        <a href="/study/languages" class="text-xs text-indigo-500 hover:text-indigo-600 cursor-pointer">View all &rarr;</a>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {% for ls in language_stats %}
-        <a href="/study/{{ ls.language.slug }}" class="group rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5 hover:border-indigo-300 dark:hover:border-indigo-500/20 cursor-pointer">
-            <div class="flex items-center gap-3 mb-3">
-                <div class="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-indigo-500 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/></svg>
-                </div>
-                <div>
-                    <div class="text-[15px] font-semibold group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{{ ls.language.name }}</div>
-                    <div class="text-sm text-slate-500 dark:text-slate-400">{{ ls.concept_count }} concepts &middot; {{ ls.total }} questions</div>
-                </div>
+<!-- Row 3: Difficulty breakdown (compact, horizontal) -->
+<div class="rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-4 mb-5">
+    <h2 class="text-sm font-semibold mb-3">Progress by Difficulty</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {% for ds in difficulty_stats %}
+        <div>
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-sm font-medium capitalize
+                    {% if ds.difficulty == 'beginner' %}text-emerald-600 dark:text-emerald-400{% elif ds.difficulty == 'intermediate' %}text-amber-600 dark:text-amber-400{% else %}text-red-500 dark:text-red-400{% endif %}">{{ ds.difficulty }}</span>
+                <span class="text-xs text-slate-400 dark:text-slate-500">{{ ds.done }}/{{ ds.total }}</span>
             </div>
-            <div class="flex items-center justify-between text-sm mb-1.5">
-                <span class="text-slate-500 dark:text-slate-400">{{ ls.done }} completed</span>
-                <span class="font-medium {% if ls.pct == 100 %}text-emerald-500{% else %}text-indigo-500{% endif %}">{{ ls.pct }}%</span>
+            <div class="h-2 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
+                <div class="h-full rounded-full progress-fill
+                    {% if ds.difficulty == 'beginner' %}bg-emerald-500{% elif ds.difficulty == 'intermediate' %}bg-amber-500{% else %}bg-red-500{% endif %}"
+                    style="width:{{ ds.pct }}%"></div>
             </div>
-            <div class="h-1.5 bg-slate-200 dark:bg-white/[.06] rounded-full overflow-hidden">
-                <div class="h-full rounded-full progress-fill {% if ls.pct == 100 %}bg-emerald-500{% else %}bg-indigo-500{% endif %}" style="width:{{ ls.pct }}%"></div>
-            </div>
-        </a>
+        </div>
         {% endfor %}
     </div>
 </div>

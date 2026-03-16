@@ -42,6 +42,25 @@ def update_progress():
     return jsonify({'status': 'ok', 'concept_progress_pct': concept_pct})
 
 
+@bp.route('/view', methods=['POST'])
+def record_view():
+    data = request.get_json()
+    question_id = data.get('question_id')
+    if not question_id:
+        return jsonify({'status': 'ok'})
+
+    progress = db.session.query(Progress).filter_by(question_id=question_id).first()
+    if not progress:
+        progress = Progress(question_id=question_id, status='in_progress')
+        db.session.add(progress)
+    progress.last_studied_at = datetime.now(timezone.utc)
+    progress.times_reviewed = (progress.times_reviewed or 0) + 1
+    if progress.status == 'not_started':
+        progress.status = 'in_progress'
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
 @bp.route('/confidence', methods=['POST'])
 def update_confidence():
     data = request.get_json()
