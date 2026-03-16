@@ -1,35 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Schedule — onPrep{% endblock %}
+{% block title %}Schedules — onPrep{% endblock %}
 {% block content %}
-{% if not deadline %}
-<div class="flex flex-col items-center justify-center min-h-[50vh] text-center">
-    <svg class="w-10 h-10 text-slate-200 dark:text-slate-700 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
-    <p class="text-sm text-slate-400 dark:text-slate-500 mb-4">No active schedule</p>
-    <a href="/planner/setup" class="bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2 rounded-lg cursor-pointer">Set a Deadline</a>
-</div>
-{% else %}
-<div class="mt-2 mb-6 flex items-center justify-between">
+<div class="mt-4 mb-6 flex items-end justify-between">
     <div>
-        <h1 class="text-xl font-semibold">Study Schedule</h1>
-        <p class="text-sm text-slate-400 dark:text-slate-500 mt-0.5">Interview on {{ deadline.interview_date.strftime('%b %d, %Y') }}</p>
+        <h1 class="text-2xl font-semibold">Study Schedules</h1>
+        <p class="text-base text-slate-500 dark:text-slate-400 mt-0.5">{{ deadlines|length }} active interview{{ 's' if deadlines|length != 1 else '' }}</p>
     </div>
-    <a href="/planner/setup" class="text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-500 cursor-pointer">Change &rarr;</a>
+    <a href="/planner/setup" class="text-sm text-indigo-500 hover:text-indigo-600 font-medium cursor-pointer">Manage interviews &rarr;</a>
 </div>
 
-<div class="max-w-2xl">
-{% set ns = namespace(current_date=None) %}
-{% for item in items %}
-    {% if item.scheduled_date != ns.current_date %}
-    {% set ns.current_date = item.scheduled_date %}
-    <div class="{% if not loop.first %}mt-5{% endif %} mb-1.5">
-        <div class="text-[11px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider">{{ item.scheduled_date.strftime('%A, %b %d') }}</div>
-    </div>
-    {% endif %}
-    <a href="/study/{{ deadline.language.slug }}/{{ item.concept.slug }}" class="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[.03] cursor-pointer group">
-        <span class="text-sm group-hover:text-indigo-500">{{ item.concept.title }}</span>
-        {% if item.is_review %}<span class="text-[10px] font-medium text-amber-500 uppercase tracking-wider">Review</span>{% endif %}
+{% if not deadlines %}
+<div class="flex flex-col items-center justify-center py-20 text-center">
+    <svg class="w-12 h-12 text-slate-200 dark:text-slate-700 mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
+    <p class="text-base text-slate-400 dark:text-slate-500 mb-4">No active schedules</p>
+    <a href="/planner/setup" class="bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium px-5 py-2 rounded-lg cursor-pointer">Add Interview</a>
+</div>
+{% else %}
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+    {% for d in deadlines %}
+    <a href="/planner/schedule/{{ d.id }}" class="group rounded-xl border border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] p-5 hover:border-{{ d.color }}-300 dark:hover:border-{{ d.color }}-500/20 cursor-pointer">
+        <div class="flex items-center gap-3 mb-3">
+            <div class="w-2 h-2 rounded-full bg-{{ d.color }}-500"></div>
+            <div class="text-base font-semibold group-hover:text-{{ d.color }}-500">{{ d.company_name }}</div>
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400">
+            {% if d.role %}{{ d.role }} &middot; {% endif %}{{ d.language.name }}
+        </div>
+        <div class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{{ d.interview_date.strftime('%B %d, %Y') }}</div>
+        <div class="mt-3 text-xs text-slate-400 dark:text-slate-500">{{ d.schedule_items|length }} items scheduled</div>
     </a>
-{% endfor %}
+    {% endfor %}
 </div>
 {% endif %}
 {% endblock %}

@@ -23,16 +23,19 @@ class Deadline(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     language_id = db.Column(db.Integer, db.ForeignKey('languages.id'), nullable=False)
+    company_name = db.Column(db.String(200), default='')
+    role = db.Column(db.String(200), default='')
     interview_date = db.Column(db.Date, nullable=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = db.Column(db.Boolean, default=True)
+    color = db.Column(db.String(20), default='indigo')  # for visual distinction
 
     language = db.relationship('Language', backref='deadlines')
     schedule_items = db.relationship('ScheduleItem', backref='deadline', cascade='all, delete-orphan',
                                     order_by='ScheduleItem.scheduled_date')
 
     def __repr__(self):
-        return f'<Deadline {self.interview_date}>'
+        return f'<Deadline {self.company_name} {self.interview_date}>'
 
 
 class ScheduleItem(db.Model):

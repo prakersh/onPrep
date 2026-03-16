@@ -16,9 +16,10 @@ class TestDashboard:
         assert resp.status_code == 200
         assert b'100%' in resp.data
 
-    def test_dashboard_shows_deadline_countdown(self, client, db, sample_language, sample_concept, sample_question):
+    def test_dashboard_shows_deadlines(self, client, db, sample_language, sample_concept, sample_question):
         d = Deadline(
             language_id=sample_language.id,
+            company_name='Google',
             interview_date=date.today() + timedelta(days=10),
             is_active=True,
         )
@@ -26,11 +27,12 @@ class TestDashboard:
         db.session.commit()
         resp = client.get('/')
         assert resp.status_code == 200
-        assert b'days left' in resp.data
+        assert b'Google' in resp.data
 
     def test_dashboard_shows_todays_items(self, client, db, sample_language, sample_concept, sample_question):
         d = Deadline(
             language_id=sample_language.id,
+            company_name='Meta',
             interview_date=date.today() + timedelta(days=10),
             is_active=True,
         )
@@ -46,3 +48,8 @@ class TestDashboard:
         resp = client.get('/')
         assert resp.status_code == 200
         assert b'Data Types' in resp.data
+
+    def test_dashboard_difficulty_stats(self, client, db, sample_language, sample_concept, sample_question):
+        resp = client.get('/')
+        assert resp.status_code == 200
+        assert b'beginner' in resp.data

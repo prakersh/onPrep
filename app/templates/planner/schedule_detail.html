@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ deadline.company_name }} Schedule — onPrep{% endblock %}
+{% block content %}
+<div class="mt-4 mb-6">
+    <a href="/planner/schedule" class="text-sm text-slate-500 dark:text-slate-400 hover:text-indigo-500 cursor-pointer">&larr; All schedules</a>
+    <div class="flex items-center gap-3 mt-2">
+        <div class="w-2 h-2 rounded-full bg-{{ deadline.color }}-500"></div>
+        <h1 class="text-2xl font-semibold">{{ deadline.company_name }}</h1>
+    </div>
+    <p class="text-base text-slate-500 dark:text-slate-400 mt-0.5 ml-5">
+        {% if deadline.role %}{{ deadline.role }} &middot; {% endif %}{{ deadline.language.name }} &middot; {{ deadline.interview_date.strftime('%B %d, %Y') }}
+    </p>
+</div>
+
+{% set items = deadline.schedule_items %}
+{% if items %}
+{% set ns = namespace(current_date=None) %}
+<div class="ml-5">
+{% for item in items %}
+    {% if item.scheduled_date != ns.current_date %}
+    {% set ns.current_date = item.scheduled_date %}
+    <div class="{% if not loop.first %}mt-6{% endif %} mb-2">
+        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">{{ item.scheduled_date.strftime('%A, %b %d') }}</div>
+    </div>
+    {% endif %}
+    <a href="/study/{{ deadline.language.slug }}/{{ item.concept.slug }}" class="flex items-center justify-between px-4 py-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[.03] cursor-pointer group border border-transparent hover:border-slate-200/80 dark:hover:border-white/[.06]">
+        <span class="text-[15px] text-slate-700 dark:text-slate-300 group-hover:text-indigo-500">{{ item.concept.title }}</span>
+        {% if item.is_review %}<span class="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Review</span>{% endif %}
+    </a>
+{% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-slate-400 dark:text-slate-500 ml-5">No items scheduled.</p>
+{% endif %}
+{% endblock %}

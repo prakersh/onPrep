@@ -6,7 +6,7 @@
 <div class="flex h-[calc(100vh-3rem)]">
 
     <!-- SIDEBAR -->
-    <aside id="sidebar" class="hidden lg:flex flex-col w-[22vw] min-w-[280px] max-w-[380px] shrink-0 border-r border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.02] overflow-hidden">
+    <aside id="sidebar" class="hidden lg:flex flex-col w-[22vw] min-w-[280px] max-w-[380px] shrink-0 border-r border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015] overflow-hidden">
         <div class="px-4 pt-4 pb-3 border-b border-slate-200/80 dark:border-white/[.06]">
             <a href="/study/{{ language.slug }}" class="text-xs text-slate-500 dark:text-slate-400 hover:text-indigo-500 cursor-pointer">&larr; {{ language.name }}</a>
             <h2 class="text-[15px] font-semibold mt-1.5 leading-snug">{{ concept.title }}</h2>
@@ -40,7 +40,7 @@
     <!-- CONTENT -->
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
         <!-- Mobile top bar -->
-        <div class="lg:hidden flex items-center gap-2 px-4 py-2.5 border-b border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.02]">
+        <div class="lg:hidden flex items-center gap-2 px-4 py-2.5 border-b border-slate-200/80 dark:border-white/[.06] bg-slate-50 dark:bg-white/[.015]">
             <button onclick="toggleSidebar()" class="w-8 h-8 rounded-md flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/[.06] cursor-pointer" aria-label="Menu">
                 <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
             </button>
@@ -189,7 +189,7 @@
 <div id="sidebar-overlay" class="hidden fixed inset-0 z-40 lg:hidden" onclick="toggleSidebar()">
     <div class="absolute inset-0 bg-black/30 dark:bg-black/60"></div>
 </div>
-<div id="sidebar-mobile" class="hidden fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-[#111118] border-r border-slate-200 dark:border-white/[.06] lg:hidden overflow-y-auto shadow-xl">
+<div id="sidebar-mobile" class="hidden fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-[#050505] border-r border-slate-200 dark:border-white/[.06] lg:hidden overflow-y-auto shadow-xl">
     <div class="px-4 pt-4 pb-3 border-b border-slate-200/80 dark:border-white/[.06] flex items-center justify-between">
         <h2 class="text-[15px] font-semibold truncate pr-2">{{ concept.title }}</h2>
         <button onclick="toggleSidebar()" class="w-8 h-8 rounded-md flex items-center justify-center hover:bg-slate-100 dark:hover:bg-white/[.06] cursor-pointer shrink-0" aria-label="Close">

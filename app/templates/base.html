@@ -30,7 +30,7 @@
 
         /* Code blocks */
         pre code.hljs{border-radius:.5rem;padding:1rem !important;font-size:.8125rem;line-height:1.7}
-        .dark pre code.hljs{background:#0d1117 !important}
+        .dark pre code.hljs{background:#111 !important}
         html:not(.dark) pre code.hljs{background:#f8fafc !important;border:1px solid #e2e8f0}
 
         /* ===== Markdown / Prose ===== */
@@ -70,11 +70,11 @@
         @media(prefers-reduced-motion:no-preference){.fade-in{animation:fi .2s ease-out}@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1}}}
     </style>
 </head>
-<body class="bg-white dark:bg-[#0b0b11] text-slate-800 dark:text-slate-200 font-sans antialiased min-h-screen">
+<body class="bg-white dark:bg-black text-slate-800 dark:text-slate-200 font-sans antialiased min-h-screen">
     <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-indigo-600 focus:text-white focus:rounded-lg">Skip to content</a>
 
     <!-- Navbar -->
-    <nav class="fixed top-0 inset-x-0 z-50 h-12 bg-white/90 dark:bg-[#0b0b11]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-white/[.06]">
+    <nav class="fixed top-0 inset-x-0 z-50 h-12 bg-white/90 dark:bg-black/90 backdrop-blur-md border-b border-slate-200/80 dark:border-white/[.06]">
         <div class="h-full px-4 flex items-center justify-between">
             <a href="/" class="flex items-center gap-2 cursor-pointer">
                 <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342"/></svg>
@@ -92,7 +92,7 @@
         </div>
     </nav>
 
-    <main id="main" class="{% block main_class %}pt-16 pb-12 px-5 sm:px-8{% endblock %} fade-in">
+    <main id="main" class="{% block main_class %}pt-16 pb-12 px-[5vw] lg:px-[7.5vw]{% endblock %} fade-in">
         {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}
         <div class="mb-4 px-4 py-3 rounded-lg text-sm border {% if category == 'error' %}bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/20 text-red-700 dark:text-red-300{% else %}bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-700 dark:text-emerald-300{% endif %}" role="alert">{{ message }}</div>
         {% endfor %}{% endif %}{% endwith %}
