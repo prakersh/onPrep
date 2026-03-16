@@ -1,0 +1,616 @@
+{
+  "concept_slug": "itertools-functools-stdlib",
+  "questions": [
+    {
+      "title": "How does itertools.chain() work and when would you use it?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["itertools", "chain", "iterators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`itertools.chain(*iterables)` takes multiple iterables and returns a single iterator that yields elements from each iterable in sequence, exhausting one before moving to the next. It does **not** create a new list in memory -- it lazily yields elements, making it highly memory-efficient for concatenating large sequences.\n\nThere is also `itertools.chain.from_iterable(iterable)` which takes a single iterable of iterables -- useful when you have a list of lists or a generator of generators.\n\n### Use cases:\n- Concatenating multiple lists/generators without copying\n- Flattening one level of nested iterables\n- Processing files from multiple directories sequentially",
+          "pseudo_code": "chain(A, B, C):\n  for iterable in [A, B, C]:\n    for element in iterable:\n      yield element\n\nchain.from_iterable([[A, B], [C, D]]):\n  for iterable in [[A, B], [C, D]]:\n    for element in iterable:\n      yield element",
+          "actual_code": "from itertools import chain\n\n# Basic chain: concatenate multiple iterables\nresult = list(chain([1, 2], [3, 4], [5, 6]))\nprint(result)  # [1, 2, 3, 4, 5, 6]\n\n# chain.from_iterable: flatten one level of nesting\nnested = [[1, 2, 3], [4, 5], [6, 7, 8, 9]]\nflat = list(chain.from_iterable(nested))\nprint(flat)  # [1, 2, 3, 4, 5, 6, 7, 8, 9]\n\n# Combining different iterable types\nfrom_list = [1, 2, 3]\nfrom_tuple = (4, 5, 6)\nfrom_set = {7, 8, 9}\nresult = list(chain(from_list, from_tuple, from_set))\nprint(result)  # [1, 2, 3, 4, 5, 6, 7, 8, 9] (set order may vary)\n\n# Memory-efficient: works with generators\ndef gen_a():\n    yield from range(3)\n\ndef gen_b():\n    yield from range(3, 6)\n\nfor val in chain(gen_a(), gen_b()):\n    print(val, end=' ')  # 0 1 2 3 4 5",
+          "code_language": "python",
+          "key_points": [
+            "chain() lazily yields elements -- no intermediate list is created",
+            "chain.from_iterable() accepts a single iterable of iterables",
+            "Works with any iterable type (lists, tuples, generators, sets)",
+            "Only flattens one level of nesting"
+          ],
+          "gotchas": [
+            "chain() does NOT deep-flatten nested structures; [[1, [2, 3]], [4]] becomes [1, [2, 3], 4]",
+            "If you pass a string to chain(), each character is yielded individually since strings are iterable",
+            "chain.from_iterable() consumes the outer iterable lazily, but each inner iterable is consumed eagerly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`itertools.chain(*iterables)` lazily concatenates multiple iterables into one. `chain.from_iterable()` takes a single iterable of iterables. Neither creates an intermediate list.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import chain\n\nprint(list(chain([1, 2], [3, 4])))  # [1, 2, 3, 4]\nprint(list(chain.from_iterable([[1, 2], [3, 4]])))  # [1, 2, 3, 4]",
+          "code_language": "python",
+          "key_points": [
+            "Lazily yields elements from multiple iterables in order",
+            "chain.from_iterable() for when you have an iterable of iterables"
+          ],
+          "gotchas": [
+            "Only flattens one level -- not recursive"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain itertools.product() and how it differs from nested for loops.",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["itertools", "product", "cartesian-product"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`itertools.product(*iterables, repeat=1)` computes the Cartesian product of input iterables, which is equivalent to nested for-loops. However, there are important differences:\n\n1. **Cleaner syntax**: Replaces deeply nested loops with a single call\n2. **Dynamic nesting**: The number of iterables can be determined at runtime\n3. **repeat parameter**: `product(A, repeat=3)` equals `product(A, A, A)`\n\nInternally, `product()` first converts each iterable to a tuple (consuming it), then generates tuples lazily. This means it uses O(n) memory for the input iterables but yields results one at a time.",
+          "pseudo_code": "product(A, B):\n  # equivalent to:\n  for a in A:\n    for b in B:\n      yield (a, b)\n\nproduct(A, repeat=2):\n  # equivalent to:\n  for a1 in A:\n    for a2 in A:\n      yield (a1, a2)",
+          "actual_code": "from itertools import product\n\n# Basic Cartesian product\ncolors = ['red', 'blue']\nsizes = ['S', 'M', 'L']\ncombinations = list(product(colors, sizes))\nprint(combinations)\n# [('red', 'S'), ('red', 'M'), ('red', 'L'),\n#  ('blue', 'S'), ('blue', 'M'), ('blue', 'L')]\n\n# Using repeat parameter (same iterable multiple times)\ndice_rolls = list(product(range(1, 7), repeat=2))\nprint(f\"Two dice outcomes: {len(dice_rolls)}\")  # 36\nprint(dice_rolls[:5])  # [(1,1), (1,2), (1,3), (1,4), (1,5)]\n\n# Dynamic nesting -- number of loops decided at runtime\nbinary_digits = [0, 1]\nbit_width = 4\nall_binary = list(product(binary_digits, repeat=bit_width))\nprint(f\"All {bit_width}-bit combos: {len(all_binary)}\")  # 16\nprint(all_binary[:4])  # [(0,0,0,0), (0,0,0,1), (0,0,1,0), (0,0,1,1)]\n\n# Three-way product\nletters = 'AB'\ndigits = '12'\nsymbols = '!@'\nfor combo in product(letters, digits, symbols):\n    print(''.join(combo), end=' ')\n# A1! A1@ A2! A2@ B1! B1@ B2! B2@",
+          "code_language": "python",
+          "key_points": [
+            "Equivalent to nested for-loops but more readable and dynamic",
+            "The repeat parameter lets you repeat the same iterable N times",
+            "Results are tuples yielded lazily (one at a time)",
+            "Input iterables are converted to tuples internally, so generators are consumed"
+          ],
+          "gotchas": [
+            "Input iterables are fully consumed and stored as tuples, so a huge generator as input will still use memory",
+            "The total number of results is the product of lengths -- can explode combinatorially",
+            "product() with generators only works once since generators are consumed on first pass"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`itertools.product()` computes the Cartesian product (equivalent to nested for-loops). The `repeat` keyword lets you use the same iterable multiple times.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import product\n\nprint(list(product('AB', '12')))  # [('A','1'), ('A','2'), ('B','1'), ('B','2')]\nprint(list(product([0, 1], repeat=3)))  # all 3-bit binary numbers",
+          "code_language": "python",
+          "key_points": [
+            "Replaces nested for-loops with cleaner syntax",
+            "repeat=N means product(A, A, ..., A) N times"
+          ],
+          "gotchas": [
+            "Input iterables are fully consumed to tuples internally -- not purely lazy on inputs"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between itertools.permutations() and itertools.combinations()?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["itertools", "permutations", "combinations", "combinatorics"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both generate subsequences from an iterable, but they differ in two key ways:\n\n| Feature | `permutations(iterable, r)` | `combinations(iterable, r)` |\n|---|---|---|\n| Order matters? | Yes -- (A,B) != (B,A) | No -- only (A,B), not (B,A) |\n| Count | n! / (n-r)! | n! / (r! * (n-r)!) |\n| Repetition | No | No |\n\nThere is also `combinations_with_replacement(iterable, r)` which allows elements to repeat.\n\n### When to use each:\n- **Permutations**: Arrangements where order matters (passwords, seating arrangements)\n- **Combinations**: Selections where order doesn't matter (lottery numbers, team selection)\n- **combinations_with_replacement**: Selections with repetition (coin combinations, multisets)",
+          "pseudo_code": "permutations('ABC', 2) -> AB, AC, BA, BC, CA, CB (6 results)\ncombinations('ABC', 2) -> AB, AC, BC (3 results)\ncombinations_with_replacement('ABC', 2) -> AA, AB, AC, BB, BC, CC (6 results)",
+          "actual_code": "from itertools import permutations, combinations, combinations_with_replacement\n\ndata = ['A', 'B', 'C']\n\n# Permutations: order matters\nperms = list(permutations(data, 2))\nprint(f\"Permutations (r=2): {perms}\")\n# [('A','B'), ('A','C'), ('B','A'), ('B','C'), ('C','A'), ('C','B')]\n\n# Combinations: order doesn't matter\ncombs = list(combinations(data, 2))\nprint(f\"Combinations (r=2): {combs}\")\n# [('A','B'), ('A','C'), ('B','C')]\n\n# Combinations with replacement: order doesn't matter, repeats allowed\ncombs_rep = list(combinations_with_replacement(data, 2))\nprint(f\"Combinations w/ replacement: {combs_rep}\")\n# [('A','A'), ('A','B'), ('A','C'), ('B','B'), ('B','C'), ('C','C')]\n\n# Full permutations (all elements)\nall_perms = list(permutations(data))\nprint(f\"Full permutations: {len(all_perms)}\")  # 6 = 3!\n\n# Practical: find all 3-letter words from given letters\nletters = 'cat'\nwords = [''.join(p) for p in permutations(letters)]\nprint(words)  # ['cat', 'cta', 'act', 'atc', 'tca', 'tac']",
+          "code_language": "python",
+          "key_points": [
+            "Permutations: order matters, (A,B) and (B,A) are different results",
+            "Combinations: order doesn't matter, only unique selections",
+            "combinations_with_replacement allows the same element to appear multiple times",
+            "All three return iterators that yield tuples lazily"
+          ],
+          "gotchas": [
+            "Elements are treated as unique based on position, not value -- permutations([1,1,2], 2) yields (1,1) twice",
+            "permutations() without r defaults to full-length permutations (n!), which grows extremely fast",
+            "These functions do not sort or deduplicate -- duplicates in input cause duplicate output tuples"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`permutations(iterable, r)` yields all r-length ordered arrangements. `combinations(iterable, r)` yields all r-length unordered selections. Permutations: order matters. Combinations: order doesn't matter.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import permutations, combinations\n\nprint(list(permutations('ABC', 2)))  # 6 results: AB, AC, BA, BC, CA, CB\nprint(list(combinations('ABC', 2)))  # 3 results: AB, AC, BC",
+          "code_language": "python",
+          "key_points": [
+            "Permutations: n!/(n-r)! results, order matters",
+            "Combinations: n!/(r!(n-r)!) results, order does not matter"
+          ],
+          "gotchas": [
+            "Duplicate values in input produce duplicate tuples in output"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does itertools.groupby() work and what are its common pitfalls?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["itertools", "groupby", "grouping"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`itertools.groupby(iterable, key=None)` groups **consecutive** elements that have the same key. This is critically different from SQL's GROUP BY or pandas' groupby, which group **all** matching elements regardless of position.\n\n### How it works:\n1. Iterates through the iterable\n2. Each time the key function returns a different value, it starts a new group\n3. Yields `(key_value, group_iterator)` pairs\n\n### Critical requirement:\nThe data **must be sorted by the key function** first if you want to group all matching elements together. Otherwise, you get separate groups for non-consecutive runs.",
+          "pseudo_code": "groupby(iterable, key):\n  current_key = None\n  current_group = []\n  for item in iterable:\n    k = key(item)\n    if k != current_key:\n      if current_group:\n        yield current_key, iter(current_group)\n      current_key = k\n      current_group = [item]\n    else:\n      current_group.append(item)\n  yield current_key, iter(current_group)",
+          "actual_code": "from itertools import groupby\nfrom operator import itemgetter\n\n# Basic groupby on sorted data\ndata = [('Alice', 'A'), ('Bob', 'A'), ('Charlie', 'B'), ('Diana', 'B'), ('Eve', 'A')]\n\n# WRONG: data not sorted by grade -- Eve's 'A' is separate from Alice/Bob's 'A'\nfor key, group in groupby(data, key=lambda x: x[1]):\n    print(f\"{key}: {list(group)}\")\n# A: [('Alice', 'A'), ('Bob', 'A')]\n# B: [('Charlie', 'B'), ('Diana', 'B')]\n# A: [('Eve', 'A')]  <-- separate group!\n\n# CORRECT: sort first, then groupby\ndata_sorted = sorted(data, key=lambda x: x[1])\nfor key, group in groupby(data_sorted, key=lambda x: x[1]):\n    print(f\"{key}: {list(group)}\")\n# A: [('Alice', 'A'), ('Bob', 'A'), ('Eve', 'A')]\n# B: [('Charlie', 'B'), ('Diana', 'B')]\n\n# Grouping consecutive identical elements\ntext = 'aaabbccddddee'\nfor char, group in groupby(text):\n    print(f\"{char}: {sum(1 for _ in group)}\", end='  ')\n# a: 3  b: 2  c: 2  d: 4  e: 2\n\n# Run-length encoding\ndef rle_encode(s):\n    return [(char, sum(1 for _ in group)) for char, group in groupby(s)]\n\nprint(rle_encode('aaabbccddddee'))\n# [('a', 3), ('b', 2), ('c', 2), ('d', 4), ('e', 2)]",
+          "code_language": "python",
+          "key_points": [
+            "Groups CONSECUTIVE elements with the same key -- not all elements globally",
+            "Data must be sorted by the key first for global grouping",
+            "Yields (key, group_iterator) pairs",
+            "Great for run-length encoding and consecutive-element analysis"
+          ],
+          "gotchas": [
+            "The group iterator is invalidated when you advance to the next group -- consume it immediately with list()",
+            "Forgetting to sort first is the #1 bug -- you get fragmented groups",
+            "The group iterator shares the underlying iterable, so storing it without consuming leads to empty groups"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`itertools.groupby()` groups **consecutive** elements with the same key. You must sort the data by the key first to get global grouping. Yields `(key, group_iterator)` pairs.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import groupby\n\ndata = sorted([3, 1, 2, 1, 3], key=lambda x: x)\nfor k, g in groupby(data):\n    print(k, list(g))  # 1 [1,1]  2 [2]  3 [3,3]",
+          "code_language": "python",
+          "key_points": [
+            "Groups consecutive elements only -- sort first for global groups",
+            "Consume each group iterator immediately or it gets lost"
+          ],
+          "gotchas": [
+            "Advancing to next group invalidates the previous group iterator"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are itertools.islice(), count(), cycle(), and repeat() used for?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["itertools", "infinite-iterators", "slicing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "These are utility iterators for controlling iteration flow:\n\n### `itertools.count(start=0, step=1)`\nInfinite counter. Yields `start, start+step, start+2*step, ...` forever. Works with floats.\n\n### `itertools.cycle(iterable)`\nInfinitely repeats an iterable. Consumes the iterable into memory on first pass, then cycles.\n\n### `itertools.repeat(object, times=None)`\nYields the same object repeatedly. If `times` is given, stops after that many. Often used with `map()` or `starmap()` for constant arguments.\n\n### `itertools.islice(iterable, stop)` / `islice(iterable, start, stop, step)`\nLazy slicing for iterators. Unlike `list[start:stop:step]`, works on any iterable without converting to a list. Cannot use negative indices.",
+          "pseudo_code": "count(10, 2)  -> 10, 12, 14, 16, ...  (infinite)\ncycle('AB')  -> A, B, A, B, A, B, ... (infinite)\nrepeat(5, 3) -> 5, 5, 5              (finite)\nislice(count(), 5, 10, 2) -> 5, 7, 9 (lazy slice)",
+          "actual_code": "from itertools import count, cycle, repeat, islice\n\n# count: infinite counter\nfor i in islice(count(10, 0.5), 5):\n    print(i, end=' ')  # 10 10.5 11.0 11.5 12.0\nprint()\n\n# count with zip to add indices\ndata = ['a', 'b', 'c']\nindexed = list(zip(count(1), data))\nprint(indexed)  # [(1, 'a'), (2, 'b'), (3, 'c')]\n\n# cycle: round-robin assignment\nteams = cycle(['Red', 'Blue', 'Green'])\nplayers = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve', 'Frank']\nassignment = {p: next(teams) for p in players}\nprint(assignment)\n# {'Alice': 'Red', 'Bob': 'Blue', 'Charlie': 'Green',\n#  'Diana': 'Red', 'Eve': 'Blue', 'Frank': 'Green'}\n\n# repeat: constant argument for map/starmap\nfrom itertools import starmap\nimport operator\npowers = list(starmap(operator.pow, zip(range(1, 5), repeat(2))))\nprint(powers)  # [1, 4, 9, 16] -- each number squared\n\n# islice: lazy slicing on any iterable\ndef fibonacci():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\n# Get fibonacci numbers at positions 10-15\nfib_slice = list(islice(fibonacci(), 10, 16))\nprint(fib_slice)  # [55, 89, 144, 233, 377, 610]\n\n# islice for first N elements of a large file\n# first_lines = list(islice(open('huge.log'), 10))",
+          "code_language": "python",
+          "key_points": [
+            "count() is an infinite counter that works with any numeric type",
+            "cycle() memorizes the iterable and repeats it forever",
+            "repeat() is useful as a constant-value iterator for map/starmap",
+            "islice() provides lazy slicing without loading the full iterable into memory"
+          ],
+          "gotchas": [
+            "cycle() stores the entire iterable in memory -- do not cycle over a huge generator",
+            "islice() does not support negative indices (no way to know length of an iterator)",
+            "count() with float steps can accumulate floating-point errors; use (start + step*i) pattern for precision",
+            "All infinite iterators will run forever if not bounded by islice, zip, or takewhile"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`count(start, step)`: infinite counter. `cycle(iterable)`: infinite repeater. `repeat(obj, n)`: yield same object n times. `islice(iter, start, stop, step)`: lazy slice for iterators.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import count, cycle, repeat, islice\n\nprint(list(islice(count(0, 2), 5)))  # [0, 2, 4, 6, 8]\nprint(list(islice(cycle('AB'), 6)))  # ['A','B','A','B','A','B']\nprint(list(repeat(42, 3)))           # [42, 42, 42]",
+          "code_language": "python",
+          "key_points": [
+            "count/cycle are infinite -- always bound them",
+            "islice is lazy slicing for any iterable"
+          ],
+          "gotchas": [
+            "islice does not support negative indices"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do itertools.starmap() and itertools.tee() work?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["itertools", "starmap", "tee"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### `itertools.starmap(function, iterable)`\nLike `map()`, but unpacks each element of the iterable as arguments to the function using `*`. While `map(f, [(a,b), (c,d)])` passes each tuple as a single argument, `starmap(f, [(a,b), (c,d)])` calls `f(a,b)` and `f(c,d)`.\n\n### `itertools.tee(iterable, n=2)`\nCreates `n` independent iterators from a single iterable. Once tee is called, the original iterable should not be used anymore. Internally, tee uses shared storage -- elements consumed by one iterator but not yet by others are kept in memory.",
+          "pseudo_code": "starmap(func, [(a,b), (c,d)]):\n  yield func(a, b)\n  yield func(c, d)\n\ntee(iterable, 3):\n  return iter1, iter2, iter3  # all independent copies",
+          "actual_code": "from itertools import starmap, tee\nimport operator\n\n# starmap: unpack arguments from tuples\npairs = [(2, 5), (3, 2), (10, 3)]\nresults = list(starmap(pow, pairs))  # pow(2,5), pow(3,2), pow(10,3)\nprint(results)  # [32, 9, 1000]\n\n# Compare with map\nprint(list(map(pow, [2, 3, 10], [5, 2, 3])))  # same result, different input format\n\n# starmap with lambda\npoints = [(1, 2), (3, 4), (5, 6)]\ndistances = list(starmap(lambda x, y: (x**2 + y**2)**0.5, points))\nprint(distances)  # [2.236, 5.0, 7.81]\n\n# tee: create independent copies of an iterator\ndata = iter(range(5))\niter1, iter2, iter3 = tee(data, 3)\n\nprint(list(iter1))  # [0, 1, 2, 3, 4]\nprint(list(iter2))  # [0, 1, 2, 3, 4] -- independent copy\nprint(list(iter3))  # [0, 1, 2, 3, 4] -- independent copy\n\n# Practical: pairwise iteration\ndef pairwise(iterable):\n    a, b = tee(iterable)\n    next(b, None)  # advance second iterator by one\n    return zip(a, b)\n\nprint(list(pairwise([1, 2, 3, 4, 5])))\n# [(1, 2), (2, 3), (3, 4), (4, 5)]",
+          "code_language": "python",
+          "key_points": [
+            "starmap unpacks each element as *args to the function",
+            "tee creates n independent iterators from one source",
+            "pairwise iteration is a classic tee use case",
+            "After tee(), do not use the original iterator"
+          ],
+          "gotchas": [
+            "tee stores elements in memory until all copies have consumed them -- if one iterator is far ahead, memory grows",
+            "Using the original iterator after tee() will consume elements that tee copies miss",
+            "tee is not thread-safe",
+            "For large iterables where one copy is consumed much faster, consider list() instead of tee()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`starmap(f, [(a,b),(c,d)])` calls `f(a,b)` and `f(c,d)` -- like map but unpacks arguments. `tee(iterable, n)` creates n independent iterator copies from one source.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import starmap, tee\n\nprint(list(starmap(pow, [(2,3), (3,2)])))  # [8, 9]\n\na, b = tee(range(3))\nprint(list(a), list(b))  # [0,1,2] [0,1,2]",
+          "code_language": "python",
+          "key_points": [
+            "starmap unpacks tuples as function arguments",
+            "tee creates independent iterator copies"
+          ],
+          "gotchas": [
+            "tee stores unconsumed elements in memory -- can be costly if iterators diverge"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does itertools.accumulate() work and how does it differ from functools.reduce()?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["itertools", "accumulate", "functools", "reduce"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`itertools.accumulate(iterable, func=operator.add, *, initial=None)` yields running (cumulative) results of a binary function. It is similar to `functools.reduce()` but with a key difference:\n\n- **accumulate**: Yields **all** intermediate results (lazy iterator)\n- **reduce**: Returns only the **final** result\n\n`accumulate` is like a scan/prefix-sum operation. It defaults to addition but accepts any two-argument function.",
+          "pseudo_code": "accumulate([1,2,3,4], add):  -> 1, 3, 6, 10  (all intermediates)\nreduce([1,2,3,4], add):      -> 10             (final only)\n\naccumulate([3,1,4,1], max):   -> 3, 3, 4, 4    (running maximum)",
+          "actual_code": "from itertools import accumulate\nfrom functools import reduce\nimport operator\n\n# Running sum (default)\nnums = [1, 2, 3, 4, 5]\nprint(list(accumulate(nums)))  # [1, 3, 6, 10, 15]\n\n# Compare with reduce -- only gets final value\nprint(reduce(operator.add, nums))  # 15\n\n# Running product\nprint(list(accumulate(nums, operator.mul)))  # [1, 2, 6, 24, 120]\n\n# Running maximum\ndata = [3, 1, 4, 1, 5, 9, 2, 6]\nprint(list(accumulate(data, max)))  # [3, 3, 4, 4, 5, 9, 9, 9]\n\n# With initial value\nprint(list(accumulate([1, 2, 3], initial=100)))  # [100, 101, 103, 106]\n\n# Practical: running balance\ntransactions = [1000, -200, -150, 500, -300]\nbalances = list(accumulate(transactions))\nprint(f\"Balances: {balances}\")  # [1000, 800, 650, 1150, 850]\nprint(f\"Min balance: {min(balances)}\")  # 650\n\n# Custom function: running average (using enumerate trick)\ndef running_avg(prev_avg, new_val):\n    # This doesn't work perfectly -- need index info\n    pass\n\n# Better approach for running average\nfrom itertools import accumulate\nsums = accumulate([10, 20, 30, 40, 50])\naverages = [s / i for i, s in enumerate(sums, 1)]\nprint(averages)  # [10.0, 15.0, 20.0, 25.0, 30.0]",
+          "code_language": "python",
+          "key_points": [
+            "accumulate yields ALL intermediate results; reduce yields only the final result",
+            "Default function is addition (running sum)",
+            "Accepts any two-argument function (max, min, mul, custom)",
+            "The initial parameter adds a starting value before the first element"
+          ],
+          "gotchas": [
+            "accumulate is lazy (returns iterator), reduce is eager (returns single value)",
+            "The initial parameter was added in Python 3.8 -- not available in earlier versions",
+            "accumulate always includes the first element as-is (or initial if provided) -- no function call for first element"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`accumulate()` yields all intermediate cumulative results; `reduce()` returns only the final one. `accumulate` defaults to addition. Both accept a custom binary function.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import accumulate\nfrom functools import reduce\n\nprint(list(accumulate([1,2,3,4])))  # [1, 3, 6, 10]\nprint(reduce(lambda a,b: a+b, [1,2,3,4]))  # 10\nprint(list(accumulate([3,1,4,1,5], max)))  # [3, 3, 4, 4, 5]",
+          "code_language": "python",
+          "key_points": [
+            "accumulate = all intermediates (lazy); reduce = final only (eager)",
+            "Default function is addition"
+          ],
+          "gotchas": [
+            "First element is yielded as-is, no function applied to it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain functools.reduce() with practical examples. When should you avoid it?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["functools", "reduce", "functional-programming"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.reduce(function, iterable[, initializer])` applies a two-argument function cumulatively to items of an iterable, reducing it to a single value. It processes left-to-right: `reduce(f, [a,b,c,d])` computes `f(f(f(a,b), c), d)`.\n\nGuido van Rossum himself has argued against overuse of reduce, saying it's often less readable than a simple for-loop. Python 3 moved it from builtins to functools for this reason.\n\n### When to use reduce:\n- Composing functions\n- Computing values where no built-in exists (e.g., GCD of a list)\n- Functional programming patterns\n\n### When to avoid:\n- When `sum()`, `math.prod()`, `min()`, `max()`, `any()`, `all()` do the job\n- When a for-loop is more readable",
+          "pseudo_code": "reduce(f, [a, b, c, d], init):\n  result = init\n  result = f(result, a)\n  result = f(result, b)\n  result = f(result, c)\n  result = f(result, d)\n  return result",
+          "actual_code": "from functools import reduce\nimport operator\nfrom math import gcd\n\n# Basic: sum (but sum() is better)\ntotal = reduce(operator.add, [1, 2, 3, 4, 5])\nprint(total)  # 15\n\n# Product (Python 3.8+ has math.prod)\nproduct = reduce(operator.mul, [1, 2, 3, 4, 5])\nprint(product)  # 120\n\n# GCD of multiple numbers\nnumbers = [24, 36, 48, 60]\nresult = reduce(gcd, numbers)\nprint(f\"GCD: {result}\")  # 12\n\n# Flatten nested list (one level)\nnested = [[1, 2], [3, 4], [5, 6]]\nflat = reduce(operator.add, nested)  # list concatenation\nprint(flat)  # [1, 2, 3, 4, 5, 6]\n\n# With initializer\nresult = reduce(operator.add, [], 0)  # safe on empty iterable\nprint(result)  # 0\n\n# Function composition\ndef compose(*funcs):\n    return reduce(lambda f, g: lambda x: f(g(x)), funcs)\n\ndouble = lambda x: x * 2\nadd_one = lambda x: x + 1\nsquare = lambda x: x ** 2\n\ntransform = compose(square, add_one, double)  # square(add_one(double(x)))\nprint(transform(3))  # square(add_one(6)) = square(7) = 49\n\n# Building a dict from pairs\npairs = [('a', 1), ('b', 2), ('c', 3)]\n# Don't do this -- dict() is better\nresult = reduce(lambda d, kv: {**d, kv[0]: kv[1]}, pairs, {})\nprint(result)  # {'a': 1, 'b': 2, 'c': 3}",
+          "code_language": "python",
+          "key_points": [
+            "Applies a function cumulatively left-to-right, producing a single result",
+            "The initializer prevents errors on empty iterables and acts as the starting value",
+            "Moved to functools in Python 3 (was a builtin in Python 2)",
+            "Best for GCD, function composition, and custom reductions with no built-in equivalent"
+          ],
+          "gotchas": [
+            "Without an initializer, reduce on an empty iterable raises TypeError",
+            "Often less readable than a simple for-loop or built-in (sum, math.prod, min, max)",
+            "Using reduce for list flattening creates a new list each step -- O(n^2) for list concatenation",
+            "reduce processes left-to-right only; for right-fold, reverse the iterable first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`functools.reduce(f, iterable, init)` applies `f` cumulatively to reduce an iterable to one value. Use it for GCD or function composition, but prefer built-ins like `sum()`, `min()`, `max()` when they fit.",
+          "pseudo_code": "",
+          "actual_code": "from functools import reduce\nfrom math import gcd\n\nprint(reduce(gcd, [24, 36, 48]))  # 12\nprint(reduce(lambda a, b: a * b, [1, 2, 3, 4]))  # 24",
+          "code_language": "python",
+          "key_points": [
+            "Cumulative left-to-right reduction to a single value",
+            "Always provide initializer for potentially empty iterables"
+          ],
+          "gotchas": [
+            "Empty iterable without initializer raises TypeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do functools.partial() and functools.partialmethod() work?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["functools", "partial", "currying"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.partial(func, *args, **kwargs)` returns a new callable that \"freezes\" some arguments of the original function. This is a form of partial application (not to be confused with currying, which produces a chain of single-argument functions).\n\n`functools.partialmethod()` is the same concept but designed for use inside class definitions where the first argument is `self`.\n\n### Use cases:\n- Configuring callbacks with pre-set arguments\n- Creating specialized versions of general functions\n- Adapting functions to expected signatures (e.g., for map/filter)",
+          "pseudo_code": "partial(func, a, b=5):\n  return new_func where:\n    new_func(c, d) == func(a, c, d, b=5)\n\n# Frozen args come first, then remaining positional args",
+          "actual_code": "from functools import partial, partialmethod\n\n# Basic partial\ndef power(base, exponent):\n    return base ** exponent\n\nsquare = partial(power, exponent=2)\ncube = partial(power, exponent=3)\n\nprint(square(5))  # 25\nprint(cube(5))    # 125\n\n# Partial with positional args\nint_from_binary = partial(int, base=2)\nprint(int_from_binary('1010'))  # 10\nprint(int_from_binary('1111'))  # 15\n\n# Using partial with map\nfrom operator import mul\ndouble = partial(mul, 2)\nresult = list(map(double, [1, 2, 3, 4]))\nprint(result)  # [2, 4, 6, 8]\n\n# Inspecting partial objects\nprint(square.func)      # <function power>\nprint(square.args)      # ()\nprint(square.keywords)  # {'exponent': 2}\n\n# partialmethod inside a class\nclass Cell:\n    def __init__(self):\n        self._alive = False\n\n    def set_state(self, state):\n        self._alive = state\n\n    set_alive = partialmethod(set_state, True)\n    set_dead = partialmethod(set_state, False)\n\ncell = Cell()\ncell.set_alive()\nprint(cell._alive)  # True\ncell.set_dead()\nprint(cell._alive)  # False\n\n# Partial for callback configuration\nimport logging\nlog_warning = partial(logging.log, logging.WARNING)\nlog_warning(\"This is a warning message\")",
+          "code_language": "python",
+          "key_points": [
+            "partial freezes some arguments, returning a new callable with fewer parameters",
+            "Frozen positional args are prepended; keyword args are merged",
+            "partial objects have .func, .args, and .keywords attributes for introspection",
+            "partialmethod is for use in class bodies where self is handled automatically"
+          ],
+          "gotchas": [
+            "Frozen positional args always come first -- you cannot skip positional arguments",
+            "partial does not validate arguments at creation time; errors appear only when called",
+            "partial objects are not picklable in all Python versions (improved in 3.x)",
+            "Keyword args from partial can be overridden at call time, which may cause confusion"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`functools.partial(func, *args, **kwargs)` freezes some arguments, returning a new callable. `partialmethod` does the same for methods in a class.",
+          "pseudo_code": "",
+          "actual_code": "from functools import partial\n\nint_bin = partial(int, base=2)\nprint(int_bin('1010'))  # 10\n\nfrom operator import mul\ndouble = partial(mul, 2)\nprint(list(map(double, [1,2,3])))  # [2, 4, 6]",
+          "code_language": "python",
+          "key_points": [
+            "Freezes arguments to create specialized functions",
+            "Inspect with .func, .args, .keywords"
+          ],
+          "gotchas": [
+            "Positional args are always prepended -- cannot skip positions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does functools.lru_cache work and what are its limitations?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["functools", "lru_cache", "memoization", "caching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.lru_cache(maxsize=128, typed=False)` is a decorator that memoizes function results using a Least Recently Used (LRU) eviction policy. When the cache is full and a new entry needs to be added, the least recently accessed entry is discarded.\n\n### Parameters:\n- `maxsize`: Maximum number of cached results. `None` means unlimited cache (never evicts). Should be a power of 2 for best performance.\n- `typed`: If True, arguments of different types are cached separately (e.g., `f(3)` and `f(3.0)` are separate entries).\n\nPython 3.9+ also provides `@functools.cache` which is equivalent to `lru_cache(maxsize=None)` -- simpler syntax for unlimited cache.\n\n### How it works:\n- Function arguments are hashed to create a cache key\n- A doubly-linked list tracks access order for LRU eviction\n- Thread-safe (uses a lock internally)",
+          "pseudo_code": "lru_cache stores results in dict:\n  key = hash(args, kwargs)\n  value = function_result\n\nOn call:\n  if key in cache:\n    move to front (most recent)\n    return cached value\n  else:\n    result = call function\n    store in cache\n    if len(cache) > maxsize:\n      evict least recently used\n    return result",
+          "actual_code": "from functools import lru_cache, cache\n\n# Classic example: Fibonacci\n@lru_cache(maxsize=128)\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n - 1) + fibonacci(n - 2)\n\nprint(fibonacci(50))  # 12586269025 (instant, without cache would be very slow)\n\n# Cache info and management\nprint(fibonacci.cache_info())\n# CacheInfo(hits=48, misses=51, maxsize=128, currsize=51)\n\nfibonacci.cache_clear()  # clear the cache\n\n# typed=True: different types cached separately\n@lru_cache(maxsize=32, typed=True)\ndef process(value):\n    print(f\"Computing for {value!r} (type={type(value).__name__})\")\n    return value * 2\n\nprocess(3)    # prints \"Computing for 3 (type=int)\"\nprocess(3.0)  # prints \"Computing for 3.0 (type=float)\" -- separate cache entry\nprocess(3)    # cache hit, no print\n\n# Python 3.9+ shorthand\n@cache  # equivalent to lru_cache(maxsize=None)\ndef factorial(n):\n    return n * factorial(n - 1) if n else 1\n\nprint(factorial(10))  # 3628800\n\n# Practical: expensive computation caching\n@lru_cache(maxsize=256)\ndef fetch_user_permissions(user_id: int, role: str) -> set:\n    # Simulating expensive DB query\n    print(f\"DB query for user {user_id}, role {role}\")\n    return {f\"perm_{i}\" for i in range(5)}\n\nfetch_user_permissions(1, 'admin')  # DB query\nfetch_user_permissions(1, 'admin')  # cache hit\nfetch_user_permissions(1, 'user')   # DB query (different args)",
+          "code_language": "python",
+          "key_points": [
+            "LRU eviction policy removes least recently accessed entries when cache is full",
+            "Use .cache_info() to monitor hits/misses and .cache_clear() to reset",
+            "maxsize=None means unlimited cache; Python 3.9 @cache is shorthand for this",
+            "Thread-safe by default"
+          ],
+          "gotchas": [
+            "All arguments must be hashable (no lists or dicts as args) -- use tuple instead",
+            "Caches based on exact argument match -- f(a=1, b=2) and f(b=2, a=1) are separate entries",
+            "Memory can grow unbounded with maxsize=None -- be careful with large result objects",
+            "Does not work with methods that take self (self is part of the key, so each instance gets separate entries); use per-instance caching instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@lru_cache(maxsize=128)` memoizes function results with LRU eviction. Arguments must be hashable. Use `.cache_info()` to inspect and `.cache_clear()` to reset. Python 3.9+ has `@cache` for unlimited caching.",
+          "pseudo_code": "",
+          "actual_code": "from functools import lru_cache\n\n@lru_cache(maxsize=128)\ndef fib(n):\n    return n if n < 2 else fib(n-1) + fib(n-2)\n\nprint(fib(50))  # 12586269025\nprint(fib.cache_info())  # CacheInfo(hits=48, misses=51, ...)",
+          "code_language": "python",
+          "key_points": [
+            "Memoizes with LRU eviction; maxsize=None for unlimited",
+            "All arguments must be hashable"
+          ],
+          "gotchas": [
+            "Lists/dicts as arguments cause TypeError -- convert to tuples/frozensets"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is functools.singledispatch and how do you use it for function overloading?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["functools", "singledispatch", "overloading", "polymorphism"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.singledispatch` transforms a function into a single-dispatch generic function. It dispatches on the type of the **first** argument, allowing you to register specialized implementations for different types -- similar to function overloading in statically typed languages.\n\nFor methods, Python 3.8+ provides `functools.singledispatchmethod`.\n\n### How it works:\n1. Decorate the base function with `@singledispatch`\n2. Register type-specific implementations with `@func.register(type)`\n3. At call time, dispatch selects the most specific registered implementation based on the first argument's type",
+          "pseudo_code": "@singledispatch\ndef process(arg):      # default/fallback\n    ...\n\n@process.register(int)\ndef _(arg):            # called when arg is int\n    ...\n\n@process.register(str)\ndef _(arg):            # called when arg is str\n    ...",
+          "actual_code": "from functools import singledispatch, singledispatchmethod\n\n@singledispatch\ndef format_value(value):\n    \"\"\"Default handler for unknown types.\"\"\"\n    return f\"Unknown: {value!r}\"\n\n@format_value.register(int)\ndef _(value):\n    return f\"Integer: {value:,}\"\n\n@format_value.register(float)\ndef _(value):\n    return f\"Float: {value:.2f}\"\n\n@format_value.register(str)\ndef _(value):\n    return f\"String: '{value}'\"\n\n@format_value.register(list)\ndef _(value):\n    return f\"List[{len(value)} items]: {value}\"\n\n# Type annotations style (Python 3.7+)\n@format_value.register\ndef _(value: dict):\n    return f\"Dict[{len(value)} keys]: {list(value.keys())}\"\n\nprint(format_value(42))           # Integer: 42\nprint(format_value(3.14159))      # Float: 3.14\nprint(format_value(\"hello\"))      # String: 'hello'\nprint(format_value([1, 2, 3]))    # List[3 items]: [1, 2, 3]\nprint(format_value({\"a\": 1}))     # Dict[1 keys]: ['a']\nprint(format_value(None))         # Unknown: None\n\n# singledispatchmethod for classes\nclass Serializer:\n    @singledispatchmethod\n    def serialize(self, value):\n        raise TypeError(f\"Cannot serialize {type(value)}\")\n\n    @serialize.register(int)\n    @serialize.register(float)\n    def _(self, value):\n        return str(value)\n\n    @serialize.register(str)\n    def _(self, value):\n        return f'\"{value}\"'\n\ns = Serializer()\nprint(s.serialize(42))       # '42'\nprint(s.serialize(\"hello\"))  # '\"hello\"'",
+          "code_language": "python",
+          "key_points": [
+            "Dispatches on the type of the first argument only",
+            "The base function serves as the default/fallback handler",
+            "Register implementations with @func.register(type) or type annotations",
+            "singledispatchmethod (3.8+) works with class methods"
+          ],
+          "gotchas": [
+            "Only dispatches on the FIRST argument's type -- cannot do multi-dispatch natively",
+            "Does not work with typing generics (List[int] vs List[str] -- both dispatch as list)",
+            "ABCs can be registered but dispatch order for overlapping types follows MRO",
+            "singledispatchmethod must be the outermost decorator when combined with @classmethod or @staticmethod"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@singledispatch` provides function overloading based on the first argument's type. Register type-specific handlers with `@func.register(type)`. Unrecognized types fall through to the base function.",
+          "pseudo_code": "",
+          "actual_code": "from functools import singledispatch\n\n@singledispatch\ndef show(val):\n    print(f\"Unknown: {val}\")\n\n@show.register(int)\ndef _(val):\n    print(f\"Int: {val}\")\n\n@show.register(str)\ndef _(val):\n    print(f\"Str: {val}\")\n\nshow(42)       # Int: 42\nshow(\"hello\")  # Str: hello\nshow([1, 2])   # Unknown: [1, 2]",
+          "code_language": "python",
+          "key_points": [
+            "Dispatch on first argument type only",
+            "Base function is the fallback for unregistered types"
+          ],
+          "gotchas": [
+            "Only single dispatch (first argument) -- no multi-dispatch"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain functools.total_ordering and functools.wraps. When are they essential?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["functools", "total_ordering", "wraps", "decorators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### `functools.total_ordering`\nA class decorator that automatically generates missing comparison methods. You only need to define `__eq__` and **one** of `__lt__`, `__le__`, `__gt__`, or `__ge__`, and it fills in the rest.\n\n### `functools.wraps`\nA decorator for decorator functions that copies metadata (`__name__`, `__doc__`, `__module__`, `__qualname__`, `__dict__`, `__wrapped__`) from the original function to the wrapper. Without it, the decorated function loses its identity.\n\n### When essential:\n- **total_ordering**: When you have a custom class that needs all 6 comparison operators but writing all of them is redundant.\n- **wraps**: In **every** decorator you write. Without it, debugging becomes harder (function names show as \"wrapper\" in tracebacks), and tools like `help()`, `inspect`, and Sphinx break.",
+          "pseudo_code": "total_ordering:\n  You define __eq__ and __lt__\n  It auto-generates __le__, __gt__, __ge__\n\nwraps:\n  @wraps(original_func)  # copies metadata\n  def wrapper(*args, **kwargs):\n      return original_func(*args, **kwargs)",
+          "actual_code": "from functools import total_ordering, wraps\nimport time\n\n# total_ordering example\n@total_ordering\nclass Student:\n    def __init__(self, name, grade):\n        self.name = name\n        self.grade = grade\n\n    def __eq__(self, other):\n        if not isinstance(other, Student):\n            return NotImplemented\n        return self.grade == other.grade\n\n    def __lt__(self, other):\n        if not isinstance(other, Student):\n            return NotImplemented\n        return self.grade < other.grade\n\n    def __repr__(self):\n        return f\"Student({self.name!r}, {self.grade})\"\n\na = Student('Alice', 90)\nb = Student('Bob', 85)\nc = Student('Charlie', 90)\n\n# These all work even though we only defined __eq__ and __lt__\nprint(a > b)   # True  (auto-generated)\nprint(a >= c)  # True  (auto-generated)\nprint(b <= a)  # True  (auto-generated)\nprint(sorted([a, b, c]))  # [Student('Bob', 85), Student('Alice', 90), ...]\n\n# wraps example\ndef timer(func):\n    @wraps(func)  # preserves func's metadata\n    def wrapper(*args, **kwargs):\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        elapsed = time.perf_counter() - start\n        print(f\"{func.__name__} took {elapsed:.4f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow_function():\n    \"\"\"A function that simulates slow work.\"\"\"\n    time.sleep(0.01)\n    return 42\n\n# With @wraps: metadata is preserved\nprint(slow_function.__name__)  # 'slow_function' (not 'wrapper')\nprint(slow_function.__doc__)   # 'A function that simulates slow work.'\nprint(slow_function.__wrapped__)  # original function reference\n\n# Without @wraps, you'd get:\n# slow_function.__name__ -> 'wrapper'\n# slow_function.__doc__  -> None",
+          "code_language": "python",
+          "key_points": [
+            "total_ordering needs __eq__ and one comparison method to generate the rest",
+            "wraps copies __name__, __doc__, __module__, __qualname__, __wrapped__ from the original",
+            "wraps also copies __dict__ and updates __wrapped__ for access to the original function",
+            "Both are essential for writing clean, maintainable Python"
+          ],
+          "gotchas": [
+            "total_ordering auto-generated methods are slower than hand-written ones (they compose from the defined methods)",
+            "total_ordering requires returning NotImplemented for incompatible types, not raising TypeError",
+            "Without @wraps, inspect.signature() returns the wrapper's signature, breaking documentation tools",
+            "@wraps should be used in EVERY decorator -- it is a common interview red flag to omit it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@total_ordering` auto-generates missing comparison methods from `__eq__` + one of `__lt__/__gt__/__le__/__ge__`. `@wraps(func)` preserves the original function's metadata in decorators.",
+          "pseudo_code": "",
+          "actual_code": "from functools import total_ordering, wraps\n\n@total_ordering\nclass Box:\n    def __init__(self, size): self.size = size\n    def __eq__(self, other): return self.size == other.size\n    def __lt__(self, other): return self.size < other.size\n\ndef my_decorator(func):\n    @wraps(func)\n    def wrapper(*a, **kw): return func(*a, **kw)\n    return wrapper",
+          "code_language": "python",
+          "key_points": [
+            "total_ordering: define __eq__ + one comparator, get all six",
+            "wraps: always use in decorators to preserve function identity"
+          ],
+          "gotchas": [
+            "total_ordering is slower than hand-written comparisons"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does collections.Counter work and what are its most useful operations?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["collections", "Counter", "counting"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`collections.Counter` is a dict subclass for counting hashable objects. It maps elements to their counts. It supports several powerful operations:\n\n- **Arithmetic**: `+`, `-` (drops zero/negative), `&` (intersection/min), `|` (union/max)\n- **most_common(n)**: Returns the n most frequent elements\n- **elements()**: Returns an iterator over elements repeating each as many times as its count\n- **subtract()**: Like update() but subtracts counts\n- **total()**: Sum of all counts (Python 3.10+)\n\nCounter is essentially a multiset (bag) data structure.",
+          "pseudo_code": "Counter(['a', 'b', 'a', 'c', 'a', 'b'])\n-> Counter({'a': 3, 'b': 2, 'c': 1})\n\nCounter('abracadabra').most_common(3)\n-> [('a', 5), ('b', 2), ('r', 2)]",
+          "actual_code": "from collections import Counter\n\n# Creation methods\nc1 = Counter('abracadabra')\nc2 = Counter({'red': 4, 'blue': 2})\nc3 = Counter(cats=4, dogs=8)\nprint(c1)  # Counter({'a': 5, 'b': 2, 'r': 2, 'c': 1, 'd': 1})\n\n# most_common\nwords = 'the cat sat on the mat the cat'.split()\nword_counts = Counter(words)\nprint(word_counts.most_common(2))  # [('the', 3), ('cat', 2)]\n\n# Missing keys return 0 (not KeyError)\nprint(word_counts['elephant'])  # 0\n\n# Arithmetic operations\ninventory = Counter(apples=5, oranges=3)\nsold = Counter(apples=2, oranges=1, bananas=1)\nremaining = inventory - sold  # drops zero/negative\nprint(remaining)  # Counter({'apples': 3, 'oranges': 2})\n\n# Union and intersection\na = Counter(x=3, y=2, z=1)\nb = Counter(x=1, y=4, w=2)\nprint(a | b)  # Counter({'y': 4, 'x': 3, 'w': 2, 'z': 1})  -- max of each\nprint(a & b)  # Counter({'y': 2, 'x': 1})  -- min of each (positive only)\n\n# elements() iterator\nc = Counter(a=3, b=1)\nprint(sorted(c.elements()))  # ['a', 'a', 'a', 'b']\n\n# Practical: anagram check\ndef is_anagram(s1, s2):\n    return Counter(s1.lower().replace(' ', '')) == Counter(s2.lower().replace(' ', ''))\n\nprint(is_anagram('listen', 'silent'))  # True\n\n# Practical: find duplicates\ndata = [1, 2, 3, 2, 4, 3, 5, 2]\nduplicates = [item for item, count in Counter(data).items() if count > 1]\nprint(duplicates)  # [2, 3]",
+          "code_language": "python",
+          "key_points": [
+            "Counter is a dict subclass that maps elements to counts",
+            "Missing keys return 0 instead of raising KeyError",
+            "Supports arithmetic (+, -, &, |) for combining counters",
+            "most_common(n) returns the n highest-count elements"
+          ],
+          "gotchas": [
+            "Subtraction drops zero and negative counts -- use subtract() to keep them",
+            "Counter({'a': 0}) is different from Counter() -- the key exists with count 0",
+            "elements() ignores zero and negative counts",
+            "Counter is unordered in Python < 3.7 (follows dict ordering in 3.7+)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Counter` is a dict subclass for counting hashable items. Missing keys return 0. Supports arithmetic (`+`, `-`, `&`, `|`) and `most_common(n)` for top-N elements.",
+          "pseudo_code": "",
+          "actual_code": "from collections import Counter\n\nc = Counter('abracadabra')\nprint(c.most_common(3))  # [('a', 5), ('b', 2), ('r', 2)]\nprint(c['z'])  # 0 (no KeyError)\nprint(Counter('abc') + Counter('bcd'))  # Counter({'b': 2, 'c': 2, 'a': 1, 'd': 1})",
+          "code_language": "python",
+          "key_points": [
+            "Dict subclass for counting; missing keys return 0",
+            "most_common(n) and arithmetic (+, -, &, |) are key features"
+          ],
+          "gotchas": [
+            "Subtraction drops zero/negative counts unless you use subtract()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain collections.defaultdict, namedtuple, and deque with use cases.",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["collections", "defaultdict", "namedtuple", "deque"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### `defaultdict(default_factory)`\nA dict subclass that calls `default_factory` to supply missing keys. Instead of raising KeyError, it creates the value automatically. Common factories: `list`, `int`, `set`, `lambda: default_value`.\n\n### `namedtuple(typename, field_names)`\nCreates an immutable tuple subclass with named fields. Provides readability of a class with the efficiency of a tuple. Python 3.6+ also has `typing.NamedTuple` for type-annotated version.\n\n### `deque(iterable=(), maxlen=None)`\nDouble-ended queue with O(1) append/pop from both ends. Lists are O(n) for `insert(0, x)` and `pop(0)` but deque handles both ends efficiently.",
+          "pseudo_code": "defaultdict(list): d['missing'] -> []\ndefaultdict(int):  d['missing'] -> 0\n\nPoint = namedtuple('Point', ['x', 'y'])\np = Point(1, 2); p.x -> 1\n\ndeque: appendleft, popleft -> O(1)\n       maxlen auto-discards oldest",
+          "actual_code": "from collections import defaultdict, namedtuple, deque\n\n# defaultdict: auto-create missing values\n# Group items by category\nproducts = [('fruit', 'apple'), ('vegetable', 'carrot'),\n            ('fruit', 'banana'), ('vegetable', 'broccoli')]\n\ngrouped = defaultdict(list)\nfor category, item in products:\n    grouped[category].append(item)  # no need to check if key exists\nprint(dict(grouped))  # {'fruit': ['apple', 'banana'], 'vegetable': ['carrot', 'broccoli']}\n\n# defaultdict(int) for counting\nword_count = defaultdict(int)\nfor word in 'the cat sat on the mat'.split():\n    word_count[word] += 1\nprint(dict(word_count))  # {'the': 2, 'cat': 1, 'sat': 1, 'on': 1, 'mat': 1}\n\n# Nested defaultdict\ntree = lambda: defaultdict(tree)\nfilesystem = tree()\nfilesystem['home']['user']['documents']['file.txt'] = 'content'\nprint(filesystem['home']['user']['documents']['file.txt'])  # 'content'\n\n# namedtuple: readable tuples\nPoint = namedtuple('Point', ['x', 'y'])\np = Point(3, 4)\nprint(p.x, p.y)       # 3 4\nprint(p[0], p[1])     # 3 4 (still a tuple)\nprint(p._asdict())    # {'x': 3, 'y': 4}\np2 = p._replace(x=10) # immutable, returns new instance\nprint(p2)             # Point(x=10, y=4)\n\n# namedtuple with defaults (Python 3.6.1+)\nConfig = namedtuple('Config', ['host', 'port', 'debug'], defaults=['localhost', 8080, False])\nprint(Config())  # Config(host='localhost', port=8080, debug=False)\n\n# deque: efficient double-ended queue\ndq = deque([1, 2, 3])\ndq.appendleft(0)  # O(1)\ndq.append(4)      # O(1)\nprint(dq)          # deque([0, 1, 2, 3, 4])\ndq.popleft()       # O(1) -- list.pop(0) is O(n)\nprint(dq)          # deque([1, 2, 3, 4])\n\n# deque as sliding window\nwindow = deque(maxlen=3)\nfor i in range(6):\n    window.append(i)\n    print(list(window), end=' ')\n# [0] [0,1] [0,1,2] [1,2,3] [2,3,4] [3,4,5]\n\n# deque.rotate\ndq = deque([1, 2, 3, 4, 5])\ndq.rotate(2)   # rotate right\nprint(dq)      # deque([4, 5, 1, 2, 3])\ndq.rotate(-2)  # rotate left\nprint(dq)      # deque([1, 2, 3, 4, 5])",
+          "code_language": "python",
+          "key_points": [
+            "defaultdict eliminates KeyError by auto-creating missing values with a factory function",
+            "namedtuple creates immutable, lightweight objects with named fields",
+            "deque provides O(1) append/pop from both ends; maxlen creates a fixed-size sliding window",
+            "deque.rotate() rotates elements in-place"
+          ],
+          "gotchas": [
+            "defaultdict's factory is called for ANY missing key access, including d[key] in boolean checks -- this creates entries silently",
+            "namedtuple instances are immutable -- use _replace() to create modified copies",
+            "deque is slower than list for random access (O(n) for d[i] in the middle)",
+            "namedtuple field names cannot start with underscore or be Python keywords"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`defaultdict(factory)`: dict that auto-creates missing values. `namedtuple`: immutable tuple with named fields. `deque`: double-ended queue with O(1) append/pop on both ends.",
+          "pseudo_code": "",
+          "actual_code": "from collections import defaultdict, namedtuple, deque\n\nd = defaultdict(list)\nd['key'].append(1)  # no KeyError\n\nPoint = namedtuple('Point', 'x y')\np = Point(1, 2)\n\ndq = deque([1, 2, 3], maxlen=5)\ndq.appendleft(0)  # O(1)",
+          "code_language": "python",
+          "key_points": [
+            "defaultdict: auto-creates values for missing keys",
+            "namedtuple: immutable tuple with named fields",
+            "deque: O(1) on both ends, optional maxlen"
+          ],
+          "gotchas": [
+            "defaultdict creates entries on ANY access, even reads of missing keys"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the operator module and how does it improve functional programming in Python?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["operator", "functional-programming", "itemgetter", "attrgetter"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `operator` module provides function equivalents of Python's built-in operators. These are faster than lambdas (implemented in C) and more readable in functional programming contexts.\n\n### Key functions:\n- **Arithmetic**: `add`, `sub`, `mul`, `truediv`, `floordiv`, `mod`, `pow`\n- **Comparison**: `eq`, `ne`, `lt`, `le`, `gt`, `ge`\n- **Logical**: `and_`, `or_`, `not_`\n- **Item access**: `itemgetter(key)` -- returns a callable that gets item[key]\n- **Attribute access**: `attrgetter(attr)` -- returns a callable that gets obj.attr\n- **Method calling**: `methodcaller(name, *args)` -- calls obj.name(*args)\n\n### Why use them:\n1. Faster than equivalent lambdas (C implementation)\n2. More readable in map/reduce/sorted calls\n3. Picklable (lambdas are not)",
+          "pseudo_code": "operator.add(a, b)        == a + b\nitemgetter('key')(d)      == d['key']\nattrgetter('name')(obj)   == obj.name\nmethodcaller('upper')(s)  == s.upper()\n\n# Multi-key versions:\nitemgetter(0, 2)(lst)     == (lst[0], lst[2])\nattrgetter('a', 'b')(obj) == (obj.a, obj.b)",
+          "actual_code": "from operator import add, mul, itemgetter, attrgetter, methodcaller\nfrom functools import reduce\n\n# Arithmetic operators with reduce/map\nnumbers = [1, 2, 3, 4, 5]\nprint(reduce(add, numbers))  # 15 (cleaner than lambda a,b: a+b)\nprint(reduce(mul, numbers))  # 120\n\n# itemgetter for sorting dicts\nstudents = [\n    {'name': 'Alice', 'grade': 90, 'age': 20},\n    {'name': 'Bob', 'grade': 85, 'age': 22},\n    {'name': 'Charlie', 'grade': 90, 'age': 19},\n]\n\n# Sort by grade (descending), then name (ascending)\nby_grade_name = sorted(students, key=lambda s: (-s['grade'], s['name']))\nprint([s['name'] for s in by_grade_name])  # ['Alice', 'Charlie', 'Bob']\n\n# itemgetter for single key\nby_name = sorted(students, key=itemgetter('name'))\nprint([s['name'] for s in by_name])  # ['Alice', 'Bob', 'Charlie']\n\n# Multi-key itemgetter\nget_name_grade = itemgetter('name', 'grade')\nprint(get_name_grade(students[0]))  # ('Alice', 90)\n\n# attrgetter with named tuples\nfrom collections import namedtuple\nPoint = namedtuple('Point', 'x y')\npoints = [Point(3, 4), Point(1, 2), Point(5, 0)]\nsorted_by_x = sorted(points, key=attrgetter('x'))\nprint(sorted_by_x)  # [Point(x=1, y=2), Point(x=3, y=4), Point(x=5, y=0)]\n\n# Nested attrgetter\nclass Department:\n    def __init__(self, name, manager):\n        self.name = name\n        self.manager = manager\n\nclass Manager:\n    def __init__(self, name):\n        self.name = name\n\ndepts = [Department('Engineering', Manager('Alice')),\n         Department('Sales', Manager('Bob'))]\nsorted_depts = sorted(depts, key=attrgetter('manager.name'))\nprint([d.manager.name for d in sorted_depts])  # ['Alice', 'Bob']\n\n# methodcaller\nstrings = ['hello world', 'foo bar', 'python rocks']\nresult = list(map(methodcaller('upper'), strings))\nprint(result)  # ['HELLO WORLD', 'FOO BAR', 'PYTHON ROCKS']\n\n# methodcaller with arguments\nresult = list(map(methodcaller('split', ' ', 1), strings))\nprint(result)  # [['hello', 'world'], ['foo', 'bar'], ['python', 'rocks']]",
+          "code_language": "python",
+          "key_points": [
+            "operator functions are C-implemented and faster than equivalent lambdas",
+            "itemgetter, attrgetter, and methodcaller return reusable callables",
+            "Multi-key versions return tuples: itemgetter(0, 2) returns (item[0], item[2])",
+            "attrgetter supports dotted names for nested attribute access"
+          ],
+          "gotchas": [
+            "operator.and_ and operator.or_ are bitwise, not logical -- use operator.and_ for & not 'and'",
+            "itemgetter does not handle missing keys gracefully -- raises KeyError/IndexError",
+            "These functions are not composable without functools.partial or lambda wrappers",
+            "methodcaller creates a new callable each time -- store it in a variable if reusing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The `operator` module provides C-implemented function equivalents of operators. `itemgetter('key')`, `attrgetter('attr')`, and `methodcaller('method')` return callables -- faster and more readable than lambdas in `sorted()`, `map()`, etc.",
+          "pseudo_code": "",
+          "actual_code": "from operator import itemgetter, attrgetter, add\n\ndata = [{'name': 'Bob', 'age': 25}, {'name': 'Alice', 'age': 30}]\nprint(sorted(data, key=itemgetter('name')))  # sorted by name\nprint(itemgetter('name', 'age')(data[0]))    # ('Bob', 25)",
+          "code_language": "python",
+          "key_points": [
+            "Faster than lambdas (C implementation), picklable",
+            "itemgetter/attrgetter/methodcaller are the most useful"
+          ],
+          "gotchas": [
+            "operator.and_/or_ are bitwise, not boolean logical operators"
+          ]
+        }
+      ]
+    }
+  ]
+}

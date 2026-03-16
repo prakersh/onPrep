@@ -1,0 +1,812 @@
+{
+  "concept_slug": "oop-classes-objects",
+  "questions": [
+    {
+      "title": "How do you define a class in Python, and what is the role of `__init__`?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["classes", "__init__", "constructor", "basics"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A class in Python is defined using the `class` keyword. The `__init__` method is the initializer (often called the constructor, though technically `__new__` is the true constructor). It is called automatically when a new instance is created, and its primary purpose is to set up the instance's initial state by assigning attributes.\n\nThe first parameter of `__init__` is always `self`, which refers to the newly created instance. Through `self`, you attach attributes that are unique to each instance.\n\nKey distinctions:\n- `__new__` creates the instance (allocates memory)\n- `__init__` initializes the instance (sets attributes)\n- `__init__` must return `None` (implicitly)\n- If `__init__` is not defined, instances are created with no custom initialization",
+          "pseudo_code": "1. Use 'class ClassName:' to define a class\n2. Define __init__(self, params) to initialize attributes\n3. Use self.attribute = value to set instance attributes\n4. Create instance: obj = ClassName(args)\n5. Python calls __new__ then __init__ automatically",
+          "actual_code": "class Dog:\n    # Class attribute -- shared by all instances\n    species = \"Canis familiaris\"\n\n    def __init__(self, name, age, breed):\n        \"\"\"Initialize a Dog instance.\"\"\"\n        # Instance attributes -- unique to each instance\n        self.name = name\n        self.age = age\n        self.breed = breed\n        self.tricks = []  # mutable default per instance\n\n    def bark(self):\n        return f\"{self.name} says Woof!\"\n\n    def learn_trick(self, trick):\n        self.tricks.append(trick)\n        return f\"{self.name} learned {trick}\"\n\n# Creating instances\nrex = Dog(\"Rex\", 3, \"German Shepherd\")\nbuddy = Dog(\"Buddy\", 5, \"Golden Retriever\")\n\nprint(rex.bark())        # Rex says Woof!\nprint(buddy.bark())      # Buddy says Woof!\nprint(rex.species)       # Canis familiaris (class attribute)\n\n# Each instance has its own tricks list\nrex.learn_trick(\"sit\")\nprint(rex.tricks)    # ['sit']\nprint(buddy.tricks)  # [] -- separate list\n\n# Instance attributes vs class attributes\nprint(rex.__dict__)  # {'name': 'Rex', 'age': 3, 'breed': 'German Shepherd', 'tricks': ['sit']}\nprint(Dog.__dict__)  # includes 'species', '__init__', 'bark', etc.\n\n# What happens without __init__\nclass Empty:\n    pass\n\ne = Empty()\ne.x = 10  # attributes can still be added dynamically\nprint(e.x)  # 10",
+          "code_language": "python",
+          "key_points": [
+            "__init__ initializes instance attributes via self.attr = value",
+            "self refers to the current instance being created",
+            "Class attributes are shared, instance attributes are per-instance",
+            "__init__ is called automatically after __new__ creates the instance"
+          ],
+          "gotchas": [
+            "__init__ must return None -- returning anything else raises TypeError",
+            "Mutable default arguments in __init__ signature (def __init__(self, items=[])) are shared across calls -- use None and create inside",
+            "Forgetting self in __init__ creates a local variable, not an instance attribute"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__init__` is the initializer called when creating an instance. It sets up instance attributes via `self.attr = value`. `self` refers to the new instance.",
+          "pseudo_code": "",
+          "actual_code": "class Person:\n    def __init__(self, name, age):\n        self.name = name\n        self.age = age\n\n    def greet(self):\n        return f\"Hi, I'm {self.name}, age {self.age}\"\n\np = Person(\"Alice\", 30)\nprint(p.greet())  # Hi, I'm Alice, age 30",
+          "code_language": "python",
+          "key_points": [
+            "__init__ sets up instance state, called automatically on creation",
+            "self is the instance reference"
+          ],
+          "gotchas": [
+            "Returning a value from __init__ raises TypeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between instance variables and class variables in Python?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["variables", "instance", "class", "scope"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Class variables** are defined directly in the class body (outside any method). They are shared by all instances and belong to the class itself. Accessed via `ClassName.var` or `instance.var` (if no instance attribute shadows it).\n\n**Instance variables** are defined inside methods (typically `__init__`) using `self.var = value`. Each instance gets its own copy.\n\nThe lookup order is: instance `__dict__` first, then class `__dict__`, then base classes (MRO). When you assign `self.var = value`, it always creates/updates an instance variable, even if a class variable with the same name exists. This is called shadowing.\n\nMutable class variables are a common source of bugs: if you mutate (not reassign) a mutable class variable through an instance, all instances see the change because they share the same object.",
+          "pseudo_code": "1. Class variable: defined at class level, shared by all instances\n2. Instance variable: defined via self.x = value, unique per instance\n3. Lookup: instance.__dict__ -> class.__dict__ -> base classes\n4. Assignment via self always creates/updates instance variable\n5. Mutation of mutable class variable affects all instances",
+          "actual_code": "class Student:\n    # Class variables\n    school = \"MIT\"\n    all_students = []  # DANGER: mutable class variable\n\n    def __init__(self, name, gpa):\n        # Instance variables\n        self.name = name\n        self.gpa = gpa\n        Student.all_students.append(self)  # modify class var via class name\n\n# Class variable is shared\ns1 = Student(\"Alice\", 3.8)\ns2 = Student(\"Bob\", 3.5)\n\nprint(s1.school)  # MIT\nprint(s2.school)  # MIT\nprint(s1.school is s2.school)  # True -- same object\n\n# Reassignment via instance creates instance variable (shadows class var)\ns1.school = \"Stanford\"\nprint(s1.school)  # Stanford (instance variable)\nprint(s2.school)  # MIT (still class variable)\nprint(Student.school)  # MIT (class variable unchanged)\n\nprint(\"school\" in s1.__dict__)  # True -- s1 has instance var\nprint(\"school\" in s2.__dict__)  # False -- s2 uses class var\n\n# Mutable class variable pitfall\nprint(Student.all_students)  # [<Student Alice>, <Student Bob>]\nprint(len(s1.all_students))  # 2 -- shared between all instances\n\n# Demonstrating the pitfall with mutable defaults\nclass BrokenList:\n    items = []  # shared mutable class variable\n\n    def add(self, item):\n        self.items.append(item)  # mutates the CLASS variable!\n\na = BrokenList()\nb = BrokenList()\na.add(\"x\")\nprint(b.items)  # ['x'] -- oops, shared!\n\n# Fixed version\nclass FixedList:\n    def __init__(self):\n        self.items = []  # instance variable -- each gets its own\n\n    def add(self, item):\n        self.items.append(item)\n\na = FixedList()\nb = FixedList()\na.add(\"x\")\nprint(b.items)  # [] -- correctly isolated",
+          "code_language": "python",
+          "key_points": [
+            "Class variables are shared across all instances, defined at class level",
+            "Instance variables are unique per instance, defined via self.x in __init__",
+            "Assignment via self creates an instance variable that shadows the class variable",
+            "Lookup order: instance -> class -> base classes"
+          ],
+          "gotchas": [
+            "Mutable class variables (lists, dicts) are shared -- mutating one affects all instances",
+            "self.var = value always creates an instance variable, even if a class variable exists with that name",
+            "del instance.var removes the instance variable, re-exposing the class variable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Class variables are defined at class level and shared by all instances. Instance variables are set via `self.x` in `__init__` and are unique per instance. Assignment via `self` creates an instance variable that shadows the class variable.",
+          "pseudo_code": "",
+          "actual_code": "class Counter:\n    count = 0  # class variable (shared)\n\n    def __init__(self, name):\n        self.name = name  # instance variable (unique)\n        Counter.count += 1\n\na = Counter(\"a\")\nb = Counter(\"b\")\nprint(Counter.count)  # 2 (shared)\nprint(a.name)  # 'a' (unique)",
+          "code_language": "python",
+          "key_points": [
+            "Class variables shared, instance variables unique",
+            "self.x = v creates instance variable, ClassName.x = v modifies class variable"
+          ],
+          "gotchas": [
+            "Mutable class variables (lists, dicts) shared across instances cause bugs"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between instance methods, class methods, and static methods?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["methods", "classmethod", "staticmethod", "instance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python classes support three types of methods, each receiving different first arguments:\n\n**Instance methods**: Regular methods that receive `self` (the instance) as the first argument. They can access and modify both instance and class state. This is the default method type.\n\n**Class methods** (`@classmethod`): Receive `cls` (the class) as the first argument. They can access and modify class state but not instance state. Used for alternative constructors and class-level operations.\n\n**Static methods** (`@staticmethod`): Receive no implicit first argument. They are essentially regular functions namespaced within the class. They cannot access instance or class state directly.\n\nAll three can be called on both the class and instances, but instance methods require an instance.",
+          "pseudo_code": "Instance method: def method(self) -> access instance + class state\nClass method: @classmethod def method(cls) -> access class state only\nStatic method: @staticmethod def method() -> no access to class/instance state\n\nCall patterns:\n- instance.method() works for all three\n- Class.method() works for classmethod and staticmethod\n- Class.instance_method() requires passing instance manually",
+          "actual_code": "class Pizza:\n    base_price = 10.0  # class variable\n\n    def __init__(self, toppings, size=\"medium\"):\n        self.toppings = toppings  # instance variable\n        self.size = size\n\n    # Instance method -- accesses self (instance)\n    def price(self):\n        topping_cost = len(self.toppings) * 1.5\n        size_multiplier = {\"small\": 0.8, \"medium\": 1.0, \"large\": 1.3}\n        return (self.base_price + topping_cost) * size_multiplier[self.size]\n\n    # Class method -- accesses cls (class), used as alternative constructor\n    @classmethod\n    def margherita(cls):\n        \"\"\"Factory method for a standard margherita.\"\"\"\n        return cls([\"mozzarella\", \"tomato\", \"basil\"], \"medium\")\n\n    @classmethod\n    def set_base_price(cls, price):\n        \"\"\"Modify class state.\"\"\"\n        cls.base_price = price\n\n    # Static method -- no access to instance or class\n    @staticmethod\n    def validate_topping(topping):\n        valid = {\"mozzarella\", \"tomato\", \"basil\", \"pepperoni\", \"mushroom\"}\n        return topping.lower() in valid\n\n# Instance method -- needs an instance\np = Pizza([\"pepperoni\", \"mushroom\"], \"large\")\nprint(p.price())  # (10.0 + 3.0) * 1.3 = 16.9\n\n# Class method -- called on class or instance\nm = Pizza.margherita()  # alternative constructor\nprint(m.toppings)  # ['mozzarella', 'tomato', 'basil']\nprint(type(m))     # <class 'Pizza'>\n\n# Static method -- called on class or instance\nprint(Pizza.validate_topping(\"pepperoni\"))  # True\nprint(p.validate_topping(\"pineapple\"))      # False\n\n# Key difference: inheritance behavior\nclass FancyPizza(Pizza):\n    base_price = 15.0\n\nf = FancyPizza.margherita()  # cls is FancyPizza\nprint(type(f))      # <class 'FancyPizza'> -- classmethod used cls\nprint(f.base_price) # 15.0",
+          "code_language": "python",
+          "key_points": [
+            "Instance methods: receive self, access all state",
+            "Class methods: receive cls, access class state, used as alternative constructors",
+            "Static methods: no implicit arg, utility functions namespaced in class",
+            "Class methods respect inheritance (cls is the actual subclass)"
+          ],
+          "gotchas": [
+            "Calling an instance method on the class requires passing the instance: Class.method(instance)",
+            "Static methods cannot access self or cls -- if you need either, use the appropriate method type",
+            "In a classmethod, use cls() not ClassName() to support subclass inheritance"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Instance methods get `self`, class methods get `cls`, static methods get nothing implicit. Use instance methods for per-object behavior, class methods for constructors, static methods for utilities.",
+          "pseudo_code": "",
+          "actual_code": "class MyClass:\n    x = 10\n    def instance_method(self):    return self.x\n\n    @classmethod\n    def class_method(cls):        return cls.x\n\n    @staticmethod\n    def static_method():          return \"no access to self or cls\"\n\nobj = MyClass()\nprint(obj.instance_method())  # 10\nprint(MyClass.class_method()) # 10\nprint(MyClass.static_method())  # no access to self or cls",
+          "code_language": "python",
+          "key_points": [
+            "self for instance, cls for class, nothing for static",
+            "classmethod for alt constructors, staticmethod for utilities"
+          ],
+          "gotchas": [
+            "Calling instance method on class requires passing instance manually"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `self` work in Python, and why is it explicitly required?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["self", "instance", "methods", "explicit"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`self` is the conventional name for the first parameter of instance methods. It refers to the instance on which the method is called. Python requires it explicitly (unlike `this` in Java/C++ which is implicit) following the Zen of Python's principle: \"Explicit is better than implicit.\"\n\nWhen you call `obj.method(arg)`, Python translates it to `ClassName.method(obj, arg)`. The instance is automatically passed as the first argument. `self` is not a keyword -- you could name it anything, but `self` is a universally followed convention.\n\nThe explicit `self` serves several purposes:\n- Makes it clear when you're accessing instance attributes vs local variables\n- Allows methods to be defined outside the class and attached later\n- Makes the descriptor protocol and method binding transparent",
+          "pseudo_code": "1. obj.method(arg) is equivalent to ClassName.method(obj, arg)\n2. self is just the first parameter -- by convention named 'self'\n3. self.x accesses instance attribute x\n4. x alone accesses local variable x\n5. Without self prefix, you'd confuse instance vs local variables",
+          "actual_code": "class Rectangle:\n    def __init__(self, width, height):\n        # self.width is instance attribute, width is the parameter\n        self.width = width\n        self.height = height\n\n    def area(self):\n        # self.width accesses instance attribute\n        return self.width * self.height\n\n    def resize(self, factor):\n        self.width *= factor\n        self.height *= factor\n        return self  # returning self enables method chaining\n\nr = Rectangle(10, 5)\n\n# These are equivalent:\nprint(r.area())              # 50 -- Python passes r as self\nprint(Rectangle.area(r))     # 50 -- explicit unbound call\n\n# Method chaining with return self\nr.resize(2).resize(0.5)\nprint(r.area())  # 50 -- back to original\n\n# self is not a keyword -- any name works (but DON'T do this)\nclass BadStyle:\n    def __init__(this, value):  # works but violates convention\n        this.value = value\n\n# Why explicit self matters: methods can be defined outside\ndef external_greet(self):\n    return f\"Hello from {self.name}\"\n\nclass Person:\n    def __init__(self, name):\n        self.name = name\n    greet = external_greet  # attach external function as method\n\np = Person(\"Alice\")\nprint(p.greet())  # Hello from Alice\n\n# Common mistake: forgetting self\nclass Broken:\n    def __init__(self, x):\n        x = x  # BUG: this sets local var, not instance attribute\n        # Should be: self.x = x",
+          "code_language": "python",
+          "key_points": [
+            "self is the instance passed as the first argument to instance methods",
+            "obj.method(arg) translates to Class.method(obj, arg)",
+            "self is a convention, not a keyword, but always use the name self",
+            "Explicit self distinguishes instance attributes from local variables"
+          ],
+          "gotchas": [
+            "Forgetting self.x = x in __init__ creates a local variable instead of instance attribute",
+            "Forgetting self as the first parameter causes TypeError: method takes 0 positional arguments but 1 was given",
+            "Using a name other than self works but violates PEP 8 conventions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`self` is the first parameter of instance methods, referring to the instance. `obj.method()` automatically passes `obj` as `self`. It is explicit to distinguish instance attributes from locals.",
+          "pseudo_code": "",
+          "actual_code": "class Dog:\n    def __init__(self, name):\n        self.name = name  # instance attribute\n\n    def bark(self):\n        return f\"{self.name} says Woof!\"\n\ndog = Dog(\"Rex\")\nprint(dog.bark())          # Rex says Woof!\nprint(Dog.bark(dog))       # Rex says Woof! -- equivalent",
+          "code_language": "python",
+          "key_points": [
+            "self = the instance, passed automatically by Python",
+            "Explicit to distinguish self.x (instance) from x (local)"
+          ],
+          "gotchas": [
+            "Forgetting self in method definition causes TypeError when calling"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `@property` decorator work for encapsulation in Python classes?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["property", "encapsulation", "getter", "setter"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `@property` decorator provides a Pythonic way to implement encapsulation by defining getter, setter, and deleter methods that are accessed like regular attributes. This follows the Uniform Access Principle -- the caller doesn't need to know whether they're accessing a stored attribute or a computed value.\n\nThe property mechanism allows you to:\n1. Add validation on setting values\n2. Compute values on the fly (lazy/computed properties)\n3. Make attributes read-only by omitting the setter\n4. Migrate from simple attributes to properties without breaking the public API\n\nThis is preferable to Java-style `get_x()`/`set_x()` methods because Python's philosophy favors direct attribute access when possible, with properties as a seamless upgrade path when control is needed.",
+          "pseudo_code": "1. Define getter with @property -- read access\n2. Define setter with @name.setter -- write access with validation\n3. Define deleter with @name.deleter -- delete with cleanup\n4. Store actual value in private attribute (self._name)\n5. External code uses obj.name as if it were a simple attribute",
+          "actual_code": "class BankAccount:\n    def __init__(self, owner, balance=0):\n        self.owner = owner\n        self._balance = balance  # private by convention\n        self._transactions = []\n\n    @property\n    def balance(self):\n        \"\"\"Read-only computed from transactions.\"\"\"\n        return self._balance\n\n    @balance.setter\n    def balance(self, value):\n        if value < 0:\n            raise ValueError(\"Balance cannot be negative\")\n        self._balance = value\n\n    @property\n    def is_overdrawn(self):\n        \"\"\"Computed property -- no setter means read-only.\"\"\"\n        return self._balance < 0\n\n    def deposit(self, amount):\n        if amount <= 0:\n            raise ValueError(\"Deposit must be positive\")\n        self._balance += amount\n        self._transactions.append((\"deposit\", amount))\n\n    def withdraw(self, amount):\n        if amount > self._balance:\n            raise ValueError(\"Insufficient funds\")\n        self._balance -= amount\n        self._transactions.append((\"withdraw\", amount))\n\naccount = BankAccount(\"Alice\", 1000)\nprint(account.balance)      # 1000 -- calls getter\naccount.deposit(500)\nprint(account.balance)      # 1500\nprint(account.is_overdrawn) # False -- computed property\n\ntry:\n    account.balance = -100  # calls setter, raises ValueError\nexcept ValueError as e:\n    print(e)  # Balance cannot be negative\n\ntry:\n    account.is_overdrawn = True  # AttributeError -- no setter\nexcept AttributeError as e:\n    print(e)  # property 'is_overdrawn' ... has no setter\n\n# Migrating from plain attribute to property (no API change)\nclass Circle:\n    def __init__(self, radius):\n        self._radius = radius\n\n    @property\n    def radius(self):\n        return self._radius\n\n    @radius.setter\n    def radius(self, value):\n        if value < 0:\n            raise ValueError(\"Radius must be non-negative\")\n        self._radius = value\n\n    @property\n    def area(self):\n        import math\n        return math.pi * self._radius ** 2\n\nc = Circle(5)\nprint(c.radius)  # 5\nprint(c.area)    # 78.539...\nc.radius = 10    # validation via setter\nprint(c.area)    # 314.159...",
+          "code_language": "python",
+          "key_points": [
+            "@property provides getter, @name.setter provides validated setter",
+            "Omitting setter makes the property read-only",
+            "Properties allow migration from plain attributes without changing API",
+            "Store backing data in _private attribute to avoid recursion"
+          ],
+          "gotchas": [
+            "Using self.name = value inside the setter when name is the property causes infinite recursion",
+            "Properties are defined on the class, not the instance -- they must be class-level",
+            "Properties add method call overhead compared to direct attribute access"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@property` creates attribute-style access with getter/setter control. Use `@name.setter` for validation. Omit setter for read-only. Store data in `self._name` to avoid recursion.",
+          "pseudo_code": "",
+          "actual_code": "class User:\n    def __init__(self, age):\n        self._age = age\n\n    @property\n    def age(self):\n        return self._age\n\n    @age.setter\n    def age(self, value):\n        if value < 0:\n            raise ValueError(\"Age must be non-negative\")\n        self._age = value\n\nu = User(25)\nu.age = 30   # validated\nprint(u.age) # 30",
+          "code_language": "python",
+          "key_points": [
+            "@property for getter, @name.setter for validated setter",
+            "Use _private backing attribute"
+          ],
+          "gotchas": [
+            "Assigning self.name inside setter causes infinite recursion"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is `__slots__` and when should you use it?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["__slots__", "memory", "optimization", "attributes"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__slots__` is a class attribute that explicitly declares the allowed instance attributes. When defined, Python does not create a `__dict__` for each instance, instead allocating a fixed set of slots for the declared attributes.\n\nBenefits:\n1. **Memory savings**: No per-instance `__dict__` -- significant when creating millions of instances\n2. **Faster attribute access**: Slot access uses a fixed offset rather than a hash table lookup\n3. **Prevents typos**: Assigning to an undeclared attribute raises `AttributeError`\n\nDrawbacks:\n1. Cannot add attributes dynamically\n2. Cannot use multiple inheritance with different non-empty `__slots__`\n3. Weakref not supported unless `__weakref__` is in `__slots__`\n4. Must re-declare slots in subclasses (they don't inherit)\n\n`__slots__` is most useful for data-heavy classes with many instances (e.g., ORM rows, data points, game objects).",
+          "pseudo_code": "1. Define __slots__ = ('attr1', 'attr2') at class level\n2. No __dict__ is created for instances\n3. Only declared attributes can be set\n4. Saves ~50-60% memory per instance\n5. Attribute access is slightly faster (direct offset vs dict lookup)",
+          "actual_code": "import sys\n\n# Without __slots__\nclass PointDict:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n# With __slots__\nclass PointSlots:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n# Memory comparison\np_dict = PointDict(1, 2)\np_slots = PointSlots(1, 2)\n\nprint(sys.getsizeof(p_dict) + sys.getsizeof(p_dict.__dict__))\n# ~152 bytes (instance + __dict__)\nprint(sys.getsizeof(p_slots))\n# ~56 bytes (no __dict__)\n\n# No __dict__ with __slots__\nprint(hasattr(p_dict, '__dict__'))   # True\nprint(hasattr(p_slots, '__dict__'))  # False\n\n# Dynamic attribute assignment prevented\ntry:\n    p_slots.z = 3  # AttributeError!\nexcept AttributeError as e:\n    print(e)  # 'PointSlots' object has no attribute 'z'\n\n# Slots with inheritance\nclass Point3D(PointSlots):\n    __slots__ = ('z',)  # only add NEW attributes\n\n    def __init__(self, x, y, z):\n        super().__init__(x, y)\n        self.z = z\n\np3d = Point3D(1, 2, 3)\nprint(p3d.x, p3d.y, p3d.z)  # 1 2 3\nprint(hasattr(p3d, '__dict__'))  # False\n\n# To allow __dict__ alongside slots:\nclass Flexible:\n    __slots__ = ('x', '__dict__')  # allows dynamic attrs too\n\n    def __init__(self, x):\n        self.x = x\n\nf = Flexible(10)\nf.y = 20  # works because __dict__ is in __slots__\nprint(f.x, f.y)  # 10 20",
+          "code_language": "python",
+          "key_points": [
+            "__slots__ prevents __dict__ creation, saving memory",
+            "Only declared attributes can be assigned",
+            "Faster attribute access via fixed-offset slots",
+            "Must re-declare in subclasses -- only add new attributes"
+          ],
+          "gotchas": [
+            "Cannot add attributes not in __slots__ -- raises AttributeError",
+            "Subclasses without __slots__ get __dict__ back, negating memory savings",
+            "Cannot use __slots__ with multiple inheritance if both parents have non-empty __slots__",
+            "weakref requires '__weakref__' in __slots__"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__slots__` declares allowed instance attributes, preventing `__dict__` creation. Saves memory and speeds up access. Use when creating many instances with fixed attributes.",
+          "pseudo_code": "",
+          "actual_code": "class Point:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\np = Point(1, 2)\nprint(p.x, p.y)  # 1 2\n# p.z = 3  # AttributeError -- not in __slots__",
+          "code_language": "python",
+          "key_points": [
+            "Prevents __dict__, saves 50%+ memory per instance",
+            "Only declared attributes allowed"
+          ],
+          "gotchas": [
+            "Cannot add dynamic attributes unless __dict__ is in __slots__"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dataclasses work in Python, and when should you use them?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "@dataclass", "boilerplate"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `@dataclass` decorator (from `dataclasses` module, Python 3.7+) automatically generates boilerplate methods like `__init__`, `__repr__`, `__eq__`, and optionally `__hash__`, `__lt__`, etc., based on class annotations.\n\nDataclasses are ideal for classes that primarily store data (DTOs, configuration objects, records). They reduce boilerplate while remaining regular classes -- you can still add methods, use inheritance, and customize behavior.\n\nKey parameters of `@dataclass`:\n- `frozen=True`: makes instances immutable (also enables hashing)\n- `order=True`: generates comparison methods (`__lt__`, `__le__`, etc.)\n- `slots=True` (Python 3.10+): generates `__slots__`\n- `kw_only=True` (Python 3.10+): makes all fields keyword-only\n\nUse `field()` for advanced field configuration: default factories, excluding from repr/compare, etc.",
+          "pseudo_code": "1. Import dataclass and field from dataclasses\n2. Apply @dataclass decorator to class\n3. Define fields as class annotations with optional defaults\n4. __init__, __repr__, __eq__ are auto-generated\n5. Use field(default_factory=list) for mutable defaults\n6. Use __post_init__ for validation or computed fields",
+          "actual_code": "from dataclasses import dataclass, field\nfrom typing import List\n\n@dataclass\nclass Product:\n    name: str\n    price: float\n    quantity: int = 0\n    tags: List[str] = field(default_factory=list)  # mutable default\n\n    @property\n    def total_value(self):\n        return self.price * self.quantity\n\n# Auto-generated __init__, __repr__, __eq__\np1 = Product(\"Widget\", 9.99, 100, [\"sale\"])\np2 = Product(\"Widget\", 9.99, 100, [\"sale\"])\n\nprint(p1)          # Product(name='Widget', price=9.99, quantity=100, tags=['sale'])\nprint(p1 == p2)    # True (auto __eq__ compares all fields)\nprint(p1.total_value)  # 999.0\n\n# Frozen dataclass (immutable)\n@dataclass(frozen=True)\nclass Point:\n    x: float\n    y: float\n\npt = Point(1.0, 2.0)\ntry:\n    pt.x = 3.0  # FrozenInstanceError\nexcept Exception as e:\n    print(type(e).__name__)  # FrozenInstanceError\n\n# Frozen dataclasses are hashable (can be dict keys / set members)\npoints = {Point(0, 0), Point(1, 1), Point(0, 0)}\nprint(len(points))  # 2 -- duplicate removed\n\n# __post_init__ for validation\n@dataclass\nclass Employee:\n    name: str\n    salary: float\n    department: str = \"Engineering\"\n    email: str = field(init=False)  # not in __init__\n\n    def __post_init__(self):\n        if self.salary < 0:\n            raise ValueError(\"Salary cannot be negative\")\n        self.email = f\"{self.name.lower().replace(' ', '.')}@company.com\"\n\nemp = Employee(\"Alice Smith\", 85000)\nprint(emp.email)  # alice.smith@company.com\n\n# Python 3.10+ features\n@dataclass(slots=True, frozen=True)\nclass Config:\n    host: str = \"localhost\"\n    port: int = 8080\n    debug: bool = False",
+          "code_language": "python",
+          "key_points": [
+            "@dataclass auto-generates __init__, __repr__, __eq__",
+            "Use field(default_factory=list) for mutable defaults",
+            "frozen=True makes instances immutable and hashable",
+            "__post_init__ runs after __init__ for validation and computed fields"
+          ],
+          "gotchas": [
+            "Never use mutable default values directly (tags: list = []) -- use field(default_factory=list)",
+            "Fields with defaults must come after fields without defaults (like function args)",
+            "@dataclass(eq=True) is default, but __hash__ is set to None unless frozen=True",
+            "Inheritance: parent fields come first in __init__, child fields after"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@dataclass` auto-generates `__init__`, `__repr__`, `__eq__` from annotated fields. Use `field(default_factory=list)` for mutable defaults, `frozen=True` for immutability, and `__post_init__` for validation.",
+          "pseudo_code": "",
+          "actual_code": "from dataclasses import dataclass, field\n\n@dataclass\nclass User:\n    name: str\n    age: int\n    tags: list = field(default_factory=list)\n\nu = User(\"Alice\", 30)\nprint(u)  # User(name='Alice', age=30, tags=[])\nprint(u == User(\"Alice\", 30))  # True",
+          "code_language": "python",
+          "key_points": [
+            "Auto-generates __init__, __repr__, __eq__",
+            "Use field(default_factory=...) for mutable defaults"
+          ],
+          "gotchas": [
+            "Mutable defaults without field() are shared across instances"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `__post_init__` work in dataclasses?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "__post_init__", "validation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__post_init__` is called automatically after the auto-generated `__init__` completes. It provides a hook for:\n1. **Validation**: Check that field values meet business rules\n2. **Computed fields**: Derive values from other fields\n3. **Transformation**: Normalize or convert input data\n\nFields marked with `field(init=False)` are not included in `__init__` and must be set in `__post_init__`. Fields using `InitVar` are passed to `__post_init__` as parameters but are not stored as instance attributes.\n\nThe execution order is: `__init__` sets all fields -> `__post_init__` runs with access to all fields.",
+          "pseudo_code": "1. @dataclass generates __init__ from field annotations\n2. __init__ assigns all fields\n3. __init__ calls self.__post_init__() at the end\n4. Use field(init=False) for fields not in __init__\n5. Use InitVar[type] for init-only parameters passed to __post_init__",
+          "actual_code": "from dataclasses import dataclass, field, InitVar\nfrom typing import List\nimport math\n\n# Validation in __post_init__\n@dataclass\nclass Rectangle:\n    width: float\n    height: float\n    area: float = field(init=False)  # computed, not in __init__\n\n    def __post_init__(self):\n        if self.width <= 0 or self.height <= 0:\n            raise ValueError(\"Dimensions must be positive\")\n        self.area = self.width * self.height\n\nr = Rectangle(10, 5)\nprint(r)       # Rectangle(width=10, height=5, area=50)\nprint(r.area)  # 50\n\ntry:\n    Rectangle(-1, 5)\nexcept ValueError as e:\n    print(e)  # Dimensions must be positive\n\n# InitVar -- parameter for __post_init__ only, not stored\n@dataclass\nclass User:\n    name: str\n    raw_password: InitVar[str]  # passed to __post_init__, not stored\n    password_hash: str = field(init=False)\n\n    def __post_init__(self, raw_password: str):\n        import hashlib\n        self.password_hash = hashlib.sha256(raw_password.encode()).hexdigest()\n\nu = User(\"Alice\", \"secret123\")\nprint(u)  # User(name='Alice', password_hash='...')\nprint(hasattr(u, 'raw_password'))  # False -- not stored\n\n# Transformation in __post_init__\n@dataclass\nclass Config:\n    values: List[str]\n    separator: InitVar[str] = \",\"\n    normalized: List[str] = field(init=False)\n\n    def __post_init__(self, separator):\n        # If values was passed as a string, split it\n        if isinstance(self.values, str):\n            self.values = self.values.split(separator)\n        self.normalized = [v.strip().lower() for v in self.values]\n\nc = Config(\"  Foo , Bar , BAZ \", separator=\",\")\nprint(c.values)      # ['  Foo ', ' Bar ', ' BAZ ']\nprint(c.normalized)  # ['foo', 'bar', 'baz']",
+          "code_language": "python",
+          "key_points": [
+            "__post_init__ runs after __init__ for validation and computed fields",
+            "field(init=False) creates fields set in __post_init__, not __init__",
+            "InitVar[type] creates init-only params passed to __post_init__ but not stored",
+            "Use for validation, normalization, and derived attribute computation"
+          ],
+          "gotchas": [
+            "InitVar fields are NOT instance attributes -- they exist only during __post_init__",
+            "In frozen dataclasses, __post_init__ cannot assign to fields normally -- use object.__setattr__(self, 'field', value)",
+            "__post_init__ is not called if you bypass __init__ (e.g., with copy or pickle)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__post_init__` runs after the auto-generated `__init__`. Use it for validation, computed fields (`field(init=False)`), and init-only parameters (`InitVar`).",
+          "pseudo_code": "",
+          "actual_code": "from dataclasses import dataclass, field, InitVar\n\n@dataclass\nclass Circle:\n    radius: float\n    diameter: float = field(init=False)\n\n    def __post_init__(self):\n        if self.radius < 0:\n            raise ValueError(\"Radius must be non-negative\")\n        self.diameter = self.radius * 2\n\nc = Circle(5)\nprint(c.diameter)  # 10",
+          "code_language": "python",
+          "key_points": [
+            "Runs after __init__ for validation and computed fields",
+            "field(init=False) for computed, InitVar for init-only params"
+          ],
+          "gotchas": [
+            "InitVar fields are not stored as instance attributes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `@classmethod` as an alternative constructor?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["classmethod", "constructor", "factory", "patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python doesn't support constructor overloading (multiple `__init__` with different signatures). Instead, `@classmethod` is used to create alternative constructors (factory methods) that construct instances from different input formats.\n\nThe key advantage is using `cls()` instead of `ClassName()`, which ensures the method works correctly with inheritance -- subclasses get instances of their own type.\n\nCommon examples in the standard library:\n- `dict.fromkeys(['a', 'b'], 0)` creates a dict from keys\n- `datetime.fromtimestamp(ts)` creates a datetime from Unix timestamp\n- `int.from_bytes(b'\\x00\\x01', 'big')` creates int from bytes",
+          "pseudo_code": "1. Define @classmethod that takes cls plus alternative parameters\n2. Parse/transform the input into __init__ parameters\n3. Return cls(param1, param2) to create the instance\n4. Using cls() ensures correct class in inheritance hierarchies",
+          "actual_code": "from datetime import datetime\n\nclass Date:\n    def __init__(self, year: int, month: int, day: int):\n        self.year = year\n        self.month = month\n        self.day = day\n\n    def __repr__(self):\n        return f\"Date({self.year}, {self.month}, {self.day})\"\n\n    @classmethod\n    def from_string(cls, date_str: str):\n        \"\"\"Create from 'YYYY-MM-DD' string.\"\"\"\n        year, month, day = map(int, date_str.split(\"-\"))\n        return cls(year, month, day)\n\n    @classmethod\n    def from_timestamp(cls, ts: float):\n        \"\"\"Create from Unix timestamp.\"\"\"\n        dt = datetime.fromtimestamp(ts)\n        return cls(dt.year, dt.month, dt.day)\n\n    @classmethod\n    def today(cls):\n        \"\"\"Create for current date.\"\"\"\n        dt = datetime.now()\n        return cls(dt.year, dt.month, dt.day)\n\n    @classmethod\n    def from_dict(cls, data: dict):\n        \"\"\"Create from dictionary.\"\"\"\n        return cls(data[\"year\"], data[\"month\"], data[\"day\"])\n\n# Multiple ways to create the same object\nd1 = Date(2024, 1, 15)\nd2 = Date.from_string(\"2024-01-15\")\nd3 = Date.from_dict({\"year\": 2024, \"month\": 1, \"day\": 15})\nd4 = Date.today()\n\nprint(d1)  # Date(2024, 1, 15)\nprint(d2)  # Date(2024, 1, 15)\n\n# Inheritance works correctly with cls()\nclass ISODate(Date):\n    \"\"\"Date subclass with ISO formatting.\"\"\"\n    def __repr__(self):\n        return f\"{self.year:04d}-{self.month:02d}-{self.day:02d}\"\n\niso = ISODate.from_string(\"2024-01-15\")\nprint(type(iso))  # <class 'ISODate'> -- correct subclass!\nprint(iso)        # 2024-01-15\n\n# Real-world example: config loading\nclass Config:\n    def __init__(self, **settings):\n        self.settings = settings\n\n    @classmethod\n    def from_json(cls, path: str):\n        import json\n        with open(path) as f:\n            return cls(**json.load(f))\n\n    @classmethod\n    def from_env(cls):\n        import os\n        return cls(\n            debug=os.getenv(\"DEBUG\", \"false\").lower() == \"true\",\n            host=os.getenv(\"HOST\", \"localhost\"),\n            port=int(os.getenv(\"PORT\", \"8080\")),\n        )",
+          "code_language": "python",
+          "key_points": [
+            "@classmethod constructors parse different input formats into __init__ params",
+            "Always use cls() instead of ClassName() to support inheritance",
+            "Python's equivalent of constructor overloading",
+            "Standard library uses this pattern: dict.fromkeys, datetime.fromtimestamp"
+          ],
+          "gotchas": [
+            "Using ClassName() instead of cls() breaks inheritance -- subclasses get parent instances",
+            "Alternative constructors should validate input and raise clear errors",
+            "Too many constructors may indicate the class is doing too much"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@classmethod` creates alternative constructors that parse different input formats. Use `cls()` instead of the class name to support inheritance correctly.",
+          "pseudo_code": "",
+          "actual_code": "class User:\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\n    @classmethod\n    def from_dict(cls, data):\n        return cls(data[\"name\"], data[\"email\"])\n\n    @classmethod\n    def from_string(cls, s):\n        name, email = s.split(\",\")\n        return cls(name.strip(), email.strip())\n\nu = User.from_string(\"Alice, alice@example.com\")\nprint(u.name)  # Alice",
+          "code_language": "python",
+          "key_points": [
+            "Use cls() not ClassName() for inheritance support",
+            "Python's way to do constructor overloading"
+          ],
+          "gotchas": [
+            "ClassName() in classmethod breaks inheritance"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between `__new__` and `__init__` in Python?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["__new__", "__init__", "constructor", "metaclass"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__new__` and `__init__` are both involved in object creation but serve different roles:\n\n**`__new__(cls, ...)`**: The true constructor. It is a static method (special-cased) that creates and returns a new instance. It is called before `__init__`. You rarely override it for regular classes.\n\n**`__init__(self, ...)`**: The initializer. It receives the already-created instance and sets up its attributes. It must return `None`.\n\nThe creation process:\n1. `MyClass(args)` calls `MyClass.__new__(MyClass, args)`\n2. If `__new__` returns an instance of `MyClass`, `__init__` is called on it\n3. If `__new__` returns something else, `__init__` is NOT called\n\nYou override `__new__` when:\n- Subclassing immutable types (str, int, tuple) that need modification before creation\n- Implementing the singleton pattern\n- Controlling instance creation in metaclasses\n- Creating instances of a different class",
+          "pseudo_code": "1. obj = MyClass(args)\n2. Python calls: obj = MyClass.__new__(MyClass, args)\n3. If isinstance(obj, MyClass): MyClass.__init__(obj, args)\n4. __new__ creates the instance, __init__ initializes it\n5. Override __new__ for immutable types or singleton pattern",
+          "actual_code": "# Normal class -- __new__ is inherited from object\nclass Normal:\n    def __init__(self, value):\n        print(f\"__init__ called with {value}\")\n        self.value = value\n\nn = Normal(42)\n# __init__ called with 42\n\n# Overriding __new__ -- creating immutable subclass\nclass UpperStr(str):\n    \"\"\"A string that is always uppercase.\"\"\"\n    def __new__(cls, value):\n        # Must override __new__ because str is immutable\n        # The value must be set BEFORE the object is created\n        instance = super().__new__(cls, value.upper())\n        return instance\n\ns = UpperStr(\"hello\")\nprint(s)         # HELLO\nprint(type(s))   # <class 'UpperStr'>\nprint(isinstance(s, str))  # True\n\n# Demonstrating the creation order\nclass Traced:\n    def __new__(cls, value):\n        print(f\"1. __new__ called with cls={cls.__name__}, value={value}\")\n        instance = super().__new__(cls)\n        print(f\"2. Instance created: {type(instance)}\")\n        return instance\n\n    def __init__(self, value):\n        print(f\"3. __init__ called with self={type(self).__name__}, value={value}\")\n        self.value = value\n\nt = Traced(42)\n# 1. __new__ called with cls=Traced, value=42\n# 2. Instance created: <class 'Traced'>\n# 3. __init__ called with self=Traced, value=42\n\n# Singleton using __new__\nclass Singleton:\n    _instance = None\n\n    def __new__(cls, *args, **kwargs):\n        if cls._instance is None:\n            cls._instance = super().__new__(cls)\n        return cls._instance\n\n    def __init__(self, value):\n        self.value = value  # called every time!\n\na = Singleton(1)\nb = Singleton(2)\nprint(a is b)    # True\nprint(a.value)   # 2 -- __init__ ran twice, overwriting\n\n# __new__ returning a different type skips __init__\nclass Weird:\n    def __new__(cls):\n        return 42  # not an instance of Weird\n\n    def __init__(self):\n        print(\"This never runs!\")\n\nw = Weird()\nprint(w)       # 42\nprint(type(w)) # <class 'int'>",
+          "code_language": "python",
+          "key_points": [
+            "__new__ creates the instance (true constructor), __init__ initializes it",
+            "__new__ is called first, receives cls; __init__ receives the created instance",
+            "Override __new__ for immutable types (str, int, tuple) or singletons",
+            "If __new__ returns non-instance of the class, __init__ is not called"
+          ],
+          "gotchas": [
+            "Singleton via __new__ still calls __init__ every time -- it may overwrite attributes",
+            "__new__ must call super().__new__(cls) and return the instance",
+            "Forgetting to return the instance from __new__ returns None",
+            "__init__ must return None -- returning a value raises TypeError"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__new__` creates the instance (called first, receives `cls`). `__init__` initializes it (called second, receives `self`). Override `__new__` for immutable types or singletons.",
+          "pseudo_code": "",
+          "actual_code": "class UpperStr(str):\n    def __new__(cls, value):\n        return super().__new__(cls, value.upper())\n\ns = UpperStr(\"hello\")\nprint(s)  # HELLO\nprint(isinstance(s, str))  # True",
+          "code_language": "python",
+          "key_points": [
+            "__new__ creates, __init__ initializes",
+            "Override __new__ for immutable types"
+          ],
+          "gotchas": [
+            "__init__ still runs on singleton instances, potentially overwriting state"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does object identity work in Python (`is` vs `==`)?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["identity", "equality", "is", "id"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python distinguishes between **identity** and **equality**:\n\n- **`is`** checks identity: whether two references point to the exact same object in memory (`id(a) == id(b)`)\n- **`==`** checks equality: whether two objects have the same value (calls `__eq__`)\n\nIdentity implies equality, but equality does not imply identity. Two different objects can have equal values.\n\nCPython caches small integers (-5 to 256) and interned strings, so `is` may return `True` unexpectedly for these. This is an implementation detail you should never rely on.\n\nUse `is` only for:\n- Comparing to `None` (`if x is None`)\n- Comparing to sentinel objects\n- Checking if two variables reference the exact same object\n\nUse `==` for value comparison in all other cases.",
+          "pseudo_code": "1. a is b -> True if id(a) == id(b) (same object in memory)\n2. a == b -> True if a.__eq__(b) returns True (same value)\n3. Use 'is' for None checks and sentinel objects\n4. Use '==' for value comparison\n5. CPython caches small ints and short strings (implementation detail)",
+          "actual_code": "# Identity vs Equality\na = [1, 2, 3]\nb = [1, 2, 3]\nc = a\n\nprint(a == b)  # True -- same value\nprint(a is b)  # False -- different objects\nprint(a is c)  # True -- same object\nprint(id(a), id(b), id(c))  # a and c share id, b is different\n\n# None should always be checked with 'is'\nx = None\nprint(x is None)   # True -- correct\nprint(x == None)    # True -- works but not Pythonic\n\n# Integer caching (CPython implementation detail)\na = 256\nb = 256\nprint(a is b)  # True -- cached\n\na = 257\nb = 257\nprint(a is b)  # False (usually) -- not cached\n# WARNING: This may be True in some contexts due to compiler optimizations\n\n# String interning\ns1 = \"hello\"\ns2 = \"hello\"\nprint(s1 is s2)  # True -- interned\n\ns3 = \"hello world!\"\ns4 = \"hello world!\"\nprint(s3 is s4)  # May be False -- not always interned\n\n# Mutable objects are never cached\na = (1, 2)\nb = (1, 2)\nprint(a is b)  # May be True (tuple) or False -- depends on context\n\na = [1, 2]\nb = [1, 2]\nprint(a is b)  # Always False -- lists are mutable, never cached\n\n# Sentinel pattern\n_MISSING = object()  # unique sentinel\n\ndef get(dictionary, key, default=_MISSING):\n    value = dictionary.get(key, _MISSING)\n    if value is _MISSING:\n        raise KeyError(key)\n    return value",
+          "code_language": "python",
+          "key_points": [
+            "'is' checks identity (same object), '==' checks equality (same value)",
+            "Always use 'is' for None comparison, not '=='",
+            "CPython caches small ints (-5 to 256) and some strings -- implementation detail",
+            "Use sentinel objects with 'is' when None is a valid value"
+          ],
+          "gotchas": [
+            "Never use 'is' for integer or string comparison -- caching makes it unreliable",
+            "a == b may behave unexpectedly if __eq__ is not defined or is buggy",
+            "Integer caching range (-5 to 256) is a CPython detail, not guaranteed by the language"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`is` checks if two references point to the same object (identity). `==` checks if values are equal. Use `is` only for `None` and sentinels. Use `==` for everything else.",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2, 3]\nb = [1, 2, 3]\nc = a\n\nprint(a == b)  # True (same value)\nprint(a is b)  # False (different objects)\nprint(a is c)  # True (same object)\n\nx = None\nprint(x is None)  # True -- always use 'is' for None",
+          "code_language": "python",
+          "key_points": [
+            "'is' = same object (identity), '==' = same value (equality)",
+            "Use 'is' for None, sentinels; '==' for everything else"
+          ],
+          "gotchas": [
+            "Small integer caching makes 'is' unreliable for numbers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `getattr`, `setattr`, `hasattr`, and `delattr` work?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["getattr", "setattr", "hasattr", "dynamic-attributes"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides four built-in functions for dynamic attribute access:\n\n- **`getattr(obj, name, default)`**: Gets an attribute by string name. Returns default if provided and attribute doesn't exist; raises `AttributeError` otherwise.\n- **`setattr(obj, name, value)`**: Sets an attribute by string name. Equivalent to `obj.name = value`.\n- **`hasattr(obj, name)`**: Returns `True` if the attribute exists. Internally calls `getattr` and checks for `AttributeError`.\n- **`delattr(obj, name)`**: Deletes an attribute by string name. Equivalent to `del obj.name`.\n\nThese functions enable metaprogramming: accessing attributes when the attribute name is determined at runtime (e.g., from config files, database columns, or user input).",
+          "pseudo_code": "getattr(obj, 'name')        -> obj.name\ngetattr(obj, 'name', None)  -> obj.name or None if missing\nsetattr(obj, 'name', value) -> obj.name = value\nhasattr(obj, 'name')        -> True if obj.name exists\ndelattr(obj, 'name')        -> del obj.name",
+          "actual_code": "class Config:\n    def __init__(self):\n        self.host = \"localhost\"\n        self.port = 8080\n        self.debug = False\n\nconfig = Config()\n\n# getattr -- access by string name\nprint(getattr(config, \"host\"))           # \"localhost\"\nprint(getattr(config, \"missing\", None))  # None (default)\n\ntry:\n    getattr(config, \"missing\")  # AttributeError\nexcept AttributeError:\n    print(\"Attribute not found\")\n\n# setattr -- set by string name\nsetattr(config, \"debug\", True)\nsetattr(config, \"timeout\", 30)  # creates new attribute\nprint(config.debug)    # True\nprint(config.timeout)  # 30\n\n# hasattr -- check existence\nprint(hasattr(config, \"host\"))     # True\nprint(hasattr(config, \"missing\"))  # False\n\n# delattr -- delete by string name\ndelattr(config, \"timeout\")\nprint(hasattr(config, \"timeout\"))  # False\n\n# Practical: load config from dict\ndef load_config(obj, settings: dict):\n    for key, value in settings.items():\n        setattr(obj, key, value)\n\nload_config(config, {\"host\": \"0.0.0.0\", \"port\": 9090})\nprint(config.host)  # 0.0.0.0\nprint(config.port)  # 9090\n\n# Practical: serialize object to dict\ndef to_dict(obj, fields):\n    return {f: getattr(obj, f) for f in fields if hasattr(obj, f)}\n\nprint(to_dict(config, [\"host\", \"port\", \"debug\", \"missing\"]))\n# {'host': '0.0.0.0', 'port': 9090, 'debug': True}\n\n# Dynamic dispatch pattern\nclass Handler:\n    def handle_login(self, data):\n        return f\"Login: {data}\"\n\n    def handle_logout(self, data):\n        return f\"Logout: {data}\"\n\n    def dispatch(self, action, data):\n        method_name = f\"handle_{action}\"\n        method = getattr(self, method_name, None)\n        if method is None:\n            raise ValueError(f\"Unknown action: {action}\")\n        return method(data)\n\nh = Handler()\nprint(h.dispatch(\"login\", \"user1\"))   # Login: user1\nprint(h.dispatch(\"logout\", \"user1\"))  # Logout: user1",
+          "code_language": "python",
+          "key_points": [
+            "getattr/setattr/hasattr/delattr provide dynamic attribute access by string name",
+            "getattr with a default prevents AttributeError",
+            "hasattr internally calls getattr and catches AttributeError",
+            "Enables metaprogramming: dynamic dispatch, serialization, config loading"
+          ],
+          "gotchas": [
+            "hasattr catches ALL exceptions from __getattr__/__getattribute__ in Python 3, not just AttributeError",
+            "setattr can create new attributes unless __slots__ restricts it",
+            "Using these functions with unsanitized user input is a security risk"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`getattr(obj, 'name')` gets attributes by string. `setattr` sets them. `hasattr` checks existence. `delattr` removes them. Used for dynamic/runtime attribute access.",
+          "pseudo_code": "",
+          "actual_code": "class Obj:\n    x = 10\n\no = Obj()\nprint(getattr(o, 'x'))           # 10\nprint(getattr(o, 'y', 'default'))  # 'default'\nsetattr(o, 'y', 20)\nprint(hasattr(o, 'y'))           # True\ndelattr(o, 'y')\nprint(hasattr(o, 'y'))           # False",
+          "code_language": "python",
+          "key_points": [
+            "Dynamic attribute access by string name",
+            "getattr with default prevents AttributeError"
+          ],
+          "gotchas": [
+            "hasattr swallows all exceptions from property getters, not just AttributeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is `__dict__` and how does Python's attribute namespace work?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["__dict__", "namespace", "attributes"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every Python object (unless using `__slots__`) has a `__dict__` attribute -- a dictionary that stores the object's writable attributes. This is the namespace where instance attributes live.\n\nClasses also have `__dict__` (actually a `mappingproxy` -- a read-only view), containing class attributes, methods, and other class-level definitions.\n\nAttribute lookup order (simplified):\n1. Data descriptors from the class (e.g., properties with `__set__`)\n2. Instance `__dict__`\n3. Non-data descriptors and other class attributes (via MRO)\n\nYou can directly manipulate `__dict__` to add, modify, or inspect attributes, though this bypasses descriptors and properties.",
+          "pseudo_code": "1. instance.__dict__ stores instance attributes\n2. Class.__dict__ stores class attributes and methods (mappingproxy)\n3. Attribute lookup: data descriptors -> instance.__dict__ -> class.__dict__ -> bases\n4. obj.x = v is equivalent to obj.__dict__['x'] = v (without descriptors)\n5. vars(obj) returns obj.__dict__",
+          "actual_code": "class Person:\n    species = \"human\"  # class attribute\n\n    def __init__(self, name, age):\n        self.name = name  # instance attribute\n        self.age = age\n\n    def greet(self):\n        return f\"Hi, I'm {self.name}\"\n\np = Person(\"Alice\", 30)\n\n# Instance __dict__ -- only instance attributes\nprint(p.__dict__)  # {'name': 'Alice', 'age': 30}\n\n# Class __dict__ -- class attributes, methods, etc.\nprint(dict(Person.__dict__))\n# {'species': 'human', '__init__': <function>, 'greet': <function>, ...}\n\n# vars() is equivalent to __dict__\nprint(vars(p))  # {'name': 'Alice', 'age': 30}\n\n# Direct manipulation\np.__dict__['email'] = 'alice@example.com'\nprint(p.email)  # alice@example.com\n\n# Bulk update attributes\np.__dict__.update({'name': 'Bob', 'age': 25})\nprint(p.name)  # Bob\n\n# Attribute lookup demonstration\nprint('name' in p.__dict__)     # True -- instance attribute\nprint('species' in p.__dict__)  # False -- class attribute\nprint(p.species)  # 'human' -- found in class __dict__\n\n# Shadowing class attribute\np.species = \"cyborg\"  # creates instance attribute\nprint(p.__dict__)    # {'name': 'Bob', 'age': 25, 'email': '...', 'species': 'cyborg'}\nprint(Person.species)  # 'human' -- class attribute unchanged\n\ndel p.species  # remove instance shadow\nprint(p.species)  # 'human' -- falls back to class attribute\n\n# Class __dict__ is a mappingproxy (read-only view)\nprint(type(Person.__dict__))  # <class 'mappingproxy'>\ntry:\n    Person.__dict__['x'] = 1  # TypeError: read-only\nexcept TypeError:\n    Person.x = 1  # This works -- goes through __setattr__",
+          "code_language": "python",
+          "key_points": [
+            "instance.__dict__ stores instance attributes as a regular dict",
+            "Class.__dict__ is a mappingproxy (read-only view) of class attributes",
+            "vars(obj) returns obj.__dict__",
+            "Attribute lookup checks instance __dict__ then class __dict__ (with MRO)"
+          ],
+          "gotchas": [
+            "Directly modifying __dict__ bypasses descriptors and properties",
+            "Objects with __slots__ do not have __dict__ (unless __dict__ is in __slots__)",
+            "Class.__dict__ is read-only (mappingproxy) -- use setattr or direct assignment on the class"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__dict__` is a dictionary holding an object's attributes. Instance `__dict__` has instance attributes; class `__dict__` has class attributes and methods. `vars(obj)` returns `__dict__`.",
+          "pseudo_code": "",
+          "actual_code": "class Dog:\n    species = \"canine\"\n    def __init__(self, name):\n        self.name = name\n\nd = Dog(\"Rex\")\nprint(d.__dict__)         # {'name': 'Rex'}\nprint('species' in d.__dict__)  # False (class attr)\nprint(vars(d))            # {'name': 'Rex'}",
+          "code_language": "python",
+          "key_points": [
+            "__dict__ stores writable attributes per object",
+            "Instance attrs in instance.__dict__, class attrs in Class.__dict__"
+          ],
+          "gotchas": [
+            "Modifying __dict__ directly bypasses properties and descriptors"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Python's naming conventions for private and protected attributes?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["private", "protected", "name-mangling", "conventions"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python doesn't have true access modifiers like Java or C++. Instead, it uses naming conventions:\n\n1. **Public** (`name`): No underscore. Part of the public API.\n2. **Protected** (`_name`): Single underscore prefix. Convention meaning \"internal use\" -- not enforced, but respected by developers and linters. Not imported with `from module import *`.\n3. **Private** (`__name`): Double underscore prefix. Triggers **name mangling**: Python renames it to `_ClassName__name` to prevent accidental override in subclasses. Still accessible if you know the mangled name.\n4. **Dunder** (`__name__`): Double underscore prefix AND suffix. Reserved for Python special methods. Never invent your own dunders.\n\nName mangling exists not for security, but to prevent accidental name collisions in inheritance hierarchies. Python's philosophy is \"we're all consenting adults here\" -- the conventions are respected voluntarily.",
+          "pseudo_code": "1. public_attr -- public API\n2. _protected_attr -- internal use by convention\n3. __private_attr -- name-mangled to _ClassName__private_attr\n4. __dunder__ -- Python special methods\n5. Single underscore: respected by convention\n6. Double underscore: name mangling prevents subclass collisions",
+          "actual_code": "class Account:\n    def __init__(self, owner, balance):\n        self.owner = owner          # public\n        self._balance = balance     # protected (convention)\n        self.__pin = 1234           # private (name-mangled)\n\n    def get_pin(self):\n        return self.__pin  # works inside the class\n\na = Account(\"Alice\", 1000)\n\n# Public -- always accessible\nprint(a.owner)  # Alice\n\n# Protected -- accessible but convention says \"don't touch\"\nprint(a._balance)  # 1000 (works, but frowned upon externally)\n\n# Private -- name mangling\ntry:\n    print(a.__pin)  # AttributeError!\nexcept AttributeError:\n    print(\"Cannot access __pin directly\")\n\n# But it IS accessible via mangled name\nprint(a._Account__pin)  # 1234\nprint(a.get_pin())       # 1234\n\n# Name mangling prevents subclass collision\nclass SpecialAccount(Account):\n    def __init__(self, owner, balance, special_pin):\n        super().__init__(owner, balance)\n        self.__pin = special_pin  # becomes _SpecialAccount__pin\n\nsa = SpecialAccount(\"Bob\", 2000, 9999)\nprint(sa._Account__pin)         # 1234 (parent's __pin)\nprint(sa._SpecialAccount__pin)  # 9999 (child's __pin)\nprint(sa.get_pin())             # 1234 (parent method uses parent's __pin)\n\n# What shows in __dict__\nprint(sa.__dict__)\n# {'owner': 'Bob', '_balance': 2000, '_Account__pin': 1234, '_SpecialAccount__pin': 9999}\n\n# Convention summary\nclass Example:\n    def public_method(self):        pass  # part of public API\n    def _internal_method(self):     pass  # internal use\n    def __private_method(self):     pass  # name-mangled\n    def __special_method__(self):   pass  # Python protocol (dunder)",
+          "code_language": "python",
+          "key_points": [
+            "Single underscore (_name): protected by convention, not enforced",
+            "Double underscore (__name): name-mangled to _ClassName__name",
+            "Name mangling prevents accidental override in subclasses",
+            "Python has no true access modifiers -- it's all conventions"
+          ],
+          "gotchas": [
+            "Name mangling only applies to names with 2+ leading underscores and at most 1 trailing underscore",
+            "Mangled names are still accessible via _ClassName__name -- it's not security",
+            "Don't use double underscore for general privacy -- use single underscore; double is for subclass collision prevention",
+            "Name mangling happens at compile time based on the class it's defined in"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Single underscore `_name` = protected by convention. Double underscore `__name` = name-mangled to `_ClassName__name` to prevent subclass collisions. Python has no true private attributes.",
+          "pseudo_code": "",
+          "actual_code": "class Foo:\n    def __init__(self):\n        self.public = 1\n        self._protected = 2    # convention: internal\n        self.__private = 3     # mangled to _Foo__private\n\nf = Foo()\nprint(f.public)          # 1\nprint(f._protected)      # 2 (accessible but discouraged)\nprint(f._Foo__private)   # 3 (mangled name)",
+          "code_language": "python",
+          "key_points": [
+            "_name = convention, __name = name mangling",
+            "No true access control -- 'we're all consenting adults'"
+          ],
+          "gotchas": [
+            "Use __ only to prevent subclass collisions, not for general privacy"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between `__repr__` and `__str__`?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["__repr__", "__str__", "string-representation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__repr__` and `__str__` both return string representations of an object, but serve different purposes:\n\n**`__repr__`**: The \"official\" string representation. Should be unambiguous and ideally valid Python code that could recreate the object. Used by `repr()`, the interactive console, and debuggers. If `__str__` is not defined, `__repr__` is used as a fallback.\n\n**`__str__`**: The \"informal\" or \"pretty\" string representation. Should be readable and user-friendly. Used by `str()`, `print()`, and f-strings.\n\nRule of thumb from the Python docs:\n- `__repr__` is for developers (debugging)\n- `__str__` is for end users (display)\n\nIf you implement only one, implement `__repr__`. It serves as the fallback for `__str__` and is the most useful for debugging.",
+          "pseudo_code": "1. __repr__ -> unambiguous, developer-facing, ideally recreatable\n2. __str__ -> readable, user-facing, pretty\n3. repr(obj) calls __repr__\n4. str(obj), print(obj), f'{obj}' call __str__\n5. If __str__ is missing, falls back to __repr__\n6. Always implement __repr__; __str__ is optional",
+          "actual_code": "class Point:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __repr__(self):\n        return f\"Point({self.x!r}, {self.y!r})\"  # unambiguous, recreatable\n\n    def __str__(self):\n        return f\"({self.x}, {self.y})\"  # readable, user-friendly\n\np = Point(3, 4)\n\n# __repr__ -- for developers\nprint(repr(p))    # Point(3, 4)\nprint([p])        # [Point(3, 4)] -- containers use __repr__\n\n# __str__ -- for users\nprint(str(p))     # (3, 4)\nprint(p)          # (3, 4) -- print uses __str__\nprint(f\"Point: {p}\")  # Point: (3, 4) -- f-strings use __str__\n\n# Container behavior: containers always use __repr__ for their elements\npoints = [Point(1, 2), Point(3, 4)]\nprint(points)     # [Point(1, 2), Point(3, 4)] -- uses __repr__!\n\n# Fallback: without __str__, __repr__ is used\nclass OnlyRepr:\n    def __repr__(self):\n        return \"OnlyRepr()\"\n\nobj = OnlyRepr()\nprint(repr(obj))  # OnlyRepr()\nprint(str(obj))   # OnlyRepr() -- falls back to __repr__\nprint(obj)        # OnlyRepr()\n\n# Real-world example\nfrom datetime import datetime\n\ndt = datetime(2024, 1, 15, 10, 30)\nprint(repr(dt))  # datetime.datetime(2024, 1, 15, 10, 30)\nprint(str(dt))   # 2024-01-15 10:30:00\n\n# Best practice: use !r in __repr__ for string fields\nclass User:\n    def __init__(self, name, role):\n        self.name = name\n        self.role = role\n\n    def __repr__(self):\n        return f\"User({self.name!r}, {self.role!r})\"  # adds quotes\n\nu = User(\"Alice\", \"admin\")\nprint(repr(u))  # User('Alice', 'admin') -- quotes make it recreatable",
+          "code_language": "python",
+          "key_points": [
+            "__repr__ for developers (unambiguous), __str__ for users (readable)",
+            "Containers (lists, dicts) always use __repr__ for their elements",
+            "If __str__ is missing, Python falls back to __repr__",
+            "Use !r format spec in __repr__ to add quotes around string values"
+          ],
+          "gotchas": [
+            "Lists/dicts use __repr__ for elements, not __str__ -- print([obj]) uses __repr__",
+            "If you only implement __str__ without __repr__, debugging output is unhelpful",
+            "f-strings use __str__ by default; use !r to force __repr__"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__repr__` is for developers (unambiguous, like valid Python). `__str__` is for users (readable). `print()` uses `__str__`, containers use `__repr__`. Always implement `__repr__` first.",
+          "pseudo_code": "",
+          "actual_code": "class Point:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __repr__(self):\n        return f\"Point({self.x!r}, {self.y!r})\"\n\n    def __str__(self):\n        return f\"({self.x}, {self.y})\"\n\np = Point(3, 4)\nprint(repr(p))  # Point(3, 4)\nprint(str(p))   # (3, 4)\nprint([p])      # [Point(3, 4)]  -- container uses __repr__",
+          "code_language": "python",
+          "key_points": [
+            "__repr__ = developer-facing, __str__ = user-facing",
+            "__repr__ is fallback when __str__ is missing"
+          ],
+          "gotchas": [
+            "Containers always use __repr__ for their elements"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `__getattr__` and `__getattribute__` for custom attribute access?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": ["__getattr__", "__getattribute__", "attribute-access", "metaprogramming"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides two hooks for customizing attribute access:\n\n**`__getattribute__(self, name)`**: Called for EVERY attribute access on the instance, before checking `__dict__`. Very powerful but dangerous -- easy to create infinite recursion. Defined on `object` by default.\n\n**`__getattr__(self, name)`**: Called ONLY when normal attribute lookup fails (not found in `__dict__`, class, or base classes). It's the fallback handler. Much safer to override.\n\nLookup order:\n1. `__getattribute__` is called\n2. It checks data descriptors, `instance.__dict__`, class/bases\n3. If nothing is found, `__getattr__` is called\n4. If `__getattr__` also fails, `AttributeError` is raised\n\nUse `__getattr__` for: proxy objects, dynamic attributes, deprecation warnings, lazy loading.\nUse `__getattribute__` for: logging all access, access control, read-only objects.",
+          "pseudo_code": "1. obj.x triggers __getattribute__('x')\n2. __getattribute__ checks: data descriptors -> __dict__ -> class attrs\n3. If not found: __getattr__('x') is called as fallback\n4. Override __getattr__ for missing attribute handling\n5. Override __getattribute__ for ALL attribute access (careful!)",
+          "actual_code": "# __getattr__ -- called only when attribute is NOT found\nclass DynamicConfig:\n    def __init__(self, **kwargs):\n        self.__dict__.update(kwargs)\n\n    def __getattr__(self, name):\n        \"\"\"Called when attribute is not found normally.\"\"\"\n        # Return a default value for any missing attribute\n        return f\"<undefined: {name}>\"\n\nconfig = DynamicConfig(host=\"localhost\", port=8080)\nprint(config.host)     # localhost (found in __dict__)\nprint(config.missing)  # <undefined: missing> (__getattr__ called)\n\n# Proxy pattern with __getattr__\nclass LoggingProxy:\n    \"\"\"Wraps an object and logs all attribute access.\"\"\"\n    def __init__(self, target):\n        self._target = target\n\n    def __getattr__(self, name):\n        print(f\"Accessing: {name}\")\n        return getattr(self._target, name)\n\nproxy = LoggingProxy([1, 2, 3])\nproxy.append(4)  # Accessing: append\nprint(proxy._target)  # [1, 2, 3, 4] (found in __dict__, no log)\n\n# __getattribute__ -- called for EVERY access (dangerous!)\nclass ReadOnly:\n    def __init__(self, **kwargs):\n        for k, v in kwargs.items():\n            object.__setattr__(self, k, v)  # bypass our override\n\n    def __setattr__(self, name, value):\n        raise AttributeError(\"Read-only object\")\n\n    def __getattribute__(self, name):\n        print(f\"[READ] {name}\")\n        return object.__getattribute__(self, name)  # MUST use object's version!\n\nr = ReadOnly(x=10, y=20)\nprint(r.x)  # [READ] x \\n 10\n\n# DANGER: infinite recursion without object.__getattribute__\nclass Broken:\n    def __getattribute__(self, name):\n        # self.data causes infinite recursion!\n        # return self.data[name]  # DON'T DO THIS\n        return object.__getattribute__(self, name)  # correct\n\n# Practical: deprecation proxy\nclass DeprecatedAttrs:\n    _deprecated = {'old_name': 'new_name', 'legacy': 'modern'}\n\n    def __init__(self):\n        self.new_name = \"value\"\n        self.modern = \"updated\"\n\n    def __getattr__(self, name):\n        if name in self._deprecated:\n            import warnings\n            new = self._deprecated[name]\n            warnings.warn(f\"{name} is deprecated, use {new}\",\n                          DeprecationWarning, stacklevel=2)\n            return getattr(self, new)\n        raise AttributeError(f\"No attribute {name}\")\n\nobj = DeprecatedAttrs()\nprint(obj.new_name)   # \"value\" (normal access)\nprint(obj.old_name)   # DeprecationWarning + \"value\"",
+          "code_language": "python",
+          "key_points": [
+            "__getattr__ is called only when normal lookup fails -- safe fallback handler",
+            "__getattribute__ is called for EVERY access -- powerful but risky",
+            "Always use object.__getattribute__ inside __getattribute__ to avoid infinite recursion",
+            "Common uses: proxies, dynamic attributes, deprecation, lazy loading"
+          ],
+          "gotchas": [
+            "Accessing self.anything inside __getattribute__ causes infinite recursion -- use object.__getattribute__",
+            "__getattr__ is NOT called if the attribute exists in __dict__ or class",
+            "hasattr catches exceptions from __getattr__, so it returns True if __getattr__ doesn't raise"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__getattr__` is called when attribute lookup fails (safe fallback). `__getattribute__` is called for every access (dangerous, causes recursion). Use `__getattr__` for proxies and defaults.",
+          "pseudo_code": "",
+          "actual_code": "class Default:\n    def __init__(self):\n        self.x = 10\n\n    def __getattr__(self, name):\n        return f\"<{name} not found>\"\n\nd = Default()\nprint(d.x)       # 10 (normal lookup)\nprint(d.missing) # <missing not found> (__getattr__ fallback)",
+          "code_language": "python",
+          "key_points": [
+            "__getattr__ = fallback for missing attributes (safe)",
+            "__getattribute__ = all access (dangerous, needs object.__getattribute__)"
+          ],
+          "gotchas": [
+            "Never access self.x inside __getattribute__ -- use object.__getattribute__(self, 'x')"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a class that supports comparison and hashing?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": ["__eq__", "__hash__", "comparison", "hashable"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "For a class to work correctly in sets and as dict keys, it must implement both `__eq__` and `__hash__` consistently.\n\n**Rules:**\n1. Objects that compare equal must have the same hash: `a == b` implies `hash(a) == hash(b)`\n2. If you define `__eq__`, Python sets `__hash__` to `None` (making instances unhashable)\n3. You must explicitly define `__hash__` alongside `__eq__` if you want hashability\n4. Hash should be based on the same fields used in `__eq__`\n5. Only immutable fields should contribute to the hash (mutable fields that change would break sets/dicts)\n\nThe `@functools.total_ordering` decorator can generate all comparison methods from just `__eq__` and one of `__lt__`, `__le__`, `__gt__`, `__ge__`.",
+          "pseudo_code": "1. Define __eq__(self, other) for equality comparison\n2. Define __hash__(self) using same fields as __eq__\n3. Hash must be based on immutable data\n4. a == b implies hash(a) == hash(b) (MUST hold)\n5. Use @total_ordering + __eq__ + __lt__ for full comparison support",
+          "actual_code": "from functools import total_ordering\n\n@total_ordering\nclass Money:\n    def __init__(self, amount, currency=\"USD\"):\n        self.amount = amount\n        self.currency = currency\n\n    def __eq__(self, other):\n        if not isinstance(other, Money):\n            return NotImplemented\n        return self.amount == other.amount and self.currency == other.currency\n\n    def __hash__(self):\n        # Based on same fields as __eq__\n        return hash((self.amount, self.currency))\n\n    def __lt__(self, other):\n        if not isinstance(other, Money):\n            return NotImplemented\n        if self.currency != other.currency:\n            raise ValueError(f\"Cannot compare {self.currency} with {other.currency}\")\n        return self.amount < other.amount\n\n    def __repr__(self):\n        return f\"Money({self.amount}, {self.currency!r})\"\n\n# Equality and hashing\nm1 = Money(100, \"USD\")\nm2 = Money(100, \"USD\")\nm3 = Money(200, \"USD\")\n\nprint(m1 == m2)      # True\nprint(m1 == m3)      # False\nprint(hash(m1) == hash(m2))  # True (equal objects, same hash)\n\n# Works in sets and dicts\nprices = {m1, m2, m3}  # m1 and m2 are deduplicated\nprint(len(prices))  # 2\n\nprice_map = {m1: \"cheap\", m3: \"expensive\"}\nprint(price_map[Money(100, \"USD\")])  # \"cheap\" -- lookup works\n\n# @total_ordering generates <=, >, >= from __eq__ and __lt__\nprint(m1 < m3)   # True\nprint(m1 <= m2)  # True (generated by @total_ordering)\nprint(m3 > m1)   # True (generated)\nprint(m3 >= m3)  # True (generated)\n\n# Without __eq__, Python uses identity (is) by default\nclass Default:\n    pass\n\na = Default()\nb = Default()\nprint(a == b)  # False (different objects)\nprint(hash(a) != hash(b))  # True (based on id)\n\n# NotImplemented allows Python to try the other operand\nprint(m1 == \"not money\")  # False (Python handles NotImplemented)\nprint(m1 < 100)  # TypeError (both sides return NotImplemented)",
+          "code_language": "python",
+          "key_points": [
+            "Define __eq__ and __hash__ together using the same fields",
+            "Equal objects MUST have equal hashes",
+            "Return NotImplemented for unsupported operand types",
+            "@total_ordering generates all comparison methods from __eq__ + one ordering method"
+          ],
+          "gotchas": [
+            "Defining __eq__ without __hash__ makes instances unhashable (can't use in sets/dicts)",
+            "Mutable objects with changing hash values break sets and dicts",
+            "Return NotImplemented (not NotImplementedError) for type mismatches in comparisons",
+            "@total_ordering has slight performance overhead -- implement all methods for hot paths"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement `__eq__` and `__hash__` using the same fields. Use `@total_ordering` with `__eq__` + `__lt__` to get all comparison operators. Return `NotImplemented` for type mismatches.",
+          "pseudo_code": "",
+          "actual_code": "from functools import total_ordering\n\n@total_ordering\nclass Point:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __eq__(self, other):\n        if not isinstance(other, Point):\n            return NotImplemented\n        return (self.x, self.y) == (other.x, other.y)\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n    def __lt__(self, other):\n        if not isinstance(other, Point):\n            return NotImplemented\n        return (self.x, self.y) < (other.x, other.y)\n\npoints = {Point(1, 2), Point(1, 2), Point(3, 4)}\nprint(len(points))  # 2",
+          "code_language": "python",
+          "key_points": [
+            "__eq__ + __hash__ on same fields for set/dict support",
+            "@total_ordering fills in missing comparison methods"
+          ],
+          "gotchas": [
+            "No __hash__ after defining __eq__ = unhashable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `__init_subclass__` to customize subclass creation?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": ["__init_subclass__", "inheritance", "metaclass-alternative"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__init_subclass__` (Python 3.6+) is a hook called on the parent class whenever a new subclass is defined. It provides a simpler alternative to metaclasses for customizing subclass behavior.\n\nWhen `class Child(Parent):` is defined, Python calls `Parent.__init_subclass__` with `cls` set to `Child`. You can use keyword arguments in the class definition to pass configuration to the hook.\n\nCommon uses:\n- Registering subclasses automatically (plugin systems)\n- Enforcing constraints on subclass definitions\n- Injecting attributes or methods into subclasses",
+          "pseudo_code": "1. Define __init_subclass__(cls, **kwargs) in parent class\n2. Called automatically when any subclass is defined\n3. cls is the new subclass being created\n4. Keyword args from class definition are passed through\n5. Call super().__init_subclass__(**kwargs) for cooperative inheritance",
+          "actual_code": "# Automatic subclass registration (plugin pattern)\nclass Plugin:\n    _registry = {}\n\n    def __init_subclass__(cls, plugin_name=None, **kwargs):\n        super().__init_subclass__(**kwargs)\n        name = plugin_name or cls.__name__.lower()\n        cls._registry[name] = cls\n        cls.plugin_name = name\n\n    @classmethod\n    def get_plugin(cls, name):\n        return cls._registry.get(name)\n\nclass JSONPlugin(Plugin, plugin_name=\"json\"):\n    def process(self, data):\n        return f\"Processing JSON: {data}\"\n\nclass XMLPlugin(Plugin, plugin_name=\"xml\"):\n    def process(self, data):\n        return f\"Processing XML: {data}\"\n\nclass CSVPlugin(Plugin):  # auto-named \"csvplugin\"\n    def process(self, data):\n        return f\"Processing CSV: {data}\"\n\nprint(Plugin._registry)\n# {'json': <class 'JSONPlugin'>, 'xml': <class 'XMLPlugin'>, 'csvplugin': <class 'CSVPlugin'>}\n\nplugin_cls = Plugin.get_plugin(\"json\")\nplugin = plugin_cls()\nprint(plugin.process('{\"key\": \"value\"}'))\n# Processing JSON: {\"key\": \"value\"}\n\n# Enforcing constraints on subclasses\nclass Serializable:\n    def __init_subclass__(cls, **kwargs):\n        super().__init_subclass__(**kwargs)\n        if not hasattr(cls, 'serialize'):\n            raise TypeError(f\"{cls.__name__} must implement serialize()\")\n        if not hasattr(cls, 'deserialize'):\n            raise TypeError(f\"{cls.__name__} must implement deserialize()\")\n\nclass UserData(Serializable):\n    def serialize(self):\n        return str(self.__dict__)\n\n    @classmethod\n    def deserialize(cls, data):\n        return cls()\n\n# This would raise TypeError at class definition time:\n# class Broken(Serializable):\n#     pass  # TypeError: Broken must implement serialize()",
+          "code_language": "python",
+          "key_points": [
+            "__init_subclass__ is called when a subclass is defined, not instantiated",
+            "Simpler alternative to metaclasses for many use cases",
+            "Keyword args in class definition are passed to __init_subclass__",
+            "Always call super().__init_subclass__(**kwargs) for cooperative inheritance"
+          ],
+          "gotchas": [
+            "It's called at class definition time, not at instantiation time",
+            "Forgetting super().__init_subclass__(**kwargs) breaks cooperative inheritance",
+            "The parent class itself does not trigger __init_subclass__ -- only subclasses do",
+            "Cannot intercept all metaclass features -- use metaclasses for more advanced control"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__init_subclass__` is called on the parent when a subclass is defined. Use it for plugin registration, subclass validation, or injecting behavior. Simpler than metaclasses.",
+          "pseudo_code": "",
+          "actual_code": "class Animal:\n    _types = []\n\n    def __init_subclass__(cls, **kwargs):\n        super().__init_subclass__(**kwargs)\n        Animal._types.append(cls.__name__)\n\nclass Dog(Animal): pass\nclass Cat(Animal): pass\n\nprint(Animal._types)  # ['Dog', 'Cat']",
+          "code_language": "python",
+          "key_points": [
+            "Called at class definition time for each subclass",
+            "Simpler alternative to metaclasses"
+          ],
+          "gotchas": [
+            "Always call super().__init_subclass__(**kwargs)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does method resolution order (MRO) affect attribute lookup on instances?",
+      "display_order": 19,
+      "difficulty": "intermediate",
+      "tags": ["MRO", "attribute-lookup", "inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you access an attribute on an instance, Python follows a specific lookup chain that involves the MRO (Method Resolution Order):\n\n1. **Data descriptors** from the type (class) and its MRO (e.g., properties with `__set__`)\n2. **Instance `__dict__`** (instance attributes)\n3. **Non-data descriptors and other attributes** from the type and its MRO\n\nThe MRO is the order in which Python searches base classes. It's computed using the C3 linearization algorithm and can be inspected via `ClassName.__mro__` or `ClassName.mro()`.\n\nThis lookup chain explains why properties (data descriptors) override instance attributes, and why you can shadow class methods with instance attributes.",
+          "pseudo_code": "Attribute lookup for obj.x:\n1. type(obj).__mro__ gives the search order\n2. Check for data descriptor x in class/bases (has __get__ AND __set__)\n3. Check obj.__dict__ for x\n4. Check for non-data descriptor or regular attr in class/bases\n5. If nothing found, call __getattr__ if defined\n6. Raise AttributeError",
+          "actual_code": "class Base:\n    x = \"from Base\"\n\nclass Middle(Base):\n    pass\n\nclass Child(Middle):\n    pass\n\n# MRO determines search order\nprint(Child.__mro__)\n# (<class 'Child'>, <class 'Middle'>, <class 'Base'>, <class 'object'>)\n\nc = Child()\nprint(c.x)  # \"from Base\" -- found via MRO\n\n# Instance attribute shadows class attribute\nc.x = \"instance value\"\nprint(c.x)  # \"instance value\" -- instance __dict__ wins\nprint(Child.x)  # \"from Base\" -- class still has it\n\ndel c.x\nprint(c.x)  # \"from Base\" -- falls back to class\n\n# Data descriptor (property) wins over instance __dict__\nclass WithProperty:\n    @property\n    def value(self):\n        return \"from property\"\n\nobj = WithProperty()\n# obj.__dict__['value'] = 'instance'  # This won't help!\n# obj.value would still return 'from property'\n# Because property is a data descriptor (has __set__)\n\n# But we can force it via __dict__ directly\nobject.__setattr__(obj, 'value', 'forced')\n# Still, obj.value returns 'from property' because data descriptor wins\n\n# Non-data descriptor (function) can be shadowed\nclass Example:\n    def method(self):\n        return \"method\"\n\ne = Example()\nprint(e.method())  # \"method\"\ne.method = lambda: \"shadowed\"\nprint(e.method())  # \"shadowed\" -- instance attr shadows non-data descriptor\n\ndel e.method\nprint(e.method())  # \"method\" -- back to class method\n\n# Practical MRO impact\nclass A:\n    def who(self): return \"A\"\nclass B(A):\n    pass\nclass C(A):\n    def who(self): return \"C\"\nclass D(B, C):\n    pass\n\nprint(D.__mro__)\n# D -> B -> C -> A -> object\nprint(D().who())  # \"C\" -- B doesn't have who, so C is next in MRO",
+          "code_language": "python",
+          "key_points": [
+            "Lookup: data descriptors -> instance __dict__ -> non-data descriptors/class attrs",
+            "MRO (C3 linearization) determines the search order through base classes",
+            "Instance attributes shadow class attributes (for non-data descriptors)",
+            "Data descriptors (properties) take priority over instance __dict__"
+          ],
+          "gotchas": [
+            "Properties (data descriptors) cannot be shadowed by instance attributes",
+            "Functions are non-data descriptors and CAN be shadowed by instance attributes",
+            "MRO with diamond inheritance may not match your intuition -- always check __mro__"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Attribute lookup follows MRO: data descriptors (properties) first, then instance `__dict__`, then class attributes via MRO. Use `Class.__mro__` to see the search order.",
+          "pseudo_code": "",
+          "actual_code": "class A:\n    x = \"A\"\nclass B(A):\n    pass\nclass C(A):\n    x = \"C\"\nclass D(B, C):\n    pass\n\nprint(D.__mro__)  # D -> B -> C -> A -> object\nprint(D().x)      # \"C\" (B has no x, C is next in MRO)",
+          "code_language": "python",
+          "key_points": [
+            "Data descriptors > instance __dict__ > class/MRO attrs",
+            "C3 linearization determines MRO"
+          ],
+          "gotchas": [
+            "Properties override instance __dict__ (data descriptor priority)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the best practices for designing Python classes?",
+      "display_order": 20,
+      "difficulty": "intermediate",
+      "tags": ["best-practices", "design", "classes", "principles"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python class design follows several key principles:\n\n1. **Favor composition over inheritance**: Use has-a relationships instead of is-a when possible. It's more flexible and easier to test.\n\n2. **Keep classes focused (SRP)**: Each class should have one responsibility. If a class does too many things, split it.\n\n3. **Use dataclasses for data containers**: If a class mainly holds data, `@dataclass` eliminates boilerplate.\n\n4. **Prefer properties over getters/setters**: Use `@property` instead of `get_x()`/`set_x()` methods.\n\n5. **Implement `__repr__` for every class**: Essential for debugging.\n\n6. **Use `__slots__` for performance-critical classes**: When creating millions of instances.\n\n7. **Follow naming conventions**: `_private` for internal, `__mangled` for subclass collision prevention.\n\n8. **Use type hints**: Annotate `__init__` parameters and method signatures.\n\n9. **Avoid deep inheritance hierarchies**: Prefer shallow hierarchies and mixins.\n\n10. **Design for duck typing**: Check behavior, not type. Use protocols (typing.Protocol) for interfaces.",
+          "pseudo_code": "1. One responsibility per class\n2. Composition > inheritance\n3. @dataclass for data-heavy classes\n4. @property for controlled attribute access\n5. Always implement __repr__\n6. Type hints on all methods\n7. __slots__ for memory-critical classes\n8. Shallow inheritance, use mixins\n9. Duck typing over isinstance checks\n10. Document public API with docstrings",
+          "actual_code": "from dataclasses import dataclass, field\nfrom typing import List, Protocol\n\n# Good: dataclass for data containers\n@dataclass\nclass Address:\n    street: str\n    city: str\n    state: str\n    zip_code: str\n\n# Good: composition over inheritance\n@dataclass\nclass Employee:\n    name: str\n    email: str\n    address: Address  # composition (has-a)\n    skills: List[str] = field(default_factory=list)\n\n    def __repr__(self):\n        return f\"Employee({self.name!r}, {self.email!r})\"\n\n# Good: Protocol for duck typing (structural subtyping)\nclass Sendable(Protocol):\n    def send(self, message: str) -> bool: ...\n\nclass EmailSender:\n    def send(self, message: str) -> bool:\n        print(f\"Email: {message}\")\n        return True\n\nclass SlackSender:\n    def send(self, message: str) -> bool:\n        print(f\"Slack: {message}\")\n        return True\n\ndef notify(sender: Sendable, msg: str) -> bool:\n    return sender.send(msg)  # works with any object that has send()\n\n# Good: small, focused classes with clear responsibilities\nclass PasswordValidator:\n    def __init__(self, min_length: int = 8):\n        self.min_length = min_length\n\n    def validate(self, password: str) -> List[str]:\n        errors = []\n        if len(password) < self.min_length:\n            errors.append(f\"Must be at least {self.min_length} characters\")\n        if not any(c.isupper() for c in password):\n            errors.append(\"Must contain an uppercase letter\")\n        if not any(c.isdigit() for c in password):\n            errors.append(\"Must contain a digit\")\n        return errors\n\n# Good: __slots__ for high-volume instances\nclass Point:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x: float, y: float):\n        self.x = x\n        self.y = y\n\n    def __repr__(self):\n        return f\"Point({self.x}, {self.y})\"\n\n# Usage\naddr = Address(\"123 Main St\", \"Springfield\", \"IL\", \"62701\")\nemp = Employee(\"Alice\", \"alice@company.com\", addr, [\"Python\", \"SQL\"])\nprint(emp)  # Employee('Alice', 'alice@company.com')\n\nnotify(EmailSender(), \"Hello!\")  # Email: Hello!\nnotify(SlackSender(), \"Hello!\")  # Slack: Hello!\n\nvalidator = PasswordValidator(min_length=10)\nerrors = validator.validate(\"short\")\nprint(errors)  # ['Must be at least 10 characters', 'Must contain an uppercase letter', 'Must contain a digit']",
+          "code_language": "python",
+          "key_points": [
+            "Composition over inheritance for flexibility",
+            "dataclasses for data containers, __slots__ for performance",
+            "Protocol for duck typing interfaces",
+            "Always implement __repr__, use type hints, keep classes focused"
+          ],
+          "gotchas": [
+            "Over-engineering with deep inheritance hierarchies makes code harder to understand",
+            "isinstance checks are often a code smell -- prefer duck typing",
+            "Mutable class-level defaults are shared across instances",
+            "Too many properties can make a class harder to reason about than simple attributes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `@dataclass` for data classes, composition over inheritance, `@property` over getters/setters, always implement `__repr__`, use type hints, and prefer duck typing with `Protocol`.",
+          "pseudo_code": "",
+          "actual_code": "from dataclasses import dataclass\nfrom typing import Protocol\n\n@dataclass\nclass User:\n    name: str\n    email: str\n\n    def __repr__(self):\n        return f\"User({self.name!r})\"\n\nclass Notifier(Protocol):\n    def notify(self, msg: str) -> None: ...\n\ndef send_alert(notifier: Notifier, msg: str):\n    notifier.notify(msg)  # duck typing",
+          "code_language": "python",
+          "key_points": [
+            "dataclass for data, composition over inheritance",
+            "Protocol for duck-typed interfaces"
+          ],
+          "gotchas": [
+            "Deep inheritance makes code hard to follow"
+          ]
+        }
+      ]
+    }
+  ]
+}

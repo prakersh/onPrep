@@ -1,0 +1,743 @@
+{
+  "concept_slug": "concurrency",
+  "questions": [
+    {
+      "title": "What is the GIL (Global Interpreter Lock) and how does it impact Python concurrency?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["GIL", "concurrency", "CPython"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The Global Interpreter Lock (GIL) is a mutex in CPython that allows only **one thread** to execute Python bytecode at a time, even on multi-core machines. It exists to protect CPython's memory management (reference counting) from race conditions.\n\n### Impact:\n- **CPU-bound tasks**: Threads do NOT run in parallel. Multiple threads actually slow things down due to context-switching overhead.\n- **I/O-bound tasks**: Threads work well because the GIL is released during I/O operations (network calls, file reads, sleep).\n- **C extensions**: Libraries like NumPy release the GIL during heavy computation, enabling true parallelism.\n\n### Workarounds for CPU-bound parallelism:\n1. `multiprocessing` -- separate processes, each with its own GIL\n2. `concurrent.futures.ProcessPoolExecutor`\n3. C extensions that release the GIL (NumPy, Cython)\n4. `subinterpreters` (Python 3.12+)\n5. Free-threaded Python (Python 3.13+ experimental, no GIL)\n\nNote: The GIL is a CPython implementation detail. Jython and IronPython do not have a GIL.",
+          "pseudo_code": "Thread 1: acquire GIL -> execute bytecode -> release GIL\nThread 2: waiting... -> acquire GIL -> execute bytecode -> release GIL\n\nI/O-bound: Thread releases GIL during I/O wait\nCPU-bound: Threads take turns but never truly parallel",
+          "actual_code": "import threading\nimport time\n\n# Demonstrating GIL impact on CPU-bound work\ndef cpu_bound(n):\n    count = 0\n    for i in range(n):\n        count += i\n    return count\n\n# Sequential\nstart = time.perf_counter()\ncpu_bound(10_000_000)\ncpu_bound(10_000_000)\nseq_time = time.perf_counter() - start\nprint(f\"Sequential: {seq_time:.3f}s\")\n\n# Threaded (NOT faster due to GIL)\nstart = time.perf_counter()\nt1 = threading.Thread(target=cpu_bound, args=(10_000_000,))\nt2 = threading.Thread(target=cpu_bound, args=(10_000_000,))\nt1.start(); t2.start()\nt1.join(); t2.join()\nthread_time = time.perf_counter() - start\nprint(f\"Threaded: {thread_time:.3f}s\")  # Similar or slower than sequential!\n\n# I/O-bound: threads DO help\nimport urllib.request\n\ndef fetch_url(url):\n    urllib.request.urlopen(url)\n\n# GIL is released during network I/O, so threads overlap",
+          "code_language": "python",
+          "key_points": [
+            "GIL allows only one thread to execute Python bytecode at a time",
+            "Threading is effective for I/O-bound tasks (GIL is released during I/O)",
+            "Threading is NOT effective for CPU-bound tasks -- use multiprocessing instead",
+            "The GIL is a CPython-specific implementation detail"
+          ],
+          "gotchas": [
+            "Even though threading doesn't provide CPU parallelism, it can make CPU-bound code SLOWER due to lock contention",
+            "GIL is released during I/O, C extension calls, and time.sleep -- so threads still have uses",
+            "Python 3.13 introduces experimental free-threaded mode (no GIL) via --disable-gil build",
+            "Some libraries (NumPy, PIL) release the GIL in C code, enabling true thread-level parallelism"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The GIL is a CPython mutex allowing only one thread to run Python bytecode at a time. It makes threading useless for CPU parallelism but fine for I/O-bound work (GIL releases during I/O). Use `multiprocessing` for CPU-bound parallelism.",
+          "pseudo_code": "",
+          "actual_code": "# CPU-bound: use multiprocessing, not threading\nfrom multiprocessing import Pool\n\ndef square(n):\n    return n * n\n\nwith Pool(4) as pool:\n    results = pool.map(square, range(10))\n    print(results)  # [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]",
+          "code_language": "python",
+          "key_points": [
+            "GIL blocks CPU parallelism in threads; I/O-bound threads are fine",
+            "Use multiprocessing for CPU-bound work"
+          ],
+          "gotchas": [
+            "Threading can be SLOWER than sequential for CPU-bound tasks due to GIL contention"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create and manage threads using the threading module?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["threading", "Thread", "concurrency"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `threading` module provides a high-level interface for creating and managing threads. There are two main approaches:\n\n1. **Passing a target function** to `Thread(target=func, args=(...))`\n2. **Subclassing Thread** and overriding the `run()` method\n\n### Key methods:\n- `start()` -- begins thread execution (calls `run()` in a new thread)\n- `join(timeout=None)` -- blocks calling thread until this thread finishes\n- `is_alive()` -- returns True if thread is running\n- `daemon` -- if True, thread is killed when main program exits\n\n### Important: `start()` vs `run()`\n- `start()` creates a new OS thread and calls `run()` in it\n- `run()` directly executes in the current thread (no parallelism)",
+          "pseudo_code": "Method 1: target function\n  t = Thread(target=func, args=(arg1, arg2))\n  t.start()   # new thread runs func(arg1, arg2)\n  t.join()    # wait for completion\n\nMethod 2: subclass\n  class MyThread(Thread):\n      def run(self):\n          # thread work here\n  t = MyThread()\n  t.start()",
+          "actual_code": "import threading\nimport time\n\n# Method 1: target function\ndef worker(name, delay):\n    print(f\"[{name}] Starting\")\n    time.sleep(delay)\n    print(f\"[{name}] Done after {delay}s\")\n    return f\"Result from {name}\"\n\n# Create and start threads\nt1 = threading.Thread(target=worker, args=(\"Thread-1\", 0.5))\nt2 = threading.Thread(target=worker, args=(\"Thread-2\", 0.3), daemon=True)\n\nt1.start()\nt2.start()\n\nprint(f\"t1 alive: {t1.is_alive()}\")  # True (still running)\nt1.join()  # wait for t1 to finish\nt2.join()  # wait for t2 to finish\nprint(f\"t1 alive: {t1.is_alive()}\")  # False\n\n# Method 2: subclass Thread\nclass DownloadThread(threading.Thread):\n    def __init__(self, url):\n        super().__init__()\n        self.url = url\n        self.result = None\n\n    def run(self):\n        # Simulate download\n        time.sleep(0.1)\n        self.result = f\"Data from {self.url}\"\n\nthreads = [DownloadThread(f\"https://example.com/{i}\") for i in range(3)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\n\nfor t in threads:\n    print(t.result)\n\n# Getting results with a shared list (thread-safe with GIL for simple appends)\nresults = []\ndef compute(n):\n    results.append(n * n)\n\nthreads = [threading.Thread(target=compute, args=(i,)) for i in range(5)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\nprint(sorted(results))  # [0, 1, 4, 9, 16]\n\n# Current thread info\nprint(f\"Active threads: {threading.active_count()}\")\nprint(f\"Current thread: {threading.current_thread().name}\")",
+          "code_language": "python",
+          "key_points": [
+            "Two approaches: pass target function or subclass Thread",
+            "start() creates a new thread; join() waits for it to finish",
+            "Daemon threads are killed when the main program exits",
+            "Thread.run() should not be called directly -- use start()"
+          ],
+          "gotchas": [
+            "Calling run() instead of start() executes synchronously in the current thread -- no parallelism",
+            "Thread target functions cannot directly return values -- use shared state, queues, or futures",
+            "Daemon threads may be killed mid-operation -- do not use for tasks that must complete (file writes)",
+            "join() with no timeout can deadlock if the thread never finishes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create threads with `Thread(target=func, args=(...))` and call `.start()`. Use `.join()` to wait for completion. Daemon threads die when the main program exits.",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\ndef task(name):\n    print(f\"{name} running in {threading.current_thread().name}\")\n\nt = threading.Thread(target=task, args=(\"Job-1\",))\nt.start()\nt.join()  # wait for completion",
+          "code_language": "python",
+          "key_points": [
+            "Thread(target=func, args=()) then start() and join()",
+            "Daemon threads are killed when main exits"
+          ],
+          "gotchas": [
+            "Calling run() instead of start() runs synchronously -- no new thread"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are locks and RLocks in threading, and when should you use each?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["threading", "Lock", "RLock", "synchronization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### `threading.Lock` (Mutex)\nA basic mutual exclusion lock. Only one thread can hold the lock at a time. If a thread tries to acquire a lock it already holds, it **deadlocks**.\n\n### `threading.RLock` (Reentrant Lock)\nA lock that can be acquired multiple times by the **same thread** without deadlocking. It must be released the same number of times it was acquired. Use RLock when a function holding a lock calls another function that also needs the same lock.\n\n### When to use each:\n- **Lock**: Simple mutual exclusion, no nested locking needed\n- **RLock**: When locked code may call other locked code (recursive locking), or when using with decorators that might nest",
+          "pseudo_code": "Lock:\n  thread.acquire() -> OK\n  thread.acquire() -> DEADLOCK!\n\nRLock:\n  thread.acquire() -> OK (count=1)\n  thread.acquire() -> OK (count=2)\n  thread.release() -> (count=1)\n  thread.release() -> (count=0, unlocked)",
+          "actual_code": "import threading\n\n# Lock: basic mutual exclusion\nbalance = 0\nlock = threading.Lock()\n\ndef deposit(amount):\n    global balance\n    lock.acquire()\n    try:\n        current = balance\n        # Simulate slow operation\n        balance = current + amount\n    finally:\n        lock.release()\n\n# Better: use context manager\ndef withdraw(amount):\n    global balance\n    with lock:  # auto acquire/release\n        if balance >= amount:\n            balance -= amount\n            return True\n        return False\n\n# RLock: reentrant locking\nrlock = threading.RLock()\nshared_data = []\n\ndef add_item(item):\n    with rlock:\n        shared_data.append(item)\n        log_action(f\"Added {item}\")  # calls another locked function\n\ndef log_action(message):\n    with rlock:  # same thread can re-acquire\n        shared_data.append(f\"LOG: {message}\")\n\n# With a regular Lock, log_action would deadlock!\n\n# Demonstration: Lock deadlock vs RLock success\ndef test_reentrant():\n    lock = threading.Lock()\n    rlock = threading.RLock()\n\n    # This would deadlock with Lock:\n    # lock.acquire()\n    # lock.acquire()  # DEADLOCK!\n\n    # This works with RLock:\n    rlock.acquire()\n    rlock.acquire()  # OK, count=2\n    rlock.release()\n    rlock.release()  # count=0, fully released\n    print(\"RLock: no deadlock\")\n\ntest_reentrant()\n\n# Lock with timeout\nlock = threading.Lock()\nacquired = lock.acquire(timeout=2.0)  # wait up to 2 seconds\nif acquired:\n    try:\n        print(\"Got the lock\")\n    finally:\n        lock.release()\nelse:\n    print(\"Could not acquire lock in time\")",
+          "code_language": "python",
+          "key_points": [
+            "Lock provides basic mutual exclusion; deadlocks if same thread acquires twice",
+            "RLock allows the same thread to acquire multiple times (reentrant)",
+            "Always use try/finally or 'with' statement to ensure locks are released",
+            "Lock.acquire(timeout=N) prevents indefinite blocking"
+          ],
+          "gotchas": [
+            "Forgetting to release a lock (no try/finally) can deadlock the entire program",
+            "RLock must be released exactly as many times as acquired",
+            "Locks do not protect against deadlocks between multiple locks (lock ordering matters)",
+            "Using a Lock where an RLock is needed causes hard-to-debug deadlocks in nested calls"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Lock`: basic mutex, deadlocks on double-acquire by same thread. `RLock`: reentrant, same thread can acquire multiple times. Always use `with lock:` pattern for safety.",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\nlock = threading.Lock()\nwith lock:\n    print(\"Critical section\")\n\nrlock = threading.RLock()\nrlock.acquire()\nrlock.acquire()  # OK with RLock, deadlock with Lock\nrlock.release()\nrlock.release()",
+          "code_language": "python",
+          "key_points": [
+            "Lock: simple mutual exclusion, no re-entry",
+            "RLock: allows same thread to re-acquire"
+          ],
+          "gotchas": [
+            "Always use with-statement or try/finally to guarantee release"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is threading.Event and how is it used for thread coordination?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["threading", "Event", "synchronization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`threading.Event` is a simple synchronization primitive for communication between threads. An Event manages an internal flag that can be set to True with `set()`, reset to False with `clear()`, and waited on with `wait()`.\n\n### Methods:\n- `set()` -- sets the flag to True, waking all waiting threads\n- `clear()` -- resets the flag to False\n- `wait(timeout=None)` -- blocks until the flag is True (or timeout)\n- `is_set()` -- returns True if the flag is set\n\n### Use cases:\n- Signal that initialization is complete\n- Coordinate start of multiple threads\n- Implement graceful shutdown\n- Producer signaling consumer that data is ready",
+          "pseudo_code": "Event flow:\n  Main thread: event = Event()  (flag = False)\n  Worker:      event.wait()     (blocks)\n  Main thread: event.set()      (flag = True)\n  Worker:      (unblocked, continues execution)",
+          "actual_code": "import threading\nimport time\n\n# Example 1: Signal thread to start\nstart_event = threading.Event()\n\ndef worker(event, name):\n    print(f\"{name}: waiting for signal...\")\n    event.wait()  # blocks until event is set\n    print(f\"{name}: got signal, starting work!\")\n    time.sleep(0.1)\n    print(f\"{name}: done\")\n\nthreads = [threading.Thread(target=worker, args=(start_event, f\"Worker-{i}\"))\n           for i in range(3)]\nfor t in threads:\n    t.start()\n\ntime.sleep(0.5)  # simulate setup\nprint(\"Main: sending start signal\")\nstart_event.set()  # all workers wake up simultaneously\n\nfor t in threads:\n    t.join()\n\n# Example 2: Graceful shutdown\nshutdown_event = threading.Event()\n\ndef background_task(stop_event):\n    while not stop_event.is_set():\n        print(\"Working...\", end=\" \")\n        stop_event.wait(timeout=0.2)  # sleep but wake on shutdown\n    print(\"\\nShutting down gracefully\")\n\nt = threading.Thread(target=background_task, args=(shutdown_event,))\nt.start()\ntime.sleep(0.5)\nshutdown_event.set()  # signal shutdown\nt.join()\n\n# Example 3: wait with timeout\nevent = threading.Event()\nsuccess = event.wait(timeout=0.1)  # returns False after timeout\nprint(f\"Event received: {success}\")  # False\nevent.set()\nsuccess = event.wait(timeout=0.1)  # returns True immediately\nprint(f\"Event received: {success}\")  # True",
+          "code_language": "python",
+          "key_points": [
+            "Event.wait() blocks until the flag is True or timeout expires",
+            "Event.set() wakes ALL waiting threads simultaneously",
+            "Event.wait(timeout=N) returns True if set, False if timed out",
+            "Great for startup signals and graceful shutdown patterns"
+          ],
+          "gotchas": [
+            "Event.wait() without timeout can block forever if no thread calls set()",
+            "After set(), the flag stays True -- new wait() calls return immediately until clear() is called",
+            "Event is NOT for passing data between threads -- use Queue for that",
+            "If you need to signal repeatedly, you must call clear() between set() calls"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`threading.Event` is a flag-based synchronization primitive. `wait()` blocks until `set()` is called. Use it for signaling between threads (startup, shutdown, readiness).",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\nevent = threading.Event()\n\ndef worker():\n    event.wait()  # blocks until set\n    print(\"Signal received!\")\n\nt = threading.Thread(target=worker)\nt.start()\nevent.set()  # unblock worker\nt.join()",
+          "code_language": "python",
+          "key_points": [
+            "wait() blocks, set() unblocks all waiters",
+            "Use for startup signals and graceful shutdown"
+          ],
+          "gotchas": [
+            "Flag stays True after set() -- call clear() to reset for reuse"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the multiprocessing module differ from threading?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["multiprocessing", "Process", "threading", "GIL"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Key Differences:\n\n| Feature | `threading` | `multiprocessing` |\n|---|---|---|\n| Parallelism | Limited by GIL | True parallelism |\n| Memory | Shared memory space | Separate memory per process |\n| Communication | Direct variable sharing | IPC (Queue, Pipe, shared memory) |\n| Overhead | Low (lightweight threads) | High (process creation) |\n| Best for | I/O-bound tasks | CPU-bound tasks |\n| Crash impact | Thread crash can corrupt process | Process crash is isolated |\n\n### multiprocessing API mirrors threading:\n- `Process` (like `Thread`)\n- `Lock`, `Event`, `Semaphore` (same API)\n- `Queue` (process-safe)\n- `Pool` for worker pool patterns\n\n### Data sharing:\nSince processes have separate memory, data must be explicitly shared via:\n- `multiprocessing.Queue` / `Pipe` for message passing\n- `multiprocessing.Value` / `Array` for shared memory\n- `multiprocessing.Manager` for shared objects (dicts, lists)",
+          "pseudo_code": "Threading:\n  All threads share same memory\n  GIL prevents CPU parallelism\n  Low overhead\n\nMultiprocessing:\n  Each process has own memory + GIL\n  True CPU parallelism\n  Higher overhead, needs IPC",
+          "actual_code": "from multiprocessing import Process, Queue, Value, Lock\nimport os\nimport time\n\n# Basic Process\ndef worker(name):\n    print(f\"{name} running in PID {os.getpid()}\")\n    return name\n\nif __name__ == '__main__':\n    processes = []\n    for i in range(3):\n        p = Process(target=worker, args=(f\"Worker-{i}\",))\n        processes.append(p)\n        p.start()\n\n    for p in processes:\n        p.join()\n\n    # Communication via Queue\n    def producer(q):\n        for i in range(5):\n            q.put(i * i)\n        q.put(None)  # sentinel\n\n    def consumer(q):\n        while True:\n            item = q.get()\n            if item is None:\n                break\n            print(f\"Got: {item}\")\n\n    q = Queue()\n    p1 = Process(target=producer, args=(q,))\n    p2 = Process(target=consumer, args=(q,))\n    p1.start()\n    p2.start()\n    p1.join()\n    p2.join()\n\n    # Shared memory with Value\n    counter = Value('i', 0)  # 'i' = integer\n    lock = Lock()\n\n    def increment(counter, lock, n):\n        for _ in range(n):\n            with lock:\n                counter.value += 1\n\n    procs = [Process(target=increment, args=(counter, lock, 1000))\n             for _ in range(4)]\n    for p in procs:\n        p.start()\n    for p in procs:\n        p.join()\n    print(f\"Counter: {counter.value}\")  # 4000",
+          "code_language": "python",
+          "key_points": [
+            "multiprocessing bypasses the GIL with separate processes",
+            "API mirrors threading (Process, Lock, Event, Queue)",
+            "Data sharing requires explicit IPC (Queue, Pipe, Value, Array)",
+            "Best for CPU-bound tasks; threading is better for I/O-bound"
+          ],
+          "gotchas": [
+            "On Windows/macOS, multiprocessing uses 'spawn' by default -- all code must be inside if __name__ == '__main__'",
+            "Arguments to Process must be picklable (no lambdas, no open files)",
+            "Process creation overhead is much higher than thread creation",
+            "Shared Value/Array without proper locking still causes race conditions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`multiprocessing` creates separate OS processes, each with its own GIL, enabling true CPU parallelism. `threading` shares memory (easy) but is GIL-limited. Use multiprocessing for CPU-bound, threading for I/O-bound.",
+          "pseudo_code": "",
+          "actual_code": "from multiprocessing import Process\nimport os\n\ndef task():\n    print(f\"PID: {os.getpid()}\")\n\nif __name__ == '__main__':\n    p = Process(target=task)\n    p.start()\n    p.join()",
+          "code_language": "python",
+          "key_points": [
+            "Separate processes bypass GIL for true parallelism",
+            "Data sharing requires Queue, Pipe, or shared memory"
+          ],
+          "gotchas": [
+            "Must guard with if __name__ == '__main__' on Windows/macOS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does multiprocessing.Pool work for parallel computation?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["multiprocessing", "Pool", "parallel"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`multiprocessing.Pool` creates a pool of worker processes that can execute tasks in parallel. It provides several methods:\n\n### Blocking methods:\n- `map(func, iterable)` -- parallel map, returns results in order\n- `starmap(func, iterable)` -- like map, but unpacks argument tuples\n- `apply(func, args)` -- single function call, blocks until done\n\n### Non-blocking methods:\n- `map_async(func, iterable)` -- returns AsyncResult\n- `starmap_async(func, iterable)` -- returns AsyncResult\n- `apply_async(func, args)` -- returns AsyncResult\n\n### Lifecycle:\n- `pool.close()` -- no more tasks accepted\n- `pool.join()` -- wait for all workers to finish\n- `pool.terminate()` -- kill all workers immediately\n\nUse `with Pool() as pool:` for automatic cleanup.",
+          "pseudo_code": "Pool(processes=4):\n  Creates 4 worker processes\n  pool.map(f, [a,b,c,d]) -> distributes to workers\n  Returns [f(a), f(b), f(c), f(d)] in order",
+          "actual_code": "from multiprocessing import Pool, cpu_count\nimport time\n\ndef heavy_computation(n):\n    \"\"\"Simulate CPU-bound work.\"\"\"\n    total = sum(i * i for i in range(n))\n    return total\n\nif __name__ == '__main__':\n    numbers = [5_000_000] * 8\n\n    # Sequential\n    start = time.perf_counter()\n    results_seq = [heavy_computation(n) for n in numbers]\n    seq_time = time.perf_counter() - start\n    print(f\"Sequential: {seq_time:.3f}s\")\n\n    # Parallel with Pool\n    start = time.perf_counter()\n    with Pool(processes=cpu_count()) as pool:\n        results_par = pool.map(heavy_computation, numbers)\n    par_time = time.perf_counter() - start\n    print(f\"Parallel ({cpu_count()} cores): {par_time:.3f}s\")\n    print(f\"Speedup: {seq_time / par_time:.1f}x\")\n\n    # starmap: multiple arguments\n    def power(base, exp):\n        return base ** exp\n\n    with Pool(4) as pool:\n        args = [(2, 10), (3, 5), (4, 3), (5, 2)]\n        results = pool.starmap(power, args)\n        print(results)  # [1024, 243, 64, 25]\n\n    # apply_async: non-blocking with callback\n    def on_complete(result):\n        print(f\"Callback got: {result}\")\n\n    with Pool(2) as pool:\n        future = pool.apply_async(heavy_computation, args=(1_000_000,),\n                                   callback=on_complete)\n        # Do other work while waiting...\n        result = future.get(timeout=10)  # blocks until ready\n        print(f\"Result: {result}\")\n\n    # imap: lazy parallel map (results yielded as completed in order)\n    with Pool(4) as pool:\n        for result in pool.imap(heavy_computation, [1_000_000] * 4):\n            print(f\"Got result: {result}\")\n\n    # imap_unordered: fastest results first\n    with Pool(4) as pool:\n        for result in pool.imap_unordered(heavy_computation, [1_000_000] * 4):\n            print(f\"Got result: {result}\")",
+          "code_language": "python",
+          "key_points": [
+            "Pool manages a fixed set of worker processes for parallel execution",
+            "map/starmap return results in order; imap_unordered returns as completed",
+            "apply_async returns AsyncResult for non-blocking execution",
+            "Use 'with Pool() as pool:' for automatic cleanup"
+          ],
+          "gotchas": [
+            "Arguments and return values must be picklable (serialized between processes)",
+            "Creating too many processes can waste resources -- use cpu_count() as guide",
+            "Pool overhead makes it inefficient for very small/fast tasks",
+            "Exceptions in workers are re-raised in the main process when .get() is called"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Pool(N)` creates N worker processes. `pool.map(func, iterable)` distributes work in parallel and returns ordered results. Use `with Pool() as pool:` for cleanup.",
+          "pseudo_code": "",
+          "actual_code": "from multiprocessing import Pool\n\ndef square(n):\n    return n * n\n\nif __name__ == '__main__':\n    with Pool(4) as pool:\n        print(pool.map(square, range(10)))  # [0, 1, 4, 9, ...81]",
+          "code_language": "python",
+          "key_points": [
+            "pool.map() for ordered parallel execution",
+            "Arguments must be picklable"
+          ],
+          "gotchas": [
+            "Overhead makes it inefficient for trivially fast functions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the basics of asyncio and the async/await syntax?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["asyncio", "async", "await", "coroutines"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`asyncio` is Python's framework for **cooperative multitasking** using coroutines. Unlike threads (preemptive), asyncio coroutines voluntarily yield control at `await` points.\n\n### Key concepts:\n- **Coroutine**: A function defined with `async def`. Calling it returns a coroutine object (does not execute).\n- **await**: Suspends the coroutine until the awaited operation completes, allowing other coroutines to run.\n- **Event loop**: The central scheduler that runs coroutines, handles I/O callbacks, and manages tasks.\n\n### When to use asyncio:\n- High-concurrency I/O-bound operations (thousands of simultaneous network connections)\n- Web servers, WebSocket handlers, API clients\n- NOT for CPU-bound work (use multiprocessing)\n\n### asyncio vs threading:\n- asyncio: single-threaded, cooperative, no race conditions from shared state\n- threading: multi-threaded, preemptive, needs locks for shared state",
+          "pseudo_code": "async def main():\n    result = await some_io_operation()  # yields control here\n    return result\n\nasyncio.run(main())  # creates event loop, runs coroutine",
+          "actual_code": "import asyncio\nimport time\n\n# Basic coroutine\nasync def greet(name, delay):\n    await asyncio.sleep(delay)  # non-blocking sleep\n    print(f\"Hello, {name}!\")\n    return f\"Greeted {name}\"\n\n# Running a single coroutine\nasync def main():\n    result = await greet(\"World\", 0.1)\n    print(result)\n\nasyncio.run(main())\n\n# Running coroutines concurrently\nasync def fetch_data(url, delay):\n    print(f\"Fetching {url}...\")\n    await asyncio.sleep(delay)  # simulates I/O\n    return f\"Data from {url}\"\n\nasync def main_concurrent():\n    start = time.perf_counter()\n\n    # Sequential (slow)\n    r1 = await fetch_data(\"url1\", 0.2)\n    r2 = await fetch_data(\"url2\", 0.2)\n    print(f\"Sequential: {time.perf_counter() - start:.2f}s\")\n\n    start = time.perf_counter()\n\n    # Concurrent (fast)\n    r1, r2 = await asyncio.gather(\n        fetch_data(\"url1\", 0.2),\n        fetch_data(\"url2\", 0.2)\n    )\n    print(f\"Concurrent: {time.perf_counter() - start:.2f}s\")\n    print(r1, r2)\n\nasyncio.run(main_concurrent())\n\n# Async context managers and iterators\nasync def async_range(n):\n    for i in range(n):\n        await asyncio.sleep(0.01)\n        yield i\n\nasync def demo_async_for():\n    async for value in async_range(5):\n        print(value, end=' ')  # 0 1 2 3 4\n    print()\n\nasyncio.run(demo_async_for())",
+          "code_language": "python",
+          "key_points": [
+            "async def creates a coroutine; calling it returns a coroutine object",
+            "await suspends execution and yields control to the event loop",
+            "asyncio.run() is the entry point that creates and runs the event loop",
+            "Coroutines run concurrently only if gathered/tasked -- sequential await is serial"
+          ],
+          "gotchas": [
+            "Calling a coroutine function without await just creates the object -- it never executes",
+            "You cannot use await outside of an async function",
+            "asyncio.sleep() is non-blocking; time.sleep() blocks the entire event loop",
+            "CPU-bound code in a coroutine blocks all other coroutines since asyncio is single-threaded"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`async def` creates coroutines, `await` suspends them at I/O points. `asyncio.run(main())` starts the event loop. Use `asyncio.gather()` to run coroutines concurrently.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def fetch(url):\n    await asyncio.sleep(0.1)  # simulate I/O\n    return f\"data from {url}\"\n\nasync def main():\n    results = await asyncio.gather(fetch(\"a\"), fetch(\"b\"))\n    print(results)  # ['data from a', 'data from b']\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "async def + await for cooperative multitasking",
+            "asyncio.gather() for concurrent execution"
+          ],
+          "gotchas": [
+            "time.sleep() blocks the entire event loop -- use asyncio.sleep()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the asyncio event loop and how does it work?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["asyncio", "event-loop", "scheduling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **event loop** is the core of asyncio. It is a single-threaded scheduler that:\n\n1. Runs coroutines, switching between them at `await` points\n2. Manages I/O callbacks (sockets, file descriptors)\n3. Schedules delayed calls (`call_later`, `call_at`)\n4. Handles signals\n\n### How it works:\nThe loop maintains a queue of ready tasks. On each iteration:\n1. Executes ready tasks until they hit an `await`\n2. Checks for completed I/O operations\n3. Runs scheduled callbacks\n4. Goes to step 1\n\n### Key APIs:\n- `asyncio.run(coro)` -- creates a new event loop, runs the coroutine, then closes the loop\n- `asyncio.get_event_loop()` -- get the running loop (deprecated in 3.10+)\n- `asyncio.get_running_loop()` -- get the currently running loop (preferred)\n- `loop.run_until_complete(coro)` -- low-level way to run a coroutine\n- `loop.run_forever()` -- run until stop() is called",
+          "pseudo_code": "Event Loop Cycle:\n  while True:\n    run all ready callbacks\n    poll for I/O events (with timeout)\n    schedule callbacks for completed I/O\n    run scheduled (timed) callbacks\n    if nothing to do: exit or wait",
+          "actual_code": "import asyncio\n\n# asyncio.run() -- the standard way (Python 3.7+)\nasync def main():\n    loop = asyncio.get_running_loop()\n    print(f\"Loop running: {loop.is_running()}\")\n    print(f\"Loop type: {type(loop).__name__}\")\n    return \"done\"\n\nresult = asyncio.run(main())\nprint(result)  # 'done'\n\n# Scheduling callbacks on the loop\nasync def schedule_demo():\n    loop = asyncio.get_running_loop()\n\n    # Schedule a callback\n    def my_callback(message):\n        print(f\"Callback: {message}\")\n\n    loop.call_soon(my_callback, \"immediate\")\n    loop.call_later(0.1, my_callback, \"delayed 0.1s\")\n\n    await asyncio.sleep(0.2)  # let callbacks execute\n\nasyncio.run(schedule_demo())\n\n# Running blocking code in executor\nimport time\n\ndef blocking_io():\n    time.sleep(0.1)  # simulates blocking I/O\n    return \"blocking result\"\n\nasync def main_with_executor():\n    loop = asyncio.get_running_loop()\n\n    # Run blocking function in thread pool (does not block event loop)\n    result = await loop.run_in_executor(None, blocking_io)\n    print(result)\n\n    # Or with a custom executor\n    from concurrent.futures import ThreadPoolExecutor\n    with ThreadPoolExecutor(max_workers=4) as executor:\n        result = await loop.run_in_executor(executor, blocking_io)\n        print(result)\n\nasyncio.run(main_with_executor())\n\n# Debug mode\nasync def debug_demo():\n    await asyncio.sleep(0.01)\n\nasyncio.run(debug_demo(), debug=True)  # enables slow callback warnings",
+          "code_language": "python",
+          "key_points": [
+            "Event loop is a single-threaded scheduler managing coroutines and I/O",
+            "asyncio.run() creates, runs, and closes the loop (preferred entry point)",
+            "loop.run_in_executor() bridges blocking code with asyncio",
+            "get_running_loop() is preferred over get_event_loop() in Python 3.10+"
+          ],
+          "gotchas": [
+            "There can be only one running event loop per thread",
+            "asyncio.run() cannot be called from within a running event loop (use nest_asyncio in Jupyter)",
+            "Blocking calls (time.sleep, requests.get) freeze the entire event loop",
+            "get_event_loop() is deprecated in Python 3.10+ -- use get_running_loop() inside coroutines"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The event loop is asyncio's single-threaded scheduler. It runs coroutines, handles I/O, and manages callbacks. `asyncio.run(coro)` is the standard entry point. Use `run_in_executor()` for blocking calls.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def main():\n    loop = asyncio.get_running_loop()\n    # Run blocking code without freezing the loop\n    result = await loop.run_in_executor(None, lambda: sum(range(1000000)))\n    print(result)\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "Single-threaded scheduler for coroutines and I/O",
+            "asyncio.run() is the standard entry point"
+          ],
+          "gotchas": [
+            "Blocking calls freeze the entire event loop -- use run_in_executor()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do asyncio.gather() and asyncio.create_task() differ?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["asyncio", "gather", "create_task", "concurrency"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### `asyncio.create_task(coro)`\nSchedules a coroutine to run on the event loop and returns a `Task` object immediately. The task starts running as soon as the event loop gets a chance (at the next `await`). You can `await` the task later to get its result.\n\n### `asyncio.gather(*coros_or_futures)`\nRuns multiple coroutines concurrently and waits for **all** of them to complete. Returns results as a list in the same order as the input coroutines.\n\n### Key differences:\n- `create_task` schedules ONE coroutine, returns immediately\n- `gather` runs MULTIPLE coroutines and awaits all results\n- `create_task` gives you a Task handle for cancellation/inspection\n- `gather` has `return_exceptions=True` to collect errors instead of raising",
+          "pseudo_code": "create_task:\n  task = create_task(coro())  # schedules immediately\n  # do other work...\n  result = await task  # get result when needed\n\ngather:\n  results = await gather(coro1(), coro2(), coro3())\n  # waits for ALL to complete, returns [r1, r2, r3]",
+          "actual_code": "import asyncio\nimport time\n\nasync def fetch(name, delay):\n    await asyncio.sleep(delay)\n    print(f\"{name} completed\")\n    return f\"result_{name}\"\n\n# create_task: schedule and control individual tasks\nasync def demo_create_task():\n    start = time.perf_counter()\n\n    # Schedule tasks (they start running immediately)\n    task1 = asyncio.create_task(fetch(\"A\", 0.2))\n    task2 = asyncio.create_task(fetch(\"B\", 0.1))\n\n    # Do other work while tasks run in background\n    print(\"Tasks scheduled, doing other work...\")\n    await asyncio.sleep(0.05)\n\n    # Now wait for results\n    result1 = await task1\n    result2 = await task2\n    print(f\"Results: {result1}, {result2}\")\n    print(f\"Time: {time.perf_counter() - start:.2f}s\")  # ~0.2s (concurrent)\n\nasyncio.run(demo_create_task())\n\n# gather: run all and collect results\nasync def demo_gather():\n    start = time.perf_counter()\n\n    results = await asyncio.gather(\n        fetch(\"A\", 0.2),\n        fetch(\"B\", 0.1),\n        fetch(\"C\", 0.15)\n    )\n    print(f\"All results: {results}\")  # ['result_A', 'result_B', 'result_C']\n    print(f\"Time: {time.perf_counter() - start:.2f}s\")  # ~0.2s (concurrent)\n\nasyncio.run(demo_gather())\n\n# gather with return_exceptions\nasync def might_fail(name, should_fail=False):\n    if should_fail:\n        raise ValueError(f\"{name} failed\")\n    return f\"{name} ok\"\n\nasync def demo_error_handling():\n    results = await asyncio.gather(\n        might_fail(\"A\"),\n        might_fail(\"B\", should_fail=True),\n        might_fail(\"C\"),\n        return_exceptions=True  # collect errors instead of raising\n    )\n    for r in results:\n        if isinstance(r, Exception):\n            print(f\"Error: {r}\")\n        else:\n            print(f\"Success: {r}\")\n\nasyncio.run(demo_error_handling())\n\n# Task cancellation\nasync def demo_cancel():\n    async def long_task():\n        try:\n            await asyncio.sleep(10)\n        except asyncio.CancelledError:\n            print(\"Task was cancelled\")\n            raise  # re-raise to properly mark as cancelled\n\n    task = asyncio.create_task(long_task())\n    await asyncio.sleep(0.1)\n    task.cancel()\n    try:\n        await task\n    except asyncio.CancelledError:\n        print(\"Confirmed cancelled\")\n\nasyncio.run(demo_cancel())",
+          "code_language": "python",
+          "key_points": [
+            "create_task schedules one coroutine, returns a Task handle immediately",
+            "gather runs multiple coroutines concurrently and returns all results in order",
+            "create_task allows individual task cancellation and status checking",
+            "gather with return_exceptions=True collects errors instead of raising the first one"
+          ],
+          "gotchas": [
+            "create_task requires a running event loop -- cannot be called outside async context",
+            "Tasks from create_task are garbage collected and cancelled if you don't keep a reference",
+            "gather without return_exceptions raises the first exception and may leave other tasks running",
+            "In Python 3.11+, use asyncio.TaskGroup as a more structured alternative to gather"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`create_task(coro)` schedules one coroutine and returns a Task handle. `gather(*coros)` runs multiple coroutines concurrently and returns all results as a list.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def job(n):\n    await asyncio.sleep(0.1)\n    return n * 2\n\nasync def main():\n    task = asyncio.create_task(job(5))  # schedule one\n    results = await asyncio.gather(job(1), job(2), job(3))  # run multiple\n    print(await task)  # 10\n    print(results)     # [2, 4, 6]\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "create_task: one task, returns handle for control",
+            "gather: multiple tasks, returns all results in order"
+          ],
+          "gotchas": [
+            "Unreferenced tasks may be garbage collected and cancelled"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are concurrent.futures ThreadPoolExecutor and ProcessPoolExecutor?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["concurrent.futures", "ThreadPoolExecutor", "ProcessPoolExecutor"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`concurrent.futures` provides a high-level interface for asynchronously executing callables using thread or process pools. It abstracts away the details of thread/process management.\n\n### `ThreadPoolExecutor`\n- Uses threads. Best for I/O-bound tasks.\n- Shares memory, lower overhead.\n\n### `ProcessPoolExecutor`\n- Uses processes. Best for CPU-bound tasks.\n- Bypasses GIL, separate memory.\n\n### Key API:\n- `executor.submit(fn, *args)` -- returns a `Future` object\n- `executor.map(fn, *iterables)` -- parallel map, returns iterator of results\n- `Future.result(timeout=None)` -- blocks until result is ready\n- `Future.done()` -- returns True if completed\n- `as_completed(futures)` -- yields futures as they complete",
+          "pseudo_code": "with ThreadPoolExecutor(max_workers=5) as executor:\n    future = executor.submit(func, arg)  # returns Future\n    result = future.result()  # blocks until done\n\n# Or use map for batch processing:\n    results = executor.map(func, items)  # parallel map",
+          "actual_code": "from concurrent.futures import (\n    ThreadPoolExecutor, ProcessPoolExecutor,\n    as_completed, wait, FIRST_COMPLETED\n)\nimport time\nimport urllib.request\n\n# ThreadPoolExecutor for I/O-bound tasks\ndef fetch_url(url):\n    response = urllib.request.urlopen(url)\n    return f\"{url}: {len(response.read())} bytes\"\n\nurls = ['https://httpbin.org/delay/0'] * 3  # example URLs\n\nwith ThreadPoolExecutor(max_workers=5) as executor:\n    # Method 1: submit + as_completed (results as they finish)\n    futures = {executor.submit(fetch_url, url): url for url in urls}\n    for future in as_completed(futures):\n        url = futures[future]\n        try:\n            result = future.result()\n            print(result)\n        except Exception as e:\n            print(f\"{url} failed: {e}\")\n\n# ProcessPoolExecutor for CPU-bound tasks\ndef compute(n):\n    return sum(i * i for i in range(n))\n\nif __name__ == '__main__':\n    with ProcessPoolExecutor(max_workers=4) as executor:\n        # Method 2: map (results in order)\n        results = list(executor.map(compute, [5_000_000] * 4))\n        print(f\"Results: {len(results)} items computed\")\n\n    # Future inspection\n    with ThreadPoolExecutor(max_workers=2) as executor:\n        future = executor.submit(time.sleep, 0.1)\n        print(f\"Done: {future.done()}\")      # False\n        print(f\"Running: {future.running()}\")  # True\n        future.result()  # wait for completion\n        print(f\"Done: {future.done()}\")      # True\n\n    # wait() for batch completion\n    with ThreadPoolExecutor(max_workers=3) as executor:\n        futures = [executor.submit(time.sleep, i * 0.1) for i in range(3)]\n        done, not_done = wait(futures, return_when=FIRST_COMPLETED)\n        print(f\"First completed: {len(done)}, still running: {len(not_done)}\")\n\n    # Exception handling\n    def risky_task(n):\n        if n == 0:\n            raise ValueError(\"Cannot be zero\")\n        return 100 / n\n\n    with ThreadPoolExecutor() as executor:\n        future = executor.submit(risky_task, 0)\n        try:\n            result = future.result()\n        except ValueError as e:\n            print(f\"Caught: {e}\")",
+          "code_language": "python",
+          "key_points": [
+            "ThreadPoolExecutor for I/O-bound; ProcessPoolExecutor for CPU-bound",
+            "submit() returns a Future; map() returns results in order",
+            "as_completed() yields futures as they finish (unordered)",
+            "Exceptions are stored in Future and re-raised on .result()"
+          ],
+          "gotchas": [
+            "ProcessPoolExecutor arguments must be picklable",
+            "executor.map() hides exceptions until you iterate -- they raise on access",
+            "Default max_workers for ThreadPoolExecutor is min(32, os.cpu_count() + 4) in Python 3.8+",
+            "Futures hold references to results in memory -- clear them when done"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`concurrent.futures` provides `ThreadPoolExecutor` (I/O-bound) and `ProcessPoolExecutor` (CPU-bound). Use `submit()` for individual tasks returning Futures, or `map()` for batch processing.",
+          "pseudo_code": "",
+          "actual_code": "from concurrent.futures import ThreadPoolExecutor, as_completed\n\ndef double(n):\n    return n * 2\n\nwith ThreadPoolExecutor(max_workers=4) as executor:\n    results = list(executor.map(double, range(10)))\n    print(results)  # [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]",
+          "code_language": "python",
+          "key_points": [
+            "Thread pool for I/O, process pool for CPU",
+            "submit() for Futures, map() for batch results"
+          ],
+          "gotchas": [
+            "ProcessPoolExecutor requires picklable arguments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the queue module work for thread-safe communication?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["queue", "threading", "producer-consumer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `queue` module provides thread-safe queue implementations for passing data between threads. All queue operations are thread-safe (use internal locks).\n\n### Queue types:\n- `queue.Queue(maxsize=0)` -- FIFO (First-In, First-Out)\n- `queue.LifoQueue(maxsize=0)` -- LIFO (stack)\n- `queue.PriorityQueue(maxsize=0)` -- lowest value first\n\n### Key methods:\n- `put(item, block=True, timeout=None)` -- add item (blocks if full)\n- `get(block=True, timeout=None)` -- remove and return item (blocks if empty)\n- `task_done()` -- signal that a gotten item is processed\n- `join()` -- blocks until all items are processed (all task_done() called)\n- `qsize()`, `empty()`, `full()` -- approximate size info\n\n### maxsize=0 means unlimited queue size.",
+          "pseudo_code": "Producer-Consumer Pattern:\n  q = Queue()\n  Producer: q.put(item)   # blocks if full\n  Consumer: item = q.get() # blocks if empty\n            q.task_done()  # signal completion\n  Main:     q.join()       # wait for all items processed",
+          "actual_code": "import queue\nimport threading\nimport time\n\n# Basic producer-consumer\ndef producer(q, items):\n    for item in items:\n        print(f\"Producing: {item}\")\n        q.put(item)\n        time.sleep(0.05)\n    q.put(None)  # sentinel to signal done\n\ndef consumer(q):\n    while True:\n        item = q.get()  # blocks until item available\n        if item is None:\n            q.task_done()\n            break\n        print(f\"Consuming: {item}\")\n        time.sleep(0.1)  # simulate processing\n        q.task_done()  # signal this item is processed\n\nq = queue.Queue(maxsize=5)  # bounded queue\nt1 = threading.Thread(target=producer, args=(q, range(5)))\nt2 = threading.Thread(target=consumer, args=(q,))\nt1.start()\nt2.start()\nt1.join()\nt2.join()\n\n# Multiple consumers\ndef multi_consumer_demo():\n    q = queue.Queue()\n    results = []\n    lock = threading.Lock()\n\n    def worker():\n        while True:\n            item = q.get()\n            if item is None:\n                break\n            with lock:\n                results.append(item * 2)\n            q.task_done()\n\n    # Start 3 consumers\n    threads = []\n    for _ in range(3):\n        t = threading.Thread(target=worker)\n        t.start()\n        threads.append(t)\n\n    # Produce items\n    for i in range(10):\n        q.put(i)\n\n    q.join()  # wait for all items to be processed\n\n    # Stop workers\n    for _ in range(3):\n        q.put(None)\n    for t in threads:\n        t.join()\n\n    print(f\"Results: {sorted(results)}\")\n\nmulti_consumer_demo()\n\n# PriorityQueue\npq = queue.PriorityQueue()\npq.put((3, \"low priority\"))\npq.put((1, \"high priority\"))\npq.put((2, \"medium priority\"))\n\nwhile not pq.empty():\n    priority, item = pq.get()\n    print(f\"Priority {priority}: {item}\")\n# high priority, medium priority, low priority\n\n# Non-blocking operations\nq = queue.Queue()\ntry:\n    item = q.get_nowait()  # same as q.get(block=False)\nexcept queue.Empty:\n    print(\"Queue is empty\")\n\ntry:\n    q.put_nowait(\"item\")  # same as q.put(block=False)\nexcept queue.Full:\n    print(\"Queue is full\")",
+          "code_language": "python",
+          "key_points": [
+            "Queue, LifoQueue, PriorityQueue are all thread-safe",
+            "put() blocks when full; get() blocks when empty",
+            "task_done() + join() ensures all items are fully processed",
+            "Use sentinels (None) to signal workers to stop"
+          ],
+          "gotchas": [
+            "qsize(), empty(), full() are approximate -- not reliable for synchronization",
+            "Forgetting task_done() causes join() to block forever",
+            "PriorityQueue items must be comparable -- wrap in (priority, index, item) for non-comparable items",
+            "queue.Queue is for threads; multiprocessing.Queue is for processes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`queue.Queue` is a thread-safe FIFO queue. `put()` adds items (blocks if full), `get()` removes (blocks if empty). Use `task_done()` + `join()` for completion tracking.",
+          "pseudo_code": "",
+          "actual_code": "import queue\nimport threading\n\nq = queue.Queue()\n\ndef worker():\n    while (item := q.get()) is not None:\n        print(f\"Processing {item}\")\n        q.task_done()\n\nt = threading.Thread(target=worker)\nt.start()\nfor i in range(5):\n    q.put(i)\nq.join()  # wait for all processed\nq.put(None)  # stop worker\nt.join()",
+          "code_language": "python",
+          "key_points": [
+            "Thread-safe queue with blocking put/get",
+            "task_done() + join() tracks completion"
+          ],
+          "gotchas": [
+            "Forgetting task_done() causes join() to hang forever"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a race condition and how do you prevent it in Python?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["race-condition", "threading", "synchronization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **race condition** occurs when the behavior of code depends on the timing/ordering of thread execution. It happens when multiple threads read and write shared data without proper synchronization, leading to unpredictable results.\n\n### Common pattern:\n1. Thread A reads value (e.g., balance = 100)\n2. Thread B reads value (balance = 100)\n3. Thread A writes modified value (balance = 100 + 50 = 150)\n4. Thread B writes modified value (balance = 100 - 30 = 70)\n5. Result: 70 instead of expected 120\n\n### Prevention methods:\n1. **Locks** (`threading.Lock`, `RLock`)\n2. **Thread-safe data structures** (`queue.Queue`)\n3. **Atomic operations** (some GIL-protected operations)\n4. **Thread-local storage** (`threading.local()`)\n5. **Immutable data** (no shared mutable state)",
+          "pseudo_code": "Race condition:\n  Thread A: read X=0 -> compute X+1 -> write X=1\n  Thread B: read X=0 -> compute X+1 -> write X=1\n  Result: X=1 (expected X=2)\n\nFix with lock:\n  Thread A: acquire lock -> read X=0 -> write X=1 -> release lock\n  Thread B: wait... -> acquire lock -> read X=1 -> write X=2 -> release lock\n  Result: X=2 (correct)",
+          "actual_code": "import threading\nimport time\n\n# BROKEN: Race condition\ncounter = 0\n\ndef increment_unsafe(n):\n    global counter\n    for _ in range(n):\n        temp = counter      # read\n        temp += 1            # modify\n        counter = temp       # write\n\ncounter = 0\nthreads = [threading.Thread(target=increment_unsafe, args=(100_000,))\n           for _ in range(5)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\nprint(f\"Unsafe counter: {counter}\")  # Often less than 500000!\n\n# FIXED: Using a lock\ncounter = 0\nlock = threading.Lock()\n\ndef increment_safe(n):\n    global counter\n    for _ in range(n):\n        with lock:\n            counter += 1\n\ncounter = 0\nthreads = [threading.Thread(target=increment_safe, args=(100_000,))\n           for _ in range(5)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\nprint(f\"Safe counter: {counter}\")  # Always 500000\n\n# FIXED: Using thread-local storage\nlocal_data = threading.local()\n\ndef process_request(request_id):\n    local_data.request_id = request_id  # each thread has its own copy\n    time.sleep(0.01)\n    print(f\"Thread {threading.current_thread().name}: request {local_data.request_id}\")\n\nthreads = [threading.Thread(target=process_request, args=(i,)) for i in range(3)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\n\n# FIXED: Using Queue instead of shared state\nimport queue\n\ndef safe_accumulator():\n    q = queue.Queue()\n    total = 0\n\n    def producer(n):\n        for i in range(n):\n            q.put(1)\n\n    threads = [threading.Thread(target=producer, args=(1000,)) for _ in range(5)]\n    for t in threads:\n        t.start()\n    for t in threads:\n        t.join()\n\n    while not q.empty():\n        total += q.get()\n    print(f\"Queue-based total: {total}\")  # Always 5000\n\nsafe_accumulator()",
+          "code_language": "python",
+          "key_points": [
+            "Race conditions occur when threads read/modify/write shared data without synchronization",
+            "Use locks (with statement) to protect critical sections",
+            "threading.local() gives each thread its own copy of data",
+            "Queue is inherently thread-safe and avoids shared mutable state"
+          ],
+          "gotchas": [
+            "Even simple operations like counter += 1 are NOT atomic in Python (read-modify-write)",
+            "The GIL does not prevent race conditions -- it only ensures bytecode atomicity, not operation atomicity",
+            "Race conditions are non-deterministic -- code may pass tests and fail in production",
+            "Over-locking (too many locks, too broad) causes performance issues and deadlocks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A race condition occurs when threads access shared data without synchronization, producing unpredictable results. Fix with locks, thread-safe queues, or thread-local storage.",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\ncounter = 0\nlock = threading.Lock()\n\ndef safe_increment():\n    global counter\n    for _ in range(100_000):\n        with lock:\n            counter += 1\n\nthreads = [threading.Thread(target=safe_increment) for _ in range(5)]\nfor t in threads: t.start()\nfor t in threads: t.join()\nprint(counter)  # Always 500000",
+          "code_language": "python",
+          "key_points": [
+            "Shared mutable state + multiple threads = race condition",
+            "Use locks or thread-safe structures to fix"
+          ],
+          "gotchas": [
+            "counter += 1 is NOT atomic -- it's read, modify, write"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a deadlock and how do you prevent it?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["deadlock", "threading", "synchronization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **deadlock** occurs when two or more threads are blocked forever, each waiting for the other to release a resource.\n\n### Four conditions for deadlock (Coffman conditions):\n1. **Mutual exclusion**: Resources can only be held by one thread\n2. **Hold and wait**: Thread holds one resource while waiting for another\n3. **No preemption**: Resources cannot be forcibly taken from a thread\n4. **Circular wait**: Thread A waits for B, B waits for A\n\n### Prevention strategies:\n1. **Lock ordering**: Always acquire locks in the same global order\n2. **Timeouts**: Use `lock.acquire(timeout=N)` to detect deadlocks\n3. **Lock-free algorithms**: Use atomic operations or queues\n4. **Context managers**: Acquire all locks atomically\n5. **Avoid nested locks**: Restructure code to minimize lock nesting",
+          "pseudo_code": "Deadlock:\n  Thread A: acquire(lock1) -> waiting for lock2\n  Thread B: acquire(lock2) -> waiting for lock1\n  Both threads wait forever!\n\nFix (lock ordering):\n  Thread A: acquire(lock1) -> acquire(lock2) -> release both\n  Thread B: acquire(lock1) -> acquire(lock2) -> release both\n  Always same order = no deadlock",
+          "actual_code": "import threading\nimport time\nfrom contextlib import contextmanager\n\n# DEADLOCK EXAMPLE (DO NOT USE)\nlock1 = threading.Lock()\nlock2 = threading.Lock()\n\ndef thread_a_deadlock():\n    with lock1:\n        time.sleep(0.1)  # gives thread_b time to acquire lock2\n        with lock2:  # DEADLOCK: waiting for lock2 held by thread_b\n            print(\"Thread A: got both locks\")\n\ndef thread_b_deadlock():\n    with lock2:\n        time.sleep(0.1)  # gives thread_a time to acquire lock1\n        with lock1:  # DEADLOCK: waiting for lock1 held by thread_a\n            print(\"Thread B: got both locks\")\n\n# FIX 1: Lock ordering (always acquire in same order)\ndef thread_a_fixed():\n    with lock1:\n        with lock2:\n            print(\"Thread A: got both locks\")\n\ndef thread_b_fixed():\n    with lock1:  # same order as thread_a\n        with lock2:\n            print(\"Thread B: got both locks\")\n\nt1 = threading.Thread(target=thread_a_fixed)\nt2 = threading.Thread(target=thread_b_fixed)\nt1.start(); t2.start()\nt1.join(); t2.join()\n\n# FIX 2: Timeout-based detection\ndef thread_with_timeout():\n    acquired1 = lock1.acquire(timeout=1.0)\n    if not acquired1:\n        print(\"Could not acquire lock1, backing off\")\n        return\n    try:\n        acquired2 = lock2.acquire(timeout=1.0)\n        if not acquired2:\n            print(\"Could not acquire lock2, backing off\")\n            return\n        try:\n            print(\"Got both locks\")\n        finally:\n            lock2.release()\n    finally:\n        lock1.release()\n\n# FIX 3: Context manager that acquires multiple locks in order\n@contextmanager\ndef acquire_locks(*locks):\n    # Sort by id to ensure consistent ordering\n    sorted_locks = sorted(locks, key=id)\n    acquired = []\n    try:\n        for lock in sorted_locks:\n            lock.acquire()\n            acquired.append(lock)\n        yield\n    finally:\n        for lock in reversed(acquired):\n            lock.release()\n\ndef safe_thread():\n    with acquire_locks(lock1, lock2):\n        print(\"Got both locks safely\")\n\nt1 = threading.Thread(target=safe_thread)\nt2 = threading.Thread(target=safe_thread)\nt1.start(); t2.start()\nt1.join(); t2.join()",
+          "code_language": "python",
+          "key_points": [
+            "Deadlock: threads wait forever for each other's locks",
+            "Lock ordering (always same global order) prevents circular wait",
+            "Timeouts detect deadlocks and allow recovery",
+            "Sort locks by id() for automatic consistent ordering"
+          ],
+          "gotchas": [
+            "Deadlocks are hard to reproduce -- they depend on exact thread timing",
+            "Lock ordering must be consistent across the ENTIRE codebase, not just one function",
+            "RLock deadlocks if acquired by thread A and thread B tries to acquire it (only same-thread re-entry works)",
+            "Deadlocks can involve resources beyond locks: database connections, file handles, etc."
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A deadlock occurs when threads wait for each other's locks forever. Prevent by: always acquiring locks in the same order, using timeouts, or using a single lock.",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\nlock_a = threading.Lock()\nlock_b = threading.Lock()\n\n# Always acquire in same order to prevent deadlock\ndef safe_task():\n    with lock_a:       # always lock_a first\n        with lock_b:   # then lock_b\n            print(\"Safe\")\n\n# Or use timeout to detect deadlocks\nif lock_a.acquire(timeout=5):\n    try:\n        pass\n    finally:\n        lock_a.release()",
+          "code_language": "python",
+          "key_points": [
+            "Always acquire multiple locks in the same global order",
+            "Use timeouts to detect and recover from deadlocks"
+          ],
+          "gotchas": [
+            "Deadlocks are timing-dependent and hard to reproduce in tests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does multiprocessing shared memory work?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["multiprocessing", "shared-memory", "Value", "Array"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Since each process has its own memory space, `multiprocessing` provides several mechanisms for sharing data between processes:\n\n### 1. `Value(typecode, value)` and `Array(typecode, size_or_initializer)`\n- Shared ctypes objects in shared memory\n- Typecodes: 'i' (int), 'd' (double), 'c' (char), etc.\n- Have an internal lock (`.value` property is synchronized)\n\n### 2. `multiprocessing.shared_memory.SharedMemory` (Python 3.8+)\n- Raw shared memory blocks\n- Can be used with NumPy arrays for high-performance sharing\n- Manual lifecycle management (close + unlink)\n\n### 3. `Manager()`\n- Creates a server process that manages shared objects\n- Supports dicts, lists, queues, namespaces, etc.\n- Slower (uses IPC) but more flexible",
+          "pseudo_code": "Value: single shared value with built-in lock\nArray: shared array of same-type elements\nSharedMemory: raw shared memory block\nManager: server-managed shared Python objects",
+          "actual_code": "from multiprocessing import Process, Value, Array, Lock, Manager\n\n# Value and Array\ndef increment_counter(counter, lock, n):\n    for _ in range(n):\n        with lock:\n            counter.value += 1\n\ndef modify_array(arr):\n    for i in range(len(arr)):\n        arr[i] = arr[i] ** 2\n\nif __name__ == '__main__':\n    # Shared Value\n    counter = Value('i', 0)  # integer, initial value 0\n    lock = Lock()\n    procs = [Process(target=increment_counter, args=(counter, lock, 10000))\n             for _ in range(4)]\n    for p in procs: p.start()\n    for p in procs: p.join()\n    print(f\"Counter: {counter.value}\")  # 40000\n\n    # Shared Array\n    arr = Array('d', [1.0, 2.0, 3.0, 4.0, 5.0])  # double array\n    p = Process(target=modify_array, args=(arr,))\n    p.start()\n    p.join()\n    print(f\"Array: {list(arr)}\")  # [1.0, 4.0, 9.0, 16.0, 25.0]\n\n    # Manager for complex shared objects\n    def worker_with_manager(shared_dict, shared_list, key, value):\n        shared_dict[key] = value\n        shared_list.append(value)\n\n    with Manager() as manager:\n        shared_dict = manager.dict()\n        shared_list = manager.list()\n\n        procs = []\n        for i in range(4):\n            p = Process(target=worker_with_manager,\n                        args=(shared_dict, shared_list, f\"key_{i}\", i * 10))\n            procs.append(p)\n            p.start()\n        for p in procs:\n            p.join()\n\n        print(f\"Dict: {dict(shared_dict)}\")  # {'key_0': 0, 'key_1': 10, ...}\n        print(f\"List: {list(shared_list)}\")   # [0, 10, 20, 30]\n\n    # SharedMemory (Python 3.8+)\n    from multiprocessing import shared_memory\n    import struct\n\n    shm = shared_memory.SharedMemory(create=True, size=100)\n    # Write data\n    struct.pack_into('5i', shm.buf, 0, 10, 20, 30, 40, 50)\n    # Read data\n    values = struct.unpack_from('5i', shm.buf, 0)\n    print(f\"SharedMemory values: {values}\")  # (10, 20, 30, 40, 50)\n    shm.close()\n    shm.unlink()  # free the shared memory block",
+          "code_language": "python",
+          "key_points": [
+            "Value/Array are shared ctypes objects with built-in synchronization",
+            "Manager creates server-managed shared Python objects (dict, list, etc.)",
+            "SharedMemory (3.8+) provides raw shared memory blocks",
+            "All shared data still needs explicit synchronization (locks) for safe access"
+          ],
+          "gotchas": [
+            "Manager objects are slower than Value/Array due to IPC overhead",
+            "SharedMemory must be explicitly unlinked or it leaks (persists until system reboot)",
+            "Value.value property access is atomic, but read-modify-write (value += 1) is NOT",
+            "Array type codes are C types ('i' for int, 'd' for double) -- not Python types"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Value` and `Array` share simple typed data. `Manager()` shares complex objects (dicts, lists) via a server process. `SharedMemory` (3.8+) gives raw shared memory blocks.",
+          "pseudo_code": "",
+          "actual_code": "from multiprocessing import Process, Value, Lock\n\ndef inc(counter, lock):\n    for _ in range(1000):\n        with lock:\n            counter.value += 1\n\nif __name__ == '__main__':\n    counter = Value('i', 0)\n    lock = Lock()\n    procs = [Process(target=inc, args=(counter, lock)) for _ in range(4)]\n    for p in procs: p.start()\n    for p in procs: p.join()\n    print(counter.value)  # 4000",
+          "code_language": "python",
+          "key_points": [
+            "Value/Array for simple shared data with built-in sync",
+            "Manager for complex Python objects"
+          ],
+          "gotchas": [
+            "counter.value += 1 is NOT atomic -- still needs a lock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you run blocking code inside an asyncio event loop?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["asyncio", "blocking", "run_in_executor"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Blocking code (CPU-bound computation, synchronous I/O, third-party libraries that don't support asyncio) will freeze the event loop if called directly in a coroutine. The solution is `loop.run_in_executor()`.\n\n### `await loop.run_in_executor(executor, func, *args)`\n- Runs `func` in a thread pool or process pool\n- Returns an awaitable (does not block the event loop)\n- `executor=None` uses the default ThreadPoolExecutor\n\n### `asyncio.to_thread(func, *args, **kwargs)` (Python 3.9+)\n- Simplified wrapper around `run_in_executor(None, ...)`\n- Supports keyword arguments (run_in_executor does not)\n\n### When to use which executor:\n- **ThreadPoolExecutor**: blocking I/O (file reads, HTTP requests, database queries)\n- **ProcessPoolExecutor**: CPU-bound computation (data processing, encryption)",
+          "pseudo_code": "async def main():\n    loop = asyncio.get_running_loop()\n    \n    # Thread pool (blocking I/O)\n    result = await loop.run_in_executor(None, blocking_io_func)\n    \n    # Process pool (CPU-bound)\n    with ProcessPoolExecutor() as pool:\n        result = await loop.run_in_executor(pool, cpu_bound_func)",
+          "actual_code": "import asyncio\nimport time\nfrom concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor\n\n# Blocking function\ndef blocking_io(url):\n    \"\"\"Simulates slow blocking I/O.\"\"\"\n    time.sleep(0.2)\n    return f\"Data from {url}\"\n\ndef cpu_heavy(n):\n    \"\"\"CPU-bound computation.\"\"\"\n    return sum(i * i for i in range(n))\n\n# Using run_in_executor\nasync def main_executor():\n    loop = asyncio.get_running_loop()\n\n    # Default thread pool for blocking I/O\n    start = time.perf_counter()\n    results = await asyncio.gather(\n        loop.run_in_executor(None, blocking_io, \"url1\"),\n        loop.run_in_executor(None, blocking_io, \"url2\"),\n        loop.run_in_executor(None, blocking_io, \"url3\"),\n    )\n    print(f\"3 I/O calls in {time.perf_counter() - start:.2f}s\")  # ~0.2s\n    print(results)\n\n    # Custom thread pool\n    with ThreadPoolExecutor(max_workers=10) as pool:\n        result = await loop.run_in_executor(pool, blocking_io, \"custom\")\n        print(result)\n\n    # Process pool for CPU-bound work\n    with ProcessPoolExecutor(max_workers=4) as pool:\n        results = await asyncio.gather(\n            loop.run_in_executor(pool, cpu_heavy, 1_000_000),\n            loop.run_in_executor(pool, cpu_heavy, 1_000_000),\n        )\n        print(f\"CPU results: {results}\")\n\nasyncio.run(main_executor())\n\n# Python 3.9+: asyncio.to_thread (simpler syntax)\nasync def main_to_thread():\n    start = time.perf_counter()\n    results = await asyncio.gather(\n        asyncio.to_thread(blocking_io, \"url1\"),\n        asyncio.to_thread(blocking_io, \"url2\"),\n    )\n    print(f\"to_thread: {time.perf_counter() - start:.2f}s\")\n    print(results)\n\nasyncio.run(main_to_thread())\n\n# Wrapping a sync library for async use\ndef sync_db_query(query):\n    time.sleep(0.1)  # simulates DB call\n    return [{\"id\": 1, \"name\": \"result\"}]\n\nasync def async_db_query(query):\n    \"\"\"Async wrapper for sync DB library.\"\"\"\n    return await asyncio.to_thread(sync_db_query, query)\n\nasync def main_wrapper():\n    data = await async_db_query(\"SELECT * FROM users\")\n    print(data)\n\nasyncio.run(main_wrapper())",
+          "code_language": "python",
+          "key_points": [
+            "run_in_executor() runs blocking code in a thread/process pool without blocking the loop",
+            "asyncio.to_thread() (3.9+) is a simpler wrapper for threading",
+            "Use ThreadPoolExecutor for blocking I/O, ProcessPoolExecutor for CPU-bound",
+            "executor=None uses the default thread pool"
+          ],
+          "gotchas": [
+            "run_in_executor does not support keyword arguments -- use functools.partial or to_thread",
+            "The default thread pool has a limited size -- heavy usage may need a custom pool",
+            "ProcessPoolExecutor with run_in_executor requires picklable functions and arguments",
+            "to_thread copies the current context -- be aware of context variable behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `await loop.run_in_executor(None, blocking_func, *args)` or `await asyncio.to_thread(func, *args)` (3.9+) to run blocking code without freezing the event loop.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nimport time\n\ndef blocking_work():\n    time.sleep(0.2)\n    return \"done\"\n\nasync def main():\n    result = await asyncio.to_thread(blocking_work)  # Python 3.9+\n    print(result)\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "run_in_executor for thread/process pool execution",
+            "to_thread (3.9+) for simpler syntax"
+          ],
+          "gotchas": [
+            "run_in_executor does not support keyword arguments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is asyncio.TaskGroup and how does it improve over asyncio.gather?",
+      "display_order": 16,
+      "difficulty": "advanced",
+      "tags": ["asyncio", "TaskGroup", "structured-concurrency"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`asyncio.TaskGroup` (Python 3.11+) provides **structured concurrency** -- a pattern where the lifetime of concurrent tasks is bounded by a scope (the `async with` block). It improves over `gather()` in several ways:\n\n### Advantages over gather():\n1. **Automatic cancellation**: If any task fails, ALL remaining tasks are cancelled\n2. **ExceptionGroup**: Collects ALL exceptions (not just the first)\n3. **Scope-bound lifecycle**: Tasks cannot outlive the `async with` block\n4. **Cleaner error handling**: Uses `except*` syntax for exception groups\n\n### gather() limitations:\n- With `return_exceptions=False`: first exception cancels, others may keep running\n- With `return_exceptions=True`: all exceptions collected but tasks always run to completion\n- No guaranteed cleanup if an exception escapes",
+          "pseudo_code": "async with TaskGroup() as tg:\n    tg.create_task(coro1())\n    tg.create_task(coro2())\n    tg.create_task(coro3())\n# All tasks guaranteed to be done or cancelled here\n# If any failed, ExceptionGroup is raised",
+          "actual_code": "import asyncio\n\nasync def fetch(name, delay, should_fail=False):\n    await asyncio.sleep(delay)\n    if should_fail:\n        raise ValueError(f\"{name} failed!\")\n    return f\"{name} result\"\n\n# TaskGroup: basic usage\nasync def demo_taskgroup():\n    async with asyncio.TaskGroup() as tg:\n        task1 = tg.create_task(fetch(\"A\", 0.1))\n        task2 = tg.create_task(fetch(\"B\", 0.2))\n        task3 = tg.create_task(fetch(\"C\", 0.15))\n    # All tasks complete when we exit the block\n    print(task1.result(), task2.result(), task3.result())\n\nasyncio.run(demo_taskgroup())\n\n# TaskGroup: error handling with except*\nasync def demo_taskgroup_errors():\n    try:\n        async with asyncio.TaskGroup() as tg:\n            tg.create_task(fetch(\"A\", 0.1))\n            tg.create_task(fetch(\"B\", 0.05, should_fail=True))\n            tg.create_task(fetch(\"C\", 0.1, should_fail=True))\n    except* ValueError as eg:\n        # ExceptionGroup contains ALL ValueError exceptions\n        for exc in eg.exceptions:\n            print(f\"Caught: {exc}\")\n    # All tasks are cancelled/complete here\n\nasyncio.run(demo_taskgroup_errors())\n\n# Compare with gather\nasync def demo_gather_comparison():\n    # gather with return_exceptions=True\n    results = await asyncio.gather(\n        fetch(\"A\", 0.1),\n        fetch(\"B\", 0.05, should_fail=True),\n        fetch(\"C\", 0.1),\n        return_exceptions=True\n    )\n    for r in results:\n        if isinstance(r, Exception):\n            print(f\"Error: {r}\")\n        else:\n            print(f\"Success: {r}\")\n\nasyncio.run(demo_gather_comparison())\n\n# Dynamic task creation with TaskGroup\nasync def process_urls(urls):\n    results = {}\n\n    async def fetch_one(url):\n        await asyncio.sleep(0.1)\n        results[url] = f\"data from {url}\"\n\n    async with asyncio.TaskGroup() as tg:\n        for url in urls:\n            tg.create_task(fetch_one(url))\n\n    return results\n\nurls = [f\"https://example.com/{i}\" for i in range(5)]\nresult = asyncio.run(process_urls(urls))\nprint(f\"Fetched {len(result)} URLs\")",
+          "code_language": "python",
+          "key_points": [
+            "TaskGroup provides structured concurrency with scope-bound task lifetimes",
+            "If any task fails, all remaining tasks are automatically cancelled",
+            "Raises ExceptionGroup containing ALL exceptions (use except* to handle)",
+            "Tasks cannot outlive the async with block -- guaranteed cleanup"
+          ],
+          "gotchas": [
+            "Requires Python 3.11+ (use gather for older versions)",
+            "except* syntax is needed to handle ExceptionGroup (regular except catches ExceptionGroup as a whole)",
+            "You cannot use return values directly from create_task inside the block -- access task.result() after the block",
+            "If the body of 'async with' raises, all tasks are cancelled even if they would succeed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`asyncio.TaskGroup` (3.11+) is structured concurrency: all tasks are scope-bound, auto-cancelled on failure, and exceptions are collected into `ExceptionGroup`. Replaces `gather()` for most use cases.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def job(n):\n    await asyncio.sleep(0.1)\n    return n * 2\n\nasync def main():\n    async with asyncio.TaskGroup() as tg:\n        t1 = tg.create_task(job(1))\n        t2 = tg.create_task(job(2))\n    print(t1.result(), t2.result())  # 2 4\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "Scope-bound tasks with automatic cancellation on failure",
+            "ExceptionGroup collects all errors"
+          ],
+          "gotchas": [
+            "Requires Python 3.11+"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use threading vs multiprocessing vs asyncio?",
+      "display_order": 17,
+      "difficulty": "advanced",
+      "tags": ["concurrency", "comparison", "decision-matrix"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Decision matrix:\n\n| Scenario | Best choice | Why |\n|---|---|---|\n| Many network requests | asyncio | Single-threaded, handles thousands of connections |\n| File I/O with moderate concurrency | threading | Simple, GIL released during I/O |\n| CPU-heavy computation | multiprocessing | True parallelism, bypasses GIL |\n| Mixed I/O and CPU | multiprocessing + asyncio | asyncio for I/O, processes for CPU |\n| Simple script, few tasks | threading | Lowest complexity |\n| Web scraping (many URLs) | asyncio (aiohttp) | Best scalability for network I/O |\n| Image processing | multiprocessing | CPU-bound, benefits from multiple cores |\n| GUI application | threading | Keep UI responsive during I/O |\n\n### Scalability:\n- **Threading**: 100s of threads (OS limit, memory overhead ~8MB stack per thread)\n- **Asyncio**: 10,000s of concurrent coroutines (minimal memory per coroutine)\n- **Multiprocessing**: 10s of processes (limited by CPU cores)\n\n### Complexity:\n- **Threading**: Shared state requires locks, prone to race conditions\n- **Asyncio**: No locks needed (single-threaded), but requires async ecosystem\n- **Multiprocessing**: Process isolation is safer but IPC is complex",
+          "pseudo_code": "Decision tree:\n  Is it CPU-bound?\n    Yes -> multiprocessing\n    No -> Is it I/O-bound?\n      Yes -> Need 1000+ concurrent connections?\n        Yes -> asyncio\n        No -> threading (simpler) or asyncio\n      No -> single-threaded is fine",
+          "actual_code": "import asyncio\nimport time\nfrom concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor\n\n# I/O-bound: asyncio is best\nasync def async_io_example():\n    async def fetch(url):\n        await asyncio.sleep(0.1)  # simulate network I/O\n        return url\n\n    start = time.perf_counter()\n    tasks = [fetch(f\"url_{i}\") for i in range(100)]\n    results = await asyncio.gather(*tasks)\n    print(f\"asyncio: 100 I/O tasks in {time.perf_counter() - start:.2f}s\")\n\nasyncio.run(async_io_example())\n\n# I/O-bound with simple threading\ndef threading_io_example():\n    import urllib.request\n\n    def fetch(url):\n        time.sleep(0.1)  # simulate I/O\n        return url\n\n    start = time.perf_counter()\n    with ThreadPoolExecutor(max_workers=20) as executor:\n        results = list(executor.map(fetch, [f\"url_{i}\" for i in range(100)]))\n    print(f\"threading: 100 I/O tasks in {time.perf_counter() - start:.2f}s\")\n\nthreading_io_example()\n\n# CPU-bound: multiprocessing is best\ndef cpu_task(n):\n    return sum(i * i for i in range(n))\n\ndef multiprocessing_cpu_example():\n    start = time.perf_counter()\n    with ProcessPoolExecutor(max_workers=4) as executor:\n        results = list(executor.map(cpu_task, [2_000_000] * 8))\n    print(f\"multiprocessing: 8 CPU tasks in {time.perf_counter() - start:.2f}s\")\n\nif __name__ == '__main__':\n    multiprocessing_cpu_example()\n\n# Hybrid: asyncio + ProcessPoolExecutor for mixed workloads\nasync def hybrid_example():\n    loop = asyncio.get_running_loop()\n\n    # I/O-bound in coroutines\n    async def io_work():\n        await asyncio.sleep(0.1)\n        return \"io_result\"\n\n    # CPU-bound in process pool\n    with ProcessPoolExecutor(max_workers=2) as pool:\n        io_result, cpu_result = await asyncio.gather(\n            io_work(),\n            loop.run_in_executor(pool, cpu_task, 1_000_000)\n        )\n    print(f\"Hybrid: {io_result}, CPU={cpu_result}\")\n\nasyncio.run(hybrid_example())",
+          "code_language": "python",
+          "key_points": [
+            "asyncio: best for high-concurrency I/O (1000s of connections)",
+            "threading: simplest for moderate I/O concurrency",
+            "multiprocessing: only option for true CPU parallelism",
+            "Combine them for mixed workloads (asyncio loop + process pool)"
+          ],
+          "gotchas": [
+            "Don't use threading for CPU-bound work -- it will be slower than sequential",
+            "asyncio requires the entire call chain to be async -- one blocking call freezes everything",
+            "multiprocessing has high overhead for small tasks (process creation + serialization)",
+            "Premature optimization: many tasks are fast enough single-threaded -- benchmark first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use **asyncio** for many I/O connections (1000s), **threading** for simple I/O concurrency, **multiprocessing** for CPU-bound parallelism. Combine as needed.",
+          "pseudo_code": "",
+          "actual_code": "# I/O-bound: asyncio or threading\nimport asyncio\nasync def io_example():\n    await asyncio.gather(*[asyncio.sleep(0.1) for _ in range(100)])\n\n# CPU-bound: multiprocessing\nfrom concurrent.futures import ProcessPoolExecutor\ndef cpu_example():\n    with ProcessPoolExecutor(4) as pool:\n        list(pool.map(sum, [range(1000000)] * 4))",
+          "code_language": "python",
+          "key_points": [
+            "asyncio: many I/O connections; threading: simple I/O; multiprocessing: CPU",
+            "Benchmark before adding concurrency"
+          ],
+          "gotchas": [
+            "Threading is slower than sequential for CPU-bound work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you safely share data between threads using threading.local()?",
+      "display_order": 18,
+      "difficulty": "advanced",
+      "tags": ["threading", "thread-local", "data-isolation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`threading.local()` creates an object where each thread sees its own independent copy of attributes. Setting an attribute in one thread does not affect the same attribute in another thread.\n\n### Use cases:\n- Per-thread database connections\n- Per-request context in web servers (Flask uses this for `request` and `g`)\n- Thread-safe logging context\n- Avoiding lock contention by giving each thread its own data\n\n### How it works:\nInternally, `threading.local()` uses a dictionary keyed by thread ID. When you access `local.attr`, Python looks up the value for the current thread's ID.\n\nFor asyncio, use `contextvars.ContextVar` instead (Python 3.7+), which works with both threads and async tasks.",
+          "pseudo_code": "local = threading.local()\n\nThread-1: local.x = 10  -> stored as {thread1_id: {'x': 10}}\nThread-2: local.x = 20  -> stored as {thread2_id: {'x': 20}}\n\nThread-1: local.x -> 10 (thread1 sees its own value)\nThread-2: local.x -> 20 (thread2 sees its own value)",
+          "actual_code": "import threading\nimport time\n\n# Basic thread-local storage\nlocal_data = threading.local()\n\ndef worker(name, value):\n    local_data.name = name\n    local_data.value = value\n    time.sleep(0.1)  # simulate work, other threads run\n    # Each thread still sees its own values\n    print(f\"Thread {local_data.name}: value = {local_data.value}\")\n\nthreads = [\n    threading.Thread(target=worker, args=(\"A\", 100)),\n    threading.Thread(target=worker, args=(\"B\", 200)),\n    threading.Thread(target=worker, args=(\"C\", 300)),\n]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\n# Each thread prints its own value, no cross-contamination\n\n# Practical: per-thread database connection\nclass DatabasePool:\n    def __init__(self):\n        self._local = threading.local()\n\n    def get_connection(self):\n        if not hasattr(self._local, 'connection'):\n            self._local.connection = self._create_connection()\n        return self._local.connection\n\n    def _create_connection(self):\n        thread_name = threading.current_thread().name\n        print(f\"Creating connection for {thread_name}\")\n        return f\"conn_{thread_name}\"\n\npool = DatabasePool()\n\ndef db_worker():\n    conn = pool.get_connection()  # created once per thread\n    conn2 = pool.get_connection()  # reuses same connection\n    assert conn is conn2\n    print(f\"{threading.current_thread().name} using {conn}\")\n\nthreads = [threading.Thread(target=db_worker) for _ in range(3)]\nfor t in threads:\n    t.start()\nfor t in threads:\n    t.join()\n\n# For asyncio: use contextvars instead\nimport contextvars\nimport asyncio\n\nrequest_id = contextvars.ContextVar('request_id', default=None)\n\nasync def handle_request(rid):\n    request_id.set(rid)\n    await asyncio.sleep(0.1)\n    print(f\"Handling request: {request_id.get()}\")\n\nasync def main():\n    await asyncio.gather(\n        handle_request(\"req_1\"),\n        handle_request(\"req_2\"),\n        handle_request(\"req_3\"),\n    )\n\nasyncio.run(main())",
+          "code_language": "python",
+          "key_points": [
+            "threading.local() gives each thread its own copy of attributes",
+            "Perfect for per-thread resources (DB connections, request context)",
+            "No locks needed since data is inherently isolated",
+            "Use contextvars.ContextVar for asyncio (works with both threads and tasks)"
+          ],
+          "gotchas": [
+            "Accessing an attribute that hasn't been set in the current thread raises AttributeError",
+            "threading.local() does NOT work with asyncio coroutines (multiple coroutines share the same thread)",
+            "Thread-local data is not inherited by child threads -- each starts with a clean slate",
+            "Memory is not automatically cleaned up when a thread ends -- can leak if threads are reused (thread pools)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`threading.local()` gives each thread its own isolated copy of attributes. No locks needed. Use `contextvars.ContextVar` for asyncio instead.",
+          "pseudo_code": "",
+          "actual_code": "import threading\n\nlocal = threading.local()\n\ndef worker(value):\n    local.x = value\n    print(f\"{threading.current_thread().name}: x = {local.x}\")\n\nt1 = threading.Thread(target=worker, args=(10,))\nt2 = threading.Thread(target=worker, args=(20,))\nt1.start(); t2.start()\nt1.join(); t2.join()  # each sees its own x",
+          "code_language": "python",
+          "key_points": [
+            "Each thread gets its own copy of attributes",
+            "No locks needed -- inherently isolated"
+          ],
+          "gotchas": [
+            "Does NOT work with asyncio -- use contextvars instead"
+          ]
+        }
+      ]
+    }
+  ]
+}

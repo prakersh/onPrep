@@ -1,0 +1,497 @@
+{
+  "concept_slug": "memory-management",
+  "questions": [
+    {
+      "title": "How does Python's reference counting work for memory management?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["reference-counting", "memory", "garbage-collection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reference counting is CPython's **primary** memory management mechanism. Every Python object has an internal reference count that tracks how many references point to it.\n\n### How it works:\n- **Increment**: When a new reference is created (assignment, function argument, adding to a container)\n- **Decrement**: When a reference is deleted (`del`), goes out of scope, or is reassigned\n- **Deallocation**: When the count reaches **zero**, the object is immediately freed\n\n### Advantages:\n- **Deterministic**: Objects are freed immediately when no longer referenced\n- **Simple**: Low overhead for the common case\n- **Predictable**: `__del__` is called promptly\n\n### Limitations:\n- Cannot handle **reference cycles** (A references B, B references A)\n- Overhead of maintaining counts on every reference change\n- Not thread-safe without the GIL",
+          "pseudo_code": "Object lifecycle:\n  x = SomeObject()   # refcount = 1\n  y = x              # refcount = 2\n  z = [x]            # refcount = 3\n  del y              # refcount = 2\n  z.pop()            # refcount = 1\n  del x              # refcount = 0 -> FREED immediately",
+          "actual_code": "import sys\n\n# sys.getrefcount returns the reference count\n# Note: passing to getrefcount itself creates a temporary reference (+1)\n\na = [1, 2, 3]\nprint(sys.getrefcount(a))  # 2 (a + getrefcount argument)\n\nb = a  # new reference\nprint(sys.getrefcount(a))  # 3 (a + b + getrefcount argument)\n\nc = [a, a, a]  # three more references\nprint(sys.getrefcount(a))  # 6 (a + b + 3 in list + getrefcount)\n\ndel b\nprint(sys.getrefcount(a))  # 5\n\nc.clear()\nprint(sys.getrefcount(a))  # 2 (a + getrefcount)\n\n# Demonstrating immediate deallocation\nclass Tracked:\n    def __init__(self, name):\n        self.name = name\n        print(f\"Created {self.name}\")\n\n    def __del__(self):\n        print(f\"Destroyed {self.name}\")\n\nprint(\"--- Creating ---\")\nobj = Tracked(\"obj1\")\nprint(\"--- Replacing ---\")\nobj = Tracked(\"obj2\")  # obj1 is freed immediately (refcount -> 0)\nprint(\"--- Deleting ---\")\ndel obj  # obj2 is freed immediately\nprint(\"--- Done ---\")\n\n# Reference cycle (refcount never reaches 0)\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.next = None\n\na = Node(\"A\")\nb = Node(\"B\")\na.next = b  # A -> B\nb.next = a  # B -> A (cycle!)\n\n# Even after deleting a and b, the cycle keeps refcount > 0\n# The cyclic garbage collector must handle this\ndel a, b  # objects not freed! (refcount = 1 each due to cycle)",
+          "code_language": "python",
+          "key_points": [
+            "Every object has an internal reference count tracking pointers to it",
+            "Objects are freed immediately when refcount reaches zero",
+            "sys.getrefcount() returns the count (adds 1 for the argument itself)",
+            "Reference counting cannot handle cyclic references -- needs cyclic GC"
+          ],
+          "gotchas": [
+            "sys.getrefcount() always shows one more than expected (the argument reference)",
+            "Reference cycles prevent refcount from reaching zero -- leads to leaks without cyclic GC",
+            "__del__ timing depends on reference counting -- not guaranteed in all Python implementations",
+            "Interned objects (small ints, string literals) have artificially high refcounts"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Every Python object has a reference count. When it reaches zero, the object is immediately freed. `sys.getrefcount(obj)` shows the count. Cycles (A->B->A) cannot be freed by refcounting alone -- the cyclic GC handles those.",
+          "pseudo_code": "",
+          "actual_code": "import sys\n\nx = [1, 2, 3]\nprint(sys.getrefcount(x))  # 2 (x + argument to getrefcount)\ny = x\nprint(sys.getrefcount(x))  # 3\ndel y\nprint(sys.getrefcount(x))  # 2",
+          "code_language": "python",
+          "key_points": [
+            "refcount=0 triggers immediate deallocation",
+            "Cannot handle reference cycles"
+          ],
+          "gotchas": [
+            "sys.getrefcount adds 1 because passing the object is itself a reference"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Python's cyclic garbage collector work?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["garbage-collection", "gc-module", "cyclic-gc"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The cyclic garbage collector supplements reference counting by detecting and collecting **reference cycles** -- groups of objects that reference each other but are not reachable from the program.\n\n### How it works (generational collection):\nPython uses a **generational** approach with three generations (0, 1, 2):\n- **Generation 0**: Newly created objects. Collected most frequently.\n- **Generation 1**: Objects that survived one collection.\n- **Generation 2**: Long-lived objects. Collected least frequently.\n\n### Collection algorithm:\n1. For each object in a generation, count internal references (references from other tracked objects)\n2. Subtract internal references from the total refcount\n3. Objects with effective refcount 0 after subtraction are unreachable (part of a cycle)\n4. These objects are collected (freed)\n\n### Thresholds:\nCollection triggers when `allocations - deallocations > threshold` for a generation. Default thresholds: (700, 10, 10).",
+          "pseudo_code": "Generational GC:\n  Gen 0 (new objects): collected every ~700 allocations\n  Gen 1 (survivors): collected every ~10 Gen 0 collections\n  Gen 2 (long-lived): collected every ~10 Gen 1 collections\n\nCycle detection:\n  For each object in generation:\n    if reachable from root (program variables): keep\n    if only reachable from other cycle members: collect",
+          "actual_code": "import gc\n\n# Check GC status\nprint(f\"GC enabled: {gc.isenabled()}\")  # True\nprint(f\"Thresholds: {gc.get_threshold()}\")  # (700, 10, 10)\nprint(f\"Counts: {gc.get_count()}\")  # (allocations_since_last_gc, gen1_count, gen2_count)\n\n# Create a reference cycle\nclass Node:\n    def __init__(self, name):\n        self.name = name\n        self.ref = None\n    def __repr__(self):\n        return f\"Node({self.name})\"\n\na = Node(\"A\")\nb = Node(\"B\")\na.ref = b\nb.ref = a  # cycle: A <-> B\n\n# Delete external references\ndel a, b\n# Objects still exist (refcount > 0 due to cycle)\n\n# Force garbage collection\ncollected = gc.collect()  # returns number of unreachable objects found\nprint(f\"Collected {collected} objects\")  # 2 (A and B)\n\n# Monitor GC activity\ngc.set_debug(gc.DEBUG_STATS)  # print collection stats\ngc.collect()\ngc.set_debug(0)  # turn off\n\n# Adjust thresholds (tune for your workload)\ngc.set_threshold(1000, 15, 15)  # less frequent collections\n\n# Get objects tracked by GC\nclass Tracked:\n    pass\n\nobj = Tracked()\ntracked = gc.get_referrers(obj)  # objects that reference obj\nprint(f\"Referrers: {len(tracked)}\")\n\n# Disable GC (for performance-critical sections)\ngc.disable()\n# ... performance-critical code ...\ngc.enable()\n\n# Generation info\nfor gen in range(3):\n    objects = gc.get_objects(gen)\n    print(f\"Generation {gen}: {len(objects)} objects\")\n\n# Callbacks for GC events (Python 3.3+)\ndef gc_callback(phase, info):\n    if phase == 'start':\n        print(f\"GC starting: generation {info['generation']}\")\n    elif phase == 'stop':\n        print(f\"GC done: collected {info['collected']}, uncollectable {info['uncollectable']}\")\n\ngc.callbacks.append(gc_callback)\ngc.collect()\ngc.callbacks.clear()",
+          "code_language": "python",
+          "key_points": [
+            "Cyclic GC detects and frees reference cycles that refcounting misses",
+            "Uses three generations: 0 (new), 1 (survived), 2 (long-lived)",
+            "gc.collect() forces immediate collection; gc.get_threshold() shows trigger points",
+            "gc.disable() can improve performance when you know there are no cycles"
+          ],
+          "gotchas": [
+            "Objects with __del__ in a cycle were uncollectable before Python 3.4 (PEP 442 fixed this)",
+            "gc.disable() can cause memory leaks if your code creates reference cycles",
+            "GC pauses can cause latency spikes -- tune thresholds for latency-sensitive applications",
+            "Weak references (weakref) are a better solution than relying on GC for cycle-prone patterns"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python's cyclic GC detects and frees reference cycles using a generational algorithm (3 generations). It supplements reference counting. Use `gc.collect()` to force collection, `gc.get_threshold()` to see triggers.",
+          "pseudo_code": "",
+          "actual_code": "import gc\n\nprint(gc.get_threshold())  # (700, 10, 10)\nprint(gc.get_count())      # current allocation counts\n\ncollected = gc.collect()   # force collection\nprint(f\"Collected {collected} cyclic objects\")",
+          "code_language": "python",
+          "key_points": [
+            "Three generations with increasing collection frequency",
+            "Detects reference cycles that refcounting cannot handle"
+          ],
+          "gotchas": [
+            "Disabling GC causes leaks if your code creates reference cycles"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is __del__ and why should you avoid relying on it?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["__del__", "finalizer", "garbage-collection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__del__` is a **finalizer** method called when an object is about to be garbage collected. It is **not** a destructor in the C++ sense.\n\n### Problems with __del__:\n1. **Non-deterministic timing**: With cyclic GC, you don't know when (or if) it will be called\n2. **Reference resurrection**: Accessing `self` in `__del__` can accidentally revive the object\n3. **Exception suppression**: Exceptions in `__del__` are ignored (printed to stderr)\n4. **GC complications**: Before Python 3.4, objects with `__del__` in cycles were uncollectable\n5. **Interpreter shutdown**: During shutdown, `__del__` may fail because globals are already cleaned up\n\n### Better alternatives:\n- Context managers (`with` statement + `__enter__`/`__exit__`)\n- `weakref.finalize()` for guaranteed cleanup\n- Explicit `.close()` methods",
+          "pseudo_code": "__del__ problems:\n  1. When is it called? Unknown (depends on GC)\n  2. Will it be called? Not guaranteed (interpreter shutdown)\n  3. Is it safe? No (globals may be None)\n\nBetter: use context managers\n  with Resource() as r:\n      use(r)\n  # __exit__ called deterministically",
+          "actual_code": "import weakref\nimport gc\n\n# __del__ basic usage (with caveats)\nclass Resource:\n    def __init__(self, name):\n        self.name = name\n        print(f\"Acquired {self.name}\")\n\n    def __del__(self):\n        print(f\"Released {self.name}\")\n\n# Deterministic: refcount drops to 0\nr = Resource(\"A\")\ndel r  # prints \"Released A\" immediately\n\n# Non-deterministic: reference cycle\nclass LinkedNode:\n    def __init__(self, name):\n        self.name = name\n        self.next = None\n    def __del__(self):\n        print(f\"Finalizing {self.name}\")\n\na = LinkedNode(\"A\")\nb = LinkedNode(\"B\")\na.next = b\nb.next = a\ndel a, b\n# __del__ will be called eventually by cyclic GC, but timing is unknown\ngc.collect()  # force it\n\n# BETTER: Context manager\nclass ManagedResource:\n    def __init__(self, name):\n        self.name = name\n        print(f\"Acquired {self.name}\")\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        self.close()\n        return False\n\n    def close(self):\n        print(f\"Released {self.name}\")\n\nwith ManagedResource(\"B\") as r:\n    pass  # Released deterministically when exiting 'with'\n\n# BETTER: weakref.finalize (guaranteed, no resurrection risk)\nclass SafeResource:\n    def __init__(self, name):\n        self.name = name\n        self._finalizer = weakref.finalize(self, self._cleanup, name)\n\n    @staticmethod\n    def _cleanup(name):\n        print(f\"Finalized {name}\")\n\n    def close(self):\n        self._finalizer()\n\nobj = SafeResource(\"C\")\ndel obj  # prints \"Finalized C\"\n\n# weakref.finalize is called even during interpreter shutdown\n# and handles reference cycles correctly",
+          "code_language": "python",
+          "key_points": [
+            "__del__ is a finalizer called when an object is about to be freed",
+            "Timing is non-deterministic when cyclic GC is involved",
+            "Context managers (__enter__/__exit__) are the preferred alternative",
+            "weakref.finalize() provides guaranteed cleanup without __del__ pitfalls"
+          ],
+          "gotchas": [
+            "Exceptions in __del__ are silently ignored (only printed to stderr)",
+            "__del__ can accidentally resurrect objects by creating new references to self",
+            "During interpreter shutdown, module globals may already be None when __del__ runs",
+            "__del__ is NOT guaranteed to be called for objects that still exist when the interpreter exits"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__del__` is a finalizer called before garbage collection, but its timing is unpredictable. Use context managers (`with` statement) or `weakref.finalize()` instead for deterministic cleanup.",
+          "pseudo_code": "",
+          "actual_code": "import weakref\n\n# Avoid __del__, use weakref.finalize\nclass Resource:\n    def __init__(self):\n        weakref.finalize(self, print, \"Cleaned up!\")\n\nr = Resource()\ndel r  # prints \"Cleaned up!\"",
+          "code_language": "python",
+          "key_points": [
+            "__del__ timing is unpredictable",
+            "Use context managers or weakref.finalize() instead"
+          ],
+          "gotchas": [
+            "Exceptions in __del__ are silently suppressed"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you profile memory usage in Python?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["memory-profiling", "tracemalloc", "optimization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several tools for memory profiling:\n\n### Built-in: `tracemalloc` (Python 3.4+)\n- Traces memory allocations back to their source file and line\n- Compare snapshots to find leaks\n- No external dependencies\n\n### Built-in: `sys.getsizeof()`\n- Returns the size of a single object in bytes\n- Does NOT include sizes of referenced objects\n\n### Third-party: `memory_profiler`\n- Line-by-line memory usage with `@profile` decorator\n- `mprof` command-line tool for plotting\n\n### Third-party: `objgraph`\n- Visualizes object reference graphs\n- Finds objects that are growing in count\n\n### Third-party: `pympler`\n- `asizeof()`: Deep size including referenced objects\n- Object tracking and statistics",
+          "pseudo_code": "tracemalloc workflow:\n  1. tracemalloc.start()\n  2. ... run code ...\n  3. snapshot = tracemalloc.take_snapshot()\n  4. stats = snapshot.statistics('lineno')\n  5. Review top memory consumers\n\nLeak detection:\n  1. snapshot1 = take_snapshot()\n  2. ... run suspected leaky code ...\n  3. snapshot2 = take_snapshot()\n  4. diff = snapshot2.compare_to(snapshot1, 'lineno')\n  5. Review what grew",
+          "actual_code": "import tracemalloc\nimport sys\n\n# tracemalloc: trace memory allocations\ntracemalloc.start()\n\n# Allocate some memory\ndata = [list(range(1000)) for _ in range(100)]\nsmall = {i: str(i) for i in range(1000)}\n\nsnapshot = tracemalloc.take_snapshot()\nstats = snapshot.statistics('lineno')\n\nprint(\"Top 5 memory consumers:\")\nfor stat in stats[:5]:\n    print(f\"  {stat}\")\n\n# Compare snapshots for leak detection\nsnapshot1 = tracemalloc.take_snapshot()\n\n# Simulate memory growth\nmore_data = [bytearray(10000) for _ in range(50)]\n\nsnapshot2 = tracemalloc.take_snapshot()\ndiff = snapshot2.compare_to(snapshot1, 'lineno')\n\nprint(\"\\nMemory changes:\")\nfor stat in diff[:5]:\n    print(f\"  {stat}\")\n\ntracemalloc.stop()\n\n# sys.getsizeof: size of individual objects (shallow)\nprint(f\"\\nint: {sys.getsizeof(0)} bytes\")\nprint(f\"str 'hello': {sys.getsizeof('hello')} bytes\")\nprint(f\"list [1,2,3]: {sys.getsizeof([1,2,3])} bytes\")  # container only!\nprint(f\"dict {{1:2}}: {sys.getsizeof({1: 2})} bytes\")\nprint(f\"empty dict: {sys.getsizeof({})} bytes\")\n\n# Deep size estimation\ndef deep_getsizeof(obj, seen=None):\n    \"\"\"Recursively calculate total size of object and its contents.\"\"\"\n    if seen is None:\n        seen = set()\n    obj_id = id(obj)\n    if obj_id in seen:\n        return 0\n    seen.add(obj_id)\n    size = sys.getsizeof(obj)\n    if isinstance(obj, dict):\n        size += sum(deep_getsizeof(k, seen) + deep_getsizeof(v, seen)\n                    for k, v in obj.items())\n    elif isinstance(obj, (list, tuple, set, frozenset)):\n        size += sum(deep_getsizeof(item, seen) for item in obj)\n    return size\n\ndata = {'key': [1, 2, 3], 'other': 'hello'}\nprint(f\"\\nShallow size: {sys.getsizeof(data)} bytes\")\nprint(f\"Deep size: {deep_getsizeof(data)} bytes\")\n\n# Current memory usage\nprint(f\"\\nCurrent: {tracemalloc.get_traced_memory() if tracemalloc.is_tracing() else 'not tracing'}\")",
+          "code_language": "python",
+          "key_points": [
+            "tracemalloc traces allocations to source lines -- best built-in tool",
+            "Compare snapshots to find memory leaks",
+            "sys.getsizeof() only measures shallow size (container itself, not contents)",
+            "Use tracemalloc.start() at program start for best results"
+          ],
+          "gotchas": [
+            "sys.getsizeof() does NOT include the size of referenced objects (shallow only)",
+            "tracemalloc itself uses memory -- adds ~10-30% overhead",
+            "tracemalloc only tracks Python allocations, not C extension memory",
+            "Memory profiler results can vary between runs due to GC timing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `tracemalloc` to trace memory allocations to source lines and compare snapshots for leak detection. `sys.getsizeof()` shows shallow size of individual objects.",
+          "pseudo_code": "",
+          "actual_code": "import tracemalloc\n\ntracemalloc.start()\ndata = [i ** 2 for i in range(10000)]\nsnapshot = tracemalloc.take_snapshot()\nfor stat in snapshot.statistics('lineno')[:3]:\n    print(stat)\ntracemalloc.stop()",
+          "code_language": "python",
+          "key_points": [
+            "tracemalloc for allocation tracing and leak detection",
+            "sys.getsizeof for shallow object size"
+          ],
+          "gotchas": [
+            "sys.getsizeof is shallow -- does not include referenced objects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does __slots__ optimize memory usage in Python classes?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["__slots__", "memory-optimization", "classes"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "By default, Python objects store instance attributes in a `__dict__` dictionary. `__slots__` replaces this dict with a fixed set of slots, which are stored more efficiently.\n\n### Memory savings:\n- A `__dict__` costs ~100+ bytes per instance (dict overhead)\n- `__slots__` attributes use fixed offsets like C struct members\n- For objects with few attributes, savings can be 30-50% per instance\n- Significant when creating millions of instances\n\n### How to use:\n```python\nclass Point:\n    __slots__ = ('x', 'y')\n```\n\n### Trade-offs:\n- No `__dict__` means you cannot add arbitrary attributes\n- No `__weakref__` unless explicitly included in `__slots__`\n- Cannot use multiple inheritance with conflicting `__slots__`\n- Subclasses without `__slots__` get `__dict__` back",
+          "pseudo_code": "Without __slots__:\n  instance.__dict__ = {'x': 1, 'y': 2}  # dict overhead per instance\n\nWith __slots__:\n  instance.x = 1  # stored at fixed memory offset\n  instance.y = 2  # stored at fixed memory offset\n  # no __dict__ overhead",
+          "actual_code": "import sys\n\n# Without __slots__\nclass RegularPoint:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n# With __slots__\nclass SlottedPoint:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n# Memory comparison\nreg = RegularPoint(1, 2)\nslot = SlottedPoint(1, 2)\n\nprint(f\"Regular: {sys.getsizeof(reg)} + dict {sys.getsizeof(reg.__dict__)} bytes\")\nprint(f\"Slotted: {sys.getsizeof(slot)} bytes (no __dict__)\")\n\n# Demonstrate: no arbitrary attributes with __slots__\ntry:\n    slot.z = 3  # AttributeError!\nexcept AttributeError as e:\n    print(f\"Cannot add attributes: {e}\")\n\n# Regular class allows arbitrary attributes\nreg.z = 3  # works fine\nprint(f\"Regular z: {reg.z}\")\n\n# Memory at scale\nimport tracemalloc\ntracemalloc.start()\n\nregular_points = [RegularPoint(i, i) for i in range(100_000)]\nreg_size = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\ntracemalloc.start()\nslotted_points = [SlottedPoint(i, i) for i in range(100_000)]\nslot_size = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\nprint(f\"\\n100K Regular objects: {reg_size / 1024 / 1024:.1f} MB\")\nprint(f\"100K Slotted objects: {slot_size / 1024 / 1024:.1f} MB\")\nprint(f\"Savings: {(1 - slot_size / reg_size) * 100:.0f}%\")\n\n# __slots__ with inheritance\nclass SlottedPoint3D(SlottedPoint):\n    __slots__ = ('z',)  # add z slot, inherit x and y\n\n    def __init__(self, x, y, z):\n        super().__init__(x, y)\n        self.z = z\n\np3d = SlottedPoint3D(1, 2, 3)\nprint(f\"\\n3D Point: ({p3d.x}, {p3d.y}, {p3d.z})\")\n\n# Including __weakref__ and __dict__ in slots\nclass FlexibleSlots:\n    __slots__ = ('x', 'y', '__dict__', '__weakref__')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\nf = FlexibleSlots(1, 2)\nf.z = 3  # works because __dict__ is in __slots__\nprint(f\"Flexible z: {f.z}\")",
+          "code_language": "python",
+          "key_points": [
+            "__slots__ replaces per-instance __dict__ with fixed-offset storage",
+            "Saves 30-50% memory per instance, significant at scale",
+            "Prevents adding arbitrary attributes (can be a feature for correctness)",
+            "Include '__weakref__' in __slots__ if you need weak references to instances"
+          ],
+          "gotchas": [
+            "Subclass without __slots__ reintroduces __dict__ (negating savings)",
+            "Cannot use __slots__ with multiple inheritance if both parents define overlapping slots",
+            "Pickling slotted objects requires __getstate__/__setstate__ or protocol 2+",
+            "__slots__ only saves memory on instances, not on the class itself"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__slots__` replaces the per-instance `__dict__` with fixed attribute slots, saving 30-50% memory per instance. Prevents adding arbitrary attributes.",
+          "pseudo_code": "",
+          "actual_code": "class Point:\n    __slots__ = ('x', 'y')\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\np = Point(1, 2)\n# p.z = 3  # AttributeError -- no __dict__",
+          "code_language": "python",
+          "key_points": [
+            "No __dict__ means fixed attributes, lower memory",
+            "Worth it when creating millions of instances"
+          ],
+          "gotchas": [
+            "Subclass without __slots__ brings back __dict__"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are weak references (weakref) and when should you use them?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["weakref", "memory", "caching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **weak reference** is a reference to an object that does **not** increase its reference count. If the only remaining references to an object are weak references, the object is garbage collected.\n\n### The `weakref` module provides:\n- `weakref.ref(obj, callback=None)` -- create a weak reference\n- `weakref.proxy(obj)` -- transparent proxy that raises ReferenceError when dead\n- `weakref.WeakValueDictionary` -- dict where values are weak references\n- `weakref.WeakKeyDictionary` -- dict where keys are weak references\n- `weakref.WeakSet` -- set with weak references\n- `weakref.finalize(obj, func, *args)` -- call func when obj is collected\n\n### Use cases:\n- **Caches**: Store values that can be reclaimed when memory is low\n- **Observer pattern**: Avoid preventing observed objects from being collected\n- **Breaking reference cycles**: Replace one direction with a weak reference\n- **Object tracking**: Monitor objects without extending their lifetime",
+          "pseudo_code": "Strong reference: obj has refcount >= 1, kept alive\nWeak reference: does not count, obj can be collected\n\nref = weakref.ref(obj)  # weak reference\nobj_again = ref()       # call to dereference\nif obj_again is not None:\n    use(obj_again)\n# If obj was collected, ref() returns None",
+          "actual_code": "import weakref\n\nclass ExpensiveObject:\n    def __init__(self, name):\n        self.name = name\n    def __repr__(self):\n        return f\"ExpensiveObject({self.name!r})\"\n\n# Basic weak reference\nobj = ExpensiveObject(\"data\")\nweak = weakref.ref(obj)\n\nprint(weak())       # ExpensiveObject('data') -- object still alive\nprint(weak() is obj)  # True\n\ndel obj\nprint(weak())  # None -- object was collected\n\n# Weak reference with callback\ndef on_finalize(ref):\n    print(f\"Object was collected! ref() = {ref()}\")\n\nobj = ExpensiveObject(\"tracked\")\nweak = weakref.ref(obj, on_finalize)\ndel obj  # prints callback message\n\n# WeakValueDictionary: cache that allows GC\ncache = weakref.WeakValueDictionary()\n\ndef get_or_create(key):\n    if key in cache:\n        return cache[key]\n    obj = ExpensiveObject(key)\n    cache[key] = obj\n    return obj\n\nresult = get_or_create(\"item1\")\nprint(f\"Cache size: {len(cache)}\")  # 1\nprint(cache[\"item1\"])  # works, result keeps it alive\n\ndel result  # no more strong references\nimport gc; gc.collect()\nprint(f\"Cache size after del: {len(cache)}\")  # 0 (collected)\n\n# WeakSet: tracking instances without preventing collection\nclass Plugin:\n    _instances = weakref.WeakSet()\n\n    def __init__(self, name):\n        self.name = name\n        Plugin._instances.add(self)\n\n    @classmethod\n    def get_active(cls):\n        return list(cls._instances)\n\np1 = Plugin(\"auth\")\np2 = Plugin(\"logging\")\nprint(f\"Active plugins: {len(Plugin.get_active())}\")  # 2\n\ndel p1\nimport gc; gc.collect()\nprint(f\"After del p1: {len(Plugin.get_active())}\")  # 1\n\n# weakref.finalize: safe destructor alternative\nobj = ExpensiveObject(\"resource\")\nfinalizer = weakref.finalize(obj, print, \"Resource cleaned up!\")\nprint(f\"Finalizer alive: {finalizer.alive}\")  # True\ndel obj  # prints \"Resource cleaned up!\"",
+          "code_language": "python",
+          "key_points": [
+            "Weak references do not prevent garbage collection of the referenced object",
+            "Call the weak ref to get the object (returns None if collected)",
+            "WeakValueDictionary/WeakSet for caches and instance tracking",
+            "weakref.finalize() is a better alternative to __del__"
+          ],
+          "gotchas": [
+            "Not all objects support weak references -- int, str, tuple, list, dict do not",
+            "Weak references to objects with __slots__ require '__weakref__' in __slots__",
+            "Accessing a dead weakref.proxy() raises ReferenceError (not None)",
+            "WeakValueDictionary may not shrink immediately -- GC timing affects it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Weak references (`weakref.ref`) point to objects without preventing garbage collection. If the object is collected, the ref returns `None`. Use `WeakValueDictionary` for caches and `WeakSet` for instance tracking.",
+          "pseudo_code": "",
+          "actual_code": "import weakref\n\nclass Data:\n    pass\n\nobj = Data()\nweak = weakref.ref(obj)\nprint(weak())  # <Data object>\ndel obj\nprint(weak())  # None -- collected",
+          "code_language": "python",
+          "key_points": [
+            "Does not increase reference count",
+            "Returns None when object is collected"
+          ],
+          "gotchas": [
+            "Built-in types (int, str, list) do not support weak references"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is object interning and small integer caching in Python?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["interning", "caching", "optimization", "identity"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python **interns** (caches and reuses) certain immutable objects to save memory and improve performance.\n\n### Small Integer Caching\nCPython pre-creates integer objects for `-5` to `256` at startup. Any integer in this range reuses the same object. Outside this range, new objects may be created.\n\n### String Interning\nCPython automatically interns:\n- String literals that look like identifiers (alphanumeric + underscores)\n- Strings used as variable names, attribute names, dict keys\n- You can manually intern with `sys.intern(string)`\n\n### Why it matters:\n- `is` comparison is O(1) on interned objects (pointer comparison)\n- Saves memory for repeated identical values\n- But relying on interning for correctness is a bug (use `==` for value comparison)",
+          "pseudo_code": "Small integers:\n  a = 100; b = 100\n  a is b  -> True  (same cached object)\n\n  a = 1000; b = 1000\n  a is b  -> False (or True, implementation-dependent)\n\nString interning:\n  a = 'hello'; b = 'hello'\n  a is b  -> True  (interned identifier-like string)\n\n  a = 'hello world'; b = 'hello world'\n  a is b  -> True or False (depends on context)",
+          "actual_code": "import sys\n\n# Small integer caching: -5 to 256\na = 256\nb = 256\nprint(f\"256: a is b = {a is b}\")  # True (cached)\nprint(f\"id(a)={id(a)}, id(b)={id(b)}\")  # same id\n\na = 257\nb = 257\nprint(f\"257: a is b = {a is b}\")  # May be False (outside cache range)\n\na = -5\nb = -5\nprint(f\"-5: a is b = {a is b}\")   # True (cached)\n\na = -6\nb = -6\nprint(f\"-6: a is b = {a is b}\")   # May be False\n\n# String interning\na = 'hello'\nb = 'hello'\nprint(f\"'hello': a is b = {a is b}\")  # True (identifier-like, interned)\n\na = 'hello world'\nb = 'hello world'\nprint(f\"'hello world': a is b = {a is b}\")  # May be False (has space)\n\n# Manual string interning\na = sys.intern('hello world')\nb = sys.intern('hello world')\nprint(f\"interned 'hello world': a is b = {a is b}\")  # True\n\n# Practical: memory savings with sys.intern\nnames = [sys.intern(f\"user_{i % 100}\") for i in range(10000)]\n# Only 100 unique string objects instead of 10000\n\n# None, True, False are singletons (always interned)\na = None\nb = None\nprint(f\"None: a is b = {a is b}\")  # Always True\nprint(f\"True: True is True = {True is True}\")  # Always True\n\n# Empty tuple and empty frozenset are also cached\na = ()\nb = ()\nprint(f\"Empty tuple: a is b = {a is b}\")  # True\n\n# IMPORTANT: Never use 'is' for value comparison!\nx = 1000\ny = 1000\n# x is y may be True or False depending on context!\n# ALWAYS use == for value comparison\nprint(f\"1000 == 1000: {x == y}\")  # Always True",
+          "code_language": "python",
+          "key_points": [
+            "CPython caches integers -5 to 256 as singletons",
+            "Identifier-like strings are automatically interned",
+            "sys.intern() manually interns strings for memory savings",
+            "None, True, False, empty tuple are always singletons"
+          ],
+          "gotchas": [
+            "NEVER use 'is' for value comparison -- it tests identity, not equality",
+            "Integer caching range (-5 to 256) is a CPython implementation detail, not guaranteed",
+            "String interning behavior varies between REPL, scripts, and different Python versions",
+            "In compiled .py files, the compiler may intern more values than in the REPL"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "CPython caches integers -5 to 256 and identifier-like strings as singletons (same object reused). Use `sys.intern()` to manually intern strings. Always use `==` for value comparison, never `is`.",
+          "pseudo_code": "",
+          "actual_code": "import sys\n\na = 100; b = 100\nprint(a is b)  # True (cached integer)\n\na = 'hello'; b = 'hello'\nprint(a is b)  # True (interned string)\n\n# Manual interning\na = sys.intern('hello world')\nb = sys.intern('hello world')\nprint(a is b)  # True",
+          "code_language": "python",
+          "key_points": [
+            "Integers -5 to 256 are pre-cached singletons",
+            "Use == for values, 'is' only for None/True/False"
+          ],
+          "gotchas": [
+            "Interning behavior is a CPython detail -- do not rely on it for correctness"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the common causes of memory leaks in Python?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["memory-leaks", "debugging", "optimization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "While Python has garbage collection, memory leaks still occur. A memory leak in Python means objects that are no longer needed are still being referenced, preventing collection.\n\n### Common causes:\n\n1. **Reference cycles with `__del__`** (pre-3.4): Objects with finalizers in cycles were uncollectable\n2. **Global variables and module-level caches**: Growing unbounded\n3. **Forgotten event listeners/callbacks**: References kept in callback registries\n4. **Mutable default arguments**: The default object persists across calls\n5. **Large closures**: Closures capture entire enclosing scope\n6. **C extension leaks**: Memory allocated in C not freed properly\n7. **Thread-local storage not cleaned up**: Thread pool reuses threads\n8. **Caches without eviction**: Growing forever (use LRU cache instead)\n9. **Logging handlers**: Custom handlers holding references\n10. **Exception tracebacks**: `sys.exc_info()` holds references to stack frames",
+          "pseudo_code": "Common patterns:\n  1. cache = {}  # grows forever\n     Fix: use LRU cache or WeakValueDictionary\n\n  2. def register(callback):\n         callbacks.append(callback)  # never removed\n     Fix: use weak references\n\n  3. def func(items=[]):  # mutable default\n         items.append(1)  # accumulates!\n     Fix: def func(items=None): items = items or []",
+          "actual_code": "import gc\nimport weakref\nimport tracemalloc\nfrom functools import lru_cache\n\n# Leak 1: Unbounded cache\nclass LeakyCache:\n    def __init__(self):\n        self._cache = {}  # grows forever!\n\n    def get(self, key):\n        if key not in self._cache:\n            self._cache[key] = self._expensive_compute(key)\n        return self._cache[key]\n\n    def _expensive_compute(self, key):\n        return [0] * 10000  # big object\n\n# Fix: use LRU cache or WeakValueDictionary\nclass FixedCache:\n    def __init__(self, maxsize=100):\n        self._cache = {}\n        self._maxsize = maxsize\n\n    def get(self, key):\n        if key not in self._cache:\n            if len(self._cache) >= self._maxsize:\n                oldest = next(iter(self._cache))\n                del self._cache[oldest]\n            self._cache[key] = self._expensive_compute(key)\n        return self._cache[key]\n\n    def _expensive_compute(self, key):\n        return [0] * 10000\n\n# Leak 2: Mutable default argument\ndef leaky_function(items=[]):\n    items.append(\"data\")\n    return items\n\nleaky_function()  # ['data']\nleaky_function()  # ['data', 'data'] -- accumulating!\nleaky_function()  # ['data', 'data', 'data']\n\n# Fix:\ndef fixed_function(items=None):\n    if items is None:\n        items = []\n    items.append(\"data\")\n    return items\n\n# Leak 3: Closure capturing large scope\ndef create_processor():\n    large_data = [0] * 1_000_000  # captured by closure!\n\n    def process(x):\n        return x * 2  # doesn't even use large_data\n\n    return process  # large_data stays alive\n\n# Fix: only capture what you need\ndef create_processor_fixed():\n    large_data = [0] * 1_000_000\n    result = sum(large_data)  # extract what you need\n    del large_data  # explicitly free\n\n    def process(x):\n        return x * result\n\n    return process\n\n# Leak 4: Exception traceback holding references\ndef leaky_exception_handling():\n    try:\n        raise ValueError(\"error\")\n    except ValueError:\n        import sys\n        exc_info = sys.exc_info()  # holds reference to stack frame!\n        # Fix: del exc_info when done, or use 'except ValueError as e'\n\n# Detecting leaks with tracemalloc\ndef find_leaks():\n    tracemalloc.start()\n    snapshot1 = tracemalloc.take_snapshot()\n\n    # Run suspected leaky code\n    cache = LeakyCache()\n    for i in range(1000):\n        cache.get(f\"key_{i}\")\n\n    snapshot2 = tracemalloc.take_snapshot()\n    diff = snapshot2.compare_to(snapshot1, 'lineno')\n\n    print(\"Memory growth:\")\n    for stat in diff[:5]:\n        print(f\"  {stat}\")\n\n    tracemalloc.stop()\n\nfind_leaks()\n\n# Using gc to find unreachable cycles\ngc.collect()\nprint(f\"Unreachable objects: {gc.garbage}\")  # objects that couldn't be freed",
+          "code_language": "python",
+          "key_points": [
+            "Unbounded caches are the most common cause -- use LRU or weak references",
+            "Mutable default arguments accumulate data across calls",
+            "Closures capture the entire enclosing scope, not just used variables",
+            "tracemalloc snapshot comparison is the best tool for finding leaks"
+          ],
+          "gotchas": [
+            "gc.collect() may not free all memory -- C extensions may leak outside Python's control",
+            "Even after fixing a leak, memory may not be returned to the OS (Python's memory allocator keeps pools)",
+            "Thread pools reuse threads, so thread-local data persists between tasks",
+            "Exception handlers with 'as e' hold references to tracebacks until the handler scope exits"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Common Python memory leaks: unbounded caches (fix: LRU/weak refs), mutable default args (fix: None default), large closures (fix: capture only needed vars), forgotten callbacks. Use `tracemalloc` snapshots to detect leaks.",
+          "pseudo_code": "",
+          "actual_code": "# Leak: mutable default\ndef bad(items=[]): items.append(1); return items\nbad()  # [1]\nbad()  # [1, 1] -- growing!\n\n# Fix:\ndef good(items=None):\n    items = items or []\n    items.append(1)\n    return items",
+          "code_language": "python",
+          "key_points": [
+            "Unbounded caches and mutable defaults are top causes",
+            "Use tracemalloc to compare snapshots"
+          ],
+          "gotchas": [
+            "Memory freed by Python may not be returned to the OS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does sys.getrefcount() work and why is it always higher than expected?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["sys", "refcount", "debugging"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`sys.getrefcount(object)` returns the reference count of an object. However, the returned value is **always at least 1 higher** than you might expect because the function call itself creates a temporary reference to the object (passed as an argument).\n\n### Why the count seems high:\n1. The argument to `getrefcount()` is itself a reference (+1)\n2. The variable holding the object (+1)\n3. Any other references (containers, other variables)\n4. CPython internal references (interned values, optimization caches)\n\n### When it's useful:\n- Debugging memory issues\n- Understanding object lifecycle\n- Verifying that references are properly cleaned up",
+          "pseudo_code": "x = SomeObject()\nsys.getrefcount(x)\n  -> x itself = 1 reference\n  -> argument to getrefcount = 1 reference\n  -> total = 2 (minimum for any named variable)",
+          "actual_code": "import sys\n\n# Basic refcount\na = object()\nprint(sys.getrefcount(a))  # 2 (a + getrefcount arg)\n\n# Adding references\nb = a\nprint(sys.getrefcount(a))  # 3 (a + b + getrefcount arg)\n\nc = [a, a, a]\nprint(sys.getrefcount(a))  # 6 (a + b + 3 in list + getrefcount arg)\n\ndel b\nprint(sys.getrefcount(a))  # 5 (a + 3 in list + getrefcount arg)\n\nc.clear()\nprint(sys.getrefcount(a))  # 2 (a + getrefcount arg)\n\n# Small integers have very high refcounts (cached/interned)\nprint(sys.getrefcount(0))    # Very high (used internally)\nprint(sys.getrefcount(1))    # Very high\nprint(sys.getrefcount(None)) # Very high (singleton)\n\n# Strings that look like identifiers are interned\nprint(sys.getrefcount('hello'))  # Higher than expected (interned)\n\n# Creating temporary references\ndef show_refs(obj):\n    # obj parameter is another reference!\n    print(f\"Inside function: {sys.getrefcount(obj)}\")\n    # getrefcount arg + obj parameter + original variable = 3+\n\nmy_obj = object()\nprint(f\"Before call: {sys.getrefcount(my_obj)}\")  # 2\nshow_refs(my_obj)  # 4 (my_obj + obj parameter + getrefcount arg + ???)\nprint(f\"After call: {sys.getrefcount(my_obj)}\")   # 2 (back to normal)\n\n# Verifying cleanup\ndef verify_cleanup():\n    data = [1, 2, 3]\n    ref_before = sys.getrefcount(data)\n\n    container = {'key': data}\n    ref_during = sys.getrefcount(data)\n\n    del container\n    ref_after = sys.getrefcount(data)\n\n    print(f\"Before: {ref_before}, During: {ref_during}, After: {ref_after}\")\n    # Before: 2, During: 3, After: 2\n\nverify_cleanup()",
+          "code_language": "python",
+          "key_points": [
+            "Always returns at least 2 for a named variable (variable + function argument)",
+            "Useful for debugging reference leaks and understanding object lifecycle",
+            "Small integers, None, and interned strings have very high counts",
+            "The count decreases predictably as references are removed"
+          ],
+          "gotchas": [
+            "The +1 from getrefcount itself makes exact comparison tricky",
+            "CPython's internal optimizations may hold additional references (bytecode cache, etc.)",
+            "The REPL may hold extra references to recent results (_)",
+            "getrefcount is CPython-specific -- other implementations may not have it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sys.getrefcount(obj)` returns the reference count, always at least +1 higher than expected because passing the object to the function creates a temporary reference.",
+          "pseudo_code": "",
+          "actual_code": "import sys\n\nx = [1, 2, 3]\nprint(sys.getrefcount(x))  # 2 (x + getrefcount's argument)\ny = x\nprint(sys.getrefcount(x))  # 3 (x + y + argument)\ndel y\nprint(sys.getrefcount(x))  # 2",
+          "code_language": "python",
+          "key_points": [
+            "Always +1 because the argument itself is a reference",
+            "Small ints and None have very high counts (interned)"
+          ],
+          "gotchas": [
+            "CPython-specific; other implementations may not support it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Python's memory allocator work internally?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["memory-allocator", "pymalloc", "internals"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "CPython uses a hierarchical memory allocation system with three levels:\n\n### Level 1: OS Allocator (malloc/mmap)\n- Handles allocations > 512 bytes\n- Memory returned to the OS when freed\n\n### Level 2: Python's Object Allocator (pymalloc)\n- Handles allocations <= 512 bytes (most Python objects)\n- Uses **arenas** (256 KB chunks from the OS), divided into **pools** (4 KB), divided into **blocks** (8-512 bytes in 8-byte increments)\n- Pools are grouped by block size class\n\n### Level 3: Object-specific allocators\n- `int`, `float`, `tuple`, etc. have specialized free lists\n- Recently freed objects are kept in free lists for quick reallocation\n\n### Key insight:\nPython often does NOT return memory to the OS even after objects are freed. pymalloc keeps arena memory for future allocations. Memory is only returned when an entire arena is empty.",
+          "pseudo_code": "Memory hierarchy:\n  Arena (256 KB) -> Pool (4 KB) -> Block (8-512 bytes)\n\nAllocation:\n  if size <= 512 bytes: pymalloc (fast, pooled)\n  if size > 512 bytes: malloc (OS allocator)\n\nDeallocation:\n  Block freed -> returned to pool's free list\n  Pool empty -> returned to arena's free list\n  Arena empty -> returned to OS",
+          "actual_code": "import sys\nimport tracemalloc\n\n# Object sizes (shows Python's memory overhead)\nprint(\"Object sizes:\")\nprint(f\"  int(0):        {sys.getsizeof(0)} bytes\")\nprint(f\"  int(2**30):    {sys.getsizeof(2**30)} bytes\")\nprint(f\"  float(0.0):    {sys.getsizeof(0.0)} bytes\")\nprint(f\"  str(''):       {sys.getsizeof('')} bytes\")\nprint(f\"  str('hello'):  {sys.getsizeof('hello')} bytes\")\nprint(f\"  list([]):      {sys.getsizeof([])} bytes\")\nprint(f\"  list([1]*10):  {sys.getsizeof([1]*10)} bytes\")\nprint(f\"  dict({{}}):      {sys.getsizeof({})} bytes\")\nprint(f\"  tuple(()):     {sys.getsizeof(())} bytes\")\nprint(f\"  set():         {sys.getsizeof(set())} bytes\")\n\n# Demonstrating memory not returned to OS\nimport os\n\ndef get_process_memory():\n    \"\"\"Get current process memory in MB (platform-dependent).\"\"\"\n    try:\n        import resource\n        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024  # macOS: bytes\n    except ImportError:\n        return 0\n\n# Before allocation\nmem_before = get_process_memory()\n\n# Allocate lots of small objects\ndata = [bytearray(100) for _ in range(100_000)]\nmem_during = get_process_memory()\n\n# Free everything\ndel data\nimport gc\ngc.collect()\nmem_after = get_process_memory()\n\nprint(f\"\\nProcess memory:\")\nprint(f\"  Before: {mem_before:.1f} MB\")\nprint(f\"  During: {mem_during:.1f} MB\")\nprint(f\"  After:  {mem_after:.1f} MB\")\nprint(\"  Note: 'After' may still be high -- Python keeps arena pools\")\n\n# Free lists for common types\n# Python reuses recently freed objects of common types\n# Visible with id() -- same id reused\nfor _ in range(3):\n    x = [1, 2, 3]\n    addr = id(x)\n    del x\n    y = [4, 5, 6]\n    print(f\"  Reused address: {id(y) == addr}\")  # Often True",
+          "code_language": "python",
+          "key_points": [
+            "pymalloc handles objects <= 512 bytes using arenas (256KB) -> pools (4KB) -> blocks",
+            "Larger allocations go directly to the OS malloc",
+            "Python often does NOT return freed memory to the OS (arenas kept for reuse)",
+            "Free lists allow fast reallocation of recently freed common objects"
+          ],
+          "gotchas": [
+            "Process RSS (resident memory) may stay high even after freeing Python objects",
+            "Memory fragmentation: if one object in an arena is alive, the whole arena is kept",
+            "sys.getsizeof() shows the Python overhead but not the actual pymalloc block size",
+            "Disabling pymalloc (PYTHONMALLOC=malloc) makes memory tools like Valgrind work better"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "CPython's pymalloc handles small objects (<= 512 bytes) using arenas (256KB) -> pools (4KB) -> blocks. Large objects use OS malloc. Freed memory is often NOT returned to the OS -- kept in pools for reuse.",
+          "pseudo_code": "",
+          "actual_code": "import sys\n\n# Python object overhead\nprint(sys.getsizeof(42))      # 28 bytes for an int!\nprint(sys.getsizeof('hello')) # 54 bytes for 5-char string\nprint(sys.getsizeof([]))      # 56 bytes for empty list",
+          "code_language": "python",
+          "key_points": [
+            "Small objects pooled in arenas; large objects use OS malloc",
+            "Freed memory often stays with the process"
+          ],
+          "gotchas": [
+            "Process memory may not shrink after freeing objects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How can you reduce memory usage when working with large datasets in Python?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["optimization", "memory", "large-data"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Strategies for reducing memory usage:\n\n1. **Use generators instead of lists**: Process items one at a time instead of loading all into memory\n2. **`__slots__`**: Save 30-50% per instance for data classes\n3. **NumPy arrays**: Much more compact than Python lists for numeric data\n4. **Tuples instead of lists**: Slightly smaller footprint\n5. **Interning strings**: `sys.intern()` for repeated string values\n6. **Memory-mapped files**: Process files without loading entirely\n7. **Data type optimization**: Use appropriate types (int vs float, array module)\n8. **Streaming/chunked processing**: Process data in chunks\n9. **`del` and gc.collect()**: Explicitly free large objects\n10. **Compress in-memory data**: zlib/lz4 for data you access infrequently",
+          "pseudo_code": "Memory hierarchy (most to least efficient for numbers):\n  numpy.int32 array:  4 bytes per element\n  array.array('i'):   4 bytes per element\n  tuple of ints:      ~28 bytes per element (object overhead)\n  list of ints:       ~28 bytes per element + list overhead",
+          "actual_code": "import sys\nfrom array import array\nimport mmap\n\n# 1. Generators vs Lists\ndef sum_with_list(n):\n    return sum([i * i for i in range(n)])  # stores entire list in memory\n\ndef sum_with_generator(n):\n    return sum(i * i for i in range(n))  # processes one at a time\n\n# 2. Compare memory of different containers\nn = 10000\nlst = list(range(n))\ntpl = tuple(range(n))\narr = array('i', range(n))  # C-type int array\n\nprint(f\"list: {sys.getsizeof(lst):,} bytes\")\nprint(f\"tuple: {sys.getsizeof(tpl):,} bytes\")\nprint(f\"array: {sys.getsizeof(arr):,} bytes\")\n\n# 3. __slots__ for data objects\nclass RegularRecord:\n    def __init__(self, name, value):\n        self.name = name\n        self.value = value\n\nclass SlottedRecord:\n    __slots__ = ('name', 'value')\n    def __init__(self, name, value):\n        self.name = name\n        self.value = value\n\nimport tracemalloc\ntracemalloc.start()\nreg = [RegularRecord(f\"item_{i}\", i) for i in range(10000)]\nreg_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\ntracemalloc.start()\nslot = [SlottedRecord(f\"item_{i}\", i) for i in range(10000)]\nslot_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\nprint(f\"\\nRegular: {reg_mem / 1024:.0f} KB\")\nprint(f\"Slotted: {slot_mem / 1024:.0f} KB\")\nprint(f\"Savings: {(1 - slot_mem / reg_mem) * 100:.0f}%\")\n\n# 4. String interning for repeated values\ncategories = ['electronics', 'clothing', 'food'] * 10000\n\ntracemalloc.start()\nnormal = [cat for cat in categories]\nnormal_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\ntracemalloc.start()\ninterned = [sys.intern(cat) for cat in categories]\ninterned_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\nprint(f\"\\nNormal strings: {normal_mem / 1024:.0f} KB\")\nprint(f\"Interned strings: {interned_mem / 1024:.0f} KB\")\n\n# 5. Chunked file processing\ndef process_large_file(filepath, chunk_size=8192):\n    \"\"\"Process a file in chunks without loading it all.\"\"\"\n    with open(filepath, 'rb') as f:\n        while chunk := f.read(chunk_size):\n            # process chunk\n            pass\n\n# 6. Memory-mapped file\ndef search_large_file(filepath, pattern):\n    \"\"\"Search a large file using memory mapping.\"\"\"\n    with open(filepath, 'rb') as f:\n        with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:\n            index = mm.find(pattern.encode())\n            return index\n\n# 7. Using __sizeof__ for custom objects\nclass EfficientBuffer:\n    __slots__ = ('_data',)\n\n    def __init__(self, size):\n        self._data = bytearray(size)\n\n    def __sizeof__(self):\n        return super().__sizeof__() + sys.getsizeof(self._data)\n\nbuf = EfficientBuffer(1000)\nprint(f\"\\nBuffer size: {sys.getsizeof(buf)} bytes\")",
+          "code_language": "python",
+          "key_points": [
+            "Generators process items lazily -- O(1) memory instead of O(n)",
+            "__slots__ saves 30-50% per instance for data objects",
+            "array.array and numpy are far more compact than lists for numeric data",
+            "sys.intern() deduplicates repeated strings"
+          ],
+          "gotchas": [
+            "Generators can only be iterated once -- convert to list if you need multiple passes",
+            "memory-mapped files on 32-bit systems are limited to ~2GB",
+            "Premature optimization: profile first, optimize the actual bottleneck",
+            "Some memory-saving techniques (compression, generators) trade CPU time for memory"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key strategies: generators (lazy), `__slots__` (data objects), `array`/numpy (numeric data), `sys.intern()` (repeated strings), chunked processing (large files), memory-mapped files.",
+          "pseudo_code": "",
+          "actual_code": "# Generator: O(1) memory\ntotal = sum(x*x for x in range(1_000_000))  # no list in memory\n\n# array: compact numeric storage\nfrom array import array\narr = array('i', range(10000))  # ~40KB vs ~280KB for list\n\n# __slots__: smaller objects\nclass Point:\n    __slots__ = ('x', 'y')\n    def __init__(self, x, y): self.x = x; self.y = y",
+          "code_language": "python",
+          "key_points": [
+            "Generators, __slots__, array/numpy for memory savings",
+            "Profile first, optimize bottlenecks"
+          ],
+          "gotchas": [
+            "Generators are single-use -- cannot iterate twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between shallow copy and deep copy in terms of memory?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["copy", "shallow-copy", "deep-copy", "memory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Shallow Copy\nCreates a new container object but **shares references** to the same child objects. Only the top-level structure is copied.\n\n### Deep Copy\nRecursively copies **all** objects, creating completely independent duplicates. No shared references.\n\n### Memory implications:\n- Shallow copy: Low memory cost (only copies the container, shares contents)\n- Deep copy: High memory cost (duplicates everything recursively)\n\n### Methods:\n- `copy.copy()` -- shallow copy\n- `copy.deepcopy()` -- deep copy\n- `list()`, `dict()`, `.copy()` -- shallow copy\n- Slicing `a[:]` -- shallow copy for lists",
+          "pseudo_code": "Original: [obj_A, obj_B, obj_C]\n\nShallow copy: new_list -> [ref_to_A, ref_to_B, ref_to_C]\n  Modifying obj_A affects both original and copy\n  New list container, same objects inside\n\nDeep copy: new_list -> [copy_of_A, copy_of_B, copy_of_C]\n  Modifying copy_of_A does NOT affect original\n  Everything is independent",
+          "actual_code": "import copy\nimport sys\n\n# Shallow copy: new container, shared contents\noriginal = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\nshallow = copy.copy(original)\n\nprint(f\"Same outer list? {original is shallow}\")            # False\nprint(f\"Same inner list? {original[0] is shallow[0]}\")      # True (shared!)\n\n# Modifying shared inner object affects both\nshallow[0].append(99)\nprint(f\"Original: {original[0]}\")  # [1, 2, 3, 99] -- affected!\nprint(f\"Shallow:  {shallow[0]}\")   # [1, 2, 3, 99]\n\n# But modifying the outer container is independent\nshallow.append([10, 11, 12])\nprint(f\"Original length: {len(original)}\")  # 3\nprint(f\"Shallow length:  {len(shallow)}\")   # 4\n\n# Deep copy: everything independent\noriginal = [[1, 2, 3], [4, 5, 6]]\ndeep = copy.deepcopy(original)\n\nprint(f\"\\nSame outer? {original is deep}\")          # False\nprint(f\"Same inner? {original[0] is deep[0]}\")      # False (independent!)\n\ndeep[0].append(99)\nprint(f\"Original: {original[0]}\")  # [1, 2, 3] -- unaffected!\nprint(f\"Deep:     {deep[0]}\")      # [1, 2, 3, 99]\n\n# Memory comparison\nimport tracemalloc\n\nbig_list = [[i] * 100 for i in range(1000)]\n\ntracemalloc.start()\nshallow_copy = copy.copy(big_list)\nshallow_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\ntracemalloc.start()\ndeep_copy = copy.deepcopy(big_list)\ndeep_mem = tracemalloc.get_traced_memory()[0]\ntracemalloc.stop()\n\nprint(f\"\\nShallow copy memory: {shallow_mem:,} bytes\")\nprint(f\"Deep copy memory:    {deep_mem:,} bytes\")\nprint(f\"Deep/Shallow ratio:  {deep_mem / shallow_mem:.1f}x\")\n\n# Deep copy handles cycles correctly\na = [1, 2]\nb = [3, 4]\na.append(b)\nb.append(a)  # cycle: a -> b -> a\n\ndeep_a = copy.deepcopy(a)  # handles cycle, no infinite recursion\nprint(f\"\\nCycle handled: {deep_a[2][2] is deep_a}\")  # True (internal cycle preserved)\nprint(f\"Independent: {deep_a is not a}\")  # True\n\n# Custom copy behavior with __copy__ and __deepcopy__\nclass Config:\n    def __init__(self, settings, cache=None):\n        self.settings = settings\n        self.cache = cache or {}\n\n    def __copy__(self):\n        # Shallow copy settings, reset cache\n        return Config(self.settings.copy(), cache={})\n\n    def __deepcopy__(self, memo):\n        # Deep copy settings, reset cache\n        return Config(copy.deepcopy(self.settings, memo), cache={})\n\nconfig = Config({'debug': True, 'db': {'host': 'localhost'}})\nconfig_copy = copy.deepcopy(config)\nprint(f\"Independent settings: {config.settings is not config_copy.settings}\")  # True\nprint(f\"Cache reset: {config_copy.cache}\")  # {}",
+          "code_language": "python",
+          "key_points": [
+            "Shallow copy: new container, shared child objects (low memory cost)",
+            "Deep copy: recursive duplication of all objects (high memory cost)",
+            "deepcopy handles reference cycles correctly (uses memo dict)",
+            "Customize with __copy__ and __deepcopy__ methods"
+          ],
+          "gotchas": [
+            "Shallow copying a list of mutable objects means changes to inner objects affect both copies",
+            "deepcopy can be very slow for large nested structures with many shared references",
+            "deepcopy of objects with open file handles or network connections can break",
+            "For flat lists of immutables (ints, strings), shallow copy is effectively the same as deep copy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Shallow copy (`copy.copy()`) creates a new container but shares inner objects. Deep copy (`copy.deepcopy()`) recursively duplicates everything. Shallow is fast/low-memory, deep is safe/high-memory.",
+          "pseudo_code": "",
+          "actual_code": "import copy\n\noriginal = [[1, 2], [3, 4]]\nshallow = copy.copy(original)\ndeep = copy.deepcopy(original)\n\nshallow[0].append(99)\nprint(original[0])  # [1, 2, 99] -- shared!\n\ndeep[1].append(99)\nprint(original[1])  # [3, 4] -- independent!",
+          "code_language": "python",
+          "key_points": [
+            "Shallow: new container, shared contents",
+            "Deep: everything duplicated recursively"
+          ],
+          "gotchas": [
+            "Shallow copy of mutable objects shares inner state -- changes propagate"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,638 @@
+{
+  "concept_slug": "data-types-variables",
+  "questions": [
+    {
+      "title": "What are the basic built-in data types in Python?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["data-types", "built-in-types", "fundamentals"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python has several built-in data types organized into categories:\n\n**Numeric types:**\n- `int` -- arbitrary-precision integers (e.g., `42`, `-7`, `10**100`)\n- `float` -- IEEE 754 double-precision floating point (e.g., `3.14`, `-0.001`, `1e10`)\n- `complex` -- complex numbers with real and imaginary parts (e.g., `3+4j`)\n\n**Sequence types:**\n- `str` -- immutable sequence of Unicode characters\n- `list` -- mutable ordered sequence\n- `tuple` -- immutable ordered sequence\n\n**Set types:**\n- `set` -- mutable unordered collection of unique elements\n- `frozenset` -- immutable version of set\n\n**Mapping type:**\n- `dict` -- mutable key-value mapping\n\n**Boolean type:**\n- `bool` -- `True` or `False` (subclass of `int`)\n\n**None type:**\n- `NoneType` -- singleton `None`, represents absence of a value\n\n**Binary types:**\n- `bytes`, `bytearray`, `memoryview`\n\nEverything in Python is an object, including these types themselves. You can check a value's type with `type()` and verify membership with `isinstance()`.",
+          "pseudo_code": "1. Numeric: int, float, complex\n2. Text: str\n3. Sequence: list, tuple, range\n4. Set: set, frozenset\n5. Mapping: dict\n6. Boolean: bool\n7. None: NoneType\n8. Binary: bytes, bytearray, memoryview",
+          "actual_code": "# Numeric types\nprint(type(42))         # <class 'int'>\nprint(type(3.14))       # <class 'float'>\nprint(type(3+4j))       # <class 'complex'>\n\n# Text type\nprint(type(\"hello\"))    # <class 'str'>\n\n# Sequence types\nprint(type([1, 2, 3]))  # <class 'list'>\nprint(type((1, 2, 3)))  # <class 'tuple'>\n\n# Set types\nprint(type({1, 2, 3}))  # <class 'set'>\n\n# Mapping type\nprint(type({\"a\": 1}))   # <class 'dict'>\n\n# Boolean and None\nprint(type(True))       # <class 'bool'>\nprint(type(None))       # <class 'NoneType'>\n\n# bool is a subclass of int\nprint(isinstance(True, int))  # True\nprint(True + True)            # 2",
+          "code_language": "python",
+          "key_points": [
+            "Everything in Python is an object, including types themselves",
+            "bool is a subclass of int (True == 1, False == 0)",
+            "Python integers have arbitrary precision -- no overflow",
+            "NoneType has exactly one instance: None",
+            "Strings are sequences of Unicode codepoints, not bytes"
+          ],
+          "gotchas": [
+            "An empty dict is {} but an empty set must be set(), not {} -- {} creates a dict",
+            "bool is a subclass of int, so isinstance(True, int) returns True",
+            "float has limited precision -- 0.1 + 0.2 != 0.3 exactly",
+            "None is a singleton: always use 'is None' rather than '== None'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python's main built-in types are: `int`, `float`, `complex` (numeric), `str` (text), `list`, `tuple` (sequences), `set`, `frozenset` (sets), `dict` (mapping), `bool` (boolean), and `NoneType`. Everything is an object. Use `type()` to check and `isinstance()` to verify.",
+          "pseudo_code": "",
+          "actual_code": "print(type(42))        # <class 'int'>\nprint(type(3.14))      # <class 'float'>\nprint(type(\"hi\"))      # <class 'str'>\nprint(type([1,2]))     # <class 'list'>\nprint(type((1,2)))     # <class 'tuple'>\nprint(type({1,2}))     # <class 'set'>\nprint(type({\"a\":1}))   # <class 'dict'>\nprint(type(True))      # <class 'bool'>\nprint(type(None))      # <class 'NoneType'>",
+          "code_language": "python",
+          "key_points": [
+            "Everything in Python is an object",
+            "bool is a subclass of int"
+          ],
+          "gotchas": [
+            "{} creates a dict, not a set -- use set() for an empty set"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do type() and isinstance() differ, and when should you use each?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["type-checking", "isinstance", "type", "inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`type(obj)` returns the exact type of an object. `isinstance(obj, cls)` checks if an object is an instance of a class **or any of its subclasses**.\n\nThe critical difference is inheritance. `type()` does an exact match, while `isinstance()` respects the class hierarchy.\n\n**When to use `type()`:**\n- When you need the exact class, not a subclass\n- For debugging / introspection\n- When building a type-to-handler dispatch table\n\n**When to use `isinstance()`:**\n- Almost all production type checking\n- When you want to accept subclasses (polymorphism)\n- PEP 8 recommends `isinstance()` over `type()` comparisons\n\n`isinstance()` also accepts a tuple of types, which acts as an OR check.",
+          "pseudo_code": "1. type(obj) returns the exact class of obj\n2. isinstance(obj, cls) returns True if obj is an instance of cls or any subclass\n3. isinstance(obj, (A, B)) returns True if obj is instance of A or B\n4. Prefer isinstance() for type checks in production code",
+          "actual_code": "# type() returns the exact type\nprint(type(42))           # <class 'int'>\nprint(type(42) == int)    # True\nprint(type(True) == int)  # False -- bool is not exactly int\n\n# isinstance() respects inheritance\nprint(isinstance(42, int))    # True\nprint(isinstance(True, int))  # True -- bool IS-A int\n\n# isinstance with a tuple (OR check)\nprint(isinstance(42, (int, float)))    # True\nprint(isinstance(3.14, (int, float)))  # True\n\n# Practical example with custom classes\nclass Animal:\n    pass\n\nclass Dog(Animal):\n    pass\n\ndog = Dog()\nprint(type(dog) == Animal)        # False\nprint(type(dog) == Dog)           # True\nprint(isinstance(dog, Animal))    # True -- Dog IS-A Animal\nprint(isinstance(dog, Dog))       # True",
+          "code_language": "python",
+          "key_points": [
+            "type() does an exact type match, isinstance() checks the inheritance chain",
+            "isinstance() accepts a tuple of types for an OR-style check",
+            "PEP 8 recommends isinstance() over type() comparisons",
+            "isinstance() supports abstract base classes (ABCs) and virtual subclasses"
+          ],
+          "gotchas": [
+            "type(True) == int is False, but isinstance(True, int) is True because bool subclasses int",
+            "Overusing type checks goes against Python's duck typing philosophy",
+            "type() does not respect __instancecheck__ from metaclasses, but isinstance() does",
+            "Never write type(x) is type(y) when isinstance(x, type(y)) is intended"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`type(obj)` gives the exact class. `isinstance(obj, cls)` checks if `obj` belongs to `cls` or any of its subclasses. Use `isinstance()` in almost all cases because it respects inheritance.",
+          "pseudo_code": "",
+          "actual_code": "print(type(True) == int)       # False (exact match)\nprint(isinstance(True, int))   # True (bool subclasses int)\n\n# Tuple of types for OR check\nprint(isinstance(42, (int, float)))  # True",
+          "code_language": "python",
+          "key_points": [
+            "isinstance() respects inheritance, type() does not",
+            "PEP 8 prefers isinstance() for type checks"
+          ],
+          "gotchas": [
+            "type(True) == int is False even though bool is a subclass of int"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain type conversion (casting) in Python. What is the difference between implicit and explicit conversion?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["type-conversion", "casting", "coercion"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Implicit conversion (coercion):**\nPython automatically converts types in certain operations to avoid data loss. For example, when you add an `int` to a `float`, the `int` is promoted to `float`. This is limited to safe, lossless conversions in numeric operations.\n\n**Explicit conversion (casting):**\nYou manually convert types using constructor functions: `int()`, `float()`, `str()`, `bool()`, `list()`, `tuple()`, `set()`, `dict()`, etc. These can raise exceptions if the conversion is invalid.\n\n**Key conversion rules:**\n- `int()` truncates floats toward zero (not floor): `int(-3.7)` is `-3`\n- `float()` can convert strings: `float(\"3.14\")` works\n- `bool()` follows truthiness rules: `0`, `\"\"`, `[]`, `None` are `False`\n- `str()` works on anything via `__str__` or `__repr__`\n- `int()` accepts a base argument for string parsing: `int(\"ff\", 16)` is `255`",
+          "pseudo_code": "Implicit:\n  int + float -> float (automatic promotion)\n  int + bool -> int (bool treated as 0 or 1)\n\nExplicit:\n  int(\"42\") -> 42\n  float(42) -> 42.0\n  str(42) -> \"42\"\n  bool(0) -> False\n  int(3.7) -> 3 (truncation, not rounding)\n  int(\"ff\", 16) -> 255 (base conversion)",
+          "actual_code": "# Implicit conversion (coercion)\nresult = 5 + 3.0     # int + float -> float\nprint(result, type(result))  # 8.0 <class 'float'>\n\nresult = True + 10   # bool + int -> int\nprint(result)        # 11\n\n# Explicit conversion\nprint(int(\"42\"))       # 42\nprint(int(3.9))        # 3  (truncates, does NOT round)\nprint(int(-3.9))       # -3 (truncates toward zero)\nprint(float(\"3.14\"))   # 3.14\nprint(str(42))         # '42'\nprint(bool(0))         # False\nprint(bool(\"\"))        # False\nprint(bool(\"hello\"))   # True\n\n# Base conversion with int()\nprint(int(\"ff\", 16))   # 255\nprint(int(\"1010\", 2))  # 10\nprint(int(\"77\", 8))    # 63\n\n# Collection conversions\nprint(list(\"abc\"))           # ['a', 'b', 'c']\nprint(tuple([1, 2, 3]))      # (1, 2, 3)\nprint(set([1, 2, 2, 3]))     # {1, 2, 3}\nprint(dict([(\"a\", 1), (\"b\", 2)]))  # {'a': 1, 'b': 2}\n\n# Invalid conversions raise exceptions\ntry:\n    int(\"hello\")\nexcept ValueError as e:\n    print(f\"Error: {e}\")  # invalid literal for int() with base 10: 'hello'",
+          "code_language": "python",
+          "key_points": [
+            "Implicit conversion only happens for safe numeric promotions (int -> float)",
+            "int() truncates toward zero, it does NOT round",
+            "int() accepts a second argument for base conversion (binary, octal, hex)",
+            "bool() follows truthiness: 0, 0.0, '', [], {}, set(), None are all False",
+            "Invalid conversions raise ValueError or TypeError"
+          ],
+          "gotchas": [
+            "int(3.9) gives 3, not 4 -- use round() if you want rounding",
+            "int(-3.9) gives -3, not -4 -- truncation is toward zero, not floor",
+            "int('3.14') raises ValueError -- you need int(float('3.14')) for string floats",
+            "str([1,2,3]) gives '[1, 2, 3]' as a string, not '123'",
+            "bool('False') is True -- any non-empty string is truthy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Implicit** conversion happens automatically in safe numeric operations (`int + float -> float`). **Explicit** conversion uses constructor functions: `int()`, `float()`, `str()`, `bool()`. Use `int()` to truncate (not round) floats, and it accepts a base for string parsing.",
+          "pseudo_code": "",
+          "actual_code": "# Implicit\nprint(5 + 3.0)        # 8.0 (int promoted to float)\n\n# Explicit\nprint(int(3.9))        # 3 (truncates, not rounds)\nprint(int(\"ff\", 16))   # 255\nprint(float(\"3.14\"))   # 3.14\nprint(bool(\"\"))        # False\nprint(bool(\"False\"))   # True (non-empty string!)",
+          "code_language": "python",
+          "key_points": [
+            "Implicit conversion only for safe numeric promotions",
+            "int() truncates toward zero, does not round"
+          ],
+          "gotchas": [
+            "int('3.14') raises ValueError -- need int(float('3.14'))",
+            "bool('False') is True because the string is non-empty"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between mutable and immutable types in Python?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["mutability", "immutable", "mutable", "fundamentals"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Immutable types** cannot be changed after creation. Any operation that appears to modify them actually creates a new object. Immutable types include: `int`, `float`, `str`, `tuple`, `frozenset`, `bytes`, `bool`, `NoneType`.\n\n**Mutable types** can be changed in-place without creating a new object. Mutable types include: `list`, `dict`, `set`, `bytearray`.\n\nThis distinction has important implications:\n\n1. **Hashability:** Only immutable types can be used as dictionary keys or set members (they must be hashable).\n2. **Function arguments:** Passing a mutable object to a function lets the function modify the caller's data.\n3. **Default arguments:** Using mutable default arguments in functions is a famous bug source.\n4. **Thread safety:** Immutable objects are inherently thread-safe.\n5. **Memory:** Python can intern/cache immutable objects (e.g., small integers, short strings).",
+          "pseudo_code": "Immutable: int, float, str, tuple, frozenset, bytes, bool, None\n  - Cannot change in place\n  - Can be dict keys / set members\n  - Safe as default function arguments\n\nMutable: list, dict, set, bytearray\n  - Can change in place\n  - Cannot be dict keys / set members\n  - Dangerous as default function arguments",
+          "actual_code": "# Immutable: str\ns = \"hello\"\nprint(id(s))         # e.g., 140234567890\ns = s + \" world\"     # creates a NEW string object\nprint(id(s))         # different id -- new object\n\n# Mutable: list\nlst = [1, 2, 3]\nprint(id(lst))       # e.g., 140234567000\nlst.append(4)        # modifies in place\nprint(id(lst))       # SAME id -- same object\nprint(lst)           # [1, 2, 3, 4]\n\n# Immutable: tuple\nt = (1, 2, 3)\ntry:\n    t[0] = 99\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # 'tuple' object does not support item assignment\n\n# Hashability consequence\nvalid_dict = {(1, 2): \"tuple key\"}  # OK: tuple is immutable\ntry:\n    invalid_dict = {[1, 2]: \"list key\"}  # Fails\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # unhashable type: 'list'\n\n# Mutable argument trap\ndef bad_append(item, lst=[]):\n    lst.append(item)\n    return lst\n\nprint(bad_append(1))  # [1]\nprint(bad_append(2))  # [1, 2] -- BUG! Same list reused\n\ndef good_append(item, lst=None):\n    if lst is None:\n        lst = []\n    lst.append(item)\n    return lst\n\nprint(good_append(1))  # [1]\nprint(good_append(2))  # [2] -- correct, fresh list each time",
+          "code_language": "python",
+          "key_points": [
+            "Immutable: int, float, str, tuple, frozenset, bytes",
+            "Mutable: list, dict, set, bytearray",
+            "Only immutable (hashable) objects can be dict keys or set members",
+            "Modifying a mutable object in a function affects the caller",
+            "Always use None as default for mutable arguments"
+          ],
+          "gotchas": [
+            "A tuple containing a mutable object (e.g., a list) is technically immutable but its contents can change",
+            "Mutable default arguments persist across function calls -- a classic Python bug",
+            "String concatenation in a loop creates many temporary objects -- use join() instead",
+            "Reassignment (x = new_value) is not mutation -- it rebinds the name"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Immutable** types (`int`, `float`, `str`, `tuple`, `frozenset`) cannot be changed in-place. **Mutable** types (`list`, `dict`, `set`) can. This affects hashability (only immutable types as dict keys), function argument safety, and caching.",
+          "pseudo_code": "",
+          "actual_code": "lst = [1, 2, 3]\nlst.append(4)     # modifies in place, same object\n\ns = \"hello\"\ns = s + \" world\"  # creates NEW string, different object\n\n# Mutable default argument trap\ndef bad(lst=[]):\n    lst.append(1)\n    return lst\nprint(bad())  # [1]\nprint(bad())  # [1, 1] -- bug!",
+          "code_language": "python",
+          "key_points": [
+            "Immutable: int, float, str, tuple, frozenset",
+            "Mutable: list, dict, set"
+          ],
+          "gotchas": [
+            "Never use mutable objects as default function arguments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is dynamic typing in Python? How does it differ from static typing?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["dynamic-typing", "static-typing", "type-system"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In **dynamically typed** languages like Python, type checking happens at **runtime**, not at compile time. Variables do not have fixed types -- they are just names (labels) bound to objects, and the objects carry the type information.\n\nA variable can be reassigned to a value of a completely different type:\n\n```\nx = 42       # x refers to an int object\nx = \"hello\"  # now x refers to a str object -- perfectly legal\n```\n\nIn **statically typed** languages (C, Java, Go), variables have a declared type that cannot change. The compiler checks types before the program runs.\n\n**Python's approach:**\n- Types belong to **objects**, not variables\n- Variables are just **name bindings** (pointers) to objects\n- Type errors are caught at runtime, not compile time\n- Python supports optional **type hints** (PEP 484) for static analysis tools like mypy, but they are not enforced at runtime\n\n**Advantages of dynamic typing:**\n- Faster prototyping, more flexible code\n- Duck typing: \"if it quacks like a duck...\"\n\n**Disadvantages:**\n- Type errors only surface at runtime\n- Harder to reason about large codebases without type hints",
+          "pseudo_code": "Dynamic typing (Python):\n  x = 42        # x is bound to an int object\n  x = \"hello\"   # x is now bound to a str object -- OK\n  # Type lives on the OBJECT, not the variable\n\nStatic typing (C/Java):\n  int x = 42;\n  x = \"hello\";  // Compile error -- x must be int",
+          "actual_code": "# Variables are just names bound to objects\nx = 42\nprint(type(x))  # <class 'int'>\n\nx = \"hello\"\nprint(type(x))  # <class 'str'> -- no error, x now points to a str\n\nx = [1, 2, 3]\nprint(type(x))  # <class 'list'> -- rebound again\n\n# The type belongs to the object, not the variable\na = 42\nb = a         # b and a point to the SAME int object\nprint(id(a) == id(b))  # True\n\nb = \"hello\"   # b now points to a different object\nprint(id(a) == id(b))  # False\n\n# Type hints are optional and NOT enforced at runtime\ndef greet(name: str) -> str:\n    return f\"Hello, {name}\"\n\n# Python will NOT stop you from passing an int\nresult = greet(42)  # No runtime error, just returns \"Hello, 42\"\nprint(result)\n\n# Duck typing in action\nclass Cat:\n    def speak(self):\n        return \"Meow\"\n\nclass Dog:\n    def speak(self):\n        return \"Woof\"\n\ndef make_speak(animal):\n    return animal.speak()  # No type check -- just calls .speak()\n\nprint(make_speak(Cat()))  # Meow\nprint(make_speak(Dog()))  # Woof",
+          "code_language": "python",
+          "key_points": [
+            "Types belong to objects, not variables -- variables are just name bindings",
+            "You can reassign a variable to a value of a different type at any time",
+            "Type errors are caught at runtime, not compile time",
+            "Type hints (PEP 484) are optional and not enforced by the interpreter",
+            "Duck typing: focus on what an object can DO, not what it IS"
+          ],
+          "gotchas": [
+            "Dynamic typing does not mean no types -- every object has a well-defined type",
+            "Type hints do not prevent runtime type errors unless you use a tool like mypy",
+            "Duck typing means AttributeError at runtime if an object lacks the expected method",
+            "Python is strongly typed (no implicit type coercion like JavaScript) AND dynamically typed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "In Python, types belong to **objects**, not variables. Variables are just names that can be rebound to any object of any type at any time. Type checking happens at runtime. Python is dynamically typed (types checked at runtime) but strongly typed (no implicit coercion like JS).",
+          "pseudo_code": "",
+          "actual_code": "x = 42       # x -> int object\nx = \"hello\"  # x -> str object, perfectly legal\nx = [1, 2]   # x -> list object\n\n# Type hints are not enforced\ndef add(a: int, b: int) -> int:\n    return a + b\n\nprint(add(\"hi\", \"!\"))  # \"hi!\" -- no runtime error",
+          "code_language": "python",
+          "key_points": [
+            "Variables are name bindings, not typed containers",
+            "Python is strongly AND dynamically typed"
+          ],
+          "gotchas": [
+            "Dynamic typing != weak typing -- Python won't add '5' + 5 like JavaScript"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does the id() function return, and what does it tell you about objects?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["id", "identity", "memory", "objects"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`id(obj)` returns an integer that uniquely identifies an object during its lifetime. In CPython (the standard implementation), this is the memory address of the object.\n\n**Key properties:**\n- Two objects that exist at the same time will have different `id()` values\n- An object's `id()` never changes during its lifetime\n- After an object is garbage collected, its `id()` can be reused\n\n**Relationship to `is` operator:**\n`a is b` is equivalent to `id(a) == id(b)` -- it checks if two names refer to the exact same object in memory.\n\n**Integer and string interning:**\nCPython caches small integers (-5 to 256) and some short strings, so variables with the same small integer value may share the same `id()`. This is an implementation detail, not a language guarantee.",
+          "pseudo_code": "1. id(obj) returns unique integer identity of object\n2. In CPython, this is the memory address\n3. a is b <==> id(a) == id(b)\n4. CPython caches small integers (-5 to 256)\n5. id can be reused after object is garbage collected",
+          "actual_code": "# id() returns the identity (memory address in CPython)\na = [1, 2, 3]\nprint(id(a))  # e.g., 140456789012345\n\n# Same object: same id\nb = a\nprint(id(a) == id(b))  # True\nprint(a is b)          # True -- same object\n\n# Different objects with same value: different id\nc = [1, 2, 3]\nprint(a == c)          # True (same value)\nprint(a is c)          # False (different objects)\nprint(id(a) == id(c))  # False\n\n# Integer caching (CPython implementation detail)\nx = 256\ny = 256\nprint(x is y)   # True -- cached small integer\n\nx = 257\ny = 257\nprint(x is y)   # False (or True in some contexts -- unreliable!)\n\n# Immutable objects may or may not be shared\ns1 = \"hello\"\ns2 = \"hello\"\nprint(s1 is s2)  # True (string interning)\n\ns3 = \"hello world!\"\ns4 = \"hello world!\"\nprint(s3 is s4)  # May be True or False (implementation-dependent)\n\n# Mutation changes the object, not its identity\nlst = [1, 2]\noriginal_id = id(lst)\nlst.append(3)\nprint(id(lst) == original_id)  # True -- same object, mutated in place",
+          "code_language": "python",
+          "key_points": [
+            "id() returns a unique integer identifier for an object's lifetime",
+            "In CPython, id() is the memory address",
+            "a is b checks identity: id(a) == id(b)",
+            "CPython caches small integers (-5 to 256) and some strings",
+            "Mutating a mutable object does not change its id()"
+          ],
+          "gotchas": [
+            "Integer caching range (-5 to 256) is a CPython implementation detail, not guaranteed",
+            "String interning behavior varies -- never rely on 'is' for string comparison",
+            "After an object is garbage collected, its id can be reused by a new object",
+            "In the REPL, the same code may produce different id results than in a script due to compilation units"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`id(obj)` returns a unique integer identifier (memory address in CPython) for an object. `a is b` is equivalent to `id(a) == id(b)`. CPython caches small integers (-5 to 256), so they share the same id.",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2]\nb = a\nprint(id(a) == id(b))  # True (same object)\n\nc = [1, 2]\nprint(a == c)   # True (same value)\nprint(a is c)   # False (different objects)",
+          "code_language": "python",
+          "key_points": [
+            "id() returns memory address in CPython",
+            "a is b checks if same object (same id)"
+          ],
+          "gotchas": [
+            "Small integer caching is an implementation detail -- never rely on 'is' for value comparison"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between 'is' and '==' in Python?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["identity", "equality", "is-operator", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`==` checks **value equality**: do the two objects have the same value? It calls the `__eq__` method.\n\n`is` checks **identity**: are the two names referring to the **exact same object** in memory? It compares `id()` values.\n\n**Rules of thumb:**\n- Use `==` for comparing values (almost always what you want)\n- Use `is` only for singletons: `None`, `True`, `False`\n- `x is None` is idiomatic Python (faster and unambiguous)\n- Never use `is` to compare strings or numbers (unreliable due to caching)\n\n**Why `is None` instead of `== None`?**\n- `is` cannot be overridden (it always checks identity)\n- `==` can be overridden via `__eq__`, which could produce unexpected results\n- `is None` is marginally faster (no method call)",
+          "pseudo_code": "== calls __eq__, compares values\nis compares id(), checks same object in memory\n\nUse == for: comparing values\nUse is for: None, True, False (singletons only)",
+          "actual_code": "# == checks value equality\na = [1, 2, 3]\nb = [1, 2, 3]\nprint(a == b)  # True -- same values\nprint(a is b)  # False -- different objects\n\n# is checks identity\nc = a\nprint(a is c)  # True -- same object\n\n# Always use 'is' for None\nx = None\nprint(x is None)   # True -- correct idiom\nprint(x == None)   # True, but bad practice\n\n# Why 'is None' matters -- __eq__ can lie\nclass Sneaky:\n    def __eq__(self, other):\n        return True  # claims to equal everything\n\nobj = Sneaky()\nprint(obj == None)   # True -- misleading!\nprint(obj is None)   # False -- correct\n\n# Integer caching makes 'is' unreliable for numbers\na = 256\nb = 256\nprint(a is b)   # True (cached)\n\na = 257\nb = 257\nprint(a is b)   # Unreliable! May be True or False\n\n# Always use == for number/string comparison\nprint(a == b)   # True -- always reliable",
+          "code_language": "python",
+          "key_points": [
+            "== compares values via __eq__, 'is' compares object identity via id()",
+            "Use 'is' only for singletons: None, True, False",
+            "'is None' is preferred over '== None' in PEP 8",
+            "'is' cannot be overridden, == can",
+            "Never use 'is' to compare strings or numbers"
+          ],
+          "gotchas": [
+            "Integer caching makes 'is' seem to work for small numbers but it is unreliable",
+            "String interning makes 'is' seem to work for short strings but it is unreliable",
+            "Custom __eq__ can make == return unexpected results, but 'is' always checks identity",
+            "'is not' is the correct negation, not 'not ... is'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`==` checks value equality (calls `__eq__`). `is` checks identity (same object in memory). Use `is` only for singletons (`None`, `True`, `False`). Use `==` for everything else.",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2, 3]\nb = [1, 2, 3]\nprint(a == b)  # True (same value)\nprint(a is b)  # False (different objects)\n\nx = None\nprint(x is None)  # True -- idiomatic Python",
+          "code_language": "python",
+          "key_points": [
+            "== for values, 'is' for identity",
+            "Use 'is None', never '== None'"
+          ],
+          "gotchas": [
+            "Never use 'is' to compare strings or numbers -- caching makes it unreliable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Python handle floating-point precision, and what are the common pitfalls?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["float", "precision", "decimal", "numeric"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python floats follow the IEEE 754 double-precision standard, using 64 bits to represent numbers. This gives about 15-17 significant decimal digits of precision.\n\nThe fundamental issue is that most decimal fractions (like 0.1) cannot be represented exactly in binary. `0.1` in binary is a repeating fraction, just like `1/3` in decimal is `0.333...`.\n\n**Solutions for precision-sensitive work:**\n1. `decimal.Decimal` -- arbitrary precision decimal arithmetic\n2. `fractions.Fraction` -- exact rational number arithmetic\n3. `math.isclose()` -- for approximate float comparisons\n4. Integer arithmetic -- store cents instead of dollars\n\n**When to use each:**\n- Financial calculations: `Decimal`\n- Scientific comparisons: `math.isclose()`\n- Exact ratios: `Fraction`\n- General programming: accept float imprecision and use `round()` for display",
+          "pseudo_code": "1. floats use IEEE 754 double precision (64-bit)\n2. 0.1 cannot be represented exactly in binary\n3. Never compare floats with ==\n4. Use Decimal for money, math.isclose() for comparisons\n5. Use round() for display purposes",
+          "actual_code": "# The classic floating-point surprise\nprint(0.1 + 0.2)              # 0.30000000000000004\nprint(0.1 + 0.2 == 0.3)       # False!\n\n# Use math.isclose() for float comparison\nimport math\nprint(math.isclose(0.1 + 0.2, 0.3))  # True\nprint(math.isclose(0.1 + 0.2, 0.3, rel_tol=1e-9))  # True\n\n# See the actual stored value\nprint(f\"{0.1:.20f}\")  # 0.10000000000000000555\n\n# Decimal for exact decimal arithmetic\nfrom decimal import Decimal\na = Decimal(\"0.1\")\nb = Decimal(\"0.2\")\nprint(a + b)                     # 0.3 (exact)\nprint(a + b == Decimal(\"0.3\"))   # True\n\n# WARNING: Decimal(0.1) vs Decimal(\"0.1\")\nprint(Decimal(0.1))    # 0.1000000000000000055511151231257827021181583404541015625\nprint(Decimal(\"0.1\"))  # 0.1 (exact)\n\n# Fraction for exact rational arithmetic\nfrom fractions import Fraction\nf = Fraction(1, 3)\nprint(f)           # 1/3\nprint(f * 3)       # 1 (exact)\nprint(float(f))    # 0.3333333333333333\n\n# round() for display\nprint(round(0.1 + 0.2, 1))  # 0.3\n\n# Accumulation error\ntotal = 0.0\nfor _ in range(10):\n    total += 0.1\nprint(total)           # 0.9999999999999999 (not 1.0)\nprint(math.fsum([0.1] * 10))  # 1.0 (math.fsum reduces error)",
+          "code_language": "python",
+          "key_points": [
+            "Python floats are IEEE 754 double precision (about 15-17 significant digits)",
+            "Most decimal fractions cannot be represented exactly in binary",
+            "Never compare floats with ==, use math.isclose() instead",
+            "Use decimal.Decimal for financial calculations",
+            "math.fsum() is more accurate than sum() for float lists"
+          ],
+          "gotchas": [
+            "Decimal(0.1) is NOT the same as Decimal('0.1') -- always use string constructor",
+            "Accumulating 0.1 ten times does not give exactly 1.0",
+            "round() uses banker's rounding (round half to even): round(0.5) is 0, round(1.5) is 2",
+            "float('inf') and float('nan') are valid float values"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python floats use IEEE 754 double precision, so `0.1 + 0.2 != 0.3`. Never compare floats with `==`. Use `math.isclose()` for comparisons, `decimal.Decimal` for money, and `round()` for display.",
+          "pseudo_code": "",
+          "actual_code": "print(0.1 + 0.2 == 0.3)  # False!\n\nimport math\nprint(math.isclose(0.1 + 0.2, 0.3))  # True\n\nfrom decimal import Decimal\nprint(Decimal(\"0.1\") + Decimal(\"0.2\") == Decimal(\"0.3\"))  # True",
+          "code_language": "python",
+          "key_points": [
+            "0.1 + 0.2 != 0.3 due to binary representation limits",
+            "Use math.isclose() or Decimal for precision"
+          ],
+          "gotchas": [
+            "Decimal(0.1) != Decimal('0.1') -- always pass strings to Decimal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are complex numbers in Python and when are they used?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["complex-numbers", "numeric-types", "math"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python has a built-in `complex` type for complex numbers. A complex number has a real part and an imaginary part, written as `a + bj` where `j` (not `i`) is the imaginary unit.\n\n**Creating complex numbers:**\n- Literal syntax: `3 + 4j`\n- Constructor: `complex(3, 4)`\n\n**Accessing parts:**\n- `.real` -- the real part\n- `.imag` -- the imaginary part\n- `.conjugate()` -- the complex conjugate\n\n**Use cases:**\n- Signal processing (FFT)\n- Electrical engineering (impedance, phasors)\n- Scientific computing\n- Fractal generation (Mandelbrot set)\n- 2D geometry (representing points/rotations)\n\nThe `cmath` module provides mathematical functions for complex numbers (analogous to `math` for reals).",
+          "pseudo_code": "1. Create: 3+4j or complex(3, 4)\n2. Access: z.real, z.imag, z.conjugate()\n3. Arithmetic: +, -, *, /, abs(), **\n4. Use cmath for complex math functions\n5. j suffix (not i) for imaginary part",
+          "actual_code": "# Creating complex numbers\nz1 = 3 + 4j\nz2 = complex(1, 2)\nprint(z1)          # (3+4j)\nprint(z2)          # (1+2j)\n\n# Accessing parts\nprint(z1.real)      # 3.0\nprint(z1.imag)      # 4.0\nprint(z1.conjugate())  # (3-4j)\n\n# Arithmetic\nprint(z1 + z2)      # (4+6j)\nprint(z1 * z2)      # (-5+10j)\nprint(z1 / z2)      # (2.2-0.4j)\nprint(abs(z1))      # 5.0 (magnitude: sqrt(3^2 + 4^2))\nprint(z1 ** 2)      # (-7+24j)\n\n# cmath module for complex math\nimport cmath\nprint(cmath.sqrt(-1))     # 1j\nprint(cmath.phase(z1))    # 0.9272... (angle in radians)\nprint(cmath.polar(z1))    # (5.0, 0.9272...) -- (magnitude, phase)\n\n# Convert polar to rectangular\nr, theta = 5.0, 0.9273\nz = cmath.rect(r, theta)\nprint(z)  # approximately (3+4j)\n\n# Type checking\nprint(type(3 + 4j))              # <class 'complex'>\nprint(isinstance(3 + 4j, complex))  # True",
+          "code_language": "python",
+          "key_points": [
+            "Python uses j (not i) for the imaginary unit",
+            "complex(real, imag) or literal syntax 3+4j",
+            "abs() returns the magnitude (modulus) of a complex number",
+            "Use cmath instead of math for complex number functions",
+            ".real and .imag are float attributes, not methods"
+          ],
+          "gotchas": [
+            "Python uses j, not i, for the imaginary unit -- mathematical convention differs",
+            "You cannot use comparison operators (<, >, <=, >=) on complex numbers -- they are not ordered",
+            "math.sqrt(-1) raises ValueError -- use cmath.sqrt(-1) instead",
+            "complex(3) gives (3+0j), not just 3 -- it always has an imaginary part"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python supports complex numbers natively with `j` suffix: `3+4j`. Access `.real`, `.imag`, and use `abs()` for magnitude. Use the `cmath` module for complex math. Common in signal processing, engineering, and scientific computing.",
+          "pseudo_code": "",
+          "actual_code": "z = 3 + 4j\nprint(z.real)        # 3.0\nprint(z.imag)        # 4.0\nprint(abs(z))        # 5.0 (magnitude)\n\nimport cmath\nprint(cmath.sqrt(-1))  # 1j",
+          "code_language": "python",
+          "key_points": [
+            "Use j, not i, for imaginary unit",
+            "Use cmath instead of math for complex operations"
+          ],
+          "gotchas": [
+            "math.sqrt(-1) raises ValueError -- must use cmath.sqrt(-1)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is type coercion in Python, and how does it differ from JavaScript's type coercion?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["type-coercion", "strong-typing", "implicit-conversion"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Type coercion** is the automatic conversion of one data type to another during an operation.\n\nPython is **strongly typed**, meaning it does very little implicit type coercion compared to JavaScript (which is weakly typed).\n\n**Python's limited coercion:**\n- Numeric promotion: `int + float -> float`, `int + complex -> complex`\n- Bool in numeric context: `True + 1 -> 2`\n- That is essentially it for implicit coercion\n\n**Python REFUSES to coerce:**\n- `\"5\" + 5` raises `TypeError` (JS gives `\"55\"`)\n- `\"5\" * \"3\"` raises `TypeError`\n- `\"5\" > 3` raises `TypeError` (JS gives `true`)\n\n**JavaScript's aggressive coercion (for contrast):**\n- `\"5\" + 5` gives `\"55\"` (number to string)\n- `\"5\" - 3` gives `2` (string to number)\n- `[] + {}` gives `\"[object Object]\"` (nonsense)",
+          "pseudo_code": "Python (strong typing):\n  \"5\" + 5 -> TypeError (no coercion)\n  5 + 3.0 -> 8.0 (numeric promotion only)\n  True + 1 -> 2 (bool is int subclass)\n\nJavaScript (weak typing):\n  \"5\" + 5 -> \"55\" (coerces number to string)\n  \"5\" - 3 -> 2 (coerces string to number)",
+          "actual_code": "# Python: limited, safe coercion\nprint(5 + 3.0)      # 8.0 (int promoted to float)\nprint(True + 1)     # 2 (bool is a subclass of int)\nprint(True + 0.5)   # 1.5 (bool -> int -> float)\n\n# Python REFUSES unsafe coercion\ntry:\n    result = \"5\" + 5\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # can only concatenate str (not \"int\") to str\n\ntry:\n    result = \"10\" > 5\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # '>' not supported between str and int\n\n# You must explicitly convert\nprint(int(\"5\") + 5)    # 10\nprint(\"5\" + str(5))    # '55'\n\n# Numeric tower: int -> float -> complex\nprint(type(1 + 1.0))       # <class 'float'>\nprint(type(1 + 1j))        # <class 'complex'>\nprint(type(1.0 + 1j))      # <class 'complex'>\n\n# Truthiness is NOT coercion -- it's a protocol (__bool__)\nif \"hello\":    # calls bool(\"hello\") implicitly\n    print(\"truthy\")\n\nif not []:\n    print(\"empty list is falsy\")",
+          "code_language": "python",
+          "key_points": [
+            "Python is strongly typed: minimal implicit coercion",
+            "Only numeric types coerce automatically: int -> float -> complex",
+            "String + int raises TypeError, unlike JavaScript",
+            "You must explicitly convert types with int(), str(), float()",
+            "Truthiness in boolean context is a protocol, not coercion"
+          ],
+          "gotchas": [
+            "Python's bool is an int subclass, so True + True = 2 is technically valid",
+            "'5' * 3 gives '555' (repetition), not 15 -- this is not coercion, it is string repetition",
+            "Truthiness checks in if/while are NOT type coercion -- they call __bool__",
+            "sorted() can compare strings to strings but not strings to ints"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python is strongly typed: it only coerces between numeric types (`int + float -> float`). Unlike JavaScript, `\"5\" + 5` raises `TypeError`. You must explicitly convert with `int()`, `str()`, etc.",
+          "pseudo_code": "",
+          "actual_code": "print(5 + 3.0)   # 8.0 (numeric promotion OK)\n\ntry:\n    \"5\" + 5\nexcept TypeError:\n    print(\"Python refuses to coerce str + int\")\n\nprint(int(\"5\") + 5)  # 10 (explicit conversion)",
+          "code_language": "python",
+          "key_points": [
+            "Python only coerces between numeric types automatically",
+            "Must explicitly convert with int(), str(), float()"
+          ],
+          "gotchas": [
+            "'5' * 3 gives '555' -- this is repetition, not coercion"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does variable assignment work in Python? What does it mean that variables are 'names'?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["variables", "assignment", "names", "references"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Python, variables are **names** (or labels) that reference objects in memory. Assignment does NOT copy data -- it binds a name to an object.\n\nThis is fundamentally different from languages like C, where a variable is a fixed memory location that holds a value.\n\n**Python's model:**\n1. Objects exist in memory (heap)\n2. Names are entries in a namespace (dictionary)\n3. Assignment (`=`) binds a name to an object\n4. Multiple names can refer to the same object\n5. Reassignment rebinds the name, it does not modify the object\n\n**Multiple assignment:**\n- `a = b = c = 0` -- all three names point to the same object\n- `a, b = 1, 2` -- tuple unpacking\n- `a, b = b, a` -- swap without a temp variable\n\n**Augmented assignment:**\n- `x += 1` for immutable types creates a new object and rebinds\n- `lst += [4]` for mutable types modifies in-place (calls `__iadd__`)",
+          "pseudo_code": "x = 42\n  1. Python creates an int object with value 42\n  2. Python binds the name 'x' to that object\n\ny = x\n  1. Python binds 'y' to the SAME object x points to\n  2. No copying occurs\n\nx = 99\n  1. Python creates an int object with value 99\n  2. Python rebinds 'x' to the new object\n  3. 'y' still points to 42",
+          "actual_code": "# Assignment binds a name to an object\nx = [1, 2, 3]\ny = x          # y is ANOTHER NAME for the same list\nprint(x is y)  # True -- same object\n\ny.append(4)\nprint(x)  # [1, 2, 3, 4] -- x sees the change because it's the same object\n\n# Reassignment rebinds the name\na = 42\nb = a\nprint(a is b)  # True\n\na = 99         # rebinds 'a', does NOT modify the int 42\nprint(b)       # 42 -- b still points to the old object\n\n# Multiple assignment\nx = y = z = []   # ALL point to the SAME list\nx.append(1)\nprint(y)          # [1] -- same list!\n\n# Tuple unpacking\na, b, c = 1, 2, 3\nprint(a, b, c)  # 1 2 3\n\n# Swap without temp variable\na, b = 1, 2\na, b = b, a\nprint(a, b)  # 2 1\n\n# Augmented assignment with immutable types\nx = 5\nprint(id(x))\nx += 1        # creates new int(6), rebinds x\nprint(id(x))  # different id!\n\n# Augmented assignment with mutable types\nlst = [1, 2]\nprint(id(lst))\nlst += [3]    # calls __iadd__, modifies in place\nprint(id(lst))  # SAME id\nprint(lst)      # [1, 2, 3]",
+          "code_language": "python",
+          "key_points": [
+            "Variables are names (references) bound to objects, not memory boxes",
+            "Assignment binds a name to an object, it does not copy",
+            "Multiple names can reference the same object",
+            "Reassignment rebinds the name, it does not modify the object",
+            "a, b = b, a swaps values without a temporary variable"
+          ],
+          "gotchas": [
+            "x = y = [] makes both point to the SAME list -- mutations via one name affect the other",
+            "x += 1 for int creates a new object; lst += [1] for list modifies in place",
+            "Passing a mutable object to a function passes the reference, not a copy",
+            "del x removes the name, not the object -- the object is garbage collected when no names reference it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python variables are names (labels) bound to objects, not boxes holding values. `x = 42` binds the name `x` to an int object. `y = x` makes `y` point to the same object. Reassignment rebinds the name; it does not modify the object.",
+          "pseudo_code": "",
+          "actual_code": "x = [1, 2, 3]\ny = x          # same object\ny.append(4)\nprint(x)       # [1, 2, 3, 4] -- x sees the change\n\na = 42\nb = a\na = 99\nprint(b)       # 42 -- b still points to old object",
+          "code_language": "python",
+          "key_points": [
+            "Variables are name bindings, not memory boxes",
+            "Assignment does not copy, it creates another reference"
+          ],
+          "gotchas": [
+            "x = y = [] makes both names reference the SAME list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Python's None type and its common uses?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["None", "NoneType", "sentinel", "null"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`None` is Python's null value. It is the sole instance of `NoneType` and is a singleton -- there is only ever one `None` object in a Python process.\n\n**Common uses:**\n1. **Default return value:** Functions without an explicit `return` return `None`\n2. **Default argument sentinel:** `def f(x=None)` to detect missing arguments\n3. **Placeholder / uninitialized:** `result = None` before assignment in a loop\n4. **Optional values:** Representing the absence of a value\n\n**Checking for None:**\n- Always use `is None` or `is not None`, never `== None`\n- `is` checks identity (fast, unambiguous)\n- `==` calls `__eq__` which can be overridden\n\n**Truthiness:**\n- `None` is falsy: `bool(None)` is `False`\n- But `if x is None` is preferred over `if not x` when you specifically need to check for None (because `0`, `\"\"`, `[]` are also falsy)",
+          "pseudo_code": "1. None is a singleton (only one instance exists)\n2. Functions without return -> return None\n3. Always check with 'is None', never '== None'\n4. None is falsy but 'if not x' also catches 0, '', []\n5. Use None as sentinel for optional parameters",
+          "actual_code": "# None is the sole instance of NoneType\nprint(type(None))       # <class 'NoneType'>\nprint(None is None)     # True (singleton)\n\n# Functions without explicit return\ndef greet(name):\n    print(f\"Hello, {name}\")\n\nresult = greet(\"Alice\")  # prints \"Hello, Alice\"\nprint(result)            # None\nprint(result is None)    # True\n\n# None as default argument sentinel\ndef process(data=None):\n    if data is None:\n        data = []   # create fresh list each call\n    data.append(1)\n    return data\n\nprint(process())       # [1]\nprint(process())       # [1] (fresh list each time)\nprint(process([5, 6]))  # [5, 6, 1]\n\n# None is falsy, but be specific\nx = None\ny = 0\nz = \"\"\n\n# All are falsy\nprint(bool(x), bool(y), bool(z))  # False False False\n\n# If you specifically need to check for None:\nif x is None:\n    print(\"x is None\")  # this fires\n\n# 'if not x' would also match 0 and \"\" -- too broad\nfor val in [None, 0, \"\", [], False]:\n    if val is None:\n        print(f\"{val!r} is None\")\n    elif not val:\n        print(f\"{val!r} is falsy but not None\")\n\n# None in type hints\nfrom typing import Optional\n\ndef find_user(user_id: int) -> Optional[str]:\n    users = {1: \"Alice\", 2: \"Bob\"}\n    return users.get(user_id)  # returns None if not found\n\nprint(find_user(1))  # Alice\nprint(find_user(3))  # None",
+          "code_language": "python",
+          "key_points": [
+            "None is a singleton -- there is exactly one None object",
+            "Always use 'is None', never '== None'",
+            "Functions without a return statement return None",
+            "None is falsy but 'if not x' catches other falsy values too",
+            "Use None as sentinel for mutable default arguments"
+          ],
+          "gotchas": [
+            "'if not x' is True for None, 0, '', [], {}, set(), False -- too broad for None-checking",
+            "None is not the same as False, 0, or '' -- use 'is None' to distinguish",
+            "You cannot add attributes to None or subclass NoneType",
+            "repr(None) is 'None' (string), not None (the object)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`None` is Python's null, a singleton of `NoneType`. Always check with `is None`. Functions without `return` give `None`. Use `None` as a sentinel for optional parameters.",
+          "pseudo_code": "",
+          "actual_code": "def f():\n    pass\n\nprint(f() is None)  # True\n\nx = None\nif x is None:       # correct way to check\n    print(\"absent\")",
+          "code_language": "python",
+          "key_points": [
+            "None is a singleton; use 'is None' to check",
+            "Functions without return give None"
+          ],
+          "gotchas": [
+            "'if not x' catches 0, '', [] too -- not specific enough for None"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between deep copy and shallow copy?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["copy", "shallow-copy", "deep-copy", "mutability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you copy a compound object (like a list of lists), there are two levels of copying:\n\n**Shallow copy:** Creates a new outer container but the elements inside are **references** to the same objects as the original. Changes to nested mutable objects are visible through both copies.\n\n**Deep copy:** Creates a new outer container AND recursively copies all nested objects. The copy is completely independent.\n\n**Ways to make a shallow copy:**\n- `list.copy()` or `dict.copy()`\n- Slice: `lst[:]`\n- `list(original)` or `dict(original)`\n- `copy.copy(obj)`\n\n**Ways to make a deep copy:**\n- `copy.deepcopy(obj)`\n\n**When it matters:**\nThe difference only matters when you have **nested mutable objects**. For flat lists of immutable items, shallow copy is sufficient.",
+          "pseudo_code": "Shallow copy:\n  new = copy(original)\n  new is not original (different outer object)\n  new[i] is original[i] (same inner objects)\n\nDeep copy:\n  new = deepcopy(original)\n  new is not original (different outer object)\n  new[i] is not original[i] (different inner objects too)",
+          "actual_code": "import copy\n\n# Shallow copy -- nested objects are shared\noriginal = [[1, 2], [3, 4], [5, 6]]\nshallow = copy.copy(original)\n\nprint(original is shallow)       # False (different outer list)\nprint(original[0] is shallow[0]) # True (same inner list!)\n\n# Modifying a nested object affects both\nshallow[0].append(99)\nprint(original)  # [[1, 2, 99], [3, 4], [5, 6]] -- original changed!\nprint(shallow)   # [[1, 2, 99], [3, 4], [5, 6]]\n\n# Deep copy -- completely independent\noriginal = [[1, 2], [3, 4], [5, 6]]\ndeep = copy.deepcopy(original)\n\nprint(original[0] is deep[0])  # False (different inner lists)\n\ndeep[0].append(99)\nprint(original)  # [[1, 2], [3, 4], [5, 6]] -- original unchanged!\nprint(deep)      # [[1, 2, 99], [3, 4], [5, 6]]\n\n# Various shallow copy methods\nlst = [1, 2, 3]\na = lst[:]           # slice\nb = list(lst)        # constructor\nc = lst.copy()       # method\nd = copy.copy(lst)   # copy module\n\n# For flat lists of immutables, shallow copy is fine\nlst = [1, 2, 3]\nshallow = lst[:]\nshallow.append(4)\nprint(lst)      # [1, 2, 3] -- unchanged (no nested mutables)\n\n# Dict shallow vs deep copy\norig_dict = {\"a\": [1, 2], \"b\": [3, 4]}\nshallow_dict = orig_dict.copy()\nshallow_dict[\"a\"].append(99)\nprint(orig_dict)  # {'a': [1, 2, 99], 'b': [3, 4]} -- affected!\n\ndeep_dict = copy.deepcopy(orig_dict)\ndeep_dict[\"a\"].append(100)\nprint(orig_dict)  # {'a': [1, 2, 99], 'b': [3, 4]} -- not affected",
+          "code_language": "python",
+          "key_points": [
+            "Shallow copy: new outer container, shared inner references",
+            "Deep copy: fully independent recursive copy",
+            "Shallow copy methods: [:], .copy(), list(), copy.copy()",
+            "Deep copy: only copy.deepcopy()",
+            "Difference only matters for nested mutable objects"
+          ],
+          "gotchas": [
+            "Assignment (b = a) is NOT a copy -- both names reference the same object",
+            "Shallow copy of a list of lists: modifying inner lists affects both",
+            "deepcopy handles circular references correctly",
+            "deepcopy can be slow for large, deeply nested structures",
+            "dict.copy() and list.copy() are shallow -- a common source of bugs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Shallow copy** creates a new outer container but inner objects are shared references. **Deep copy** (`copy.deepcopy()`) recursively copies everything. The difference matters only for nested mutable objects.",
+          "pseudo_code": "",
+          "actual_code": "import copy\n\noriginal = [[1, 2], [3, 4]]\nshallow = original.copy()     # or original[:]\ndeep = copy.deepcopy(original)\n\nshallow[0].append(99)\nprint(original)  # [[1, 2, 99], [3, 4]] -- affected!\n\ndeep[0].append(100)\nprint(original)  # [[1, 2, 99], [3, 4]] -- NOT affected",
+          "code_language": "python",
+          "key_points": [
+            "Shallow: new container, shared inner objects",
+            "Deep: fully independent copy"
+          ],
+          "gotchas": [
+            "list.copy() and dict.copy() are SHALLOW -- nested mutables are shared"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a variable is of a certain type in Python?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["type-checking", "isinstance", "duck-typing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are several ways to check types in Python, from most to least recommended:\n\n**1. isinstance() -- recommended:**\nRespects inheritance, accepts tuples for OR checks.\n\n**2. type() comparison -- discouraged:**\nExact match only, does not respect inheritance.\n\n**3. Duck typing -- Pythonic:**\nDo not check the type at all. Try the operation and handle exceptions (EAFP).\n\n**4. hasattr() -- structural check:**\nCheck if an object has a specific attribute or method.\n\n**5. Abstract Base Classes (ABCs):**\nCheck if an object implements a protocol (e.g., `isinstance(obj, Iterable)`).\n\nThe most Pythonic approach is often to NOT check types at all (duck typing). If you must check, use `isinstance()`. Use type hints + mypy for compile-time safety without runtime checks.",
+          "pseudo_code": "Best to worst:\n1. Duck typing: just try the operation (EAFP)\n2. isinstance(obj, Type) -- respects inheritance\n3. isinstance(obj, (Type1, Type2)) -- OR check\n4. isinstance(obj, ABC) -- protocol check\n5. hasattr(obj, 'method') -- structural check\n6. type(obj) == Type -- exact match (discouraged)",
+          "actual_code": "# isinstance() -- recommended\nprint(isinstance(42, int))           # True\nprint(isinstance(42, (int, float)))  # True (OR check)\nprint(isinstance(True, int))         # True (bool subclasses int)\n\n# type() -- exact match, discouraged\nprint(type(42) == int)     # True\nprint(type(True) == int)   # False (exact match only)\n\n# Duck typing -- most Pythonic\ndef get_length(obj):\n    try:\n        return len(obj)\n    except TypeError:\n        return None\n\nprint(get_length([1, 2, 3]))  # 3\nprint(get_length(\"hello\"))    # 5\nprint(get_length(42))         # None\n\n# hasattr() -- structural check\ndef is_iterable(obj):\n    return hasattr(obj, '__iter__')\n\nprint(is_iterable([1, 2]))   # True\nprint(is_iterable(\"hello\"))  # True\nprint(is_iterable(42))       # False\n\n# Abstract Base Classes\nfrom collections.abc import Iterable, Mapping, Sequence\n\nprint(isinstance([1, 2], Sequence))   # True\nprint(isinstance({\"a\": 1}, Mapping))  # True\nprint(isinstance(range(10), Iterable))  # True\nprint(isinstance(42, Iterable))       # False\n\n# Type hints + runtime checking\nfrom typing import get_type_hints\n\ndef add(a: int, b: int) -> int:\n    if not isinstance(a, int) or not isinstance(b, int):\n        raise TypeError(f\"Expected int, got {type(a).__name__} and {type(b).__name__}\")\n    return a + b\n\nprint(add(3, 4))  # 7\ntry:\n    add(\"3\", 4)\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # Expected int, got str and int",
+          "code_language": "python",
+          "key_points": [
+            "isinstance() is the standard way to check types",
+            "isinstance() respects inheritance and accepts tuples",
+            "Duck typing (EAFP) is the most Pythonic approach",
+            "collections.abc provides abstract base classes for protocol checks",
+            "Type hints provide compile-time checking without runtime overhead"
+          ],
+          "gotchas": [
+            "Overusing type checks goes against Python's duck typing philosophy",
+            "isinstance(True, int) is True -- bool is a subclass of int",
+            "type() does not work with ABCs or virtual subclasses",
+            "hasattr() can trigger property getters or __getattr__ -- may have side effects"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `isinstance(obj, Type)` for type checking -- it respects inheritance and accepts a tuple of types. The most Pythonic approach is duck typing: do not check types, just try the operation. Use `collections.abc` for protocol checks.",
+          "pseudo_code": "",
+          "actual_code": "print(isinstance(42, int))           # True\nprint(isinstance(42, (int, float)))  # True\n\nfrom collections.abc import Iterable\nprint(isinstance([1,2], Iterable))   # True",
+          "code_language": "python",
+          "key_points": [
+            "Use isinstance() for type checks",
+            "Duck typing is most Pythonic"
+          ],
+          "gotchas": [
+            "isinstance(True, int) returns True because bool subclasses int"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Python's numeric precision limits and how do you handle large numbers?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["integers", "precision", "arbitrary-precision", "overflow"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Integers (`int`):**\nPython integers have **arbitrary precision** -- they can be as large as your memory allows. There is NO integer overflow in Python. This is different from C/Java where integers have fixed sizes (32/64 bit).\n\n**Floats (`float`):**\nPython floats are IEEE 754 double precision (64-bit), giving:\n- About 15-17 significant decimal digits\n- Range: approximately 1.8 x 10^308 to 5 x 10^-324\n- Special values: `float('inf')`, `float('-inf')`, `float('nan')`\n\n**Decimal:**\nFor arbitrary decimal precision, use `decimal.Decimal` with configurable precision.\n\n**Performance note:**\nArbitrary-precision integers are slower than fixed-size integers. For very large numbers (thousands of digits), operations become noticeably slower.",
+          "pseudo_code": "int: arbitrary precision, no overflow\nfloat: 64-bit IEEE 754, ~15-17 digits, can overflow to inf\nDecimal: configurable precision, slower but exact\nFraction: exact rational numbers\n\nsys.maxsize: largest native int (platform word size)\nsys.float_info: float limits",
+          "actual_code": "import sys\n\n# Integers have arbitrary precision\nbig = 10 ** 100  # googol\nprint(big)  # 10000...0000 (101 digits)\nprint(type(big))  # <class 'int'>\n\n# No overflow!\nprint(2 ** 1000)  # huge number, works fine\nprint(len(str(2 ** 1000)))  # 302 digits\n\n# sys.maxsize is NOT the max integer -- it's the max native int\nprint(sys.maxsize)  # 9223372036854775807 on 64-bit\nprint(sys.maxsize + 1)  # works fine, Python auto-promotes\n\n# Float limits\nprint(sys.float_info.max)    # 1.7976931348623157e+308\nprint(sys.float_info.min)    # 2.2250738585072014e-308\nprint(sys.float_info.epsilon)  # 2.220446049250313e-16\n\n# Float overflow\nprint(1e308)      # 1e+308\nprint(1e309)      # inf\nprint(-1e309)     # -inf\n\n# Special float values\nprint(float('inf') > 1e308)   # True\nprint(float('nan') == float('nan'))  # False! NaN != NaN\n\nimport math\nprint(math.isinf(float('inf')))  # True\nprint(math.isnan(float('nan')))  # True\n\n# Decimal for configurable precision\nfrom decimal import Decimal, getcontext\ngetcontext().prec = 50  # 50 significant digits\nresult = Decimal(1) / Decimal(7)\nprint(result)  # 0.14285714285714285714285714285714285714285714285714\n\n# Integer arithmetic for avoiding float issues\n# Store cents instead of dollars\nprice_cents = 1999  # $19.99\ntax_cents = int(price_cents * 0.08)  # 8% tax\ntotal_cents = price_cents + tax_cents\nprint(f\"${total_cents / 100:.2f}\")  # $21.59",
+          "code_language": "python",
+          "key_points": [
+            "Python integers have arbitrary precision -- no overflow",
+            "Floats are 64-bit IEEE 754 with ~15-17 digits of precision",
+            "sys.maxsize is the max native int size, not the max Python int",
+            "Float overflow gives inf, not an error",
+            "NaN is not equal to itself: float('nan') != float('nan')"
+          ],
+          "gotchas": [
+            "sys.maxsize is NOT the maximum integer -- Python ints are unbounded",
+            "Large integer arithmetic is slower than native int operations",
+            "float('nan') != float('nan') -- always use math.isnan() to check",
+            "int to float conversion can lose precision for very large ints: float(10**20) loses precision",
+            "1e309 silently becomes inf instead of raising an error"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python integers have **arbitrary precision** -- no overflow. Floats are 64-bit IEEE 754 (~15 digits). Floats overflow to `inf`. Use `decimal.Decimal` for exact decimal arithmetic.",
+          "pseudo_code": "",
+          "actual_code": "print(2 ** 1000)   # works! 302-digit number\nprint(1e309)       # inf (float overflow)\n\nimport math\nprint(math.isnan(float('nan')))  # True\nprint(math.isinf(float('inf')))  # True",
+          "code_language": "python",
+          "key_points": [
+            "Python ints are arbitrary precision -- no overflow",
+            "Floats overflow to inf, not an error"
+          ],
+          "gotchas": [
+            "float('nan') != float('nan') -- always use math.isnan()"
+          ]
+        }
+      ]
+    }
+  ]
+}

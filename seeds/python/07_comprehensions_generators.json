@@ -1,0 +1,635 @@
+{
+  "concept_slug": "comprehensions-generators",
+  "questions": [
+    {
+      "title": "What are list comprehensions and how do they work?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["list-comprehension", "syntax", "basics"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A list comprehension is a concise way to create lists from iterables:\n\n```python\n[expression for item in iterable if condition]\n```\n\nIt is equivalent to:\n```python\nresult = []\nfor item in iterable:\n    if condition:\n        result.append(expression)\n```\n\n**Advantages over loops:**\n- More concise and readable for simple transforms\n- Slightly faster (optimized C loop internally)\n- Clearly communicates intent (creating a list)\n\n**Components:**\n1. **Expression:** What to put in the new list\n2. **Iteration:** `for item in iterable`\n3. **Filter (optional):** `if condition`\n\nList comprehensions can also include multiple `for` clauses (nested) and multiple `if` clauses.",
+          "pseudo_code": "Basic: [expr for x in iterable]\nFiltered: [expr for x in iterable if condition]\nTransform + filter: [f(x) for x in iterable if g(x)]\nNested: [expr for x in iter1 for y in iter2]\n\nEquivalent loop:\n  result = []\n  for x in iterable:\n      if condition:\n          result.append(expr)",
+          "actual_code": "# Basic list comprehension\nsquares = [x**2 for x in range(10)]\nprint(squares)  # [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]\n\n# With filter\nevens = [x for x in range(20) if x % 2 == 0]\nprint(evens)  # [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]\n\n# Transform + filter\neven_squares = [x**2 for x in range(10) if x % 2 == 0]\nprint(even_squares)  # [0, 4, 16, 36, 64]\n\n# With function call\nwords = [\"hello\", \"world\", \"python\"]\nupper_words = [w.upper() for w in words]\nprint(upper_words)  # ['HELLO', 'WORLD', 'PYTHON']\n\n# Conditional expression (ternary) in comprehension\nlabels = [\"even\" if x % 2 == 0 else \"odd\" for x in range(5)]\nprint(labels)  # ['even', 'odd', 'even', 'odd', 'even']\n\n# Note the difference: filter vs ternary\n# Filter (if at end): controls WHICH items to include\nfiltered = [x for x in range(10) if x > 5]\nprint(filtered)  # [6, 7, 8, 9]\n\n# Ternary (if in expression): transforms ALL items\ntransformed = [x if x > 5 else 0 for x in range(10)]\nprint(transformed)  # [0, 0, 0, 0, 0, 0, 6, 7, 8, 9]\n\n# String processing\nnames = [\"  alice  \", \"BOB\", \"  Charlie \"]\ncleaned = [name.strip().title() for name in names]\nprint(cleaned)  # ['Alice', 'Bob', 'Charlie']\n\n# Type conversion\nstring_nums = [\"1\", \"2\", \"3\", \"4\", \"5\"]\nnums = [int(s) for s in string_nums]\nprint(nums)  # [1, 2, 3, 4, 5]\n\n# Performance comparison\nimport timeit\n\n# List comprehension\ncomp_time = timeit.timeit(lambda: [x**2 for x in range(1000)], number=10000)\n\n# Equivalent loop\ndef loop_version():\n    result = []\n    for x in range(1000):\n        result.append(x**2)\n    return result\n\nloop_time = timeit.timeit(loop_version, number=10000)\nprint(f\"Comprehension: {comp_time:.4f}s\")\nprint(f\"Loop: {loop_time:.4f}s\")  # typically slower",
+          "code_language": "python",
+          "key_points": [
+            "Syntax: [expression for item in iterable if condition]",
+            "Filter (if at end) selects which items to include",
+            "Ternary (if in expression) transforms all items",
+            "Faster than equivalent for loop (optimized internally)",
+            "Best for simple transforms -- use loops for complex logic"
+          ],
+          "gotchas": [
+            "Do not confuse filter (if at end) with ternary (if in expression)",
+            "List comprehensions create the entire list in memory at once",
+            "Complex comprehensions hurt readability -- use loops instead",
+            "Variables in comprehensions do NOT leak into enclosing scope (Python 3)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "List comprehension: `[expr for x in iterable if cond]`. Concise, faster than loops. Filter (`if` at end) selects items; ternary (`if` in expr) transforms all.",
+          "pseudo_code": "",
+          "actual_code": "squares = [x**2 for x in range(5)]       # [0, 1, 4, 9, 16]\nevens = [x for x in range(10) if x % 2 == 0]  # [0, 2, 4, 6, 8]\nlabels = [\"even\" if x%2==0 else \"odd\" for x in range(3)]  # ['even', 'odd', 'even']",
+          "code_language": "python",
+          "key_points": [
+            "[expr for x in iter if cond]",
+            "Faster and more concise than loops"
+          ],
+          "gotchas": [
+            "Complex comprehensions hurt readability"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dict and set comprehensions work?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["dict-comprehension", "set-comprehension"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Dict comprehension:** `{key: value for item in iterable if condition}`\nCreates a new dictionary.\n\n**Set comprehension:** `{expression for item in iterable if condition}`\nCreates a new set (unique elements, unordered).\n\nThe only syntactic difference between a set comprehension and a dict comprehension is the colon (`:`) -- dict has `key: value`, set has just `value`.",
+          "pseudo_code": "Dict: {k: v for item in iterable if condition}\nSet:  {expr for item in iterable if condition}\n\nDict from two lists: {k: v for k, v in zip(keys, values)}\nSet of unique values: {expr for item in iterable}",
+          "actual_code": "# Dict comprehension\nsquares = {x: x**2 for x in range(6)}\nprint(squares)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16, 5: 25}\n\n# Filter entries\neven_squares = {x: x**2 for x in range(10) if x % 2 == 0}\nprint(even_squares)  # {0: 0, 2: 4, 4: 16, 6: 36, 8: 64}\n\n# From two lists\nkeys = [\"name\", \"age\", \"city\"]\nvalues = [\"Alice\", 30, \"NYC\"]\nperson = {k: v for k, v in zip(keys, values)}\nprint(person)  # {'name': 'Alice', 'age': 30, 'city': 'NYC'}\n\n# Invert dict\noriginal = {\"a\": 1, \"b\": 2, \"c\": 3}\ninverted = {v: k for k, v in original.items()}\nprint(inverted)  # {1: 'a', 2: 'b', 3: 'c'}\n\n# Transform keys\ndata = {\"First Name\": \"Alice\", \"Last Name\": \"Smith\"}\nnormalized = {k.lower().replace(\" \", \"_\"): v for k, v in data.items()}\nprint(normalized)  # {'first_name': 'Alice', 'last_name': 'Smith'}\n\n# Set comprehension\nunique_lengths = {len(word) for word in [\"hello\", \"world\", \"hi\", \"hey\"]}\nprint(unique_lengths)  # {2, 3, 5}\n\n# Unique absolute values\nnumbers = [-3, -1, 0, 1, 2, 3]\nunique_abs = {abs(x) for x in numbers}\nprint(unique_abs)  # {0, 1, 2, 3}\n\n# Unique first letters\nwords = [\"apple\", \"avocado\", \"banana\", \"blueberry\", \"cherry\"]\nfirst_letters = {w[0] for w in words}\nprint(first_letters)  # {'a', 'b', 'c'}\n\n# Nested dict comprehension\nmatrix = {i: {j: i*j for j in range(1, 4)} for i in range(1, 4)}\nprint(matrix)\n# {1: {1: 1, 2: 2, 3: 3}, 2: {1: 2, 2: 4, 3: 6}, 3: {1: 3, 2: 6, 3: 9}}",
+          "code_language": "python",
+          "key_points": [
+            "Dict: {key: value for item in iterable if condition}",
+            "Set: {expression for item in iterable if condition}",
+            "Dict comprehension with zip() creates dict from two lists",
+            "Set comprehension automatically deduplicates",
+            "Difference from dict: no colon = set, with colon = dict"
+          ],
+          "gotchas": [
+            "{} creates an empty dict, not set -- use set() for empty set",
+            "Dict with duplicate keys: last value wins",
+            "Set comprehension cannot have duplicates (they are auto-removed)",
+            "Inverting a dict loses data if values are not unique"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dict: `{k: v for item in iter}`. Set: `{expr for item in iter}`. Dict uses colon, set does not. Both support filtering with `if`.",
+          "pseudo_code": "",
+          "actual_code": "squares = {x: x**2 for x in range(5)}\nprint(squares)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}\n\nunique = {len(w) for w in [\"hi\", \"hello\", \"hey\"]}\nprint(unique)  # {2, 3, 5}",
+          "code_language": "python",
+          "key_points": [
+            "Dict has colon, set does not",
+            "Both support if filter"
+          ],
+          "gotchas": [
+            "{} is empty dict, not empty set"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do nested comprehensions work?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["nested-comprehension", "flatten", "matrix"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Nested comprehensions have multiple `for` clauses. The order reads **left to right**, matching the equivalent nested loop.\n\n```python\n[expr for x in iter1 for y in iter2]\n```\nIs equivalent to:\n```python\nresult = []\nfor x in iter1:\n    for y in iter2:\n        result.append(expr)\n```\n\n**Common patterns:**\n1. **Flatten:** `[x for row in matrix for x in row]`\n2. **Cartesian product:** `[(x, y) for x in a for y in b]`\n3. **Matrix creation:** `[[0 for _ in range(cols)] for _ in range(rows)]`\n\n**Important:** For creating a matrix (list of lists), use a **nested comprehension** (comprehension inside comprehension), not a nested for in one comprehension.",
+          "pseudo_code": "Flatten: [x for row in matrix for x in row]\n  outer: for row in matrix\n  inner: for x in row\n\nCartesian: [(x,y) for x in a for y in b]\n  All pairs of (x, y)\n\nMatrix: [[0]*cols for _ in range(rows)]\n  Creates independent rows",
+          "actual_code": "# Flatten a matrix\nmatrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\nflat = [x for row in matrix for x in row]\nprint(flat)  # [1, 2, 3, 4, 5, 6, 7, 8, 9]\n\n# Equivalent loop\nflat = []\nfor row in matrix:\n    for x in row:\n        flat.append(x)\n\n# Cartesian product\ncolors = [\"red\", \"blue\"]\nsizes = [\"S\", \"M\", \"L\"]\ncombinations = [(c, s) for c in colors for s in sizes]\nprint(combinations)\n# [('red', 'S'), ('red', 'M'), ('red', 'L'), ('blue', 'S'), ('blue', 'M'), ('blue', 'L')]\n\n# Flatten with filter\nmatrix = [[1, -2, 3], [-4, 5, -6], [7, -8, 9]]\npositive_flat = [x for row in matrix for x in row if x > 0]\nprint(positive_flat)  # [1, 3, 5, 7, 9]\n\n# Create matrix (comprehension inside comprehension)\nrows, cols = 3, 4\nmatrix = [[0 for _ in range(cols)] for _ in range(rows)]\nprint(matrix)  # [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]\n\n# Each row is independent\nmatrix[0][0] = 99\nprint(matrix)  # [[99, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]] -- correct\n\n# WRONG way to create matrix\nmatrix_bad = [[0] * cols] * rows  # all rows are the SAME list!\nmatrix_bad[0][0] = 99\nprint(matrix_bad)  # [[99, 0, 0, 0], [99, 0, 0, 0], [99, 0, 0, 0]] -- BUG!\n\n# Transpose a matrix\nmatrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\ntransposed = [[row[i] for row in matrix] for i in range(len(matrix[0]))]\nprint(transposed)  # [[1, 4, 7], [2, 5, 8], [3, 6, 9]]\n# Or simpler: list(zip(*matrix))\n\n# Nested with condition on outer\npairs = [(x, y) for x in range(5) if x % 2 == 0 for y in range(5) if y > x]\nprint(pairs)  # [(0, 1), (0, 2), (0, 3), (0, 4), (2, 3), (2, 4), (4,)... no y > 4]",
+          "code_language": "python",
+          "key_points": [
+            "Multiple for clauses read left to right (outer to inner)",
+            "Flatten: [x for row in matrix for x in row]",
+            "Matrix creation: [[0]*cols for _ in range(rows)]",
+            "NEVER use [[0]*cols]*rows -- all rows are the same object",
+            "Transpose: [[row[i] for row in matrix] for i in range(cols)]"
+          ],
+          "gotchas": [
+            "[[0]*n]*m creates m references to the SAME list",
+            "Order reads left-to-right: first for is outer, second for is inner",
+            "Deeply nested comprehensions are hard to read -- use loops instead",
+            "Filter (if) applies to the for clause immediately before it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Multiple `for` clauses read left to right (outer first). Flatten: `[x for row in matrix for x in row]`. Matrix: `[[0]*cols for _ in range(rows)]`.",
+          "pseudo_code": "",
+          "actual_code": "matrix = [[1,2],[3,4],[5,6]]\nflat = [x for row in matrix for x in row]  # [1,2,3,4,5,6]\n\ngrid = [[0]*3 for _ in range(3)]  # 3x3 matrix of zeros",
+          "code_language": "python",
+          "key_points": [
+            "Left to right = outer to inner",
+            "Use comprehension inside comprehension for matrix"
+          ],
+          "gotchas": [
+            "[[0]*n]*m shares all rows -- use comprehension instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are generator expressions and how do they differ from list comprehensions?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["generator-expression", "lazy", "memory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **generator expression** has the same syntax as a list comprehension but uses **parentheses** instead of brackets:\n\n```python\n(expression for item in iterable if condition)\n```\n\n**Key differences from list comprehension:**\n| Feature | List Comp `[...]` | Gen Expr `(...)` |\n|---------|-------------------|------------------|\n| Returns | list | generator (iterator) |\n| Memory | All at once | One at a time (lazy) |\n| Reusable | Yes | No (one-shot) |\n| Speed | Slightly faster for small data | Better for large data |\n\n**When to use generator expressions:**\n- Large datasets that do not need to be in memory\n- When you only need to iterate once\n- As arguments to functions like `sum()`, `max()`, `any()`, `all()`\n- Pipeline processing",
+          "pseudo_code": "List comp: [x**2 for x in range(n)]  -> entire list in memory\nGen expr:  (x**2 for x in range(n))  -> one value at a time\n\nsum([x**2 for x in range(n)])  # creates list, then sums\nsum(x**2 for x in range(n))   # sums lazily, no list created",
+          "actual_code": "# List comprehension -- creates list\nlst = [x**2 for x in range(5)]\nprint(lst)        # [0, 1, 4, 9, 16]\nprint(type(lst))  # <class 'list'>\n\n# Generator expression -- creates generator\ngen = (x**2 for x in range(5))\nprint(gen)        # <generator object ...>\nprint(type(gen))  # <class 'generator'>\n\n# Consume the generator\nprint(list(gen))  # [0, 1, 4, 9, 16]\nprint(list(gen))  # [] -- exhausted!\n\n# Memory comparison\nimport sys\n\nlst = [x**2 for x in range(1000000)]\ngen = (x**2 for x in range(1000000))\n\nprint(f\"List: {sys.getsizeof(lst):,} bytes\")  # ~8 MB\nprint(f\"Generator: {sys.getsizeof(gen)} bytes\")  # ~200 bytes\n\n# Use with aggregate functions (no extra brackets needed)\nnumbers = range(1, 101)\n\ntotal = sum(x**2 for x in numbers)    # no intermediate list\nprint(total)  # 338350\n\nhas_even = any(x % 2 == 0 for x in numbers)\nprint(has_even)  # True (short-circuits at first True)\n\nall_positive = all(x > 0 for x in numbers)\nprint(all_positive)  # True\n\nmax_square = max(x**2 for x in range(10))\nprint(max_square)  # 81\n\n# Chaining generators (pipeline)\ndef read_lines():\n    return [\"  Hello  \", \"  \", \"World  \", \"\", \"  Python \"]\n\nlines = read_lines()\ncleaned = (line.strip() for line in lines)\nnon_empty = (line for line in cleaned if line)\nupper = (line.upper() for line in non_empty)\n\nresult = list(upper)\nprint(result)  # ['HELLO', 'WORLD', 'PYTHON']\n\n# No intermediate lists were created!\n\n# Generator expression as function argument\n# When gen expr is the sole argument, extra parens not needed:\nprint(sum(x for x in range(5)))       # 10 (no extra parens)\nprint(sorted(x**2 for x in [3,1,2]))  # [1, 4, 9]\n\n# With multiple arguments, need parens:\nresult = dict((x, x**2) for x in range(5))\nprint(result)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}",
+          "code_language": "python",
+          "key_points": [
+            "Parentheses instead of brackets: (expr for x in iter)",
+            "Lazy evaluation: one value at a time, minimal memory",
+            "One-shot: cannot iterate twice",
+            "Perfect for sum(), any(), all(), max(), min()",
+            "No extra parens needed when sole function argument"
+          ],
+          "gotchas": [
+            "Generators are one-shot -- cannot iterate twice",
+            "Cannot index or slice a generator (no random access)",
+            "len() does not work on generators",
+            "Generator expressions create the generator immediately but execute lazily"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Generator expression: `(expr for x in iter)`. Lazy (one value at a time), minimal memory, one-shot. Use with `sum()`, `any()`, `all()` for efficiency.",
+          "pseudo_code": "",
+          "actual_code": "# List: all in memory\nlst = [x**2 for x in range(1000000)]  # ~8 MB\n\n# Generator: lazy, ~200 bytes\ntotal = sum(x**2 for x in range(1000000))  # no list created\nprint(total)",
+          "code_language": "python",
+          "key_points": [
+            "Parentheses for lazy evaluation",
+            "Perfect for aggregate functions"
+          ],
+          "gotchas": [
+            "One-shot: cannot iterate twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are generator functions and how does yield work?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["generator-function", "yield", "iterator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **generator function** contains one or more `yield` statements. When called, it returns a **generator object** (an iterator) without executing the body.\n\nEach `yield`:\n1. Produces a value to the caller\n2. Pauses the function, saving its state\n3. Resumes from where it left off on the next `next()` call\n\nWhen the function returns (or falls off the end), `StopIteration` is raised.\n\n**Generator functions are ideal for:**\n- Processing large datasets without loading into memory\n- Infinite sequences\n- Pipeline processing\n- Coroutines (with `send()`)",
+          "pseudo_code": "def my_generator():\n    yield 1   # produce 1, pause\n    yield 2   # resume, produce 2, pause\n    yield 3   # resume, produce 3, pause\n    # falls off end -> StopIteration\n\ngen = my_generator()  # creates generator, does NOT execute body\nnext(gen)  # 1 (executes to first yield)\nnext(gen)  # 2 (resumes, executes to second yield)\nnext(gen)  # 3\nnext(gen)  # StopIteration",
+          "actual_code": "# Basic generator function\ndef count_up_to(n):\n    i = 1\n    while i <= n:\n        yield i\n        i += 1\n\n# Calling returns a generator (does NOT run the body)\ngen = count_up_to(5)\nprint(type(gen))   # <class 'generator'>\n\n# Consume with next()\nprint(next(gen))   # 1\nprint(next(gen))   # 2\n\n# Consume remaining with for loop\nfor num in gen:\n    print(num, end=\" \")\nprint()  # 3 4 5\n\n# Fibonacci generator (infinite)\ndef fibonacci():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\nfib = fibonacci()\nfirst_10 = [next(fib) for _ in range(10)]\nprint(first_10)  # [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]\n\n# File reader (memory efficient)\ndef read_large_file(filepath):\n    with open(filepath, 'r') as f:\n        for line in f:\n            yield line.strip()\n\n# Each line is processed one at a time\n# No matter how large the file\n\n# Generator with return value\ndef bounded_counter(limit):\n    count = 0\n    while count < limit:\n        yield count\n        count += 1\n    return count  # return value available via StopIteration.value\n\ngen = bounded_counter(3)\nprint(next(gen))  # 0\nprint(next(gen))  # 1\nprint(next(gen))  # 2\ntry:\n    next(gen)\nexcept StopIteration as e:\n    print(f\"Generator done, returned: {e.value}\")  # 3\n\n# State preservation demo\ndef stateful_generator():\n    print(\"Starting\")\n    yield 1\n    print(\"After first yield\")\n    yield 2\n    print(\"After second yield\")\n    yield 3\n    print(\"Ending\")\n\ngen = stateful_generator()\nprint(next(gen))  # prints \"Starting\", returns 1\nprint(\"--- between calls ---\")\nprint(next(gen))  # prints \"After first yield\", returns 2\n\n# Generator for data pipeline\ndef integers():\n    i = 0\n    while True:\n        yield i\n        i += 1\n\ndef squares(nums):\n    for n in nums:\n        yield n ** 2\n\ndef take(n, iterable):\n    for i, item in enumerate(iterable):\n        if i >= n:\n            break\n        yield item\n\npipeline = take(5, squares(integers()))\nprint(list(pipeline))  # [0, 1, 4, 9, 16]",
+          "code_language": "python",
+          "key_points": [
+            "yield pauses function and produces a value",
+            "Calling a generator function returns a generator object",
+            "State is preserved between yields",
+            "StopIteration raised when generator is exhausted",
+            "Perfect for large datasets, infinite sequences, and pipelines"
+          ],
+          "gotchas": [
+            "Calling gen_func() does NOT execute the body -- it returns a generator",
+            "Generators are one-shot: exhausted after one pass",
+            "return value is accessible only via StopIteration.value",
+            "Generators cannot be indexed or rewound"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Generator function uses `yield`. Calling it returns a generator (does not execute). Each `next()` runs to the next yield. State is preserved. StopIteration when done.",
+          "pseudo_code": "",
+          "actual_code": "def count(n):\n    for i in range(n):\n        yield i\n\ngen = count(3)\nprint(next(gen))   # 0\nprint(next(gen))   # 1\nprint(list(gen))   # [2] (remaining)",
+          "code_language": "python",
+          "key_points": [
+            "yield pauses and produces values",
+            "State preserved between calls"
+          ],
+          "gotchas": [
+            "Calling the function returns a generator, not a value"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does send() work with generators?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["send", "generator", "coroutine"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`generator.send(value)` resumes the generator and sends a value INTO it. The sent value becomes the result of the `yield` expression inside the generator.\n\n**Flow:**\n1. `yield` produces a value OUT\n2. `send()` pushes a value IN (becomes the yield expression result)\n3. The generator continues until the next `yield`\n\n**Rules:**\n- Must call `next(gen)` or `gen.send(None)` first to \"prime\" the generator (advance to first yield)\n- `send(value)` both sends a value and receives the next yielded value\n- `next(gen)` is equivalent to `gen.send(None)`\n\n**Use cases:**\n- Coroutine-style programming\n- Running averages\n- State machines\n- Pipeline processing with feedback",
+          "pseudo_code": "def gen():\n    received = yield produced  # yield OUT, receive IN\n    ...\n\ng = gen()\nnext(g)         # prime: run to first yield, get first produced value\ng.send(value)   # send value IN, get next produced value OUT",
+          "actual_code": "# Basic send example\ndef echo():\n    while True:\n        received = yield  # yield None, receive sent value\n        print(f\"Received: {received}\")\n\ngen = echo()\nnext(gen)           # prime the generator (advance to first yield)\ngen.send(\"hello\")   # Received: hello\ngen.send(\"world\")   # Received: world\n\n# Running average\ndef running_average():\n    total = 0\n    count = 0\n    average = None\n    while True:\n        value = yield average  # yield current avg, receive new value\n        total += value\n        count += 1\n        average = total / count\n\navg = running_average()\nnext(avg)                # prime: returns None\nprint(avg.send(10))      # 10.0\nprint(avg.send(20))      # 15.0\nprint(avg.send(30))      # 20.0\nprint(avg.send(40))      # 25.0\n\n# Accumulator\ndef accumulator(initial=0):\n    total = initial\n    while True:\n        value = yield total\n        if value is None:\n            break\n        total += value\n\nacc = accumulator(100)\nnext(acc)              # prime: returns 100\nprint(acc.send(10))    # 110\nprint(acc.send(20))    # 130\nprint(acc.send(50))    # 180\n\n# Generator with both send and regular next\ndef counter():\n    count = 0\n    while True:\n        reset = yield count\n        if reset:\n            count = 0\n        else:\n            count += 1\n\nc = counter()\nprint(next(c))        # 0\nprint(next(c))        # 1\nprint(next(c))        # 2\nprint(c.send(True))   # 0 (reset!)\nprint(next(c))        # 1\n\n# close() and throw()\ndef gen_with_cleanup():\n    try:\n        while True:\n            value = yield\n            print(f\"Processing: {value}\")\n    except GeneratorExit:\n        print(\"Generator closed, cleaning up\")\n\ng = gen_with_cleanup()\nnext(g)\ng.send(\"data1\")  # Processing: data1\ng.close()        # Generator closed, cleaning up",
+          "code_language": "python",
+          "key_points": [
+            "send(value) pushes a value into the generator via yield",
+            "Must prime generator with next() or send(None) first",
+            "yield is bidirectional: produces OUT and receives IN",
+            "next(gen) is equivalent to gen.send(None)",
+            "close() and throw() control generator lifecycle"
+          ],
+          "gotchas": [
+            "TypeError if you send() before priming with next()",
+            "send(None) is equivalent to next() -- both advance the generator",
+            "The first next() does not receive the sent value (it primes to the first yield)",
+            "Generators with send() are sometimes called 'coroutines' (legacy usage)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`gen.send(value)` sends a value INTO the generator. The sent value becomes the result of the `yield` expression. Must prime with `next(gen)` first.",
+          "pseudo_code": "",
+          "actual_code": "def running_avg():\n    total = count = 0\n    avg = None\n    while True:\n        val = yield avg\n        total += val\n        count += 1\n        avg = total / count\n\na = running_avg()\nnext(a)            # prime\nprint(a.send(10))  # 10.0\nprint(a.send(20))  # 15.0",
+          "code_language": "python",
+          "key_points": [
+            "send() pushes value in via yield",
+            "Must prime first with next()"
+          ],
+          "gotchas": [
+            "TypeError if you send before priming"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is StopIteration and how does it relate to generators?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["StopIteration", "iterator-protocol", "generator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`StopIteration` is the exception that signals an iterator is exhausted. It is the core mechanism of Python's **iterator protocol**.\n\n**Iterator protocol:**\n1. `iter(obj)` returns an iterator (object with `__next__` method)\n2. `next(iterator)` returns the next value or raises `StopIteration`\n3. `for` loops automatically catch `StopIteration`\n\n**In generators:**\n- When a generator function returns (explicitly or by falling off the end), `StopIteration` is raised\n- The return value (if any) is stored in `StopIteration.value`\n- `for` loops catch `StopIteration` transparently\n\n**You rarely need to handle `StopIteration` manually** -- `for` loops handle it.",
+          "pseudo_code": "Iterator protocol:\n  iterator = iter(iterable)\n  while True:\n      try:\n          value = next(iterator)\n      except StopIteration:\n          break\n\nThis is exactly what a for loop does:\n  for value in iterable:\n      ...",
+          "actual_code": "# Manual iteration shows StopIteration\nlst = [1, 2, 3]\nit = iter(lst)\n\nprint(next(it))  # 1\nprint(next(it))  # 2\nprint(next(it))  # 3\n\ntry:\n    next(it)\nexcept StopIteration:\n    print(\"Iterator exhausted\")\n\n# for loop catches StopIteration automatically\nfor x in [1, 2, 3]:\n    print(x)\n# No StopIteration visible\n\n# Generator StopIteration\ndef simple_gen():\n    yield 1\n    yield 2\n    # function ends -> StopIteration\n\ngen = simple_gen()\nprint(next(gen))  # 1\nprint(next(gen))  # 2\ntry:\n    next(gen)     # StopIteration\nexcept StopIteration:\n    print(\"Generator done\")\n\n# Generator with return value\ndef gen_with_return():\n    yield 1\n    yield 2\n    return \"final result\"\n\ngen = gen_with_return()\nnext(gen)  # 1\nnext(gen)  # 2\ntry:\n    next(gen)\nexcept StopIteration as e:\n    print(f\"Return value: {e.value}\")  # 'final result'\n\n# next() with default value\ngen = simple_gen()\nprint(next(gen, \"default\"))  # 1\nprint(next(gen, \"default\"))  # 2\nprint(next(gen, \"default\"))  # 'default' (no StopIteration)\n\n# Custom iterator class\nclass CountDown:\n    def __init__(self, start):\n        self.current = start\n    \n    def __iter__(self):\n        return self\n    \n    def __next__(self):\n        if self.current <= 0:\n            raise StopIteration\n        self.current -= 1\n        return self.current + 1\n\nfor num in CountDown(3):\n    print(num)  # 3, 2, 1\n\n# StopIteration in generator delegation (yield from)\ndef inner():\n    yield 1\n    yield 2\n    return \"inner done\"\n\ndef outer():\n    result = yield from inner()  # catches StopIteration, gets return value\n    print(f\"Inner returned: {result}\")\n    yield 3\n\nfor val in outer():\n    print(val)\n# 1, 2, Inner returned: inner done, 3",
+          "code_language": "python",
+          "key_points": [
+            "StopIteration signals that an iterator is exhausted",
+            "for loops catch StopIteration automatically",
+            "Generator return value is stored in StopIteration.value",
+            "next(iter, default) avoids StopIteration by returning default",
+            "yield from automatically handles StopIteration delegation"
+          ],
+          "gotchas": [
+            "Do not catch StopIteration inside a generator (Python 3.7+: RuntimeError)",
+            "next() without default raises StopIteration on exhaustion",
+            "StopIteration inside a generator function is converted to RuntimeError (PEP 479)",
+            "Generators cannot be \"rewound\" -- create a new one to restart"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`StopIteration` signals iterator exhaustion. `for` loops catch it automatically. `next(iter, default)` avoids the exception. Generator return values go in `StopIteration.value`.",
+          "pseudo_code": "",
+          "actual_code": "gen = (x for x in [1, 2])\nprint(next(gen))              # 1\nprint(next(gen))              # 2\nprint(next(gen, \"done\"))      # 'done' (no exception)",
+          "code_language": "python",
+          "key_points": [
+            "Signals iterator exhaustion",
+            "for loops handle it automatically"
+          ],
+          "gotchas": [
+            "Do not catch StopIteration inside a generator (RuntimeError in 3.7+)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the benefits of lazy evaluation with generators?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["lazy-evaluation", "memory", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Lazy evaluation** means values are computed only when needed, not all at once. Generators are Python's primary mechanism for lazy evaluation.\n\n**Benefits:**\n1. **Memory efficiency:** Only one value in memory at a time\n2. **Performance:** Avoid computing unused values (short-circuit)\n3. **Infinite sequences:** Can represent unbounded data\n4. **Pipeline composability:** Chain operations without intermediate lists\n5. **I/O efficiency:** Process files line by line, not all at once\n\n**Eager vs lazy:**\n- `list(range(10**9))` -- tries to allocate ~8 GB of memory\n- `range(10**9)` -- uses ~50 bytes (lazy)\n- `[x**2 for x in range(10**9)]` -- ~8 GB (eager list)\n- `(x**2 for x in range(10**9))` -- ~200 bytes (lazy generator)",
+          "pseudo_code": "Eager: compute ALL values, store ALL in memory\n  [f(x) for x in big_data]  -> entire list\n\nLazy: compute ONE value at a time\n  (f(x) for x in big_data)  -> one at a time\n\nBenefits:\n  1. Memory: O(1) instead of O(n)\n  2. Speed: stop early if you find what you need\n  3. Infinite: can represent unbounded sequences\n  4. Pipeline: chain without intermediate storage",
+          "actual_code": "import sys\n\n# Memory comparison\neager = [x**2 for x in range(1_000_000)]\nlazy = (x**2 for x in range(1_000_000))\n\nprint(f\"List: {sys.getsizeof(eager):>10,} bytes\")  # ~8 MB\nprint(f\"Generator: {sys.getsizeof(lazy):>10,} bytes\")  # ~200 bytes\n\n# Short-circuit: stop as soon as we find what we need\ndef find_first_over_1000(data):\n    return next(x for x in data if x > 1000)\n\nimport random\nbig_data = (random.randint(0, 2000) for _ in range(10_000_000))\n# Stops as soon as it finds one > 1000 -- does not generate all 10M\nresult = find_first_over_1000(big_data)\nprint(f\"Found: {result}\")\n\n# Infinite sequences\ndef naturals():\n    n = 0\n    while True:\n        yield n\n        n += 1\n\ndef take(n, iterable):\n    for i, item in enumerate(iterable):\n        if i >= n:\n            break\n        yield item\n\nprint(list(take(5, naturals())))  # [0, 1, 2, 3, 4]\n\n# Pipeline without intermediate lists\ndef read_data():\n    \"\"\"Simulate reading from a large file.\"\"\"\n    for i in range(1000000):\n        yield f\"line {i}: data\"\n\ndef parse(lines):\n    for line in lines:\n        yield line.split(\": \")[1]\n\ndef filter_relevant(items):\n    for item in items:\n        if \"data\" in item:\n            yield item\n\ndef transform(items):\n    for item in items:\n        yield item.upper()\n\n# Each step processes one item at a time\npipeline = transform(filter_relevant(parse(read_data())))\nfirst_5 = list(take(5, pipeline))\nprint(first_5)  # ['DATA', 'DATA', 'DATA', 'DATA', 'DATA']\n# Only 5 items were ever processed through the entire pipeline\n\n# Practical: processing a large CSV without loading it all\ndef process_csv(filepath):\n    with open(filepath) as f:\n        header = next(f).strip().split(\",\")\n        for line in f:\n            values = line.strip().split(\",\")\n            yield dict(zip(header, values))\n\n# Each row is processed independently -- constant memory\n# for row in process_csv(\"huge_file.csv\"):\n#     process(row)",
+          "code_language": "python",
+          "key_points": [
+            "Generators use O(1) memory regardless of data size",
+            "Short-circuit evaluation: stop early without processing everything",
+            "Infinite sequences are possible with generators",
+            "Pipelines process one item at a time through all stages",
+            "Essential for processing large files and data streams"
+          ],
+          "gotchas": [
+            "Generators are one-shot -- cannot iterate twice",
+            "Debugging generators is harder (no random access or inspection)",
+            "len() and indexing do not work on generators",
+            "If you need to iterate multiple times, use list() or itertools.tee()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Generators provide lazy evaluation: compute one value at a time. Benefits: O(1) memory, short-circuit, infinite sequences, composable pipelines. Essential for large data.",
+          "pseudo_code": "",
+          "actual_code": "import sys\neager = [x**2 for x in range(1000000)]  # ~8 MB\nlazy = (x**2 for x in range(1000000))   # ~200 bytes\n\nprint(sys.getsizeof(eager))  # big\nprint(sys.getsizeof(lazy))   # tiny",
+          "code_language": "python",
+          "key_points": [
+            "O(1) memory, short-circuit, infinite sequences",
+            "Essential for large data processing"
+          ],
+          "gotchas": [
+            "One-shot: cannot iterate twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does 'yield from' work and when should you use it?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["yield-from", "delegation", "subgenerator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`yield from iterable` delegates to a sub-generator (or any iterable), yielding each of its values. It was introduced in Python 3.3 (PEP 380).\n\n**Without yield from:**\n```python\nfor item in iterable:\n    yield item\n```\n\n**With yield from:**\n```python\nyield from iterable\n```\n\n**Key benefits:**\n1. Cleaner syntax for delegating to sub-generators\n2. Properly forwards `send()`, `throw()`, and `close()` to sub-generator\n3. Captures the sub-generator's return value\n4. Enables recursive generators\n\n**`yield from` vs `for/yield`:**\nFor simple delegation, they are equivalent. But `yield from` properly handles the full generator protocol (send, throw, close).",
+          "pseudo_code": "# Without yield from\ndef outer():\n    for item in inner():\n        yield item\n\n# With yield from\ndef outer():\n    yield from inner()\n\n# Captures return value\ndef outer():\n    result = yield from inner()\n    # result = return value of inner generator",
+          "actual_code": "# Basic yield from\ndef flatten(nested):\n    for item in nested:\n        if isinstance(item, list):\n            yield from flatten(item)  # recursive delegation\n        else:\n            yield item\n\nprint(list(flatten([1, [2, [3, 4]], 5, [6]])))  # [1, 2, 3, 4, 5, 6]\n\n# yield from any iterable\ndef chain(*iterables):\n    for iterable in iterables:\n        yield from iterable\n\nresult = list(chain([1, 2], [3, 4], [5, 6]))\nprint(result)  # [1, 2, 3, 4, 5, 6]\n\n# yield from with string\ndef letters():\n    yield from \"hello\"\n\nprint(list(letters()))  # ['h', 'e', 'l', 'l', 'o']\n\n# Capturing return value\ndef sub_generator():\n    yield 1\n    yield 2\n    return \"done\"  # return value captured by yield from\n\ndef main_generator():\n    result = yield from sub_generator()\n    print(f\"Sub-generator returned: {result}\")\n    yield 3\n\nfor val in main_generator():\n    print(val)\n# 1\n# 2\n# Sub-generator returned: done\n# 3\n\n# yield from forwards send()\ndef receiver():\n    total = 0\n    while True:\n        value = yield total\n        if value is None:\n            return total\n        total += value\n\ndef proxy():\n    result = yield from receiver()\n    print(f\"Total: {result}\")\n\np = proxy()\nnext(p)           # prime\nprint(p.send(10))  # 10\nprint(p.send(20))  # 30\ntry:\n    p.send(None)   # triggers return in receiver\nexcept StopIteration:\n    pass\n# Total: 30\n\n# Tree traversal with yield from\nclass TreeNode:\n    def __init__(self, value, children=None):\n        self.value = value\n        self.children = children or []\n\ndef traverse(node):\n    yield node.value\n    for child in node.children:\n        yield from traverse(child)  # recursive delegation\n\ntree = TreeNode(1, [\n    TreeNode(2, [TreeNode(4), TreeNode(5)]),\n    TreeNode(3, [TreeNode(6)])\n])\n\nprint(list(traverse(tree)))  # [1, 2, 4, 5, 3, 6]",
+          "code_language": "python",
+          "key_points": [
+            "yield from delegates to a sub-generator or iterable",
+            "Cleaner than explicit for/yield loop",
+            "Properly forwards send(), throw(), close()",
+            "Captures sub-generator's return value",
+            "Essential for recursive generators (tree traversal, flattening)"
+          ],
+          "gotchas": [
+            "yield from only works in generator functions (not in regular functions)",
+            "The return value of yield from is the sub-generator's return, not a yielded value",
+            "yield from with a non-generator iterable (list, string) works but cannot use send()",
+            "Python 3.3+ only"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`yield from iterable` delegates to a sub-generator, yielding each value. Cleaner than `for x in it: yield x`. Captures return values and forwards `send()`/`throw()`.",
+          "pseudo_code": "",
+          "actual_code": "def flatten(lst):\n    for item in lst:\n        if isinstance(item, list):\n            yield from flatten(item)\n        else:\n            yield item\n\nprint(list(flatten([1, [2, [3]]])))  # [1, 2, 3]",
+          "code_language": "python",
+          "key_points": [
+            "Delegates to sub-generator",
+            "Captures return value"
+          ],
+          "gotchas": [
+            "Python 3.3+ only"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most useful itertools functions?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["itertools", "standard-library", "iteration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `itertools` module provides fast, memory-efficient building blocks for iterator-based programming. All functions return iterators (lazy).\n\n**Infinite iterators:**\n- `count(start, step)` -- infinite counter\n- `cycle(iterable)` -- repeat iterable forever\n- `repeat(value, times)` -- repeat a value\n\n**Terminating iterators:**\n- `chain(*iterables)` -- concatenate iterables\n- `chain.from_iterable(iterable)` -- flatten one level\n- `islice(iterable, stop)` -- slice an iterator\n- `zip_longest(*iterables)` -- zip with padding\n- `groupby(iterable, key)` -- group consecutive equal elements\n- `takewhile(pred, iterable)` -- take while predicate is true\n- `dropwhile(pred, iterable)` -- drop while predicate is true\n- `filterfalse(pred, iterable)` -- opposite of filter\n- `starmap(func, iterable)` -- apply func(*args) for each tuple\n\n**Combinatoric iterators:**\n- `product(*iterables)` -- Cartesian product\n- `permutations(iterable, r)` -- all r-length permutations\n- `combinations(iterable, r)` -- all r-length combinations\n- `combinations_with_replacement(iterable, r)` -- with repetition",
+          "pseudo_code": "Infinite: count, cycle, repeat\nFlatten: chain, chain.from_iterable\nSlice: islice(iter, start, stop, step)\nGroup: groupby(sorted_data, key)\nCombinatorics: product, permutations, combinations",
+          "actual_code": "from itertools import (\n    count, cycle, repeat,\n    chain, islice, zip_longest, groupby,\n    takewhile, dropwhile,\n    product, permutations, combinations,\n    accumulate, starmap\n)\n\n# count -- infinite counter\nfor i in islice(count(10, 2), 5):\n    print(i, end=\" \")\nprint()  # 10 12 14 16 18\n\n# cycle -- repeat iterable\ncolors = cycle([\"red\", \"green\", \"blue\"])\nprint([next(colors) for _ in range(7)])\n# ['red', 'green', 'blue', 'red', 'green', 'blue', 'red']\n\n# chain -- concatenate iterables\nprint(list(chain([1, 2], [3, 4], [5, 6])))  # [1, 2, 3, 4, 5, 6]\n\n# chain.from_iterable -- flatten one level\nnested = [[1, 2], [3, 4], [5, 6]]\nprint(list(chain.from_iterable(nested)))  # [1, 2, 3, 4, 5, 6]\n\n# islice -- slice an iterator\nprint(list(islice(range(100), 5, 10)))  # [5, 6, 7, 8, 9]\n\n# zip_longest -- pad shorter iterables\nprint(list(zip_longest([1, 2], [3, 4, 5], fillvalue=0)))\n# [(1, 3), (2, 4), (0, 5)]\n\n# groupby -- group consecutive equal elements (MUST be sorted first)\ndata = sorted([\"apple\", \"banana\", \"avocado\", \"blueberry\", \"cherry\"], key=lambda x: x[0])\nfor key, group in groupby(data, key=lambda x: x[0]):\n    print(f\"{key}: {list(group)}\")\n# a: ['apple', 'avocado']\n# b: ['banana', 'blueberry']\n# c: ['cherry']\n\n# takewhile / dropwhile\nnums = [1, 3, 5, 8, 2, 4]\nprint(list(takewhile(lambda x: x < 6, nums)))  # [1, 3, 5]\nprint(list(dropwhile(lambda x: x < 6, nums)))  # [8, 2, 4]\n\n# accumulate -- running total\nprint(list(accumulate([1, 2, 3, 4, 5])))  # [1, 3, 6, 10, 15]\nimport operator\nprint(list(accumulate([1, 2, 3, 4, 5], operator.mul)))  # [1, 2, 6, 24, 120]\n\n# product -- Cartesian product\nprint(list(product(\"AB\", \"12\")))  # [('A','1'), ('A','2'), ('B','1'), ('B','2')]\n\n# permutations\nprint(list(permutations(\"ABC\", 2)))  # [('A','B'), ('A','C'), ('B','A'), ...]\n\n# combinations\nprint(list(combinations(\"ABCD\", 2)))  # [('A','B'), ('A','C'), ('A','D'), ...]\n\n# starmap -- unpack args\nprint(list(starmap(pow, [(2, 3), (3, 2), (10, 3)])))  # [8, 9, 1000]",
+          "code_language": "python",
+          "key_points": [
+            "All itertools functions return lazy iterators",
+            "chain/chain.from_iterable for concatenation and flattening",
+            "islice for slicing iterators",
+            "groupby requires pre-sorted data",
+            "product/permutations/combinations for combinatorics"
+          ],
+          "gotchas": [
+            "groupby only groups CONSECUTIVE equal elements -- sort first",
+            "All results are iterators -- wrap with list() to see values",
+            "Infinite iterators (count, cycle, repeat) need islice or break",
+            "permutations/combinations can produce HUGE output for large inputs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key itertools: `chain` (concat), `islice` (slice iterators), `groupby` (group sorted data), `product`/`permutations`/`combinations` (combinatorics). All lazy.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import chain, islice, groupby, product\n\nprint(list(chain([1,2], [3,4])))        # [1, 2, 3, 4]\nprint(list(islice(range(100), 3)))      # [0, 1, 2]\nprint(list(product(\"AB\", \"12\")))        # all combinations",
+          "code_language": "python",
+          "key_points": [
+            "All lazy (return iterators)",
+            "groupby needs sorted data"
+          ],
+          "gotchas": [
+            "groupby only groups CONSECUTIVE equal elements"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you compare memory usage of list vs generator?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["memory", "performance", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Lists store all elements in memory. Generators produce one element at a time. The memory difference is dramatic for large datasets.\n\n**Measuring memory:**\n- `sys.getsizeof()` -- size of the object itself (not recursive)\n- `tracemalloc` -- track memory allocations\n- `memory_profiler` (third-party) -- line-by-line memory\n\n**Approximate sizes:**\n- Empty list: ~56 bytes + 8 bytes per element pointer\n- List of 1M ints: ~8 MB\n- Generator: ~200 bytes (constant, regardless of data size)\n\n**Trade-offs:**\n| | List | Generator |\n|---|---|---|\n| Memory | O(n) | O(1) |\n| Random access | O(1) | Not supported |\n| Reusable | Yes | No (one-shot) |\n| len() | O(1) | Not supported |\n| Creation time | Upfront | Lazy |",
+          "pseudo_code": "List: O(n) memory, O(1) access, reusable\nGenerator: O(1) memory, sequential only, one-shot\n\nUse list when: need random access, reuse, len()\nUse generator when: large data, single pass, pipeline",
+          "actual_code": "import sys\nimport tracemalloc\n\n# sys.getsizeof comparison\nn = 1_000_000\n\nlst = [x**2 for x in range(n)]\ngen = (x**2 for x in range(n))\n\nprint(f\"List of {n:,} items: {sys.getsizeof(lst):>12,} bytes\")\nprint(f\"Generator:          {sys.getsizeof(gen):>12,} bytes\")\n# List: ~8,000,056 bytes\n# Generator: ~200 bytes\n\n# tracemalloc for accurate measurement\ndef measure_list(n):\n    tracemalloc.start()\n    data = [x**2 for x in range(n)]\n    current, peak = tracemalloc.get_traced_memory()\n    tracemalloc.stop()\n    total = sum(data)\n    return peak\n\ndef measure_generator(n):\n    tracemalloc.start()\n    data = (x**2 for x in range(n))\n    current, peak = tracemalloc.get_traced_memory()\n    total = sum(data)\n    _, peak_after = tracemalloc.get_traced_memory()\n    tracemalloc.stop()\n    return max(peak, peak_after)\n\nn = 1_000_000\nlist_mem = measure_list(n)\ngen_mem = measure_generator(n)\n\nprint(f\"\\nList peak memory:      {list_mem:>12,} bytes\")\nprint(f\"Generator peak memory: {gen_mem:>12,} bytes\")\nprint(f\"Ratio: {list_mem / max(gen_mem, 1):.0f}x\")\n\n# Time comparison\nimport timeit\n\n# For sum, generator is comparable speed\nlist_time = timeit.timeit(\n    lambda: sum([x**2 for x in range(100000)]),\n    number=10\n)\ngen_time = timeit.timeit(\n    lambda: sum(x**2 for x in range(100000)),\n    number=10\n)\n\nprint(f\"\\nSum with list:      {list_time:.4f}s\")\nprint(f\"Sum with generator: {gen_time:.4f}s\")\n\n# When to use each\ndef use_list():\n    data = [x for x in range(100)]  # need random access\n    print(data[50])                  # O(1) access\n    print(len(data))                 # O(1) length\n    for x in data: pass              # first pass\n    for x in data: pass              # second pass (reusable)\n\ndef use_generator():\n    data = (x for x in range(10**9))  # too big for memory\n    total = sum(data)                  # single pass, O(1) memory\n    # Cannot access data[50] or len(data)\n    # Cannot iterate again (exhausted)",
+          "code_language": "python",
+          "key_points": [
+            "List: O(n) memory, generator: O(1) memory",
+            "1M int list uses ~8 MB, generator uses ~200 bytes",
+            "Use sys.getsizeof() or tracemalloc to measure",
+            "Speed is comparable for single-pass operations",
+            "Choose based on: random access, reuse, and memory constraints"
+          ],
+          "gotchas": [
+            "sys.getsizeof() does not count referenced objects (shallow size only)",
+            "Generator speed advantage appears mainly with very large data",
+            "Creating a list from a generator with list() defeats the purpose",
+            "For small data, list is usually better (simpler, reusable)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "List uses O(n) memory (all at once). Generator uses O(1) memory (one at a time). 1M items: list ~8 MB vs generator ~200 bytes. Use generators for large data, lists for random access.",
+          "pseudo_code": "",
+          "actual_code": "import sys\nlst = [x for x in range(1000000)]\ngen = (x for x in range(1000000))\nprint(sys.getsizeof(lst))  # ~8,000,056\nprint(sys.getsizeof(gen))  # ~200",
+          "code_language": "python",
+          "key_points": [
+            "List O(n) memory, generator O(1)",
+            "Use generators for large data"
+          ],
+          "gotchas": [
+            "list(generator) defeats the memory benefit"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create generator pipelines?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["pipeline", "generator", "data-processing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **generator pipeline** chains multiple generators together, where each stage processes one item at a time. Data flows through the pipeline without creating intermediate lists.\n\nThis is similar to Unix pipes (`cat file | grep pattern | sort`) but in Python.\n\n**Structure:**\n```\nsource -> transform1 -> transform2 -> filter -> consumer\n```\n\nEach stage is a generator that takes an iterable and yields transformed items. The consumer (e.g., `for` loop, `list()`, `sum()`) pulls items through the entire pipeline.\n\n**Benefits:**\n- Constant memory regardless of data size\n- Each item processed through entire pipeline before next item starts\n- Can process infinite streams\n- Easy to add/remove/reorder stages",
+          "pseudo_code": "source = read_data()           # generator\nstage1 = transform(source)     # generator wrapping source\nstage2 = filter_data(stage1)   # generator wrapping stage1\nresult = consume(stage2)       # pulls data through all stages\n\nEach item flows: source -> stage1 -> stage2 -> consume\nNo intermediate lists created",
+          "actual_code": "# Log file processing pipeline\ndef read_lines(text):\n    \"\"\"Source: split text into lines.\"\"\"\n    for line in text.strip().split(\"\\n\"):\n        yield line\n\ndef strip_comments(lines):\n    \"\"\"Transform: remove comments.\"\"\"\n    for line in lines:\n        if not line.strip().startswith(\"#\"):\n            yield line\n\ndef strip_whitespace(lines):\n    \"\"\"Transform: strip leading/trailing whitespace.\"\"\"\n    for line in lines:\n        stripped = line.strip()\n        if stripped:  # skip empty lines\n            yield stripped\n\ndef to_uppercase(lines):\n    \"\"\"Transform: convert to uppercase.\"\"\"\n    for line in lines:\n        yield line.upper()\n\n# Build pipeline\nlog_text = \"\"\"\n# Config file\nhost = localhost\n# Database settings\nport = 5432\nuser = admin\n\npassword = secret\n\"\"\"\n\npipeline = to_uppercase(\n    strip_whitespace(\n        strip_comments(\n            read_lines(log_text)\n        )\n    )\n)\n\nfor line in pipeline:\n    print(line)\n# HOST = LOCALHOST\n# PORT = 5432\n# USER = ADMIN\n# PASSWORD = SECRET\n\n# Data processing pipeline\ndef generate_numbers(n):\n    for i in range(n):\n        yield i\n\ndef square(numbers):\n    for n in numbers:\n        yield n ** 2\n\ndef filter_even(numbers):\n    for n in numbers:\n        if n % 2 == 0:\n            yield n\n\ndef accumulate(numbers):\n    total = 0\n    for n in numbers:\n        total += n\n        yield total\n\n# Pipeline: generate -> square -> filter even -> accumulate\npipeline = accumulate(filter_even(square(generate_numbers(10))))\nprint(list(pipeline))  # [0, 4, 20, 56, 120]\n\n# More readable: assign each stage\nsource = generate_numbers(10)\nsquared = square(source)\nevens = filter_even(squared)\nrunning_total = accumulate(evens)\nprint(list(running_total))  # [0, 4, 20, 56, 120]\n\n# Generic pipeline builder\ndef pipe(data, *functions):\n    for func in functions:\n        data = func(data)\n    return data\n\nresult = pipe(\n    range(10),\n    square,\n    filter_even,\n    accumulate\n)\nprint(list(result))  # [0, 4, 20, 56, 120]\n\n# Real-world: CSV processing\ndef parse_csv_lines(lines):\n    for line in lines:\n        yield line.split(\",\")\n\ndef select_columns(rows, indices):\n    for row in rows:\n        yield [row[i] for i in indices]\n\ndef filter_rows(rows, col, value):\n    for row in rows:\n        if row[col] == value:\n            yield row\n\ncsv_data = [\n    \"Alice,30,NYC\",\n    \"Bob,25,LA\",\n    \"Charlie,35,NYC\",\n    \"Diana,28,LA\"\n]\n\npipeline = select_columns(\n    filter_rows(\n        parse_csv_lines(iter(csv_data)),\n        col=2, value=\"NYC\"\n    ),\n    indices=[0, 1]\n)\n\nfor row in pipeline:\n    print(row)\n# ['Alice', '30']\n# ['Charlie', '35']",
+          "code_language": "python",
+          "key_points": [
+            "Each stage is a generator that takes an iterable and yields results",
+            "Data flows one item at a time through all stages",
+            "No intermediate lists created -- constant memory",
+            "Stages can be easily added, removed, or reordered",
+            "Consumer (for loop, list()) pulls data through the pipeline"
+          ],
+          "gotchas": [
+            "Deeply nested function calls reduce readability -- assign stages to variables",
+            "Errors in later stages surface only when items reach them",
+            "Cannot reuse a pipeline (generators are one-shot)",
+            "Debugging is harder -- add a debug stage that prints and yields"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Chain generators: each takes an iterable, yields results. Data flows one item at a time. No intermediate lists. Consumer pulls through the entire chain.",
+          "pseudo_code": "",
+          "actual_code": "def double(nums):\n    for n in nums: yield n * 2\n\ndef evens(nums):\n    for n in nums:\n        if n % 2 == 0: yield n\n\npipeline = evens(double(range(10)))\nprint(list(pipeline))  # [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]",
+          "code_language": "python",
+          "key_points": [
+            "Each stage: generator taking iterable",
+            "One item at a time, no intermediate lists"
+          ],
+          "gotchas": [
+            "Generators are one-shot -- cannot reuse pipeline"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between a comprehension with if-filter and if-else expression?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["comprehension", "filter", "ternary"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are two different uses of `if` in comprehensions:\n\n**1. Filter (if at the END):**\n```python\n[expr for x in iterable if condition]\n```\nControls **which items** are included. Items where condition is falsy are skipped.\n\n**2. Ternary expression (if-else in the EXPRESSION):**\n```python\n[expr_if_true if condition else expr_if_false for x in iterable]\n```\nControls **what value** each item produces. ALL items are included.\n\n**You can combine both:**\n```python\n[expr_true if cond1 else expr_false for x in iterable if cond2]\n```\nFirst filter with `cond2`, then transform with ternary.",
+          "pseudo_code": "Filter (which items):\n  [x for x in data if x > 0]\n  -> only positive items\n\nTernary (what value):\n  [x if x > 0 else 0 for x in data]\n  -> ALL items, negatives become 0\n\nCombined:\n  [x**2 if x > 0 else 0 for x in data if x != 5]\n  -> skip 5, square positives, zero for negatives",
+          "actual_code": "data = [-3, -1, 0, 1, 2, 3, 4, 5]\n\n# FILTER: only include items where condition is True\n# Syntax: [expr for x in iterable if condition]\nresult = [x for x in data if x > 0]\nprint(f\"Filter (x > 0): {result}\")\n# [1, 2, 3, 4, 5] -- negatives and zero excluded\n\n# TERNARY: transform ALL items\n# Syntax: [expr_true if condition else expr_false for x in iterable]\nresult = [x if x > 0 else 0 for x in data]\nprint(f\"Ternary (x if x>0 else 0): {result}\")\n# [0, 0, 0, 1, 2, 3, 4, 5] -- ALL items present, negatives become 0\n\n# COMBINED: filter AND ternary\nresult = [x**2 if x > 0 else abs(x) for x in data if x != 0]\nprint(f\"Combined: {result}\")\n# [3, 1, 1, 4, 9, 16, 25] -- zero removed, positives squared, negatives -> abs\n\n# Common mistake: filter without else\n# [x if x > 0 for x in data]  # SyntaxError! if without else in expression position\n\n# Correct: if at end (filter)\nresult = [x for x in data if x > 0]  # OK\n\n# Correct: if-else in expression (ternary)\nresult = [x if x > 0 else 0 for x in data]  # OK\n\n# Multiple conditions in filter\nresult = [x for x in range(100) if x % 2 == 0 if x % 3 == 0]\nprint(f\"Divisible by 2 AND 3: {result[:10]}\")\n# [0, 6, 12, 18, 24, 30, 36, 42, 48, 54]\n# Multiple if clauses are AND conditions\n\n# Equivalent to:\nresult = [x for x in range(100) if x % 2 == 0 and x % 3 == 0]\n\n# Practical examples\nwords = [\"hello\", \"world\", \"\", \"python\", \"\", \"code\"]\n\n# Filter: only non-empty\nnon_empty = [w for w in words if w]\nprint(non_empty)  # ['hello', 'world', 'python', 'code']\n\n# Ternary: replace empty with placeholder\nfilled = [w if w else \"<empty>\" for w in words]\nprint(filled)  # ['hello', 'world', '<empty>', 'python', '<empty>', 'code']",
+          "code_language": "python",
+          "key_points": [
+            "Filter (if at end): controls which items are included",
+            "Ternary (if-else in expression): controls what value is produced",
+            "Filter can exclude items; ternary always includes all items",
+            "Can combine both: filter first, then ternary",
+            "Multiple if clauses in filter act as AND"
+          ],
+          "gotchas": [
+            "[x if condition for x in data] is a SyntaxError -- need else for ternary",
+            "if at end = filter (no else), if-else in expression = ternary",
+            "Position matters: if BEFORE 'for' needs else, if AFTER 'for' does not",
+            "Multiple if clauses are AND, not OR"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Filter** (`if` at end): selects which items. **Ternary** (`if-else` in expression): transforms all items. Filter can omit `else`; ternary requires `else`.",
+          "pseudo_code": "",
+          "actual_code": "data = [-2, -1, 0, 1, 2]\n\n# Filter: only positives\nprint([x for x in data if x > 0])          # [1, 2]\n\n# Ternary: transform all\nprint([x if x > 0 else 0 for x in data])   # [0, 0, 0, 1, 2]",
+          "code_language": "python",
+          "key_points": [
+            "if at end = filter, if-else in expr = ternary",
+            "Filter excludes, ternary transforms"
+          ],
+          "gotchas": [
+            "[x if cond for x in data] is SyntaxError -- needs else"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use a comprehension vs a generator vs a loop?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["best-practices", "when-to-use", "readability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Use a list comprehension when:**\n- You need the entire result as a list\n- The logic is simple (one transform, one filter)\n- The data fits in memory\n- You need to access results multiple times\n\n**Use a generator expression when:**\n- You only iterate once (single pass)\n- Data is large (memory matters)\n- Passing to functions like `sum()`, `any()`, `all()`, `max()`\n- Building pipelines\n\n**Use a for loop when:**\n- Logic is complex (multiple conditions, nested logic)\n- You need side effects (print, write to file, API calls)\n- The body requires statements (try/except, with)\n- Readability would suffer with a comprehension\n- You need `break` or `continue`\n\n**Rule of thumb:** If the comprehension is hard to read at a glance, use a loop.",
+          "pseudo_code": "Simple transform: [f(x) for x in data]  -> comprehension\nSimple filter: [x for x in data if g(x)]  -> comprehension\nAggregate: sum(x for x in data)  -> generator expression\nLarge data: (f(x) for x in big_data)  -> generator\nComplex logic: for loop\nSide effects: for loop\nNeed break/continue: for loop",
+          "actual_code": "# COMPREHENSION: simple transform\nnames = [\"alice\", \"bob\", \"charlie\"]\ntitled = [name.title() for name in names]\nprint(titled)  # ['Alice', 'Bob', 'Charlie']\n\n# COMPREHENSION: simple filter\nscores = [85, 92, 67, 95, 73, 88]\nhigh_scores = [s for s in scores if s >= 80]\nprint(high_scores)  # [85, 92, 95, 88]\n\n# GENERATOR: aggregate (no list needed)\ntotal = sum(s for s in scores if s >= 80)\nprint(total)  # 360\n\nany_failing = any(s < 70 for s in scores)\nprint(any_failing)  # True\n\n# GENERATOR: large data\nimport sys\nbig_gen = (x**2 for x in range(10_000_000))\nprint(sys.getsizeof(big_gen))  # ~200 bytes\n# sum(big_gen) processes without loading all into memory\n\n# FOR LOOP: complex logic\nresults = []\nfor s in scores:\n    if s >= 90:\n        results.append((s, \"A\"))\n    elif s >= 80:\n        results.append((s, \"B\"))\n    elif s >= 70:\n        results.append((s, \"C\"))\n    else:\n        results.append((s, \"F\"))\nprint(results)\n\n# FOR LOOP: side effects\nfor name in names:\n    print(f\"Processing {name}...\")  # side effect\n    # write_to_database(name)  # side effect\n\n# FOR LOOP: need break\ndef find_first_failing(scores):\n    for i, s in enumerate(scores):\n        if s < 70:\n            return i\n    return -1\n\nprint(find_first_failing(scores))  # 2\n\n# FOR LOOP: try/except\ndef safe_parse(data):\n    results = []\n    for item in data:\n        try:\n            results.append(int(item))\n        except ValueError:\n            results.append(None)\n    return results\n\nprint(safe_parse([\"1\", \"two\", \"3\"]))  # [1, None, 3]\n\n# TOO COMPLEX for comprehension (avoid this)\n# Bad: hard to read\nresult = [(s, \"A\" if s >= 90 else \"B\" if s >= 80 else \"C\" if s >= 70 else \"F\") for s in scores]\n\n# Good: use a loop or helper function\ndef grade(s):\n    if s >= 90: return \"A\"\n    if s >= 80: return \"B\"\n    if s >= 70: return \"C\"\n    return \"F\"\n\nresult = [(s, grade(s)) for s in scores]  # OK: helper keeps comprehension simple",
+          "code_language": "python",
+          "key_points": [
+            "Comprehension: simple transforms and filters",
+            "Generator: large data, single pass, aggregate functions",
+            "Loop: complex logic, side effects, break/continue, try/except",
+            "If comprehension is hard to read, use a loop",
+            "Extract complex logic into helper functions to keep comprehensions simple"
+          ],
+          "gotchas": [
+            "Nested comprehensions with ternaries become unreadable fast",
+            "Do not use comprehensions for side effects (they create a list you discard)",
+            "Generator expressions cannot use break/continue",
+            "List comprehension creates the full list even if you only need part of it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Comprehension**: simple transforms/filters, need the list. **Generator**: large data, single pass, aggregates. **Loop**: complex logic, side effects, break/continue. If hard to read, use a loop.",
+          "pseudo_code": "",
+          "actual_code": "# Comprehension: simple\nsquares = [x**2 for x in range(10)]\n\n# Generator: aggregate\ntotal = sum(x**2 for x in range(10000000))\n\n# Loop: complex\nfor x in data:\n    try:\n        process(x)\n    except Error:\n        handle(x)",
+          "code_language": "python",
+          "key_points": [
+            "Simple -> comprehension, large -> generator, complex -> loop",
+            "Readability is the deciding factor"
+          ],
+          "gotchas": [
+            "Do not use comprehensions for side effects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create an infinite generator and safely consume it?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["infinite", "generator", "itertools"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Infinite generators produce values forever. They are possible because generators are lazy -- they only compute the next value when asked.\n\n**Creating infinite generators:**\n- Custom generator with `while True`\n- `itertools.count(start, step)`\n- `itertools.cycle(iterable)`\n- `itertools.repeat(value)`\n\n**Safely consuming:**\n- `itertools.islice(gen, n)` -- take first n items\n- `itertools.takewhile(pred, gen)` -- take while condition is true\n- `for` with `break`\n- `next()` for individual items\n- Custom `take(n, iterable)` function\n\nNever call `list()` on an infinite generator -- it will consume all memory.",
+          "pseudo_code": "Create:\n  def naturals(): n=0; while True: yield n; n+=1\n  itertools.count(0)\n  itertools.cycle([1, 2, 3])\n\nConsume safely:\n  islice(gen, n)  -- take n items\n  takewhile(pred, gen)  -- take while true\n  next(gen)  -- one item\n  for x in gen: if done: break",
+          "actual_code": "from itertools import count, cycle, repeat, islice, takewhile\n\n# Custom infinite generator\ndef naturals(start=0):\n    n = start\n    while True:\n        yield n\n        n += 1\n\n# itertools infinite generators\n# count(10, 2) -> 10, 12, 14, 16, ...\n# cycle([1,2,3]) -> 1, 2, 3, 1, 2, 3, ...\n# repeat('x') -> 'x', 'x', 'x', ...\n# repeat('x', 3) -> 'x', 'x', 'x' (finite)\n\n# Safe consumption with islice\nprint(list(islice(naturals(), 5)))  # [0, 1, 2, 3, 4]\nprint(list(islice(count(10, 5), 5)))  # [10, 15, 20, 25, 30]\nprint(list(islice(cycle(\"abc\"), 7)))  # ['a', 'b', 'c', 'a', 'b', 'c', 'a']\n\n# Safe consumption with takewhile\ndef fibonacci():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\nfib_under_100 = list(takewhile(lambda x: x < 100, fibonacci()))\nprint(fib_under_100)  # [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]\n\n# Safe consumption with next()\ngen = naturals()\nprint(next(gen))  # 0\nprint(next(gen))  # 1\nprint(next(gen))  # 2\n\n# Safe consumption with break\nfor n in naturals():\n    if n > 5:\n        break\n    print(n, end=\" \")\nprint()  # 0 1 2 3 4 5\n\n# Custom take function\ndef take(n, iterable):\n    return list(islice(iterable, n))\n\nprint(take(5, fibonacci()))  # [0, 1, 1, 2, 3]\n\n# Practical: infinite ID generator\ndef id_generator(prefix=\"ID\"):\n    n = 1\n    while True:\n        yield f\"{prefix}-{n:06d}\"\n        n += 1\n\nids = id_generator(\"USR\")\nprint(next(ids))  # USR-000001\nprint(next(ids))  # USR-000002\nprint(next(ids))  # USR-000003\n\n# Practical: infinite retry with backoff\nimport time\n\ndef exponential_backoff(initial=1, factor=2, max_delay=60):\n    delay = initial\n    while True:\n        yield delay\n        delay = min(delay * factor, max_delay)\n\nbackoff = exponential_backoff()\nprint(take(8, exponential_backoff()))\n# [1, 2, 4, 8, 16, 32, 60, 60]\n\n# Combining infinite generators\ndef primes():\n    \"\"\"Sieve-based prime generator.\"\"\"\n    yield 2\n    composites = {}\n    n = 3\n    while True:\n        if n not in composites:\n            yield n\n            composites[n * n] = [n]\n        else:\n            for p in composites[n]:\n                composites.setdefault(n + p, []).append(p)\n            del composites[n]\n        n += 2\n\nprint(take(20, primes()))\n# [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71]",
+          "code_language": "python",
+          "key_points": [
+            "Infinite generators use while True with yield",
+            "itertools: count(), cycle(), repeat() for common patterns",
+            "islice(gen, n) safely takes first n items",
+            "takewhile(pred, gen) takes while condition holds",
+            "NEVER call list() on an infinite generator"
+          ],
+          "gotchas": [
+            "list(infinite_gen) will consume all memory and crash",
+            "len() does not work on generators (infinite or finite)",
+            "Generators are one-shot -- create a new one to restart",
+            "islice() creates a new iterator -- the original generator advances too"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Infinite generators use `while True` with `yield`. Consume safely with `islice(gen, n)`, `takewhile(pred, gen)`, or `break`. Never `list()` an infinite generator.",
+          "pseudo_code": "",
+          "actual_code": "from itertools import islice, count, takewhile\n\ndef fib():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\nprint(list(islice(fib(), 10)))  # first 10 fibonacci\nprint(list(takewhile(lambda x: x < 50, fib())))  # fib < 50",
+          "code_language": "python",
+          "key_points": [
+            "while True + yield for infinite generators",
+            "islice and takewhile for safe consumption"
+          ],
+          "gotchas": [
+            "Never list() an infinite generator"
+          ]
+        }
+      ]
+    }
+  ]
+}

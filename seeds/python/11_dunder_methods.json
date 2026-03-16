@@ -1,0 +1,617 @@
+{
+  "concept_slug": "dunder-methods",
+  "questions": [
+    {
+      "title": "What is the difference between `__repr__` and `__str__`, and when is each called?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["__repr__", "__str__", "string-representation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__repr__` and `__str__` both produce string representations, but they serve different audiences:\n\n**`__repr__`**: Developer-facing. Should be unambiguous and ideally return a string that could recreate the object (`eval(repr(obj)) == obj`). Called by `repr()`, the interactive interpreter, and when objects are displayed inside containers (lists, dicts).\n\n**`__str__`**: User-facing. Should be readable and informative. Called by `str()`, `print()`, and f-strings.\n\n**Fallback behavior**: If `__str__` is not defined, Python uses `__repr__` as the fallback. The reverse is NOT true -- missing `__repr__` falls back to the default `object.__repr__` (e.g., `<MyClass object at 0x...>`).\n\n**Priority rule**: Always implement `__repr__`. Only add `__str__` if you need a different user-facing representation.",
+          "pseudo_code": "1. repr(obj) -> obj.__repr__()\n2. str(obj), print(obj), f'{obj}' -> obj.__str__()\n3. If __str__ missing -> falls back to __repr__\n4. Containers (list, dict) always use __repr__ for elements\n5. Interactive console uses __repr__",
+          "actual_code": "from datetime import datetime\n\nclass Transaction:\n    def __init__(self, amount, currency, timestamp=None):\n        self.amount = amount\n        self.currency = currency\n        self.timestamp = timestamp or datetime.now()\n\n    def __repr__(self):\n        return (f\"Transaction({self.amount!r}, {self.currency!r}, \"\n                f\"timestamp={self.timestamp!r})\")\n\n    def __str__(self):\n        return f\"{self.currency} {self.amount:,.2f}\"\n\nt = Transaction(1234.5, \"USD\")\n\n# __repr__ -- for developers\nprint(repr(t))  # Transaction(1234.5, 'USD', timestamp=datetime.datetime(...))\n\n# __str__ -- for users\nprint(str(t))   # USD 1,234.50\nprint(t)        # USD 1,234.50 (print uses __str__)\nprint(f\"Payment: {t}\")  # Payment: USD 1,234.50 (f-string uses __str__)\nprint(f\"Debug: {t!r}\")  # Debug: Transaction(...) (f-string with !r uses __repr__)\n\n# Containers ALWAYS use __repr__\ntransactions = [Transaction(100, \"USD\"), Transaction(200, \"EUR\")]\nprint(transactions)  # [Transaction(100, 'USD', ...), Transaction(200, 'EUR', ...)]\n\n# Without __str__, __repr__ is used everywhere\nclass OnlyRepr:\n    def __repr__(self):\n        return \"OnlyRepr()\"\n\nobj = OnlyRepr()\nprint(str(obj))   # OnlyRepr() -- falls back to __repr__\nprint(repr(obj))  # OnlyRepr()\n\n# Use !r in __repr__ to quote strings properly\nclass User:\n    def __init__(self, name):\n        self.name = name\n    def __repr__(self):\n        return f\"User({self.name!r})\"  # !r adds quotes: User('Alice')\n\nprint(repr(User(\"Alice\")))  # User('Alice')",
+          "code_language": "python",
+          "key_points": [
+            "__repr__ for developers (unambiguous), __str__ for users (readable)",
+            "Containers use __repr__ for elements, not __str__",
+            "__str__ falls back to __repr__ if not defined",
+            "Use !r in f-strings to force __repr__"
+          ],
+          "gotchas": [
+            "print([obj]) uses __repr__, not __str__ -- surprising for beginners",
+            "If you only implement __str__, debugging output shows unhelpful <object at 0x...>",
+            "eval(repr(obj)) == obj is an ideal, not always achievable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__repr__` is developer-facing (debugging), `__str__` is user-facing (display). Containers use `__repr__`. If `__str__` is missing, `__repr__` is the fallback.",
+          "pseudo_code": "",
+          "actual_code": "class Money:\n    def __init__(self, amount):\n        self.amount = amount\n    def __repr__(self):\n        return f\"Money({self.amount!r})\"\n    def __str__(self):\n        return f\"${self.amount:.2f}\"\n\nm = Money(42.5)\nprint(repr(m))  # Money(42.5)\nprint(str(m))   # $42.50\nprint([m])      # [Money(42.5)]  -- container uses __repr__",
+          "code_language": "python",
+          "key_points": [
+            "__repr__ for debugging, __str__ for display",
+            "Always implement __repr__; __str__ is optional"
+          ],
+          "gotchas": [
+            "Containers always use __repr__ for their elements"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `__eq__` and `__hash__` work together, and what are the rules?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["__eq__", "__hash__", "equality", "hashable"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `__eq__` defines value equality (`==`) and `__hash__` returns an integer hash for use in sets and dict keys.\n\n**Critical rules:**\n1. If `a == b`, then `hash(a) == hash(b)` MUST be true\n2. If you define `__eq__`, Python sets `__hash__` to `None` (unhashable)\n3. You must explicitly define `__hash__` if you want hashability with custom `__eq__`\n4. Hash should be based on the same immutable fields used in `__eq__`\n5. Equal objects MUST have equal hashes; unequal objects MAY have equal hashes (collisions are OK)\n\nDefault behavior (no `__eq__` defined): equality is identity (`is`), hash is based on `id()`.\n\nReturn `NotImplemented` from `__eq__` when comparing with unsupported types -- this lets Python try the other operand's `__eq__`.",
+          "pseudo_code": "Rules:\n1. a == b implies hash(a) == hash(b)\n2. Define __eq__ -> Python sets __hash__ = None\n3. Must explicitly re-define __hash__ for sets/dict keys\n4. Hash from same fields as __eq__\n5. Use hash(tuple_of_fields) for consistent hashing",
+          "actual_code": "class Color:\n    def __init__(self, r, g, b):\n        self.r = r\n        self.g = g\n        self.b = b\n\n    def __eq__(self, other):\n        if not isinstance(other, Color):\n            return NotImplemented\n        return (self.r, self.g, self.b) == (other.r, other.g, other.b)\n\n    def __hash__(self):\n        return hash((self.r, self.g, self.b))\n\n    def __repr__(self):\n        return f\"Color({self.r}, {self.g}, {self.b})\"\n\n# Equality works\nc1 = Color(255, 0, 0)\nc2 = Color(255, 0, 0)\nc3 = Color(0, 255, 0)\n\nprint(c1 == c2)  # True\nprint(c1 == c3)  # False\nprint(c1 == \"red\")  # False (NotImplemented -> Python returns False)\n\n# Hashable -- works in sets and dicts\ncolors = {c1, c2, c3}  # c1 and c2 are deduplicated\nprint(len(colors))  # 2\n\ncolor_names = {Color(255, 0, 0): \"red\", Color(0, 255, 0): \"green\"}\nprint(color_names[Color(255, 0, 0)])  # \"red\" -- lookup works\n\n# What happens without __hash__\nclass NoHash:\n    def __eq__(self, other):\n        return True\n\ntry:\n    {NoHash()}  # TypeError: unhashable type\nexcept TypeError as e:\n    print(e)  # unhashable type: 'NoHash'\n\n# Mutable objects should generally not be hashable\nclass MutablePoint:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __eq__(self, other):\n        if not isinstance(other, MutablePoint):\n            return NotImplemented\n        return (self.x, self.y) == (other.x, other.y)\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\n# DANGER: mutating after adding to set breaks things\ns = set()\np = MutablePoint(1, 2)\ns.add(p)\nprint(p in s)  # True\np.x = 99       # mutate!\nprint(p in s)  # False! Hash changed, can't find it\n# The object is still in the set but unreachable!",
+          "code_language": "python",
+          "key_points": [
+            "Equal objects MUST have equal hashes",
+            "Defining __eq__ sets __hash__ to None -- must re-define",
+            "Use hash(tuple_of_fields) for consistent hashing",
+            "Return NotImplemented for unsupported comparison types"
+          ],
+          "gotchas": [
+            "Mutating an object after adding to a set makes it unreachable",
+            "Return NotImplemented (not NotImplementedError) from __eq__",
+            "Without __hash__, instances can't be in sets or dict keys",
+            "Hash collisions are OK (performance penalty only); unequal hashes for equal objects are BUGS"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define `__eq__` and `__hash__` together on the same fields. Equal objects must have equal hashes. Defining `__eq__` without `__hash__` makes instances unhashable.",
+          "pseudo_code": "",
+          "actual_code": "class Point:\n    def __init__(self, x, y):\n        self.x, self.y = x, y\n    def __eq__(self, other):\n        if not isinstance(other, Point): return NotImplemented\n        return (self.x, self.y) == (other.x, other.y)\n    def __hash__(self):\n        return hash((self.x, self.y))\n\nprint({Point(1,2), Point(1,2), Point(3,4)})  # 2 unique points",
+          "code_language": "python",
+          "key_points": [
+            "a == b implies hash(a) == hash(b)",
+            "hash() from same fields as __eq__"
+          ],
+          "gotchas": [
+            "Mutating hashed objects in sets makes them unreachable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do comparison dunder methods work, and what is `@total_ordering`?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["comparison", "__lt__", "__gt__", "total_ordering"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides six comparison dunder methods:\n- `__eq__` (==), `__ne__` (!=)\n- `__lt__` (<), `__le__` (<=)\n- `__gt__` (>), `__ge__` (>=)\n\nBy default, only `__eq__` and `__ne__` are defined (based on identity). The ordering methods (`__lt__`, `__le__`, etc.) are not automatically derived from each other.\n\n`@functools.total_ordering` is a class decorator that generates the missing ordering methods from `__eq__` and one of `__lt__`, `__le__`, `__gt__`, or `__ge__`. This saves you from implementing all four manually.\n\n**Important**: Return `NotImplemented` (not `NotImplementedError`) when the comparison doesn't make sense for the given types. This tells Python to try the reflected operation on the other operand.",
+          "pseudo_code": "1. Define __eq__ for equality\n2. Define one ordering method (__lt__ is conventional)\n3. Apply @total_ordering to generate the rest\n4. Always return NotImplemented for unsupported types\n5. Compare using tuples for multi-field ordering",
+          "actual_code": "from functools import total_ordering\n\n@total_ordering\nclass Version:\n    def __init__(self, major, minor, patch):\n        self.major = major\n        self.minor = minor\n        self.patch = patch\n\n    def __eq__(self, other):\n        if not isinstance(other, Version):\n            return NotImplemented\n        return self._tuple == other._tuple\n\n    def __lt__(self, other):\n        if not isinstance(other, Version):\n            return NotImplemented\n        return self._tuple < other._tuple\n\n    @property\n    def _tuple(self):\n        return (self.major, self.minor, self.patch)\n\n    def __repr__(self):\n        return f\"Version({self.major}.{self.minor}.{self.patch})\"\n\nv1 = Version(1, 0, 0)\nv2 = Version(1, 2, 0)\nv3 = Version(1, 2, 3)\nv4 = Version(1, 2, 3)\n\n# All comparisons work with just __eq__ and __lt__\nprint(v1 < v2)   # True\nprint(v2 <= v3)  # True  (generated by @total_ordering)\nprint(v3 > v1)   # True  (generated)\nprint(v3 >= v4)  # True  (generated)\nprint(v3 == v4)  # True\nprint(v1 != v2)  # True\n\n# Sorting works automatically\nversions = [v3, v1, v2]\nprint(sorted(versions))  # [Version(1.0.0), Version(1.2.0), Version(1.2.3)]\n\n# Without @total_ordering, implement all methods manually\nclass Temperature:\n    def __init__(self, celsius):\n        self.celsius = celsius\n\n    def __eq__(self, other):\n        if not isinstance(other, Temperature):\n            return NotImplemented\n        return self.celsius == other.celsius\n\n    def __lt__(self, other):\n        if not isinstance(other, Temperature):\n            return NotImplemented\n        return self.celsius < other.celsius\n\n    def __le__(self, other):\n        if not isinstance(other, Temperature):\n            return NotImplemented\n        return self.celsius <= other.celsius\n\n    def __gt__(self, other):\n        if not isinstance(other, Temperature):\n            return NotImplemented\n        return self.celsius > other.celsius\n\n    def __ge__(self, other):\n        if not isinstance(other, Temperature):\n            return NotImplemented\n        return self.celsius >= other.celsius\n\n# NotImplemented allows Python to try the other side\nprint(v1 == \"1.0.0\")  # False (str.__eq__ also returns NotImplemented)\nprint(v1 < 5)  # TypeError (both sides return NotImplemented)",
+          "code_language": "python",
+          "key_points": [
+            "@total_ordering generates missing comparisons from __eq__ + one ordering method",
+            "Return NotImplemented for unsupported types, not False or NotImplementedError",
+            "Use tuple comparison for multi-field ordering",
+            "Sorted() and min()/max() use __lt__ by default"
+          ],
+          "gotchas": [
+            "@total_ordering has slight performance overhead -- implement all methods for hot paths",
+            "Return NotImplemented (a singleton), not NotImplementedError (an exception)",
+            "__ne__ is auto-derived from __eq__ in Python 3 (returns not __eq__)",
+            "Comparing incompatible types raises TypeError if both sides return NotImplemented"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@total_ordering` generates `<=`, `>`, `>=` from `__eq__` + `__lt__`. Return `NotImplemented` for unsupported types. Use tuple comparison for multi-field ordering.",
+          "pseudo_code": "",
+          "actual_code": "from functools import total_ordering\n\n@total_ordering\nclass Score:\n    def __init__(self, value):\n        self.value = value\n    def __eq__(self, other):\n        if not isinstance(other, Score): return NotImplemented\n        return self.value == other.value\n    def __lt__(self, other):\n        if not isinstance(other, Score): return NotImplemented\n        return self.value < other.value\n\nprint(Score(5) < Score(10))   # True\nprint(Score(10) >= Score(5))  # True (generated)",
+          "code_language": "python",
+          "key_points": [
+            "@total_ordering fills in missing comparisons",
+            "Return NotImplemented for type mismatches"
+          ],
+          "gotchas": [
+            "Return NotImplemented, not NotImplementedError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do arithmetic dunder methods like `__add__` and `__radd__` work?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["__add__", "__radd__", "operator-overloading", "arithmetic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python uses dunder methods for operator overloading. For `a + b`, Python calls `a.__add__(b)`. If that returns `NotImplemented`, Python tries `b.__radd__(a)` (the reflected/right-hand version).\n\nThe arithmetic dunders are:\n- `__add__` (+), `__sub__` (-), `__mul__` (*), `__truediv__` (/)\n- `__floordiv__` (//), `__mod__` (%), `__pow__` (**)\n- `__radd__`, `__rsub__`, etc. -- reflected versions\n- `__iadd__`, `__isub__`, etc. -- in-place versions (+=, -=)\n\nThe `r` (reflected) variants handle the case where the left operand doesn't know how to handle the operation. The `i` (in-place) variants handle augmented assignment and should modify `self` and return it.\n\nReturn `NotImplemented` when the operation doesn't make sense for the given types.",
+          "pseudo_code": "a + b:\n1. Try a.__add__(b)\n2. If NotImplemented, try b.__radd__(a)\n3. If both NotImplemented, raise TypeError\n\na += b:\n1. Try a.__iadd__(b)\n2. If not defined or NotImplemented, fall back to a = a.__add__(b)\n3. If immutable type, creates new object",
+          "actual_code": "class Vector:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __add__(self, other):\n        if isinstance(other, Vector):\n            return Vector(self.x + other.x, self.y + other.y)\n        if isinstance(other, (int, float)):\n            return Vector(self.x + other, self.y + other)\n        return NotImplemented\n\n    def __radd__(self, other):\n        # Called when other + self and other.__add__ returns NotImplemented\n        return self.__add__(other)\n\n    def __mul__(self, scalar):\n        if isinstance(scalar, (int, float)):\n            return Vector(self.x * scalar, self.y * scalar)\n        return NotImplemented\n\n    def __rmul__(self, scalar):\n        return self.__mul__(scalar)\n\n    def __iadd__(self, other):\n        # In-place addition (+=)\n        if isinstance(other, Vector):\n            self.x += other.x\n            self.y += other.y\n            return self  # MUST return self for in-place\n        return NotImplemented\n\n    def __neg__(self):\n        return Vector(-self.x, -self.y)\n\n    def __abs__(self):\n        return (self.x ** 2 + self.y ** 2) ** 0.5\n\n    def __repr__(self):\n        return f\"Vector({self.x}, {self.y})\"\n\n# Vector + Vector\nv1 = Vector(1, 2)\nv2 = Vector(3, 4)\nprint(v1 + v2)  # Vector(4, 6)\n\n# Vector + scalar and scalar + Vector\nprint(v1 + 10)  # Vector(11, 12) -- __add__\nprint(10 + v1)   # Vector(11, 12) -- __radd__\n\n# Scalar * Vector and Vector * scalar\nprint(v1 * 3)   # Vector(3, 6) -- __mul__\nprint(3 * v1)    # Vector(3, 6) -- __rmul__\n\n# In-place addition\nv1 += v2\nprint(v1)  # Vector(4, 6) -- modified in-place\n\n# Unary operators\nprint(-v2)    # Vector(-3, -4)\nprint(abs(v2))  # 5.0\n\n# NotImplemented triggers reflected method\nclass Money:\n    def __init__(self, amount):\n        self.amount = amount\n    def __add__(self, other):\n        if isinstance(other, Money):\n            return Money(self.amount + other.amount)\n        return NotImplemented  # let other.__radd__ handle it\n    def __repr__(self):\n        return f\"Money({self.amount})\"\n\nprint(Money(10) + Money(20))  # Money(30)\n# Money(10) + \"hello\"  # TypeError: both sides return NotImplemented",
+          "code_language": "python",
+          "key_points": [
+            "a + b tries a.__add__(b), then b.__radd__(a)",
+            "__iadd__ handles +=, must return self for in-place mutation",
+            "Return NotImplemented for unsupported types (not TypeError)",
+            "__rmul__/__radd__ handle reversed operand cases"
+          ],
+          "gotchas": [
+            "__iadd__ must return self for mutable objects; for immutables, += creates a new object",
+            "If __radd__ is not defined, reversed operations raise TypeError",
+            "Return NotImplemented, not None or raise TypeError -- let Python handle the error",
+            "Subclass __radd__ has priority over parent __add__ (Python checks subclass first)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`a + b` calls `a.__add__(b)`, failing that tries `b.__radd__(a)`. `__iadd__` handles `+=`. Return `NotImplemented` for unsupported types.",
+          "pseudo_code": "",
+          "actual_code": "class Vec:\n    def __init__(self, x, y):\n        self.x, self.y = x, y\n    def __add__(self, other):\n        if isinstance(other, Vec):\n            return Vec(self.x + other.x, self.y + other.y)\n        return NotImplemented\n    def __repr__(self):\n        return f\"Vec({self.x}, {self.y})\"\n\nprint(Vec(1, 2) + Vec(3, 4))  # Vec(4, 6)",
+          "code_language": "python",
+          "key_points": [
+            "__add__ for +, __radd__ for reversed, __iadd__ for +=",
+            "Return NotImplemented for unsupported types"
+          ],
+          "gotchas": [
+            "__iadd__ must return self for mutable objects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `__len__`, `__getitem__`, `__setitem__`, and `__contains__` make a class behave like a sequence?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["sequence", "__len__", "__getitem__", "__contains__"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's data model lets you make any class behave like a built-in sequence (list, tuple) by implementing specific dunder methods:\n\n- **`__len__`**: Called by `len()`. Returns the number of items.\n- **`__getitem__`**: Called by `obj[key]`. Enables indexing and slicing. Also makes the object iterable (Python falls back to `__getitem__` with integer indices if `__iter__` is not defined).\n- **`__setitem__`**: Called by `obj[key] = value`. Enables item assignment.\n- **`__delitem__`**: Called by `del obj[key]`. Enables item deletion.\n- **`__contains__`**: Called by `in` operator. If not defined, Python falls back to iterating with `__iter__` or `__getitem__`.\n\nImplementing `__getitem__` alone is enough for iteration, `in` operator, and unpacking to work.",
+          "pseudo_code": "1. __len__(self) -> len(obj)\n2. __getitem__(self, index) -> obj[index], obj[start:stop]\n3. __setitem__(self, index, value) -> obj[index] = value\n4. __delitem__(self, index) -> del obj[index]\n5. __contains__(self, item) -> item in obj\n6. Just __getitem__ enables: iteration, in, unpacking",
+          "actual_code": "class Playlist:\n    def __init__(self, name, songs=None):\n        self.name = name\n        self._songs = list(songs or [])\n\n    def __len__(self):\n        return len(self._songs)\n\n    def __getitem__(self, index):\n        # Supports both indexing and slicing\n        if isinstance(index, slice):\n            return Playlist(f\"{self.name} (slice)\", self._songs[index])\n        return self._songs[index]\n\n    def __setitem__(self, index, value):\n        self._songs[index] = value\n\n    def __delitem__(self, index):\n        del self._songs[index]\n\n    def __contains__(self, item):\n        return item in self._songs\n\n    def __repr__(self):\n        return f\"Playlist({self.name!r}, {self._songs!r})\"\n\npl = Playlist(\"Rock\", [\"Bohemian Rhapsody\", \"Stairway to Heaven\", \"Hotel California\"])\n\n# __len__\nprint(len(pl))  # 3\n\n# __getitem__ -- indexing\nprint(pl[0])    # Bohemian Rhapsody\nprint(pl[-1])   # Hotel California\n\n# __getitem__ -- slicing\nprint(pl[0:2])  # Playlist('Rock (slice)', ['Bohemian Rhapsody', 'Stairway to Heaven'])\n\n# __setitem__\npl[1] = \"Back in Black\"\nprint(pl[1])  # Back in Black\n\n# __delitem__\ndel pl[2]\nprint(len(pl))  # 2\n\n# __contains__\nprint(\"Back in Black\" in pl)  # True\nprint(\"Missing Song\" in pl)   # False\n\n# __getitem__ enables iteration automatically\nfor song in pl:\n    print(song)\n# Bohemian Rhapsody\n# Back in Black\n\n# Unpacking works too\na, b = pl\nprint(a, b)  # Bohemian Rhapsody Back in Black\n\n# reversed() works if __getitem__ + __len__ are defined\nfor song in reversed(pl):\n    print(song)\n# Back in Black\n# Bohemian Rhapsody",
+          "code_language": "python",
+          "key_points": [
+            "__getitem__ alone enables indexing, iteration, and unpacking",
+            "__len__ + __getitem__ enable reversed()",
+            "__contains__ optimizes 'in' operator (otherwise Python iterates)",
+            "Handle slice objects in __getitem__ for slicing support"
+          ],
+          "gotchas": [
+            "Without __contains__, 'in' falls back to iterating the entire sequence (O(n))",
+            "__getitem__ must raise IndexError for out-of-range indices to stop iteration",
+            "Slicing passes a slice object, not individual indices -- check isinstance(index, slice)",
+            "Implementing __getitem__ without __len__ means len() doesn't work but iteration does"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement `__len__`, `__getitem__`, `__setitem__`, `__contains__` to make a class behave like a list. Just `__getitem__` alone enables iteration, `in`, and unpacking.",
+          "pseudo_code": "",
+          "actual_code": "class MyList:\n    def __init__(self, items):\n        self._items = list(items)\n    def __len__(self):\n        return len(self._items)\n    def __getitem__(self, index):\n        return self._items[index]\n    def __contains__(self, item):\n        return item in self._items\n\nm = MyList([10, 20, 30])\nprint(len(m))       # 3\nprint(m[1])         # 20\nprint(20 in m)      # True\nfor x in m: print(x)  # iteration works",
+          "code_language": "python",
+          "key_points": [
+            "__getitem__ enables indexing and iteration",
+            "__contains__ optimizes 'in' operator"
+          ],
+          "gotchas": [
+            "__getitem__ must raise IndexError to stop iteration"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `__call__` method work, and when would you use it?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["__call__", "callable", "function-objects"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__call__` makes instances of a class callable like functions. When you write `obj()`, Python calls `obj.__call__()`. Any object with `__call__` passes the `callable()` test.\n\nUse cases:\n1. **Stateful functions**: Objects that maintain state between calls (counters, accumulators)\n2. **Decorators**: Class-based decorators use `__call__` as the wrapper\n3. **Strategy pattern**: Swappable callables with configurable behavior\n4. **Callbacks**: Objects that behave like functions but carry extra state\n5. **Function factories**: More readable than closures for complex cases",
+          "pseudo_code": "1. Define __call__(self, *args, **kwargs) on a class\n2. Instances can be called like functions: obj(args)\n3. callable(obj) returns True\n4. Useful for stateful functions, decorators, strategies",
+          "actual_code": "class Counter:\n    \"\"\"Callable that counts invocations.\"\"\"\n    def __init__(self, start=0):\n        self.count = start\n\n    def __call__(self, increment=1):\n        self.count += increment\n        return self.count\n\n    def reset(self):\n        self.count = 0\n\ncounter = Counter()\nprint(counter())   # 1\nprint(counter())   # 2\nprint(counter(5))  # 7\nprint(callable(counter))  # True\ncounter.reset()\nprint(counter())   # 1\n\n# Use case: configurable validator\nclass RangeValidator:\n    def __init__(self, min_val, max_val):\n        self.min_val = min_val\n        self.max_val = max_val\n\n    def __call__(self, value):\n        if not self.min_val <= value <= self.max_val:\n            raise ValueError(\n                f\"{value} not in range [{self.min_val}, {self.max_val}]\"\n            )\n        return True\n\nvalidate_age = RangeValidator(0, 150)\nvalidate_score = RangeValidator(0, 100)\n\nprint(validate_age(25))    # True\nprint(validate_score(95))  # True\n\ntry:\n    validate_age(200)\nexcept ValueError as e:\n    print(e)  # 200 not in range [0, 150]\n\n# Use case: memoized function as a class\nclass Memoize:\n    def __init__(self, func):\n        self.func = func\n        self.cache = {}\n\n    def __call__(self, *args):\n        if args not in self.cache:\n            self.cache[args] = self.func(*args)\n        return self.cache[args]\n\n@Memoize\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n - 1) + fibonacci(n - 2)\n\nprint(fibonacci(10))  # 55\nprint(fibonacci.cache)  # {(0,): 0, (1,): 1, (2,): 1, ...}\n\n# callable() check\nprint(callable(counter))   # True\nprint(callable(len))       # True\nprint(callable(42))        # False\nprint(callable(\"string\"))  # False",
+          "code_language": "python",
+          "key_points": [
+            "__call__ makes instances callable with obj() syntax",
+            "callable(obj) returns True for objects with __call__",
+            "Used for stateful functions, validators, decorators",
+            "Carries state between calls (advantage over plain functions)"
+          ],
+          "gotchas": [
+            "Class-based callables don't work as bound methods without implementing __get__",
+            "__call__ can accept any signature -- document it clearly",
+            "Overusing __call__ can make code confusing -- it's not obvious what obj() does"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__call__` makes instances callable like functions. `obj()` triggers `obj.__call__()`. Used for stateful functions, validators, and class-based decorators.",
+          "pseudo_code": "",
+          "actual_code": "class Adder:\n    def __init__(self, n):\n        self.n = n\n    def __call__(self, x):\n        return self.n + x\n\nadd5 = Adder(5)\nprint(add5(10))       # 15\nprint(callable(add5)) # True",
+          "code_language": "python",
+          "key_points": [
+            "obj() triggers __call__",
+            "Used for stateful callables"
+          ],
+          "gotchas": [
+            "Not obvious what obj() does -- document clearly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `__enter__` and `__exit__` implement the context manager protocol?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["context-manager", "__enter__", "__exit__", "with"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The context manager protocol consists of two methods:\n\n**`__enter__(self)`**: Called when entering the `with` block. Its return value is bound to the variable after `as`.\n\n**`__exit__(self, exc_type, exc_val, exc_tb)`**: Called when leaving the `with` block, whether normally or due to an exception. The three parameters describe any exception that occurred:\n- `exc_type`: Exception class (or None)\n- `exc_val`: Exception instance (or None)\n- `exc_tb`: Traceback object (or None)\n\nIf `__exit__` returns a truthy value, the exception is suppressed. If it returns a falsy value (or None), the exception propagates.\n\nCommon uses: file handling, database transactions, locks, timing, temporary state changes.",
+          "pseudo_code": "with manager as value:\n    1. value = manager.__enter__()\n    2. Execute block\n    3. If exception: __exit__(exc_type, exc_val, exc_tb)\n       If no exception: __exit__(None, None, None)\n    4. If __exit__ returns True, exception is suppressed\n    5. If __exit__ returns False/None, exception propagates",
+          "actual_code": "import time\n\nclass Timer:\n    \"\"\"Context manager that measures execution time.\"\"\"\n    def __enter__(self):\n        self.start = time.perf_counter()\n        return self  # bound to 'as' variable\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        self.elapsed = time.perf_counter() - self.start\n        print(f\"Elapsed: {self.elapsed:.4f}s\")\n        return False  # don't suppress exceptions\n\nwith Timer() as t:\n    total = sum(range(1_000_000))\nprint(f\"Result: {total}, took {t.elapsed:.4f}s\")\n\n# Context manager for database transactions\nclass Transaction:\n    def __init__(self, connection):\n        self.conn = connection\n\n    def __enter__(self):\n        print(\"BEGIN transaction\")\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        if exc_type is None:\n            print(\"COMMIT\")\n        else:\n            print(f\"ROLLBACK due to {exc_type.__name__}: {exc_val}\")\n        return False  # propagate exceptions\n\n# Exception suppression\nclass Suppress:\n    \"\"\"Suppress specific exceptions.\"\"\"\n    def __init__(self, *exceptions):\n        self.exceptions = exceptions\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        if exc_type is not None and issubclass(exc_type, self.exceptions):\n            self.exception = exc_val\n            return True  # suppress the exception\n        return False\n\nwith Suppress(FileNotFoundError, PermissionError):\n    open(\"/nonexistent/file\")  # FileNotFoundError suppressed\n\nprint(\"Execution continues!\")  # This runs\n\n# Context manager for temporary state\nclass TempDirectory:\n    def __init__(self):\n        import os\n        self.original = os.getcwd()\n\n    def __enter__(self):\n        import tempfile\n        self.tmpdir = tempfile.mkdtemp()\n        import os\n        os.chdir(self.tmpdir)\n        return self.tmpdir\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        import os\n        import shutil\n        os.chdir(self.original)\n        shutil.rmtree(self.tmpdir)\n        return False",
+          "code_language": "python",
+          "key_points": [
+            "__enter__ runs on 'with' entry, return value bound to 'as' variable",
+            "__exit__ runs on exit, receives exception info (or None)",
+            "Return True from __exit__ to suppress exceptions",
+            "Use for resource management: files, locks, transactions, temp state"
+          ],
+          "gotchas": [
+            "__exit__ is called even if __enter__ raises (if the with block was entered)",
+            "Returning True from __exit__ suppresses ALL exceptions of that type -- be very specific",
+            "If __enter__ raises, __exit__ is NOT called -- the with block was never entered",
+            "__enter__ must return self (or the managed resource), not the result of some operation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__enter__` runs on `with` entry (return value goes to `as`). `__exit__` runs on exit with exception info. Return `True` from `__exit__` to suppress exceptions.",
+          "pseudo_code": "",
+          "actual_code": "class Timer:\n    def __enter__(self):\n        import time\n        self.start = time.perf_counter()\n        return self\n    def __exit__(self, *args):\n        import time\n        self.elapsed = time.perf_counter() - self.start\n        return False\n\nwith Timer() as t:\n    sum(range(1_000_000))\nprint(f\"{t.elapsed:.4f}s\")",
+          "code_language": "python",
+          "key_points": [
+            "__enter__ returns resource, __exit__ cleans up",
+            "Return True to suppress exceptions"
+          ],
+          "gotchas": [
+            "__exit__ not called if __enter__ raises"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `__iter__` and `__next__` implement the iterator protocol?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["iterator", "__iter__", "__next__", "iterable"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's iteration protocol requires two methods:\n\n**Iterable**: An object with `__iter__()` that returns an iterator. Iterables can be looped over multiple times.\n\n**Iterator**: An object with both `__iter__()` (returns self) and `__next__()` (returns next value or raises `StopIteration`). Iterators are exhaustible -- once done, they're empty.\n\n`for x in obj` works by:\n1. Calling `iter(obj)` which calls `obj.__iter__()` to get an iterator\n2. Repeatedly calling `next(iterator)` which calls `iterator.__next__()`\n3. Stopping when `StopIteration` is raised\n\nSeparating iterable from iterator allows multiple independent iterations over the same data.",
+          "pseudo_code": "Iterable: class with __iter__() returning an iterator\nIterator: class with __iter__() returning self + __next__()\n\nfor x in iterable:\n  1. iterator = iter(iterable)  # calls __iter__\n  2. while True:\n  3.   try: x = next(iterator)  # calls __next__\n  4.   except StopIteration: break",
+          "actual_code": "# Separate iterable and iterator (best practice)\nclass Countdown:\n    \"\"\"Iterable: can be iterated multiple times.\"\"\"\n    def __init__(self, start):\n        self.start = start\n\n    def __iter__(self):\n        return CountdownIterator(self.start)\n\nclass CountdownIterator:\n    \"\"\"Iterator: exhaustible, one-pass.\"\"\"\n    def __init__(self, current):\n        self.current = current\n\n    def __iter__(self):\n        return self  # iterators return themselves\n\n    def __next__(self):\n        if self.current <= 0:\n            raise StopIteration\n        value = self.current\n        self.current -= 1\n        return value\n\ncd = Countdown(3)\n\n# Can iterate multiple times\nfor n in cd:\n    print(n, end=\" \")  # 3 2 1\nprint()\n\nfor n in cd:\n    print(n, end=\" \")  # 3 2 1 (fresh iterator each time)\nprint()\n\n# Combined iterable + iterator (simpler but single-pass)\nclass SinglePassRange:\n    def __init__(self, n):\n        self.n = n\n        self.current = 0\n\n    def __iter__(self):\n        return self\n\n    def __next__(self):\n        if self.current >= self.n:\n            raise StopIteration\n        value = self.current\n        self.current += 1\n        return value\n\nr = SinglePassRange(3)\nprint(list(r))  # [0, 1, 2]\nprint(list(r))  # [] -- exhausted!\n\n# Practical: file-like line iterator\nclass LineReader:\n    def __init__(self, text):\n        self.lines = text.split(\"\\n\")\n\n    def __iter__(self):\n        return iter(self.lines)  # delegate to list iterator\n\n    def __len__(self):\n        return len(self.lines)\n\nreader = LineReader(\"line1\\nline2\\nline3\")\nfor line in reader:\n    print(line)\n\n# Manual iteration with iter() and next()\nit = iter([10, 20, 30])\nprint(next(it))  # 10\nprint(next(it))  # 20\nprint(next(it))  # 30\nprint(next(it, \"default\"))  # \"default\" (instead of StopIteration)",
+          "code_language": "python",
+          "key_points": [
+            "Iterable has __iter__() returning an iterator; Iterator has __iter__() + __next__()",
+            "Separate iterable from iterator for multi-pass iteration",
+            "__next__() raises StopIteration when exhausted",
+            "next(iter, default) avoids StopIteration exception"
+          ],
+          "gotchas": [
+            "Combined iterable+iterator can only be iterated once (exhaustible)",
+            "Forgetting to raise StopIteration causes infinite loops",
+            "Iterators should return self from __iter__ (required by protocol)",
+            "Modifying the underlying collection during iteration causes undefined behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Iterable has `__iter__()` returning an iterator. Iterator has `__iter__()` + `__next__()`. Raise `StopIteration` when done. Separate iterable from iterator for multi-pass.",
+          "pseudo_code": "",
+          "actual_code": "class Range:\n    def __init__(self, n):\n        self.n = n\n    def __iter__(self):\n        self.i = 0\n        return self\n    def __next__(self):\n        if self.i >= self.n:\n            raise StopIteration\n        val = self.i\n        self.i += 1\n        return val\n\nfor x in Range(3):\n    print(x)  # 0, 1, 2",
+          "code_language": "python",
+          "key_points": [
+            "__iter__ returns iterator, __next__ returns values",
+            "StopIteration signals end of iteration"
+          ],
+          "gotchas": [
+            "Combined iterable+iterator is single-pass only"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `__bool__` work, and what determines the truthiness of an object?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["__bool__", "__len__", "truthiness"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When Python needs a boolean value (in `if`, `while`, `and`, `or`, `not`), it calls `bool(obj)` which follows this lookup:\n\n1. **`__bool__`**: If defined, its return value is used\n2. **`__len__`**: If `__bool__` is not defined but `__len__` is, the object is truthy if `len(obj) != 0`\n3. **Default**: If neither is defined, the object is always truthy\n\nBuilt-in falsy values: `None`, `False`, `0`, `0.0`, `0j`, `''`, `[]`, `()`, `{}`, `set()`, `frozenset()`, `range(0)`.\n\nDefining `__bool__` gives you control over when your objects are considered truthy or falsy. This is useful for objects that represent states (empty/non-empty, valid/invalid, connected/disconnected).",
+          "pseudo_code": "bool(obj):\n1. If __bool__ defined: return obj.__bool__()\n2. Elif __len__ defined: return len(obj) != 0\n3. Else: return True (all objects are truthy by default)\n\nFalsy: None, False, 0, 0.0, '', [], {}, set()\nEverything else is truthy",
+          "actual_code": "# __bool__ for custom truthiness\nclass Connection:\n    def __init__(self, host):\n        self.host = host\n        self.connected = False\n\n    def connect(self):\n        self.connected = True\n\n    def __bool__(self):\n        return self.connected\n\nconn = Connection(\"localhost\")\nprint(bool(conn))  # False\n\nif not conn:\n    print(\"Not connected\")  # prints\n\nconn.connect()\nif conn:\n    print(\"Connected!\")  # prints\n\n# __len__ fallback\nclass Playlist:\n    def __init__(self, songs=None):\n        self.songs = songs or []\n\n    def __len__(self):\n        return len(self.songs)\n\nempty = Playlist()\nfull = Playlist([\"song1\", \"song2\"])\n\nprint(bool(empty))  # False (len == 0)\nprint(bool(full))   # True (len > 0)\n\nif full:\n    print(f\"{len(full)} songs\")  # 2 songs\nif not empty:\n    print(\"No songs\")  # No songs\n\n# Default: objects without __bool__ or __len__ are truthy\nclass Plain:\n    pass\n\nprint(bool(Plain()))  # True\n\n# __bool__ takes priority over __len__\nclass Weird:\n    def __len__(self):\n        return 10  # would be truthy\n\n    def __bool__(self):\n        return False  # but __bool__ overrides\n\nprint(bool(Weird()))  # False (__bool__ wins)\nprint(len(Weird()))   # 10\n\n# Built-in falsy values\nfalsy_values = [None, False, 0, 0.0, 0j, \"\", [], (), {}, set(), frozenset()]\nfor val in falsy_values:\n    assert not val, f\"{val!r} should be falsy\"",
+          "code_language": "python",
+          "key_points": [
+            "__bool__ > __len__ > default True for truthiness evaluation",
+            "Containers are falsy when empty (via __len__ returning 0)",
+            "__bool__ must return True or False (not other truthy/falsy values)",
+            "Falsy: None, False, 0, empty containers"
+          ],
+          "gotchas": [
+            "__bool__ must return exactly True or False -- returning an int raises TypeError",
+            "__bool__ overrides __len__ for truthiness, but len() still works independently",
+            "Objects without __bool__ or __len__ are always truthy -- even if logically empty"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`bool(obj)` checks `__bool__` first, then `__len__` (truthy if non-zero), then defaults to `True`. Empty containers are falsy via `__len__`.",
+          "pseudo_code": "",
+          "actual_code": "class Result:\n    def __init__(self, data=None):\n        self.data = data\n    def __bool__(self):\n        return self.data is not None\n\nprint(bool(Result()))       # False\nprint(bool(Result(\"ok\")))   # True\nif Result([1, 2]):\n    print(\"Has data\")       # prints",
+          "code_language": "python",
+          "key_points": [
+            "__bool__ > __len__ > True for truthiness",
+            "Empty containers are falsy via __len__"
+          ],
+          "gotchas": [
+            "__bool__ must return True/False, not other types"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the descriptor protocol (`__get__`, `__set__`, `__delete__`)?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["descriptors", "__get__", "__set__", "__delete__"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Descriptors are objects that customize attribute access by implementing `__get__`, `__set__`, and/or `__delete__`. They must be defined as **class attributes** (not instance attributes) to work.\n\n**Data descriptor**: Has `__set__` or `__delete__` (in addition to `__get__`). Takes priority over instance `__dict__`.\n**Non-data descriptor**: Has only `__get__`. Instance `__dict__` takes priority.\n\nDescriptors power many Python features:\n- `property` is a data descriptor\n- Functions are non-data descriptors (their `__get__` creates bound methods)\n- `classmethod` and `staticmethod` are descriptors\n- `__slots__` uses descriptors internally\n\nThe descriptor protocol is one of the most fundamental mechanisms in Python's data model.",
+          "pseudo_code": "Descriptor methods:\n  __get__(self, obj, objtype) -> called on attribute access\n  __set__(self, obj, value) -> called on attribute assignment\n  __delete__(self, obj) -> called on attribute deletion\n\nLookup priority:\n  1. Data descriptors (has __set__ or __delete__)\n  2. Instance __dict__\n  3. Non-data descriptors (only __get__)",
+          "actual_code": "# Simple descriptor: validated attribute\nclass Positive:\n    \"\"\"Descriptor that enforces positive values.\"\"\"\n    def __set_name__(self, owner, name):\n        self.name = name\n        self.private_name = f\"_{name}\"\n\n    def __get__(self, obj, objtype=None):\n        if obj is None:\n            return self  # accessed on class, return descriptor\n        return getattr(obj, self.private_name, None)\n\n    def __set__(self, obj, value):\n        if value <= 0:\n            raise ValueError(f\"{self.name} must be positive, got {value}\")\n        setattr(obj, self.private_name, value)\n\n    def __delete__(self, obj):\n        delattr(obj, self.private_name)\n\nclass Product:\n    price = Positive()    # descriptor as class attribute\n    quantity = Positive()\n\n    def __init__(self, name, price, quantity):\n        self.name = name\n        self.price = price        # triggers Positive.__set__\n        self.quantity = quantity\n\np = Product(\"Widget\", 9.99, 100)\nprint(p.price)     # 9.99 (triggers Positive.__get__)\nprint(p.quantity)  # 100\n\ntry:\n    p.price = -5  # triggers Positive.__set__ -> ValueError\nexcept ValueError as e:\n    print(e)  # price must be positive, got -5\n\n# How property works (simplified)\nclass Property:\n    def __init__(self, fget=None, fset=None, fdel=None):\n        self.fget = fget\n        self.fset = fset\n        self.fdel = fdel\n\n    def __get__(self, obj, objtype=None):\n        if obj is None:\n            return self\n        if self.fget is None:\n            raise AttributeError(\"unreadable attribute\")\n        return self.fget(obj)\n\n    def __set__(self, obj, value):\n        if self.fset is None:\n            raise AttributeError(\"can't set attribute\")\n        self.fset(obj, value)\n\n# How functions become bound methods (non-data descriptor)\nclass Function:\n    def __get__(self, obj, objtype=None):\n        if obj is None:\n            return self  # unbound\n        # Return a bound method\n        import types\n        return types.MethodType(self, obj)\n\n# Data descriptor vs non-data descriptor\nclass DataDesc:\n    def __get__(self, obj, objtype=None):\n        return \"from data descriptor\"\n    def __set__(self, obj, value):\n        pass  # having __set__ makes it a data descriptor\n\nclass NonDataDesc:\n    def __get__(self, obj, objtype=None):\n        return \"from non-data descriptor\"\n\nclass MyClass:\n    data = DataDesc()\n    nondata = NonDataDesc()\n\nobj = MyClass()\nobj.__dict__['data'] = \"from instance\"\nobj.__dict__['nondata'] = \"from instance\"\n\nprint(obj.data)     # \"from data descriptor\" -- data desc wins over __dict__\nprint(obj.nondata)  # \"from instance\" -- __dict__ wins over non-data desc",
+          "code_language": "python",
+          "key_points": [
+            "Descriptors customize attribute access via __get__, __set__, __delete__",
+            "Data descriptors (with __set__) take priority over instance __dict__",
+            "Non-data descriptors (only __get__) are overridden by instance __dict__",
+            "__set_name__ (Python 3.6+) provides the attribute name to the descriptor"
+          ],
+          "gotchas": [
+            "Descriptors must be class attributes, not instance attributes",
+            "Data descriptors override instance __dict__; non-data descriptors don't",
+            "Accessing descriptor on the class (not instance) passes obj=None to __get__",
+            "property, classmethod, staticmethod, and functions are all descriptors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Descriptors customize attribute access via `__get__`/`__set__`/`__delete__` on class attributes. Data descriptors (with `__set__`) override instance `__dict__`. Powers `property`, methods, and `classmethod`.",
+          "pseudo_code": "",
+          "actual_code": "class Positive:\n    def __set_name__(self, owner, name):\n        self.name = f\"_{name}\"\n    def __get__(self, obj, objtype=None):\n        return getattr(obj, self.name, None)\n    def __set__(self, obj, value):\n        if value < 0: raise ValueError(\"Must be positive\")\n        setattr(obj, self.name, value)\n\nclass Item:\n    price = Positive()\n    def __init__(self, price):\n        self.price = price  # triggers descriptor\n\nprint(Item(10).price)  # 10",
+          "code_language": "python",
+          "key_points": [
+            "Descriptors must be class attributes",
+            "Data descriptors override instance __dict__"
+          ],
+          "gotchas": [
+            "Instance-level descriptors don't trigger the protocol"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `__del__` work, and why should you avoid relying on it?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["__del__", "finalizer", "garbage-collection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__del__` is called when an object is about to be garbage collected (its reference count drops to zero or the garbage collector runs). It's a finalizer, not a destructor in the C++ sense.\n\n**Why you should avoid relying on it:**\n1. **Timing is unpredictable**: You don't know when (or if) `__del__` will be called\n2. **May not be called at all**: During interpreter shutdown, `__del__` may be skipped\n3. **Can resurrect objects**: If `__del__` creates a new reference to the object, it prevents garbage collection\n4. **Interferes with garbage collection**: Objects with `__del__` in reference cycles may not be collected (Python 3.4 fixed this via PEP 442)\n5. **Exception handling**: Exceptions in `__del__` are ignored (only printed to stderr)\n\n**Use instead**: Context managers (`with` statement) for deterministic cleanup, or `weakref.finalize()` for callback-based cleanup.",
+          "pseudo_code": "1. __del__ called when reference count reaches 0\n2. Timing is non-deterministic\n3. May not run during interpreter shutdown\n4. Exceptions are silently swallowed\n5. Better alternatives: context managers, weakref.finalize()",
+          "actual_code": "import weakref\n\n# __del__ basic usage (unreliable)\nclass Resource:\n    def __init__(self, name):\n        self.name = name\n        print(f\"Creating {name}\")\n\n    def __del__(self):\n        print(f\"Destroying {self.name}\")\n\n# Explicit deletion triggers __del__ (when refcount hits 0)\nr = Resource(\"R1\")  # Creating R1\ndel r                # Destroying R1 (usually, if no other references)\n\n# But timing is not guaranteed\nr2 = Resource(\"R2\")\nr3 = r2  # another reference\ndel r2   # __del__ NOT called -- r3 still references the object\ndel r3   # NOW __del__ is called\n\n# BETTER: Use context managers for deterministic cleanup\nclass ManagedResource:\n    def __init__(self, name):\n        self.name = name\n\n    def __enter__(self):\n        print(f\"Acquiring {self.name}\")\n        return self\n\n    def __exit__(self, *args):\n        print(f\"Releasing {self.name}\")  # always called\n        return False\n\nwith ManagedResource(\"connection\") as res:\n    print(f\"Using {res.name}\")\n# Acquiring connection\n# Using connection\n# Releasing connection  <-- deterministic!\n\n# BETTER: Use weakref.finalize for reliable cleanup\nclass CleanResource:\n    def __init__(self, name):\n        self.name = name\n        self._finalizer = weakref.finalize(self, self._cleanup, name)\n\n    @staticmethod\n    def _cleanup(name):\n        print(f\"Cleanup: {name}\")\n\n    def close(self):\n        self._finalizer()  # explicit cleanup\n\nr = CleanResource(\"DB\")\ndel r  # Cleanup: DB (via finalizer)\n\n# Why __del__ is problematic with reference cycles\nclass Node:\n    def __init__(self, value):\n        self.value = value\n        self.next = None\n\n    def __del__(self):\n        print(f\"Deleting Node({self.value})\")\n\n# Circular reference\na = Node(1)\nb = Node(2)\na.next = b\nb.next = a  # cycle!\ndel a, b\n# In CPython with PEP 442, __del__ will eventually be called\n# but timing depends on the cyclic garbage collector",
+          "code_language": "python",
+          "key_points": [
+            "__del__ is called when garbage collected, not when del is used",
+            "Timing is non-deterministic and may not happen at all",
+            "Use context managers (with) for deterministic cleanup",
+            "Use weakref.finalize() as a more reliable alternative"
+          ],
+          "gotchas": [
+            "Exceptions in __del__ are printed to stderr and ignored",
+            "__del__ can prevent garbage collection of reference cycles",
+            "Creating new references in __del__ 'resurrects' the object",
+            "During interpreter shutdown, global variables may already be None"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__del__` is called during garbage collection but timing is unpredictable. Avoid relying on it. Use context managers for deterministic cleanup, or `weakref.finalize()` for callbacks.",
+          "pseudo_code": "",
+          "actual_code": "# Avoid __del__ -- use context managers instead\nclass SafeResource:\n    def __enter__(self):\n        print(\"Acquired\")\n        return self\n    def __exit__(self, *args):\n        print(\"Released\")  # always runs\n        return False\n\nwith SafeResource():\n    print(\"Using resource\")\n# Acquired -> Using resource -> Released (deterministic)",
+          "code_language": "python",
+          "key_points": [
+            "__del__ timing is unpredictable",
+            "Use context managers for cleanup"
+          ],
+          "gotchas": [
+            "__del__ may not run at all during interpreter shutdown"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does operator overloading work in Python with dunder methods?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["operator-overloading", "dunder", "numeric"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Operator overloading in Python works by implementing specific dunder methods. Each operator maps to one or more dunder methods:\n\n**Arithmetic**: `+`(`__add__`), `-`(`__sub__`), `*`(`__mul__`), `/`(`__truediv__`), `//`(`__floordiv__`), `%`(`__mod__`), `**`(`__pow__`)\n\n**Reflected**: `__radd__`, `__rsub__`, etc. -- called when the left operand doesn't support the operation\n\n**In-place**: `__iadd__`, `__isub__`, etc. -- called for `+=`, `-=`, etc.\n\n**Unary**: `__neg__`(-), `__pos__`(+), `__abs__`(abs), `__invert__`(~)\n\n**Comparison**: `__eq__`, `__lt__`, `__gt__`, `__le__`, `__ge__`\n\n**Bitwise**: `__and__`(&), `__or__`(|), `__xor__`(^), `__lshift__`(<<), `__rshift__`(>>)\n\nAlways return `NotImplemented` when the operation is not supported for the given types.",
+          "pseudo_code": "a + b -> a.__add__(b), or b.__radd__(a) if NotImplemented\na += b -> a.__iadd__(b), or a = a.__add__(b)\n-a -> a.__neg__()\nabs(a) -> a.__abs__()\na & b -> a.__and__(b)\na[i] -> a.__getitem__(i)",
+          "actual_code": "import math\n\nclass Matrix:\n    \"\"\"Simple 2x2 matrix with operator overloading.\"\"\"\n    def __init__(self, data):\n        self.data = [list(row) for row in data]\n        self.rows = len(data)\n        self.cols = len(data[0])\n\n    def __add__(self, other):\n        if isinstance(other, Matrix):\n            if self.rows != other.rows or self.cols != other.cols:\n                raise ValueError(\"Matrix dimensions must match\")\n            result = [\n                [self.data[i][j] + other.data[i][j] for j in range(self.cols)]\n                for i in range(self.rows)\n            ]\n            return Matrix(result)\n        return NotImplemented\n\n    def __mul__(self, scalar):\n        if isinstance(scalar, (int, float)):\n            result = [\n                [self.data[i][j] * scalar for j in range(self.cols)]\n                for i in range(self.rows)\n            ]\n            return Matrix(result)\n        return NotImplemented\n\n    def __rmul__(self, scalar):\n        return self.__mul__(scalar)\n\n    def __neg__(self):\n        return self * -1\n\n    def __eq__(self, other):\n        if not isinstance(other, Matrix):\n            return NotImplemented\n        return self.data == other.data\n\n    def __repr__(self):\n        rows = \", \".join(str(row) for row in self.data)\n        return f\"Matrix([{rows}])\"\n\n# Usage\nm1 = Matrix([[1, 2], [3, 4]])\nm2 = Matrix([[5, 6], [7, 8]])\n\nprint(m1 + m2)   # Matrix([[6, 8], [10, 12]])\nprint(m1 * 2)    # Matrix([[2, 4], [6, 8]])\nprint(3 * m1)    # Matrix([[3, 6], [9, 12]])  -- __rmul__\nprint(-m1)       # Matrix([[-1, -2], [-3, -4]])  -- __neg__\n\n# Bitwise operators example\nclass Permissions:\n    def __init__(self, flags=0):\n        self.flags = flags\n\n    def __or__(self, other):\n        if isinstance(other, Permissions):\n            return Permissions(self.flags | other.flags)\n        return NotImplemented\n\n    def __and__(self, other):\n        if isinstance(other, Permissions):\n            return Permissions(self.flags & other.flags)\n        return NotImplemented\n\n    def __contains__(self, flag):\n        return bool(self.flags & flag)\n\n    def __repr__(self):\n        return f\"Permissions(0b{self.flags:08b})\"\n\nREAD = Permissions(0b001)\nWRITE = Permissions(0b010)\nEXEC = Permissions(0b100)\n\nuser_perms = READ | WRITE  # __or__\nprint(user_perms)  # Permissions(0b00000011)\nprint(0b001 in user_perms)  # True (has READ)",
+          "code_language": "python",
+          "key_points": [
+            "Each Python operator maps to specific dunder methods",
+            "__radd__ handles reversed operands, __iadd__ handles +=",
+            "Return NotImplemented for unsupported types",
+            "Bitwise operators (&, |, ^) also have dunder methods"
+          ],
+          "gotchas": [
+            "Don't raise TypeError -- return NotImplemented and let Python handle it",
+            "In-place operators (__iadd__) should modify self and return self for mutables",
+            "If subclass B defines __radd__, it takes priority over parent A's __add__",
+            "Matrix multiplication uses __matmul__ (@) since Python 3.5"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Each operator has a dunder method (`+` = `__add__`, `-` = `__sub__`, etc.). `__radd__` for reversed operands, `__iadd__` for `+=`. Return `NotImplemented` for unsupported types.",
+          "pseudo_code": "",
+          "actual_code": "class Vec:\n    def __init__(self, x, y):\n        self.x, self.y = x, y\n    def __add__(self, o):\n        return Vec(self.x + o.x, self.y + o.y)\n    def __mul__(self, s):\n        return Vec(self.x * s, self.y * s)\n    def __rmul__(self, s):\n        return self * s\n    def __repr__(self):\n        return f\"Vec({self.x}, {self.y})\"\n\nprint(Vec(1,2) + Vec(3,4))  # Vec(4, 6)\nprint(3 * Vec(1,2))         # Vec(3, 6)",
+          "code_language": "python",
+          "key_points": [
+            "Operators map to dunder methods",
+            "__rmul__ handles scalar * object"
+          ],
+          "gotchas": [
+            "Return NotImplemented, not TypeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `__format__` and `__index__` work?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["__format__", "__index__", "formatting"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__format__` controls how an object is formatted when used with `format()`, f-strings, and `str.format()`. It receives a format spec string (the part after `:` in format strings).\n\n`__index__` returns an integer that represents the object. It's used when Python needs an exact integer: for indexing (`seq[obj]`), slicing, `bin()`, `oct()`, `hex()`, and `operator.index()`. Unlike `__int__`, `__index__` must return an exact integer (not a float-to-int conversion).\n\n`__format__` is called by the `format()` built-in and f-strings. If not defined, Python falls back to `str(obj)` with the format spec applied to that string.",
+          "pseudo_code": "__format__(self, format_spec):\n  - f'{obj:spec}' calls obj.__format__(spec)\n  - format(obj, spec) calls obj.__format__(spec)\n  - format_spec is the string after ':' (e.g., '.2f', '>10s')\n\n__index__(self):\n  - Returns exact integer for indexing/slicing\n  - Used by bin(), oct(), hex()\n  - Must return int",
+          "actual_code": "# __format__ example\nclass Temperature:\n    def __init__(self, celsius):\n        self.celsius = celsius\n\n    def __format__(self, format_spec):\n        if format_spec == \"f\":  # Fahrenheit\n            return f\"{self.celsius * 9/5 + 32:.1f}F\"\n        elif format_spec == \"k\":  # Kelvin\n            return f\"{self.celsius + 273.15:.1f}K\"\n        elif format_spec == \"\":\n            return f\"{self.celsius:.1f}C\"\n        # Delegate numeric formatting to float\n        return format(self.celsius, format_spec)\n\nt = Temperature(100)\nprint(f\"{t}\")       # 100.0C (default)\nprint(f\"{t:f}\")     # 212.0F (Fahrenheit)\nprint(f\"{t:k}\")     # 373.1K (Kelvin)\nprint(f\"{t:.2f}\")   # 100.00 (delegated to float format)\nprint(format(t, \"f\"))  # 212.0F\n\n# __index__ example\nclass Weekday:\n    NAMES = [\"Mon\", \"Tue\", \"Wed\", \"Thu\", \"Fri\", \"Sat\", \"Sun\"]\n\n    def __init__(self, day):\n        self.day = day  # 0-6\n\n    def __index__(self):\n        return self.day\n\n    def __repr__(self):\n        return f\"Weekday({self.NAMES[self.day]})\"\n\nmonday = Weekday(0)\nwednesday = Weekday(2)\n\n# Used for indexing\nletters = ['a', 'b', 'c', 'd', 'e', 'f', 'g']\nprint(letters[monday])     # 'a' (__index__ returns 0)\nprint(letters[wednesday])  # 'c' (__index__ returns 2)\n\n# Used for bin/oct/hex\nprint(bin(wednesday))  # 0b10\nprint(hex(Weekday(5))) # 0x5\n\n# Used for slicing\nprint(letters[monday:wednesday])  # ['a', 'b']\n\n# Used with range\nfor i in range(monday, wednesday):\n    print(i)  # 0, 1",
+          "code_language": "python",
+          "key_points": [
+            "__format__ controls f-string and format() behavior with custom format specs",
+            "__index__ returns exact int for indexing, slicing, bin/oct/hex",
+            "__format__ receives the spec string after ':' in format expressions",
+            "__index__ is different from __int__ -- it must return exact integer"
+          ],
+          "gotchas": [
+            "__format__ with empty spec should produce same result as __str__",
+            "__index__ must return int (not float) or TypeError is raised",
+            "Not implementing __format__ falls back to str(obj) with format spec",
+            "__int__ is for int() conversion, __index__ is for exact integer contexts"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__format__` controls formatting in f-strings (`f'{obj:spec}'`). `__index__` returns an exact int for indexing and `bin()`/`hex()`.",
+          "pseudo_code": "",
+          "actual_code": "class Temp:\n    def __init__(self, c):\n        self.c = c\n    def __format__(self, spec):\n        if spec == 'f':\n            return f\"{self.c * 9/5 + 32:.1f}F\"\n        return f\"{self.c:.1f}C\"\n\nt = Temp(100)\nprint(f\"{t}\")    # 100.0C\nprint(f\"{t:f}\")  # 212.0F",
+          "code_language": "python",
+          "key_points": [
+            "__format__ receives the format spec string",
+            "__index__ for indexing and bin/oct/hex"
+          ],
+          "gotchas": [
+            "__format__ with empty spec should match __str__"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you make a class work as a dictionary (mapping protocol)?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["mapping", "__getitem__", "__setitem__", "dict-like"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "To make a class behave like a dictionary, implement the mapping protocol:\n\n- **`__getitem__(self, key)`**: Access by key (`obj[key]`)\n- **`__setitem__(self, key, value)`**: Assign by key (`obj[key] = value`)\n- **`__delitem__(self, key)`**: Delete by key (`del obj[key]`)\n- **`__len__(self)`**: Number of items (`len(obj)`)\n- **`__contains__(self, key)`**: Key membership (`key in obj`)\n- **`__iter__(self)`**: Iterate over keys (`for key in obj`)\n- **`keys()`, `values()`, `items()`**: Dict-like methods\n\nFor full compatibility, inherit from `collections.abc.MutableMapping` and implement `__getitem__`, `__setitem__`, `__delitem__`, `__len__`, and `__iter__`. The ABC provides the rest (keys, values, items, get, pop, update, etc.) for free.",
+          "pseudo_code": "Minimal mapping: __getitem__, __setitem__, __delitem__, __len__, __iter__\nInherit MutableMapping to get free methods:\n  keys(), values(), items(), get(), pop(), update(), __contains__, __eq__",
+          "actual_code": "from collections.abc import MutableMapping\n\nclass CaseInsensitiveDict(MutableMapping):\n    \"\"\"Dict that treats keys as case-insensitive.\"\"\"\n\n    def __init__(self, data=None, **kwargs):\n        self._store = {}  # lowercase_key -> (original_key, value)\n        if data:\n            self.update(data)\n        if kwargs:\n            self.update(kwargs)\n\n    def __getitem__(self, key):\n        return self._store[key.lower()][1]\n\n    def __setitem__(self, key, value):\n        self._store[key.lower()] = (key, value)\n\n    def __delitem__(self, key):\n        del self._store[key.lower()]\n\n    def __iter__(self):\n        return (original_key for original_key, _ in self._store.values())\n\n    def __len__(self):\n        return len(self._store)\n\n    def __repr__(self):\n        items = \", \".join(f\"{k!r}: {v!r}\" for k, v in self.items())\n        return f\"CaseInsensitiveDict({{{items}}})\"\n\n# Usage\nd = CaseInsensitiveDict({\"Content-Type\": \"application/json\"})\n\n# Case-insensitive access\nprint(d[\"content-type\"])   # application/json\nprint(d[\"CONTENT-TYPE\"])   # application/json\nprint(d[\"Content-Type\"])   # application/json\n\n# All MutableMapping methods work for free\nd[\"Accept\"] = \"text/html\"\nprint(len(d))              # 2\nprint(\"accept\" in d)       # True (case-insensitive)\nprint(d.get(\"missing\", \"default\"))  # default\nprint(list(d.keys()))      # ['Content-Type', 'Accept']\nprint(list(d.values()))    # ['application/json', 'text/html']\nprint(list(d.items()))     # [('Content-Type', 'application/json'), ...]\n\n# pop, update, etc. all work\nd.update({\"Authorization\": \"Bearer token\"})\nprint(d.pop(\"authorization\"))  # Bearer token\n\n# isinstance check\nfrom collections.abc import Mapping\nprint(isinstance(d, Mapping))          # True\nprint(isinstance(d, MutableMapping))   # True",
+          "code_language": "python",
+          "key_points": [
+            "Implement __getitem__, __setitem__, __delitem__, __len__, __iter__",
+            "Inherit MutableMapping to get keys(), values(), items(), get(), pop() for free",
+            "Minimal effort for full dict compatibility",
+            "isinstance(obj, Mapping) works automatically"
+          ],
+          "gotchas": [
+            "__getitem__ should raise KeyError for missing keys (not return None)",
+            "Without MutableMapping, you must implement all methods manually",
+            "Remember to handle **kwargs unpacking if needed (__getitem__ + __iter__ + __len__)",
+            "MutableMapping.update() calls your __setitem__ -- make sure it's correct"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Inherit `MutableMapping` and implement `__getitem__`, `__setitem__`, `__delitem__`, `__len__`, `__iter__`. You get `keys()`, `values()`, `items()`, `get()`, `pop()` for free.",
+          "pseudo_code": "",
+          "actual_code": "from collections.abc import MutableMapping\n\nclass MyDict(MutableMapping):\n    def __init__(self):\n        self._data = {}\n    def __getitem__(self, key):\n        return self._data[key]\n    def __setitem__(self, key, val):\n        self._data[key] = val\n    def __delitem__(self, key):\n        del self._data[key]\n    def __iter__(self):\n        return iter(self._data)\n    def __len__(self):\n        return len(self._data)\n\nd = MyDict()\nd[\"x\"] = 1\nprint(d.get(\"x\"))  # 1 -- free from MutableMapping",
+          "code_language": "python",
+          "key_points": [
+            "5 methods for full dict behavior via MutableMapping",
+            "Free methods: keys, values, items, get, pop, update"
+          ],
+          "gotchas": [
+            "__getitem__ must raise KeyError for missing keys"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is `__slots__` and how does it affect dunder method behavior?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["__slots__", "memory", "descriptors"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__slots__` declares fixed instance attributes, preventing the creation of `__dict__`. This has several effects on dunder methods and behavior:\n\n1. **Memory**: No `__dict__` means significantly less memory per instance\n2. **Speed**: Attribute access uses descriptors with fixed offsets, slightly faster\n3. **No dynamic attributes**: Only attributes listed in `__slots__` can be set\n4. **Descriptor-based**: Each slot creates a descriptor on the class\n5. **Inheritance**: Subclasses need their own `__slots__` for new attributes\n6. **Weakref**: Not supported unless `'__weakref__'` is in `__slots__`\n7. **`__dict__`**: Not available unless `'__dict__'` is in `__slots__`\n\n`__slots__` interacts with several dunder methods: `__getattribute__`, `__setattr__`, `__delattr__` all respect slot descriptors, which are data descriptors and therefore take priority over instance `__dict__` (if both exist).",
+          "pseudo_code": "1. __slots__ = ('x', 'y') -> no __dict__, only x and y attributes\n2. Each slot is a data descriptor on the class\n3. obj.z = 1 raises AttributeError if z not in __slots__\n4. Saves ~50% memory per instance\n5. Subclass must declare __slots__ for new attributes",
+          "actual_code": "import sys\n\n# Memory comparison\nclass WithDict:\n    def __init__(self, x, y, z):\n        self.x = x\n        self.y = y\n        self.z = z\n\nclass WithSlots:\n    __slots__ = ('x', 'y', 'z')\n\n    def __init__(self, x, y, z):\n        self.x = x\n        self.y = y\n        self.z = z\n\n# Memory per instance\nd = WithDict(1, 2, 3)\ns = WithSlots(1, 2, 3)\n\ndict_size = sys.getsizeof(d) + sys.getsizeof(d.__dict__)\nslots_size = sys.getsizeof(s)\nprint(f\"With __dict__: {dict_size} bytes\")\nprint(f\"With __slots__: {slots_size} bytes\")\n\n# No dynamic attributes\ntry:\n    s.w = 4  # AttributeError\nexcept AttributeError as e:\n    print(e)  # 'WithSlots' object has no attribute 'w'\n\n# No __dict__\nprint(hasattr(s, '__dict__'))  # False\nprint(hasattr(d, '__dict__'))  # True\n\n# Slots with inheritance\nclass Point2D:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\nclass Point3D(Point2D):\n    __slots__ = ('z',)  # only declare NEW slots\n\n    def __init__(self, x, y, z):\n        super().__init__(x, y)\n        self.z = z\n\np3 = Point3D(1, 2, 3)\nprint(p3.x, p3.y, p3.z)  # 1 2 3\nprint(hasattr(p3, '__dict__'))  # False\n\n# Slots are descriptors on the class\nprint(type(Point2D.__dict__['x']))  # <class 'member_descriptor'>\n\n# Dunder methods work normally with __slots__\nclass Vector:\n    __slots__ = ('x', 'y')\n\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n\n    def __add__(self, other):\n        return Vector(self.x + other.x, self.y + other.y)\n\n    def __repr__(self):\n        return f\"Vector({self.x}, {self.y})\"\n\n    def __eq__(self, other):\n        if not isinstance(other, Vector):\n            return NotImplemented\n        return self.x == other.x and self.y == other.y\n\n    def __hash__(self):\n        return hash((self.x, self.y))\n\nv1 = Vector(1, 2)\nv2 = Vector(3, 4)\nprint(v1 + v2)  # Vector(4, 6)\nprint({v1, v1 + v2})  # {Vector(1, 2), Vector(4, 6)}",
+          "code_language": "python",
+          "key_points": [
+            "__slots__ prevents __dict__, saving memory",
+            "Only declared attributes allowed -- no dynamic attributes",
+            "Slots are data descriptors on the class",
+            "Dunder methods work normally with __slots__"
+          ],
+          "gotchas": [
+            "Cannot use __dict__ for introspection unless __dict__ is in __slots__",
+            "Subclass without __slots__ gets __dict__ back, negating savings",
+            "Cannot pickle slots by default -- need custom __getstate__/__setstate__",
+            "Multiple inheritance with different __slots__ is problematic"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__slots__` declares fixed attributes, preventing `__dict__` creation. Saves memory, prevents dynamic attributes. Dunder methods work normally with slots.",
+          "pseudo_code": "",
+          "actual_code": "class Point:\n    __slots__ = ('x', 'y')\n    def __init__(self, x, y):\n        self.x, self.y = x, y\n    def __repr__(self):\n        return f\"Point({self.x}, {self.y})\"\n\np = Point(1, 2)\nprint(p)              # Point(1, 2)\n# p.z = 3             # AttributeError\nprint(hasattr(p, '__dict__'))  # False",
+          "code_language": "python",
+          "key_points": [
+            "Saves memory, prevents dynamic attributes",
+            "Dunder methods unaffected by __slots__"
+          ],
+          "gotchas": [
+            "Subclass without __slots__ reintroduces __dict__"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,743 @@
+{
+  "concept_slug": "flask",
+  "questions": [
+    {
+      "title": "What is the Flask application factory pattern and why should you use it?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["flask", "app-factory", "architecture"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **application factory pattern** creates the Flask app inside a function rather than as a module-level global. This function typically:\n\n1. Creates the Flask instance\n2. Loads configuration\n3. Initializes extensions (db, login manager, etc.)\n4. Registers blueprints\n5. Returns the configured app\n\n### Why use it:\n- **Testing**: Create separate app instances with different configs (testing vs production)\n- **Multiple instances**: Run different configurations simultaneously\n- **Circular imports**: Avoids issues where extensions need the app at import time\n- **Blueprints**: Clean separation of concerns\n- **Flask CLI**: Works better with the `flask` command",
+          "pseudo_code": "def create_app(config=None):\n    app = Flask(__name__)\n    app.config.from_object(default_config)\n    if config:\n        app.config.update(config)\n    init_extensions(app)\n    register_blueprints(app)\n    return app",
+          "actual_code": "from flask import Flask\nfrom flask_sqlalchemy import SQLAlchemy\nfrom flask_migrate import Migrate\n\n# Extensions created without app (initialized later)\ndb = SQLAlchemy()\nmigrate = Migrate()\n\ndef create_app(config=None):\n    \"\"\"Application factory.\"\"\"\n    app = Flask(__name__)\n\n    # Default configuration\n    app.config.from_mapping(\n        SECRET_KEY='dev-secret-key',\n        SQLALCHEMY_DATABASE_URI='sqlite:///app.db',\n        SQLALCHEMY_TRACK_MODIFICATIONS=False,\n    )\n\n    # Override with passed config (useful for testing)\n    if config:\n        app.config.update(config)\n\n    # Initialize extensions with app\n    db.init_app(app)\n    migrate.init_app(app, db)\n\n    # Register blueprints\n    from .routes.auth import auth_bp\n    from .routes.api import api_bp\n    app.register_blueprint(auth_bp)\n    app.register_blueprint(api_bp, url_prefix='/api')\n\n    # Register error handlers\n    @app.errorhandler(404)\n    def not_found(error):\n        return {'error': 'Not found'}, 404\n\n    @app.errorhandler(500)\n    def server_error(error):\n        return {'error': 'Internal server error'}, 500\n\n    return app\n\n# Usage in production (wsgi.py or app.py)\napp = create_app()\n\n# Usage in tests\ndef test_config():\n    app = create_app({\n        'TESTING': True,\n        'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:',\n    })\n    assert app.config['TESTING'] is True\n\n# Usage with Flask CLI\n# In pyproject.toml or .flaskenv:\n# FLASK_APP=mypackage:create_app",
+          "code_language": "python",
+          "key_points": [
+            "Create Flask app inside a function, not at module level",
+            "Extensions are created globally but initialized with init_app() inside the factory",
+            "Enables different configs for testing, development, production",
+            "Avoids circular import issues"
+          ],
+          "gotchas": [
+            "Extensions must support the init_app pattern (most Flask extensions do)",
+            "Importing the app directly from the module does not work -- use current_app instead",
+            "Blueprint imports should be inside the factory to avoid circular imports",
+            "Flask CLI needs FLASK_APP pointing to the factory function"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The app factory creates the Flask app inside a function (`create_app()`), enabling different configs for testing/production, avoiding circular imports, and supporting multiple app instances.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Flask\n\ndef create_app(config=None):\n    app = Flask(__name__)\n    app.config['SECRET_KEY'] = 'dev'\n    if config:\n        app.config.update(config)\n    # register blueprints, extensions...\n    return app\n\n# Test with different config\ntest_app = create_app({'TESTING': True})",
+          "code_language": "python",
+          "key_points": [
+            "App created in a function, not at module level",
+            "Different configs for different environments"
+          ],
+          "gotchas": [
+            "Use current_app instead of importing the app instance directly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Flask routing work, including URL parameters and HTTP methods?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["flask", "routing", "URL", "HTTP-methods"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask uses decorators to map URLs to view functions. The `@app.route()` decorator registers a URL rule with the app's URL map.\n\n### URL parameters:\n- `<variable>`: String by default\n- `<int:id>`: Integer converter\n- `<float:value>`: Float converter\n- `<path:subpath>`: Like string but accepts slashes\n- `<uuid:item_id>`: UUID converter\n\n### HTTP methods:\nBy default, routes only accept GET. Use `methods=['GET', 'POST']` to accept multiple methods.\n\n### URL building:\n`url_for('function_name', **params)` generates URLs from view function names, making code resilient to URL changes.",
+          "pseudo_code": "@app.route('/path/<type:variable>', methods=['GET', 'POST'])\ndef view_function(variable):\n    if request.method == 'POST':\n        # handle POST\n    return response",
+          "actual_code": "from flask import Flask, request, redirect, url_for, jsonify\n\napp = Flask(__name__)\n\n# Basic route\n@app.route('/')\ndef index():\n    return 'Hello, World!'\n\n# URL parameters\n@app.route('/user/<username>')\ndef show_user(username):\n    return f'User: {username}'\n\n# Type converters\n@app.route('/post/<int:post_id>')\ndef show_post(post_id):\n    return f'Post #{post_id}'\n\n@app.route('/price/<float:amount>')\ndef show_price(amount):\n    return f'Price: ${amount:.2f}'\n\n@app.route('/files/<path:filepath>')\ndef serve_file(filepath):\n    return f'File: {filepath}'  # filepath can contain slashes\n\n# Multiple HTTP methods\n@app.route('/login', methods=['GET', 'POST'])\ndef login():\n    if request.method == 'POST':\n        username = request.form.get('username')\n        password = request.form.get('password')\n        # authenticate...\n        return redirect(url_for('index'))\n    return '''<form method=\"post\">\n        <input name=\"username\">\n        <input name=\"password\" type=\"password\">\n        <button>Login</button>\n    </form>'''\n\n# RESTful resource with multiple methods\n@app.route('/api/items', methods=['GET', 'POST'])\ndef items():\n    if request.method == 'GET':\n        return jsonify({'items': []})\n    elif request.method == 'POST':\n        data = request.get_json()\n        return jsonify(data), 201\n\n@app.route('/api/items/<int:item_id>', methods=['GET', 'PUT', 'DELETE'])\ndef item_detail(item_id):\n    if request.method == 'GET':\n        return jsonify({'id': item_id})\n    elif request.method == 'PUT':\n        data = request.get_json()\n        return jsonify(data)\n    elif request.method == 'DELETE':\n        return '', 204\n\n# URL building with url_for\nwith app.test_request_context():\n    print(url_for('index'))              # '/'\n    print(url_for('show_user', username='alice'))  # '/user/alice'\n    print(url_for('show_post', post_id=42))        # '/post/42'\n    print(url_for('items'))              # '/api/items'\n\n# Trailing slash behavior\n@app.route('/about/')   # Accessible as /about/ AND /about (redirects)\ndef about(): return 'About'\n\n@app.route('/contact')  # Accessible as /contact only. /contact/ returns 404\ndef contact(): return 'Contact'",
+          "code_language": "python",
+          "key_points": [
+            "@app.route() maps URLs to view functions with optional type converters",
+            "methods parameter controls which HTTP methods are accepted",
+            "url_for() builds URLs from function names, preventing hardcoded URLs",
+            "Trailing slash in route means Flask redirects /path to /path/"
+          ],
+          "gotchas": [
+            "Routes without trailing slash return 404 for URLs with trailing slash",
+            "url_for raises BuildError if the function name does not exist",
+            "Order of route registration matters -- first match wins for ambiguous patterns",
+            "request.get_json() returns None if Content-Type is not application/json"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@app.route('/path/<type:var>')` maps URLs to functions. Type converters: `int`, `float`, `path`, `uuid`. Use `methods=['GET', 'POST']` for HTTP methods. `url_for()` builds URLs from function names.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Flask, request, jsonify\n\napp = Flask(__name__)\n\n@app.route('/users/<int:user_id>', methods=['GET', 'PUT'])\ndef user(user_id):\n    if request.method == 'GET':\n        return jsonify({'id': user_id})\n    data = request.get_json()\n    return jsonify(data)",
+          "code_language": "python",
+          "key_points": [
+            "Type converters in angle brackets: <int:id>, <path:p>",
+            "url_for('function_name') generates URLs safely"
+          ],
+          "gotchas": [
+            "request.get_json() returns None without Content-Type: application/json"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Flask blueprints and how do they help organize larger applications?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["flask", "blueprints", "architecture"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **Blueprint** is a way to organize related routes, templates, and static files into reusable modules. Think of it as a mini-application that gets registered on the main Flask app.\n\n### Benefits:\n- **Modularity**: Split a large app into logical components (auth, api, admin)\n- **Reusability**: Same blueprint can be registered on multiple apps\n- **URL prefixing**: Each blueprint can have its own URL prefix\n- **Template/static overriding**: Each blueprint can have its own templates folder\n\n### Common patterns:\n- Feature-based: `auth_bp`, `api_bp`, `admin_bp`\n- API versioning: `/api/v1/...`, `/api/v2/...`\n- Plugin systems: register third-party blueprints",
+          "pseudo_code": "# In auth/routes.py:\nauth_bp = Blueprint('auth', __name__)\n\n@auth_bp.route('/login')\ndef login(): ...\n\n# In app factory:\napp.register_blueprint(auth_bp, url_prefix='/auth')\n# Result: /auth/login",
+          "actual_code": "from flask import Flask, Blueprint, render_template, jsonify, request\n\n# Blueprint for authentication\nauth_bp = Blueprint('auth', __name__,\n                    template_folder='templates/auth',\n                    url_prefix='/auth')\n\n@auth_bp.route('/login', methods=['GET', 'POST'])\ndef login():\n    if request.method == 'POST':\n        return jsonify({'message': 'Logged in'})\n    return '<form method=\"post\"><button>Login</button></form>'\n\n@auth_bp.route('/logout')\ndef logout():\n    return jsonify({'message': 'Logged out'})\n\n# Blueprint for API\napi_bp = Blueprint('api', __name__, url_prefix='/api/v1')\n\n@api_bp.route('/users')\ndef list_users():\n    return jsonify({'users': []})\n\n@api_bp.route('/users/<int:user_id>')\ndef get_user(user_id):\n    return jsonify({'id': user_id})\n\n# Blueprint-specific error handler\n@api_bp.errorhandler(404)\ndef api_not_found(error):\n    return jsonify({'error': 'API resource not found'}), 404\n\n# Blueprint-level before_request\n@api_bp.before_request\ndef require_api_key():\n    if not request.headers.get('X-API-Key'):\n        return jsonify({'error': 'API key required'}), 401\n\n# Admin blueprint\nadmin_bp = Blueprint('admin', __name__,\n                     url_prefix='/admin',\n                     static_folder='admin_static')\n\n@admin_bp.route('/dashboard')\ndef dashboard():\n    return 'Admin Dashboard'\n\n# App factory with blueprint registration\ndef create_app():\n    app = Flask(__name__)\n    app.config['SECRET_KEY'] = 'dev'\n\n    # Register blueprints\n    app.register_blueprint(auth_bp)\n    app.register_blueprint(api_bp)\n    app.register_blueprint(admin_bp)\n\n    return app\n\n# URL building with blueprints\napp = create_app()\nwith app.test_request_context():\n    from flask import url_for\n    print(url_for('auth.login'))       # /auth/login\n    print(url_for('api.list_users'))   # /api/v1/users\n    print(url_for('admin.dashboard'))  # /admin/dashboard\n\n# Nested blueprints (Flask 2.0+)\nparent_bp = Blueprint('parent', __name__, url_prefix='/parent')\nchild_bp = Blueprint('child', __name__, url_prefix='/child')\n\n@child_bp.route('/hello')\ndef child_hello():\n    return 'Hello from child'\n\nparent_bp.register_blueprint(child_bp)\n# URL: /parent/child/hello",
+          "code_language": "python",
+          "key_points": [
+            "Blueprints group related routes into reusable modules",
+            "url_prefix adds a prefix to all routes in the blueprint",
+            "Blueprint-specific before_request and errorhandler only apply to that blueprint",
+            "url_for('blueprint_name.function_name') to reference blueprint routes"
+          ],
+          "gotchas": [
+            "Blueprint names must be unique -- duplicate names cause errors at registration",
+            "url_for requires 'blueprint_name.endpoint' syntax for blueprint routes",
+            "Blueprint templates can shadow app-level templates of the same name",
+            "before_request on a blueprint only runs for that blueprint's routes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Blueprints are modular components grouping related routes. Create with `Blueprint('name', __name__)`, register with `app.register_blueprint(bp, url_prefix='/prefix')`. Reference with `url_for('bp.endpoint')`.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Blueprint, jsonify\n\napi_bp = Blueprint('api', __name__, url_prefix='/api')\n\n@api_bp.route('/users')\ndef list_users():\n    return jsonify({'users': []})\n\n# In app factory:\n# app.register_blueprint(api_bp)",
+          "code_language": "python",
+          "key_points": [
+            "Group related routes into reusable modules",
+            "url_prefix adds a prefix to all blueprint routes"
+          ],
+          "gotchas": [
+            "Blueprint names must be unique across the app"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do Jinja2 template filters, macros, and inheritance work in Flask?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["flask", "jinja2", "templates"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Jinja2 is Flask's default template engine. Three powerful features:\n\n### Template Inheritance\nBase templates define blocks that child templates override. This creates a consistent layout across pages.\n\n### Filters\nTransform variables in templates: `{{ value|filter }}`. Custom filters can be registered.\n\n### Macros\nReusable template functions. Like Python functions but for HTML. Defined with `{% macro name(args) %}`.",
+          "pseudo_code": "Inheritance:\n  base.html:  {% block content %}{% endblock %}\n  child.html: {% extends 'base.html' %}\n              {% block content %}My content{% endblock %}\n\nFilters:\n  {{ name|upper }}         -> \"ALICE\"\n  {{ list|join(', ') }}    -> \"a, b, c\"\n  {{ text|truncate(50) }}  -> \"Long text...\"\n\nMacros:\n  {% macro input(name, type='text') %}\n    <input type=\"{{ type }}\" name=\"{{ name }}\">\n  {% endmacro %}\n  {{ input('email', 'email') }}",
+          "actual_code": "from flask import Flask, render_template_string\n\napp = Flask(__name__)\n\n# Template Inheritance Example\nbase_template = '''\n<!DOCTYPE html>\n<html>\n<head><title>{% block title %}Default{% endblock %}</title></head>\n<body>\n  <nav>Navigation Bar</nav>\n  <main>\n    {% block content %}{% endblock %}\n  </main>\n  <footer>{% block footer %}Default Footer{% endblock %}</footer>\n</body>\n</html>\n'''\n\nchild_template = '''\n{% extends \"base.html\" %}\n{% block title %}Home Page{% endblock %}\n{% block content %}\n  <h1>Welcome, {{ user.name }}!</h1>\n  <p>{{ user.bio|truncate(100) }}</p>\n{% endblock %}\n{# footer block not overridden -- uses default #}\n'''\n\n# Custom Filters\n@app.template_filter('currency')\ndef currency_filter(value):\n    \"\"\"Format a number as currency.\"\"\"\n    return f\"${value:,.2f}\"\n\n@app.template_filter('timeago')\ndef timeago_filter(dt):\n    \"\"\"Convert datetime to relative time string.\"\"\"\n    from datetime import datetime\n    diff = datetime.utcnow() - dt\n    if diff.days > 0:\n        return f\"{diff.days}d ago\"\n    hours = diff.seconds // 3600\n    if hours > 0:\n        return f\"{hours}h ago\"\n    return f\"{diff.seconds // 60}m ago\"\n\n# Usage in template:\n# {{ price|currency }}        -> \"$1,234.56\"\n# {{ created_at|timeago }}    -> \"3h ago\"\n\n# Macros Example\nmacro_template = '''\n{# Define macros #}\n{% macro form_field(name, label, type=\"text\", required=false) %}\n  <div class=\"field\">\n    <label for=\"{{ name }}\">{{ label }}</label>\n    <input type=\"{{ type }}\" name=\"{{ name }}\" id=\"{{ name }}\"\n           {% if required %}required{% endif %}>\n  </div>\n{% endmacro %}\n\n{% macro alert(message, type=\"info\") %}\n  <div class=\"alert alert-{{ type }}\">\n    {{ message }}\n  </div>\n{% endmacro %}\n\n{# Use macros #}\n<form>\n  {{ form_field(\"username\", \"Username\", required=true) }}\n  {{ form_field(\"email\", \"Email\", type=\"email\", required=true) }}\n  {{ form_field(\"bio\", \"Bio\") }}\n  <button>Submit</button>\n</form>\n\n{{ alert(\"Profile updated!\", \"success\") }}\n'''\n\n# Import macros from another file\nimport_template = '''\n{% from \"macros.html\" import form_field, alert %}\n\n<form>\n  {{ form_field(\"name\", \"Name\") }}\n</form>\n'''\n\n# Built-in filters\nfilter_examples = '''\n{{ \"hello world\"|title }}           {# Hello World #}\n{{ \"hello\"|upper }}                 {# HELLO #}\n{{ [1,2,3]|join(\", \") }}            {# 1, 2, 3 #}\n{{ \"<script>\"|e }}                  {# &lt;script&gt; (escaped) #}\n{{ users|length }}                  {# number of users #}\n{{ users|selectattr(\"active\")|list }} {# filter active users #}\n{{ items|sort(attribute=\"name\") }}  {# sort by attribute #}\n{{ value|default(\"N/A\") }}          {# default if undefined #}\n{{ text|truncate(50, true, \"...\") }} {# truncate with ellipsis #}\n{{ dict|tojson }}                   {# convert to JSON string #}\n'''\n\n@app.route('/')\ndef index():\n    return render_template_string(macro_template)",
+          "code_language": "python",
+          "key_points": [
+            "Template inheritance: base defines blocks, children override them",
+            "Filters transform values: {{ val|filter }}, custom with @app.template_filter",
+            "Macros are reusable template functions, importable across files",
+            "Built-in filters: truncate, join, sort, default, tojson, length"
+          ],
+          "gotchas": [
+            "Jinja2 auto-escapes HTML by default -- use |safe only for trusted content",
+            "Macros imported with {% from %} are not available in child template blocks by default",
+            "Template inheritance only works with {% extends %} as the first tag in the file",
+            "Custom filters must be registered before the template is rendered"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Inheritance**: `{% extends 'base.html' %}` + `{% block name %}`. **Filters**: `{{ val|upper }}`, custom with `@app.template_filter`. **Macros**: `{% macro name(args) %}...{% endmacro %}`, import with `{% from 'file' import macro %}`.",
+          "pseudo_code": "",
+          "actual_code": "# Custom filter\n@app.template_filter('currency')\ndef currency(value):\n    return f\"${value:,.2f}\"\n\n# In template: {{ 1234.5|currency }} -> $1,234.50\n# Macro: {% macro btn(text) %}<button>{{ text }}</button>{% endmacro %}",
+          "code_language": "python",
+          "key_points": [
+            "Inheritance for layout, filters for data, macros for reusable HTML",
+            "@app.template_filter to register custom filters"
+          ],
+          "gotchas": [
+            "Jinja2 auto-escapes HTML -- use |safe only for trusted content"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do Flask request and response objects work?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["flask", "request", "response"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### The `request` object\nA thread-local proxy to the current request. Contains all data about the incoming HTTP request.\n\n### Key `request` attributes:\n- `request.method` -- HTTP method (GET, POST, etc.)\n- `request.args` -- URL query parameters (GET)\n- `request.form` -- Form data (POST)\n- `request.json` / `request.get_json()` -- JSON body\n- `request.files` -- Uploaded files\n- `request.headers` -- HTTP headers\n- `request.cookies` -- Cookies\n- `request.path` -- URL path\n- `request.url` -- Full URL\n\n### The `response` object\nView functions can return:\n- A string (becomes response body)\n- A tuple `(body, status_code)` or `(body, status_code, headers)`\n- A `Response` object\n- A dict (auto-converted to JSON in Flask 2.x+)\n\n`make_response()` creates a Response object for customization.",
+          "pseudo_code": "Request data access:\n  GET /search?q=python  -> request.args.get('q') = 'python'\n  POST form data        -> request.form.get('field')\n  POST JSON body        -> request.get_json()['key']\n  File upload           -> request.files['file']\n\nResponse creation:\n  return 'text'                    -> 200 OK, text/html\n  return {'key': 'val'}            -> 200 OK, application/json\n  return 'text', 201               -> 201 Created\n  return 'text', 201, {'X-Custom': 'val'}  -> with headers",
+          "actual_code": "from flask import Flask, request, make_response, jsonify, redirect, url_for\n\napp = Flask(__name__)\n\n# Accessing request data\n@app.route('/search')\ndef search():\n    query = request.args.get('q', '')  # GET parameter\n    page = request.args.get('page', 1, type=int)\n    return jsonify({'query': query, 'page': page})\n\n@app.route('/submit', methods=['POST'])\ndef submit():\n    # Form data (application/x-www-form-urlencoded or multipart/form-data)\n    name = request.form.get('name')\n    email = request.form.get('email')\n\n    # JSON body (application/json)\n    data = request.get_json(silent=True)  # silent=True returns None on failure\n\n    # Headers\n    auth = request.headers.get('Authorization')\n    content_type = request.content_type\n\n    return jsonify({\n        'name': name,\n        'email': email,\n        'json_data': data,\n        'auth_header': auth,\n    })\n\n# File upload\n@app.route('/upload', methods=['POST'])\ndef upload():\n    if 'file' not in request.files:\n        return jsonify({'error': 'No file uploaded'}), 400\n\n    file = request.files['file']\n    if file.filename == '':\n        return jsonify({'error': 'No file selected'}), 400\n\n    # file.save('/path/to/uploads/' + file.filename)\n    return jsonify({\n        'filename': file.filename,\n        'content_type': file.content_type,\n        'size': file.content_length,\n    })\n\n# Response creation methods\n@app.route('/text')\ndef text_response():\n    return 'Hello World'  # 200, text/html\n\n@app.route('/json')\ndef json_response():\n    return {'message': 'Hello'}  # auto-JSON in Flask 2.x+\n\n@app.route('/custom')\ndef custom_response():\n    response = make_response('Custom body', 201)\n    response.headers['X-Custom-Header'] = 'value'\n    response.set_cookie('session_id', 'abc123', httponly=True, samesite='Lax')\n    return response\n\n@app.route('/redirect-example')\ndef redirect_example():\n    return redirect(url_for('search', q='flask'))\n\n# Tuple responses\n@app.route('/tuple')\ndef tuple_response():\n    return 'Created', 201, {'Location': '/items/1'}\n\n# Accessing various request properties\n@app.route('/info')\ndef request_info():\n    return jsonify({\n        'method': request.method,\n        'url': request.url,\n        'path': request.path,\n        'remote_addr': request.remote_addr,\n        'user_agent': str(request.user_agent),\n        'is_json': request.is_json,\n        'cookies': dict(request.cookies),\n    })",
+          "code_language": "python",
+          "key_points": [
+            "request is a thread-local proxy with args, form, json, files, headers",
+            "Views can return strings, dicts (auto-JSON), tuples, or Response objects",
+            "make_response() for customizing headers, cookies, status codes",
+            "request.get_json(silent=True) returns None on parse failure instead of 400"
+          ],
+          "gotchas": [
+            "request.json raises 400 if body is not valid JSON; use get_json(silent=True)",
+            "request.form and request.args are MultiDict -- getlist() for multiple values",
+            "request is only available inside a request context (view function or with app.test_request_context())",
+            "Returning a dict as JSON only works in Flask 2.0+; use jsonify() for older versions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`request` provides access to query params (`.args`), form data (`.form`), JSON (`.get_json()`), files, headers, cookies. Views return strings, dicts (auto-JSON), tuples `(body, status, headers)`, or `Response` objects.",
+          "pseudo_code": "",
+          "actual_code": "from flask import request, jsonify, make_response\n\n@app.route('/api', methods=['POST'])\ndef api():\n    data = request.get_json()\n    name = request.args.get('name', 'default')\n    resp = make_response(jsonify({'ok': True}), 201)\n    resp.headers['X-Custom'] = 'value'\n    return resp",
+          "code_language": "python",
+          "key_points": [
+            "request.args (GET), request.form (POST), request.get_json() (JSON)",
+            "Return dict for JSON, tuple for status + headers"
+          ],
+          "gotchas": [
+            "request.get_json() needs Content-Type: application/json header"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do before_request and after_request hooks work in Flask?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["flask", "hooks", "middleware"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask provides request lifecycle hooks that run code before and after each request:\n\n### Hooks (in execution order):\n1. `before_request`: Runs before each request. If it returns a response, the view is skipped.\n2. **View function**: The matched route handler\n3. `after_request(response)`: Runs after each request. Must return a response.\n4. `teardown_request(exception)`: Runs after response is sent. For cleanup. Called even on errors.\n\n### Additional hooks:\n- `before_first_request` (deprecated in Flask 2.3): Runs only once on first request\n- `teardown_appcontext`: Cleanup when app context is popped\n\nBlueprint-specific hooks only apply to that blueprint's routes.",
+          "pseudo_code": "Request lifecycle:\n  before_request_1()\n  before_request_2()\n  |-> if any returns response, skip view\n  view_function()\n  after_request_1(response)\n  after_request_2(response)\n  teardown_request(exception)  # always runs",
+          "actual_code": "from flask import Flask, request, g, jsonify\nimport time\n\napp = Flask(__name__)\n\n# before_request: runs before every request\n@app.before_request\ndef log_request():\n    g.start_time = time.perf_counter()  # g is per-request storage\n    print(f\"Request: {request.method} {request.path}\")\n\n@app.before_request\ndef check_auth():\n    \"\"\"Authenticate requests. Return response to short-circuit.\"\"\"\n    public_paths = ['/', '/health', '/login']\n    if request.path in public_paths:\n        return None  # continue to view\n\n    token = request.headers.get('Authorization')\n    if not token:\n        return jsonify({'error': 'Unauthorized'}), 401  # skip view!\n\n    g.user = {'id': 1, 'name': 'Alice'}  # store user in g\n\n# after_request: modify response, add headers\n@app.after_request\ndef add_timing_header(response):\n    if hasattr(g, 'start_time'):\n        elapsed = time.perf_counter() - g.start_time\n        response.headers['X-Response-Time'] = f\"{elapsed:.4f}s\"\n    return response  # MUST return response\n\n@app.after_request\ndef add_security_headers(response):\n    response.headers['X-Content-Type-Options'] = 'nosniff'\n    response.headers['X-Frame-Options'] = 'DENY'\n    return response\n\n# teardown_request: cleanup, always runs\n@app.teardown_request\ndef cleanup(exception):\n    if exception:\n        print(f\"Request failed: {exception}\")\n    # Close database connections, etc.\n\n# Routes\n@app.route('/')\ndef index():\n    return 'Public page'\n\n@app.route('/api/data')\ndef api_data():\n    return jsonify({'user': g.user, 'data': [1, 2, 3]})\n\n@app.route('/health')\ndef health():\n    return jsonify({'status': 'ok'})\n\n# Blueprint-specific hooks\nfrom flask import Blueprint\n\nadmin_bp = Blueprint('admin', __name__, url_prefix='/admin')\n\n@admin_bp.before_request\ndef admin_auth():\n    \"\"\"Only runs for admin blueprint routes.\"\"\"\n    if not getattr(g, 'user', {}).get('is_admin'):\n        return jsonify({'error': 'Admin access required'}), 403\n\n@admin_bp.route('/dashboard')\ndef dashboard():\n    return jsonify({'admin': True})\n\napp.register_blueprint(admin_bp)",
+          "code_language": "python",
+          "key_points": [
+            "before_request can short-circuit by returning a response (skips view)",
+            "after_request receives and must return the response object",
+            "teardown_request always runs, even on errors -- for cleanup",
+            "g object stores per-request data accessible across hooks and views"
+          ],
+          "gotchas": [
+            "after_request must return the response -- forgetting this causes 500 errors",
+            "after_request does NOT run if an unhandled exception occurs -- use teardown_request for guaranteed cleanup",
+            "Blueprint before_request only runs for that blueprint's routes, not all routes",
+            "g is reset between requests -- do not use it for persistent state"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`before_request` runs before every view (return a response to skip the view). `after_request(response)` modifies the response (must return it). `teardown_request` always runs for cleanup. `g` stores per-request data.",
+          "pseudo_code": "",
+          "actual_code": "from flask import g, request\nimport time\n\n@app.before_request\ndef before():\n    g.start = time.time()\n\n@app.after_request\ndef after(response):\n    response.headers['X-Time'] = str(time.time() - g.start)\n    return response  # must return!",
+          "code_language": "python",
+          "key_points": [
+            "before_request for auth checks; after_request for headers",
+            "after_request MUST return the response object"
+          ],
+          "gotchas": [
+            "after_request does not run on unhandled exceptions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do sessions and cookies work in Flask?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["flask", "sessions", "cookies", "security"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Cookies\nFlask can set and read cookies using `response.set_cookie()` and `request.cookies`.\n\n### Sessions\nFlask sessions are **client-side** by default -- stored as a signed cookie. The data is serialized, signed with `SECRET_KEY`, and sent to the client. The client cannot tamper with it (the signature would break), but they CAN read it.\n\n### Session storage:\n- **Default**: Signed cookie (client-side). Limited to ~4KB.\n- **Server-side**: Use `Flask-Session` extension for Redis, filesystem, database backends.\n\n### Security considerations:\n- Always set a strong `SECRET_KEY` (used to sign session cookies)\n- Use `httponly=True` to prevent JavaScript access\n- Use `secure=True` for HTTPS-only\n- Use `samesite='Lax'` or `'Strict'` for CSRF protection",
+          "pseudo_code": "# Session (signed cookie)\nsession['user_id'] = 42      # set\nuser_id = session.get('user_id')  # get\nsession.pop('user_id', None)     # remove\n\n# Cookie (plain)\nresp.set_cookie('key', 'value', httponly=True)\nvalue = request.cookies.get('key')",
+          "actual_code": "from flask import Flask, session, request, make_response, redirect, url_for, jsonify\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = 'your-secret-key-change-in-production'\napp.config['SESSION_COOKIE_HTTPONLY'] = True\napp.config['SESSION_COOKIE_SAMESITE'] = 'Lax'\n\n# Session usage\n@app.route('/login', methods=['POST'])\ndef login():\n    data = request.get_json()\n    # Validate credentials...\n    session['user_id'] = 1\n    session['username'] = data.get('username', 'guest')\n    session.permanent = True  # session lasts beyond browser close\n    return jsonify({'message': 'Logged in'})\n\n@app.route('/profile')\ndef profile():\n    if 'user_id' not in session:\n        return jsonify({'error': 'Not logged in'}), 401\n    return jsonify({\n        'user_id': session['user_id'],\n        'username': session.get('username'),\n    })\n\n@app.route('/logout')\ndef logout():\n    session.clear()  # remove all session data\n    return jsonify({'message': 'Logged out'})\n\n# Cookie usage\n@app.route('/set-preference')\ndef set_preference():\n    theme = request.args.get('theme', 'light')\n    response = make_response(jsonify({'theme': theme}))\n    response.set_cookie(\n        'theme',\n        theme,\n        max_age=60 * 60 * 24 * 365,  # 1 year\n        httponly=True,\n        secure=False,  # True in production (HTTPS only)\n        samesite='Lax',\n    )\n    return response\n\n@app.route('/get-preference')\ndef get_preference():\n    theme = request.cookies.get('theme', 'light')\n    return jsonify({'theme': theme})\n\n@app.route('/delete-preference')\ndef delete_preference():\n    response = make_response(jsonify({'message': 'Preference deleted'}))\n    response.delete_cookie('theme')\n    return response\n\n# Session configuration options\napp.config.update(\n    SESSION_COOKIE_NAME='myapp_session',\n    PERMANENT_SESSION_LIFETIME=3600,  # 1 hour for permanent sessions\n    SESSION_COOKIE_SECURE=True,  # HTTPS only\n    SESSION_COOKIE_HTTPONLY=True,  # no JS access\n    SESSION_COOKIE_SAMESITE='Lax',  # CSRF protection\n)",
+          "code_language": "python",
+          "key_points": [
+            "Sessions are signed cookies by default -- tamper-proof but client-readable",
+            "SECRET_KEY signs the session cookie -- must be strong and secret",
+            "session.permanent = True makes sessions survive browser close",
+            "Cookies need httponly, secure, and samesite for security"
+          ],
+          "gotchas": [
+            "Default sessions are client-side (cookie) -- limited to ~4KB",
+            "Session data is readable by the client (just signed, not encrypted)",
+            "Changing SECRET_KEY invalidates all existing sessions",
+            "session.modified must be set to True if you mutate a mutable object in session (e.g., session['list'].append(x))"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask sessions are signed cookies (tamper-proof, client-readable). Use `session['key'] = value` to set, `session.get('key')` to read. Cookies: `response.set_cookie(name, value, httponly=True)`. Always set a strong `SECRET_KEY`.",
+          "pseudo_code": "",
+          "actual_code": "from flask import session, request, make_response\n\n@app.route('/login', methods=['POST'])\ndef login():\n    session['user_id'] = 1  # stored in signed cookie\n    return 'OK'\n\n@app.route('/check')\ndef check():\n    user_id = session.get('user_id')  # read from cookie\n    theme = request.cookies.get('theme', 'light')  # plain cookie",
+          "code_language": "python",
+          "key_points": [
+            "session uses signed cookies; SECRET_KEY required",
+            "Cookies need httponly=True and samesite='Lax'"
+          ],
+          "gotchas": [
+            "Session data is signed but NOT encrypted -- client can read it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle errors and create custom error pages in Flask?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["flask", "error-handling", "errorhandler"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask provides `@app.errorhandler()` to register custom error handlers for HTTP status codes and exceptions.\n\n### Error handling approaches:\n1. `@app.errorhandler(404)` -- handle specific HTTP status codes\n2. `@app.errorhandler(Exception)` -- catch-all for unhandled exceptions\n3. `abort(status_code)` -- raise HTTP errors from view functions\n4. `@app.errorhandler(CustomException)` -- handle custom exception classes\n\nError handlers can return HTML (for web apps) or JSON (for APIs).",
+          "pseudo_code": "@app.errorhandler(404)\ndef not_found(error):\n    if wants_json(request):\n        return jsonify({'error': 'Not found'}), 404\n    return render_template('404.html'), 404\n\nabort(403)  # raises 403 Forbidden from any view",
+          "actual_code": "from flask import Flask, jsonify, render_template_string, request\nfrom werkzeug.exceptions import HTTPException\n\napp = Flask(__name__)\n\n# Custom exception\nclass APIError(Exception):\n    def __init__(self, message, status_code=400, payload=None):\n        super().__init__()\n        self.message = message\n        self.status_code = status_code\n        self.payload = payload\n\n    def to_dict(self):\n        rv = dict(self.payload or {})\n        rv['error'] = self.message\n        return rv\n\n# Register error handlers\n@app.errorhandler(404)\ndef not_found(error):\n    if request.path.startswith('/api/'):\n        return jsonify({'error': 'Resource not found'}), 404\n    return render_template_string(\n        '<h1>404 - Page Not Found</h1><p>{{ message }}</p>',\n        message=str(error)\n    ), 404\n\n@app.errorhandler(500)\ndef server_error(error):\n    return jsonify({'error': 'Internal server error'}), 500\n\n@app.errorhandler(405)\ndef method_not_allowed(error):\n    return jsonify({\n        'error': 'Method not allowed',\n        'allowed': error.valid_methods\n    }), 405\n\n# Handle custom exception\n@app.errorhandler(APIError)\ndef handle_api_error(error):\n    response = jsonify(error.to_dict())\n    response.status_code = error.status_code\n    return response\n\n# Catch-all for unhandled exceptions\n@app.errorhandler(Exception)\ndef handle_unexpected_error(error):\n    if isinstance(error, HTTPException):\n        return error  # let HTTP errors pass through\n    # Log the error\n    app.logger.error(f\"Unexpected error: {error}\", exc_info=True)\n    return jsonify({'error': 'An unexpected error occurred'}), 500\n\n# Using abort and custom exceptions in views\nfrom flask import abort\n\n@app.route('/api/users/<int:user_id>')\ndef get_user(user_id):\n    if user_id > 100:\n        abort(404)  # raises werkzeug NotFound exception\n\n    if user_id == 0:\n        raise APIError('Invalid user ID', status_code=400)\n\n    return jsonify({'id': user_id, 'name': 'Alice'})\n\n@app.route('/api/protected')\ndef protected():\n    token = request.headers.get('Authorization')\n    if not token:\n        raise APIError('Authentication required', status_code=401)\n    if token != 'Bearer valid-token':\n        raise APIError('Invalid token', status_code=403,\n                       payload={'hint': 'Check your API key'})\n    return jsonify({'data': 'secret'})",
+          "code_language": "python",
+          "key_points": [
+            "@app.errorhandler handles specific HTTP codes or exception types",
+            "abort(code) raises HTTP errors from within view functions",
+            "Custom exception classes for structured API error responses",
+            "Error handlers can return HTML or JSON based on request context"
+          ],
+          "gotchas": [
+            "Error handlers must return a response (or tuple) -- returning None causes 500",
+            "The catch-all Exception handler should check for HTTPException to not swallow them",
+            "In debug mode, Flask shows its own error page for 500 errors, hiding your handler",
+            "abort() raises werkzeug.exceptions.HTTPException subclasses, not generic exceptions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@app.errorhandler(404)` registers a handler for HTTP 404. `abort(code)` raises HTTP errors. Custom exception classes with their own handlers create structured API errors.",
+          "pseudo_code": "",
+          "actual_code": "from flask import abort, jsonify\n\n@app.errorhandler(404)\ndef not_found(e):\n    return jsonify({'error': 'Not found'}), 404\n\n@app.route('/users/<int:uid>')\ndef get_user(uid):\n    if uid > 100:\n        abort(404)",
+          "code_language": "python",
+          "key_points": [
+            "@app.errorhandler for status codes and exception classes",
+            "abort(code) to raise HTTP errors from views"
+          ],
+          "gotchas": [
+            "In debug mode, Flask's debugger overrides your 500 handler"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between Flask's application context and request context?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["flask", "context", "application-context", "request-context"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask uses two contexts implemented as thread-local stacks:\n\n### Application Context\n- Contains: `current_app` (the Flask app) and `g` (per-request storage)\n- Pushed: When a request starts, or manually with `app.app_context()`\n- Use case: Accessing app config, database connections outside of requests\n\n### Request Context\n- Contains: `request` (incoming HTTP data) and `session` (user session)\n- Pushed: Automatically when Flask handles a request\n- Pushing request context also pushes application context\n\n### When you need to manually push contexts:\n- In CLI commands\n- In background tasks/workers\n- In tests\n- In interactive shell",
+          "pseudo_code": "Application Context:\n  current_app -> the Flask app instance\n  g -> per-request storage (reset each request)\n\nRequest Context:\n  request -> incoming HTTP request data\n  session -> user session data\n\nWith request context:\n  both contexts are available\nWith only app context:\n  only current_app and g are available",
+          "actual_code": "from flask import Flask, current_app, g, request, session\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = 'dev'\napp.config['DATABASE_URI'] = 'sqlite:///app.db'\n\n# Inside a view -- both contexts available\n@app.route('/')\ndef index():\n    # Application context\n    db_uri = current_app.config['DATABASE_URI']\n    g.user = 'Alice'\n\n    # Request context\n    method = request.method\n    user_agent = request.user_agent.string\n\n    return f'DB: {db_uri}, Method: {method}'\n\n# Manually pushing application context\ndef init_database():\n    \"\"\"Called from CLI or script -- no request context.\"\"\"\n    with app.app_context():\n        db_uri = current_app.config['DATABASE_URI']\n        print(f\"Initializing DB: {db_uri}\")\n        # current_app works here, but request does NOT\n\ninit_database()\n\n# Manually pushing request context (for testing)\ndef test_example():\n    with app.test_request_context('/test?name=Alice',\n                                   method='POST',\n                                   data={'key': 'value'}):\n        # Both contexts available\n        print(request.args.get('name'))  # Alice\n        print(request.method)  # POST\n        print(current_app.name)  # app name\n\ntest_example()\n\n# Error: using request outside context\ntry:\n    print(request.method)  # RuntimeError!\nexcept RuntimeError as e:\n    print(f\"Error: {e}\")\n    # \"Working outside of request context\"\n\n# Common pattern: CLI command\n@app.cli.command()\ndef seed_db():\n    \"\"\"Flask CLI commands have app context automatically.\"\"\"\n    db_uri = current_app.config['DATABASE_URI']\n    print(f\"Seeding database: {db_uri}\")\n\n# Background task pattern\ndef send_email_task(app, user_email):\n    \"\"\"Background task needs its own app context.\"\"\"\n    with app.app_context():\n        # current_app works here\n        sender = current_app.config.get('MAIL_SENDER')\n        print(f\"Sending from {sender} to {user_email}\")\n\n# g object lifespan\n@app.before_request\ndef load_user():\n    g.user = 'loaded from DB'  # available in view and after_request\n\n@app.route('/profile')\ndef profile():\n    return f'User: {g.user}'\n\n@app.teardown_appcontext\ndef close_db(exception):\n    \"\"\"Clean up when app context is popped.\"\"\"\n    db = g.pop('db_connection', None)\n    if db is not None:\n        db.close()",
+          "code_language": "python",
+          "key_points": [
+            "Application context: current_app + g (config, per-request storage)",
+            "Request context: request + session (HTTP data, user session)",
+            "Request context automatically pushes app context",
+            "CLI commands, background tasks, and tests need manual context pushing"
+          ],
+          "gotchas": [
+            "Accessing request/session outside a request context raises RuntimeError",
+            "g is reset between requests -- do not use for persistent storage",
+            "Forgetting to push app context in background tasks causes 'working outside of application context' errors",
+            "current_app is a proxy -- don't store it; it changes with context"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**App context**: `current_app` + `g` (config, per-request storage). **Request context**: `request` + `session` (HTTP data). Request context auto-includes app context. CLI commands/tests need `with app.app_context():`.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Flask, current_app\n\napp = Flask(__name__)\napp.config['DB'] = 'sqlite:///app.db'\n\n# Outside request: manually push context\nwith app.app_context():\n    print(current_app.config['DB'])  # works\n\n# Inside view: both contexts available automatically\n@app.route('/')\ndef index():\n    return current_app.config['DB']",
+          "code_language": "python",
+          "key_points": [
+            "App context: current_app, g. Request context: request, session",
+            "Use with app.app_context() outside of requests"
+          ],
+          "gotchas": [
+            "Accessing request outside request context raises RuntimeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test Flask applications?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["flask", "testing", "pytest"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask provides built-in testing support with `app.test_client()` which simulates HTTP requests without running a real server.\n\n### Key testing tools:\n- `app.test_client()`: Makes HTTP requests to the app\n- `app.test_request_context()`: Creates a request context for unit testing\n- `TESTING=True` config: Disables error catching for better tracebacks\n\n### With pytest:\n- Use fixtures for app, client, and database setup\n- conftest.py for shared fixtures\n- Each test gets its own database transaction (rolled back after test)",
+          "pseudo_code": "@pytest.fixture\ndef app():\n    app = create_app({'TESTING': True})\n    yield app\n\n@pytest.fixture\ndef client(app):\n    return app.test_client()\n\ndef test_home(client):\n    response = client.get('/')\n    assert response.status_code == 200",
+          "actual_code": "import pytest\nfrom flask import Flask, jsonify, request\n\n# Application to test\ndef create_app(config=None):\n    app = Flask(__name__)\n    app.config['SECRET_KEY'] = 'test'\n    if config:\n        app.config.update(config)\n\n    @app.route('/')\n    def index():\n        return jsonify({'message': 'Hello'})\n\n    @app.route('/api/items', methods=['GET', 'POST'])\n    def items():\n        if request.method == 'POST':\n            data = request.get_json()\n            return jsonify(data), 201\n        return jsonify({'items': []})\n\n    @app.route('/api/items/<int:item_id>')\n    def item_detail(item_id):\n        if item_id > 100:\n            return jsonify({'error': 'Not found'}), 404\n        return jsonify({'id': item_id})\n\n    return app\n\n# conftest.py fixtures\n@pytest.fixture\ndef app():\n    app = create_app({'TESTING': True})\n    yield app\n\n@pytest.fixture\ndef client(app):\n    return app.test_client()\n\n@pytest.fixture\ndef runner(app):\n    return app.test_cli_runner()\n\n# Test cases\ndef test_index(client):\n    response = client.get('/')\n    assert response.status_code == 200\n    data = response.get_json()\n    assert data['message'] == 'Hello'\n\ndef test_get_items(client):\n    response = client.get('/api/items')\n    assert response.status_code == 200\n    assert 'items' in response.get_json()\n\ndef test_create_item(client):\n    response = client.post('/api/items',\n                           json={'name': 'Test Item', 'price': 9.99})\n    assert response.status_code == 201\n    data = response.get_json()\n    assert data['name'] == 'Test Item'\n\ndef test_get_item(client):\n    response = client.get('/api/items/1')\n    assert response.status_code == 200\n    assert response.get_json()['id'] == 1\n\ndef test_item_not_found(client):\n    response = client.get('/api/items/999')\n    assert response.status_code == 404\n\n# Testing with authentication\ndef test_with_headers(client):\n    response = client.get('/api/items',\n                          headers={'Authorization': 'Bearer token123'})\n    assert response.status_code == 200\n\n# Testing sessions\ndef test_session(client):\n    with client.session_transaction() as sess:\n        sess['user_id'] = 1  # set session before request\n\n    response = client.get('/profile')\n    # session is now set for this request\n\n# Testing forms\ndef test_form_submission(client):\n    response = client.post('/login',\n                           data={'username': 'alice', 'password': 'secret'},\n                           follow_redirects=True)\n    assert response.status_code == 200\n\n# Testing file uploads\nimport io\n\ndef test_file_upload(client):\n    data = {\n        'file': (io.BytesIO(b'file content'), 'test.txt'),\n    }\n    response = client.post('/upload',\n                           data=data,\n                           content_type='multipart/form-data')\n    assert response.status_code == 200",
+          "code_language": "python",
+          "key_points": [
+            "app.test_client() simulates HTTP requests without a real server",
+            "response.get_json() parses JSON response body",
+            "json= parameter sends JSON with correct Content-Type",
+            "session_transaction() context manager sets session data for testing"
+          ],
+          "gotchas": [
+            "TESTING=True disables error catching -- exceptions propagate to the test",
+            "client.get/post returns a Response, not the view's return value",
+            "follow_redirects=False by default -- set True to follow redirect chains",
+            "File uploads need content_type='multipart/form-data'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `app.test_client()` to make HTTP requests in tests. `response.get_json()` parses JSON. Use `json=` for POST data. Test sessions with `client.session_transaction()`.",
+          "pseudo_code": "",
+          "actual_code": "import pytest\n\n@pytest.fixture\ndef client():\n    app = create_app({'TESTING': True})\n    return app.test_client()\n\ndef test_api(client):\n    resp = client.post('/api/items', json={'name': 'test'})\n    assert resp.status_code == 201\n    assert resp.get_json()['name'] == 'test'",
+          "code_language": "python",
+          "key_points": [
+            "test_client() for HTTP simulation",
+            "json= for sending JSON data"
+          ],
+          "gotchas": [
+            "follow_redirects defaults to False"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Flask-SQLAlchemy integrate with Flask?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["flask", "SQLAlchemy", "ORM", "database"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask-SQLAlchemy is an extension that integrates SQLAlchemy ORM with Flask. It simplifies database setup, model definition, and session management.\n\n### Key features:\n- Automatic session management tied to request lifecycle\n- `db.Model` base class for defining models\n- `db.session` for queries and transactions\n- Integration with Flask's app factory pattern via `db.init_app(app)`\n- Automatic table creation with `db.create_all()`",
+          "pseudo_code": "db = SQLAlchemy()\n\nclass User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    name = db.Column(db.String(100))\n\n# In app factory:\ndb.init_app(app)\n\n# Query:\nUser.query.filter_by(name='Alice').first()\ndb.session.add(user)\ndb.session.commit()",
+          "actual_code": "from flask import Flask\nfrom flask_sqlalchemy import SQLAlchemy\nfrom datetime import datetime\n\ndb = SQLAlchemy()\n\n# Model definitions\nclass User(db.Model):\n    __tablename__ = 'users'\n\n    id = db.Column(db.Integer, primary_key=True)\n    username = db.Column(db.String(80), unique=True, nullable=False)\n    email = db.Column(db.String(120), unique=True, nullable=False)\n    created_at = db.Column(db.DateTime, default=datetime.utcnow)\n    posts = db.relationship('Post', backref='author', lazy='dynamic')\n\n    def __repr__(self):\n        return f'<User {self.username}>'\n\n    def to_dict(self):\n        return {\n            'id': self.id,\n            'username': self.username,\n            'email': self.email,\n            'created_at': self.created_at.isoformat(),\n        }\n\nclass Post(db.Model):\n    __tablename__ = 'posts'\n\n    id = db.Column(db.Integer, primary_key=True)\n    title = db.Column(db.String(200), nullable=False)\n    body = db.Column(db.Text)\n    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)\n    created_at = db.Column(db.DateTime, default=datetime.utcnow)\n\n# App factory\ndef create_app():\n    app = Flask(__name__)\n    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'\n    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False\n    db.init_app(app)\n    return app\n\n# CRUD operations in views\nfrom flask import jsonify, request\n\napp = create_app()\n\n@app.route('/api/users', methods=['GET'])\ndef list_users():\n    users = User.query.all()\n    return jsonify([u.to_dict() for u in users])\n\n@app.route('/api/users', methods=['POST'])\ndef create_user():\n    data = request.get_json()\n    user = User(username=data['username'], email=data['email'])\n    db.session.add(user)\n    db.session.commit()\n    return jsonify(user.to_dict()), 201\n\n@app.route('/api/users/<int:user_id>')\ndef get_user(user_id):\n    user = db.session.get(User, user_id)  # SQLAlchemy 2.0 style\n    if not user:\n        return jsonify({'error': 'Not found'}), 404\n    return jsonify(user.to_dict())\n\n@app.route('/api/users/<int:user_id>', methods=['PUT'])\ndef update_user(user_id):\n    user = db.session.get(User, user_id)\n    if not user:\n        return jsonify({'error': 'Not found'}), 404\n    data = request.get_json()\n    user.username = data.get('username', user.username)\n    user.email = data.get('email', user.email)\n    db.session.commit()\n    return jsonify(user.to_dict())\n\n@app.route('/api/users/<int:user_id>', methods=['DELETE'])\ndef delete_user(user_id):\n    user = db.session.get(User, user_id)\n    if not user:\n        return jsonify({'error': 'Not found'}), 404\n    db.session.delete(user)\n    db.session.commit()\n    return '', 204\n\n# Advanced queries\n@app.route('/api/users/search')\ndef search_users():\n    query = request.args.get('q', '')\n    users = User.query.filter(\n        User.username.ilike(f'%{query}%')\n    ).order_by(User.created_at.desc()).limit(10).all()\n    return jsonify([u.to_dict() for u in users])\n\n# Create tables\nwith app.app_context():\n    db.create_all()",
+          "code_language": "python",
+          "key_points": [
+            "db = SQLAlchemy() created globally, initialized with db.init_app(app)",
+            "Models inherit from db.Model with columns as db.Column instances",
+            "db.session manages transactions: add(), commit(), rollback()",
+            "db.create_all() creates tables from model definitions"
+          ],
+          "gotchas": [
+            "db.create_all() only creates tables that don't exist -- use Flask-Migrate for schema changes",
+            "db.session.commit() is needed after add/delete -- forgetting it means changes are lost",
+            "Querying outside app context raises RuntimeError -- push context first",
+            "SQLALCHEMY_TRACK_MODIFICATIONS should be False to avoid performance overhead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask-SQLAlchemy integrates SQLAlchemy with Flask. Define models with `db.Model`, use `db.session` for CRUD. Initialize with `db.init_app(app)` in the factory.",
+          "pseudo_code": "",
+          "actual_code": "from flask_sqlalchemy import SQLAlchemy\n\ndb = SQLAlchemy()\n\nclass User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    name = db.Column(db.String(100), nullable=False)\n\n# Query\nuser = User.query.filter_by(name='Alice').first()\ndb.session.add(User(name='Bob'))\ndb.session.commit()",
+          "code_language": "python",
+          "key_points": [
+            "db.Model for models, db.session for CRUD",
+            "db.init_app(app) for app factory pattern"
+          ],
+          "gotchas": [
+            "Must db.session.commit() to persist changes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create RESTful APIs with Flask?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["flask", "REST", "API", "design-patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "REST (Representational State Transfer) uses HTTP methods and URLs to represent resources. Flask is well-suited for building RESTful APIs.\n\n### REST conventions:\n| Method | URL | Action |\n|---|---|---|\n| GET | /api/items | List all items |\n| POST | /api/items | Create new item |\n| GET | /api/items/1 | Get item 1 |\n| PUT | /api/items/1 | Update item 1 (full) |\n| PATCH | /api/items/1 | Update item 1 (partial) |\n| DELETE | /api/items/1 | Delete item 1 |\n\n### Response codes:\n- 200 OK, 201 Created, 204 No Content\n- 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found\n- 422 Unprocessable Entity, 500 Internal Server Error",
+          "pseudo_code": "GET    /api/items     -> list items    (200)\nPOST   /api/items     -> create item   (201 + Location header)\nGET    /api/items/1   -> get item      (200 or 404)\nPUT    /api/items/1   -> replace item  (200 or 404)\nDELETE /api/items/1   -> delete item   (204 or 404)",
+          "actual_code": "from flask import Flask, jsonify, request, url_for\nfrom functools import wraps\n\napp = Flask(__name__)\n\n# In-memory storage for demo\nitems_db = {\n    1: {'id': 1, 'name': 'Widget', 'price': 9.99},\n    2: {'id': 2, 'name': 'Gadget', 'price': 19.99},\n}\nnext_id = 3\n\n# Input validation decorator\ndef require_json(f):\n    @wraps(f)\n    def decorated(*args, **kwargs):\n        if not request.is_json:\n            return jsonify({'error': 'Content-Type must be application/json'}), 415\n        return f(*args, **kwargs)\n    return decorated\n\n# LIST\n@app.route('/api/items', methods=['GET'])\ndef list_items():\n    page = request.args.get('page', 1, type=int)\n    per_page = request.args.get('per_page', 10, type=int)\n    items = list(items_db.values())\n    start = (page - 1) * per_page\n    end = start + per_page\n    return jsonify({\n        'items': items[start:end],\n        'total': len(items),\n        'page': page,\n        'per_page': per_page,\n    })\n\n# CREATE\n@app.route('/api/items', methods=['POST'])\n@require_json\ndef create_item():\n    global next_id\n    data = request.get_json()\n\n    # Validation\n    if 'name' not in data:\n        return jsonify({'error': 'name is required'}), 400\n    if 'price' not in data:\n        return jsonify({'error': 'price is required'}), 400\n\n    item = {\n        'id': next_id,\n        'name': data['name'],\n        'price': float(data['price']),\n    }\n    items_db[next_id] = item\n    next_id += 1\n\n    response = jsonify(item)\n    response.status_code = 201\n    response.headers['Location'] = url_for('get_item', item_id=item['id'])\n    return response\n\n# READ\n@app.route('/api/items/<int:item_id>', methods=['GET'])\ndef get_item(item_id):\n    item = items_db.get(item_id)\n    if not item:\n        return jsonify({'error': 'Item not found'}), 404\n    return jsonify(item)\n\n# UPDATE (full replacement)\n@app.route('/api/items/<int:item_id>', methods=['PUT'])\n@require_json\ndef update_item(item_id):\n    if item_id not in items_db:\n        return jsonify({'error': 'Item not found'}), 404\n\n    data = request.get_json()\n    items_db[item_id] = {\n        'id': item_id,\n        'name': data['name'],\n        'price': float(data['price']),\n    }\n    return jsonify(items_db[item_id])\n\n# PARTIAL UPDATE\n@app.route('/api/items/<int:item_id>', methods=['PATCH'])\n@require_json\ndef patch_item(item_id):\n    item = items_db.get(item_id)\n    if not item:\n        return jsonify({'error': 'Item not found'}), 404\n\n    data = request.get_json()\n    if 'name' in data:\n        item['name'] = data['name']\n    if 'price' in data:\n        item['price'] = float(data['price'])\n    return jsonify(item)\n\n# DELETE\n@app.route('/api/items/<int:item_id>', methods=['DELETE'])\ndef delete_item(item_id):\n    if item_id not in items_db:\n        return jsonify({'error': 'Item not found'}), 404\n    del items_db[item_id]\n    return '', 204\n\n# Error handlers for API\n@app.errorhandler(404)\ndef not_found(error):\n    return jsonify({'error': 'Not found'}), 404\n\n@app.errorhandler(405)\ndef method_not_allowed(error):\n    return jsonify({'error': 'Method not allowed'}), 405",
+          "code_language": "python",
+          "key_points": [
+            "Map HTTP methods to CRUD operations: GET=Read, POST=Create, PUT=Update, DELETE=Delete",
+            "Return appropriate status codes: 201 Created, 204 No Content, 404 Not Found",
+            "Include Location header for POST responses pointing to the new resource",
+            "Validate input and return 400/422 for bad requests"
+          ],
+          "gotchas": [
+            "PUT replaces the entire resource; PATCH updates only specified fields",
+            "DELETE should return 204 No Content (empty body), not 200",
+            "POST to a collection creates a new resource; POST to a resource is non-standard",
+            "Always validate input -- never trust client data"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Map HTTP methods to CRUD: GET=list/read, POST=create (201), PUT=update, DELETE=remove (204). Use `request.get_json()` for input, `jsonify()` for output, proper status codes.",
+          "pseudo_code": "",
+          "actual_code": "@app.route('/api/items', methods=['GET', 'POST'])\ndef items():\n    if request.method == 'POST':\n        data = request.get_json()\n        # create item...\n        return jsonify(item), 201\n    return jsonify({'items': all_items})\n\n@app.route('/api/items/<int:id>', methods=['DELETE'])\ndef delete(id):\n    # delete item...\n    return '', 204",
+          "code_language": "python",
+          "key_points": [
+            "HTTP methods map to CRUD operations",
+            "201 for create, 204 for delete, 404 for not found"
+          ],
+          "gotchas": [
+            "PUT replaces entirely; PATCH updates partially"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do Flask-WTF forms work for input validation?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["flask", "WTForms", "forms", "validation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask-WTF integrates WTForms with Flask, providing:\n\n- CSRF protection automatically\n- Form validation with built-in and custom validators\n- File upload handling\n- Integration with Jinja2 templates\n\nForms are defined as classes with fields that have validators attached.",
+          "pseudo_code": "class LoginForm(FlaskForm):\n    username = StringField('Username', validators=[DataRequired()])\n    password = PasswordField('Password', validators=[Length(min=8)])\n    submit = SubmitField('Login')\n\n# In view:\nform = LoginForm()\nif form.validate_on_submit():\n    # form data is valid\n    username = form.username.data",
+          "actual_code": "from flask import Flask, render_template_string, redirect, url_for, flash\nfrom flask_wtf import FlaskForm\nfrom wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField\nfrom wtforms.validators import DataRequired, Email, Length, EqualTo, ValidationError\n\napp = Flask(__name__)\napp.config['SECRET_KEY'] = 'dev-secret'\n\n# Form definition\nclass RegistrationForm(FlaskForm):\n    username = StringField('Username', validators=[\n        DataRequired(),\n        Length(min=3, max=20, message='Username must be 3-20 characters')\n    ])\n    email = StringField('Email', validators=[\n        DataRequired(),\n        Email(message='Invalid email address')\n    ])\n    password = PasswordField('Password', validators=[\n        DataRequired(),\n        Length(min=8, message='Password must be at least 8 characters')\n    ])\n    confirm = PasswordField('Confirm Password', validators=[\n        DataRequired(),\n        EqualTo('password', message='Passwords must match')\n    ])\n    accept_tos = BooleanField('I accept the Terms of Service', validators=[\n        DataRequired(message='You must accept the Terms of Service')\n    ])\n    submit = SubmitField('Register')\n\n    # Custom validator\n    def validate_username(self, field):\n        reserved = ['admin', 'root', 'system']\n        if field.data.lower() in reserved:\n            raise ValidationError('This username is reserved.')\n\n# View using form\n@app.route('/register', methods=['GET', 'POST'])\ndef register():\n    form = RegistrationForm()\n    if form.validate_on_submit():  # POST + valid\n        username = form.username.data\n        email = form.email.data\n        password = form.password.data\n        # Create user...\n        flash('Registration successful!', 'success')\n        return redirect(url_for('register'))\n\n    # GET or validation failed -- show form with errors\n    return render_template_string('''\n    <form method=\"post\">\n        {{ form.hidden_tag() }}\n        {% for field in [form.username, form.email, form.password, form.confirm] %}\n            <div>\n                {{ field.label }}\n                {{ field(size=32) }}\n                {% for error in field.errors %}\n                    <span style=\"color:red\">{{ error }}</span>\n                {% endfor %}\n            </div>\n        {% endfor %}\n        <div>{{ form.accept_tos() }} {{ form.accept_tos.label }}</div>\n        {{ form.submit() }}\n    </form>\n    ''', form=form)\n\n# Simple login form\nclass LoginForm(FlaskForm):\n    username = StringField('Username', validators=[DataRequired()])\n    password = PasswordField('Password', validators=[DataRequired()])\n    remember = BooleanField('Remember Me')\n    submit = SubmitField('Login')\n\n# Contact form with textarea\nclass ContactForm(FlaskForm):\n    name = StringField('Name', validators=[DataRequired()])\n    email = StringField('Email', validators=[DataRequired(), Email()])\n    message = TextAreaField('Message', validators=[\n        DataRequired(),\n        Length(min=10, max=1000)\n    ])\n    submit = SubmitField('Send')",
+          "code_language": "python",
+          "key_points": [
+            "Forms are classes inheriting FlaskForm with typed fields and validators",
+            "form.validate_on_submit() checks POST + validation in one call",
+            "form.hidden_tag() renders CSRF token in templates",
+            "Custom validators as validate_fieldname(self, field) methods"
+          ],
+          "gotchas": [
+            "CSRF token is required -- form.hidden_tag() must be in the template",
+            "validate_on_submit() returns False for GET requests (by design)",
+            "form.errors is a dict of field -> error list; check after validate_on_submit() fails",
+            "SECRET_KEY is required for CSRF protection -- must be set"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask-WTF forms are classes with typed fields and validators. `form.validate_on_submit()` checks POST + validation. `form.hidden_tag()` renders the CSRF token.",
+          "pseudo_code": "",
+          "actual_code": "from flask_wtf import FlaskForm\nfrom wtforms import StringField\nfrom wtforms.validators import DataRequired, Length\n\nclass MyForm(FlaskForm):\n    name = StringField('Name', validators=[DataRequired(), Length(max=50)])\n\n@app.route('/form', methods=['GET', 'POST'])\ndef form_view():\n    form = MyForm()\n    if form.validate_on_submit():\n        name = form.name.data  # validated data\n    return render_template('form.html', form=form)",
+          "code_language": "python",
+          "key_points": [
+            "FlaskForm with validators for input validation + CSRF",
+            "validate_on_submit() = POST + all validators pass"
+          ],
+          "gotchas": [
+            "CSRF token (hidden_tag) required in template"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do Flask extensions work and what are the most commonly used ones?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["flask", "extensions", "ecosystem"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask extensions follow a consistent pattern:\n\n1. Created as module-level instances: `ext = Extension()`\n2. Initialized with the app: `ext.init_app(app)` (app factory compatible)\n3. Provide functionality through the instance or decorators\n\n### Most commonly used extensions:\n\n| Extension | Purpose |\n|---|---|\n| Flask-SQLAlchemy | ORM (database) |\n| Flask-Migrate | Database migrations (Alembic) |\n| Flask-Login | User session management |\n| Flask-WTF | Form validation + CSRF |\n| Flask-Mail | Email sending |\n| Flask-CORS | Cross-Origin Resource Sharing |\n| Flask-JWT-Extended | JWT authentication |\n| Flask-Caching | Response/data caching |\n| Flask-Limiter | Rate limiting |\n| Flask-SocketIO | WebSocket support |",
+          "pseudo_code": "# Extension pattern:\next = Extension()           # create\next.init_app(app)           # initialize with app\n\n# Usage:\n@ext.decorator              # or\next.method()                # depends on extension",
+          "actual_code": "from flask import Flask\nfrom flask_sqlalchemy import SQLAlchemy\nfrom flask_migrate import Migrate\nfrom flask_cors import CORS\n\n# Create extensions (without app)\ndb = SQLAlchemy()\nmigrate = Migrate()\n\ndef create_app(config=None):\n    app = Flask(__name__)\n    app.config.from_mapping(\n        SECRET_KEY='dev',\n        SQLALCHEMY_DATABASE_URI='sqlite:///app.db',\n    )\n    if config:\n        app.config.update(config)\n\n    # Initialize extensions with app\n    db.init_app(app)\n    migrate.init_app(app, db)\n    CORS(app, resources={r'/api/*': {'origins': '*'}})\n\n    # Register blueprints\n    from .routes import main_bp\n    app.register_blueprint(main_bp)\n\n    return app\n\n# Flask-Login example\nfrom flask_login import LoginManager, UserMixin, login_required, current_user\n\nlogin_manager = LoginManager()\n\nclass User(UserMixin, db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    username = db.Column(db.String(80), unique=True)\n\n@login_manager.user_loader\ndef load_user(user_id):\n    return db.session.get(User, int(user_id))\n\n@app.route('/protected')\n@login_required\ndef protected():\n    return f'Hello, {current_user.username}!'\n\n# Flask-Caching example\nfrom flask_caching import Cache\n\ncache = Cache(config={'CACHE_TYPE': 'SimpleCache'})\n\n@app.route('/expensive')\n@cache.cached(timeout=60)  # cache for 60 seconds\ndef expensive_view():\n    # expensive computation\n    return 'result'\n\n# Flask-Limiter example\nfrom flask_limiter import Limiter\nfrom flask_limiter.util import get_remote_address\n\nlimiter = Limiter(key_func=get_remote_address, default_limits=['100/hour'])\n\n@app.route('/api/data')\n@limiter.limit('10/minute')\ndef rate_limited_api():\n    return {'data': 'limited'}\n\n# Flask-Migrate CLI commands:\n# flask db init      -> initialize migrations directory\n# flask db migrate   -> generate migration from model changes\n# flask db upgrade   -> apply migrations to database",
+          "code_language": "python",
+          "key_points": [
+            "Extensions follow init_app pattern for app factory compatibility",
+            "Flask-SQLAlchemy + Flask-Migrate for database management",
+            "Flask-Login for session-based authentication",
+            "Flask-CORS, Flask-Caching, Flask-Limiter for common API needs"
+          ],
+          "gotchas": [
+            "Extensions must be initialized with init_app() when using the app factory pattern",
+            "Extension order can matter -- some depend on others being initialized first",
+            "Flask-Login's @login_required redirects to login page -- set login_manager.login_view",
+            "Flask-Migrate migrations are auto-generated but should always be reviewed before applying"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask extensions: create globally, initialize with `ext.init_app(app)`. Key extensions: Flask-SQLAlchemy (DB), Flask-Migrate (migrations), Flask-Login (auth), Flask-WTF (forms), Flask-CORS, Flask-Caching.",
+          "pseudo_code": "",
+          "actual_code": "from flask_sqlalchemy import SQLAlchemy\nfrom flask_migrate import Migrate\n\ndb = SQLAlchemy()\nmigrate = Migrate()\n\ndef create_app():\n    app = Flask(__name__)\n    db.init_app(app)\n    migrate.init_app(app, db)\n    return app",
+          "code_language": "python",
+          "key_points": [
+            "init_app pattern for app factory compatibility",
+            "SQLAlchemy + Migrate for database management"
+          ],
+          "gotchas": [
+            "Extensions must be initialized in the factory function"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Flask-Migrate handle database schema changes?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["flask", "migrations", "Alembic", "database"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask-Migrate wraps Alembic to manage database schema changes (migrations) for Flask-SQLAlchemy. Migrations track incremental changes to the database schema, making it possible to upgrade (apply changes) and downgrade (revert changes).\n\n### Workflow:\n1. `flask db init` -- create migrations directory (once)\n2. Change your models (add columns, tables, etc.)\n3. `flask db migrate -m \"description\"` -- auto-generate migration script\n4. Review the generated migration (in `migrations/versions/`)\n5. `flask db upgrade` -- apply to database\n\n### Key commands:\n- `flask db init` -- initialize migrations\n- `flask db migrate` -- generate migration from model changes\n- `flask db upgrade` -- apply pending migrations\n- `flask db downgrade` -- revert last migration\n- `flask db history` -- show migration history\n- `flask db current` -- show current migration version",
+          "pseudo_code": "1. flask db init            -> creates migrations/ directory\n2. Add/change model columns\n3. flask db migrate -m 'add email column'\n4. Review generated migration file\n5. flask db upgrade          -> applies changes to DB\n6. flask db downgrade        -> reverts if needed",
+          "actual_code": "from flask import Flask\nfrom flask_sqlalchemy import SQLAlchemy\nfrom flask_migrate import Migrate\n\ndb = SQLAlchemy()\nmigrate = Migrate()\n\ndef create_app():\n    app = Flask(__name__)\n    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'\n    db.init_app(app)\n    migrate.init_app(app, db)\n    return app\n\n# Model (initial version)\nclass User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    username = db.Column(db.String(80), unique=True, nullable=False)\n    email = db.Column(db.String(120), unique=True, nullable=False)\n\n# After running:\n#   flask db init\n#   flask db migrate -m \"initial migration\"\n#   flask db upgrade\n\n# Later: add a new column\nclass User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    username = db.Column(db.String(80), unique=True, nullable=False)\n    email = db.Column(db.String(120), unique=True, nullable=False)\n    bio = db.Column(db.Text, default='')  # NEW COLUMN\n    created_at = db.Column(db.DateTime, server_default=db.func.now())  # NEW\n\n# Then:\n#   flask db migrate -m \"add bio and created_at to user\"\n#   flask db upgrade\n\n# Generated migration file looks like:\n# (in migrations/versions/xxxx_add_bio_and_created_at.py)\n\"\"\"\ndef upgrade():\n    op.add_column('user', sa.Column('bio', sa.Text(), nullable=True))\n    op.add_column('user', sa.Column('created_at', sa.DateTime(),\n                  server_default=sa.text('(CURRENT_TIMESTAMP)')))\n\ndef downgrade():\n    op.drop_column('user', 'created_at')\n    op.drop_column('user', 'bio')\n\"\"\"\n\n# Custom migration (when auto-detect fails)\n\"\"\"\n# flask db revision -m \"custom data migration\"\n\ndef upgrade():\n    # Data migration: populate a new column\n    op.execute(\"UPDATE user SET bio = 'Default bio' WHERE bio IS NULL\")\n\ndef downgrade():\n    pass\n\"\"\"",
+          "code_language": "python",
+          "key_points": [
+            "flask db migrate auto-generates migrations from model changes",
+            "flask db upgrade applies pending migrations to the database",
+            "Always review generated migrations before applying",
+            "flask db downgrade reverts the last migration"
+          ],
+          "gotchas": [
+            "Auto-generated migrations may miss some changes (table renames, data migrations)",
+            "SQLite has limited ALTER TABLE support -- some migrations require workarounds",
+            "Always review generated migrations -- auto-detect can get column order or constraints wrong",
+            "Running migrate without changes generates an empty migration file"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask-Migrate wraps Alembic for database migrations. Workflow: `flask db init` (once), change models, `flask db migrate -m 'description'`, review, `flask db upgrade`.",
+          "pseudo_code": "",
+          "actual_code": "# Terminal commands:\n# flask db init                    # once\n# flask db migrate -m 'add users'  # generate\n# flask db upgrade                 # apply\n# flask db downgrade               # revert\n\nfrom flask_migrate import Migrate\nmigrate = Migrate()\nmigrate.init_app(app, db)",
+          "code_language": "python",
+          "key_points": [
+            "migrate generates, upgrade applies, downgrade reverts",
+            "Always review auto-generated migration files"
+          ],
+          "gotchas": [
+            "SQLite has limited ALTER TABLE support"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Flask's CLI system work?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": ["flask", "CLI", "click"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask's CLI is built on Click and provides a `flask` command for running the development server, database operations, and custom commands.\n\n### Key features:\n- `flask run` -- start the development server\n- `flask shell` -- interactive shell with app context\n- Custom commands with `@app.cli.command()` or Click groups\n- Blueprint commands with `bp.cli.command()`\n- Environment variables: `FLASK_APP`, `FLASK_ENV`, `FLASK_DEBUG`",
+          "pseudo_code": "@app.cli.command()\n@click.argument('name')\ndef greet(name):\n    \"\"\"Greet someone.\"\"\"\n    click.echo(f'Hello, {name}!')\n\n# Usage: flask greet Alice",
+          "actual_code": "from flask import Flask\nimport click\n\napp = Flask(__name__)\n\n# Basic CLI command\n@app.cli.command()\ndef init_db():\n    \"\"\"Initialize the database.\"\"\"\n    # db.create_all()\n    click.echo('Database initialized.')\n\n# Command with arguments and options\n@app.cli.command()\n@click.argument('username')\n@click.option('--role', default='user', help='User role')\ndef create_user(username, role):\n    \"\"\"Create a new user.\"\"\"\n    click.echo(f'Created user: {username} (role: {role})')\n\n# Usage: flask create-user alice --role admin\n\n# Command group\n@app.cli.group()\ndef seed():\n    \"\"\"Seed the database with sample data.\"\"\"\n    pass\n\n@seed.command()\ndef users():\n    \"\"\"Seed sample users.\"\"\"\n    click.echo('Seeding users...')\n\n@seed.command()\ndef products():\n    \"\"\"Seed sample products.\"\"\"\n    click.echo('Seeding products...')\n\n# Usage: flask seed users\n#        flask seed products\n\n# Command with confirmation\n@app.cli.command()\n@click.confirmation_option(prompt='Are you sure you want to drop all tables?')\ndef drop_db():\n    \"\"\"Drop all database tables.\"\"\"\n    # db.drop_all()\n    click.echo('All tables dropped.')\n\n# Blueprint commands\nfrom flask import Blueprint\n\nadmin_bp = Blueprint('admin', __name__)\n\n@admin_bp.cli.command()\ndef report():\n    \"\"\"Generate admin report.\"\"\"\n    click.echo('Generating report...')\n\n# Usage: flask admin report\n\napp.register_blueprint(admin_bp)\n\n# .flaskenv file (load with python-dotenv)\n# FLASK_APP=myapp:create_app\n# FLASK_DEBUG=1\n# FLASK_RUN_PORT=5000",
+          "code_language": "python",
+          "key_points": [
+            "Flask CLI is built on Click -- use Click decorators for arguments/options",
+            "@app.cli.command() registers commands available via 'flask' command",
+            "CLI commands automatically have application context",
+            "Use .flaskenv for environment variables (requires python-dotenv)"
+          ],
+          "gotchas": [
+            "FLASK_APP must be set for the flask command to find your app",
+            "CLI commands run inside application context but NOT request context",
+            "Command names use hyphens in CLI (create-user) but underscores in Python (create_user)",
+            "Blueprint CLI commands are prefixed with blueprint name (flask bp-name command)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask CLI uses Click. Register commands with `@app.cli.command()`. Use Click decorators for arguments/options. Commands auto-have app context. Set `FLASK_APP` env var.",
+          "pseudo_code": "",
+          "actual_code": "import click\n\n@app.cli.command()\n@click.argument('name')\ndef greet(name):\n    \"\"\"Greet someone.\"\"\"\n    click.echo(f'Hello, {name}!')\n\n# flask greet Alice -> Hello, Alice!",
+          "code_language": "python",
+          "key_points": [
+            "@app.cli.command() registers CLI commands",
+            "Commands auto-have application context"
+          ],
+          "gotchas": [
+            "FLASK_APP env var must be set"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you structure a larger Flask application?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": ["flask", "architecture", "project-structure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Small Flask apps can be a single file, but larger apps need organized structure. Two common patterns:\n\n### Package-based structure (recommended)\n```\nmyapp/\n  __init__.py          # app factory (create_app)\n  config.py            # configuration classes\n  extensions.py        # db, migrate, login_manager\n  models/\n    __init__.py\n    user.py\n    post.py\n  routes/\n    __init__.py\n    auth.py            # auth blueprint\n    api.py             # api blueprint\n  services/\n    __init__.py\n    user_service.py    # business logic\n  templates/\n  static/\n  tests/\n```\n\n### Key principles:\n1. **App factory** in `__init__.py`\n2. **Extensions** in a separate file (avoid circular imports)\n3. **Blueprints** for route organization\n4. **Services** for business logic (separate from routes)\n5. **Models** for data layer\n6. **Config** classes for different environments",
+          "pseudo_code": "myapp/__init__.py -> create_app()\nmyapp/extensions.py -> db, migrate, login_manager\nmyapp/models/ -> User, Post, etc.\nmyapp/routes/ -> auth_bp, api_bp, main_bp\nmyapp/services/ -> business logic\nmyapp/config.py -> Dev/Test/Prod configs",
+          "actual_code": "# myapp/config.py\nclass Config:\n    SECRET_KEY = 'change-in-production'\n    SQLALCHEMY_TRACK_MODIFICATIONS = False\n\nclass DevelopmentConfig(Config):\n    DEBUG = True\n    SQLALCHEMY_DATABASE_URI = 'sqlite:///dev.db'\n\nclass TestingConfig(Config):\n    TESTING = True\n    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'\n\nclass ProductionConfig(Config):\n    SQLALCHEMY_DATABASE_URI = 'postgresql://user:pass@host/db'\n\nconfig_map = {\n    'development': DevelopmentConfig,\n    'testing': TestingConfig,\n    'production': ProductionConfig,\n}\n\n# myapp/extensions.py\nfrom flask_sqlalchemy import SQLAlchemy\nfrom flask_migrate import Migrate\nfrom flask_login import LoginManager\n\ndb = SQLAlchemy()\nmigrate = Migrate()\nlogin_manager = LoginManager()\n\n# myapp/models/user.py\nfrom myapp.extensions import db\n\nclass User(db.Model):\n    id = db.Column(db.Integer, primary_key=True)\n    username = db.Column(db.String(80), unique=True, nullable=False)\n    email = db.Column(db.String(120), unique=True, nullable=False)\n\n    def to_dict(self):\n        return {'id': self.id, 'username': self.username, 'email': self.email}\n\n# myapp/services/user_service.py\nfrom myapp.extensions import db\nfrom myapp.models.user import User\n\nclass UserService:\n    @staticmethod\n    def create_user(username, email):\n        user = User(username=username, email=email)\n        db.session.add(user)\n        db.session.commit()\n        return user\n\n    @staticmethod\n    def get_user(user_id):\n        return db.session.get(User, user_id)\n\n# myapp/routes/api.py\nfrom flask import Blueprint, jsonify, request\nfrom myapp.services.user_service import UserService\n\napi_bp = Blueprint('api', __name__, url_prefix='/api')\n\n@api_bp.route('/users', methods=['GET'])\ndef list_users():\n    users = UserService.get_all()\n    return jsonify([u.to_dict() for u in users])\n\n@api_bp.route('/users', methods=['POST'])\ndef create_user():\n    data = request.get_json()\n    user = UserService.create_user(data['username'], data['email'])\n    return jsonify(user.to_dict()), 201\n\n# myapp/__init__.py\nfrom flask import Flask\nfrom myapp.config import config_map\nfrom myapp.extensions import db, migrate, login_manager\n\ndef create_app(config_name='development'):\n    app = Flask(__name__)\n    app.config.from_object(config_map[config_name])\n\n    # Initialize extensions\n    db.init_app(app)\n    migrate.init_app(app, db)\n    login_manager.init_app(app)\n\n    # Register blueprints\n    from myapp.routes.api import api_bp\n    from myapp.routes.auth import auth_bp\n    app.register_blueprint(api_bp)\n    app.register_blueprint(auth_bp)\n\n    return app",
+          "code_language": "python",
+          "key_points": [
+            "App factory in __init__.py, extensions in separate file",
+            "Blueprints for route organization, services for business logic",
+            "Config classes for different environments (dev/test/prod)",
+            "Models separate from routes -- clean separation of concerns"
+          ],
+          "gotchas": [
+            "Circular imports are the #1 issue -- solve with app factory + late imports",
+            "Import blueprints inside create_app(), not at module level",
+            "Extensions file should NOT import from models (circular dependency)",
+            "Test fixtures should use the TestingConfig with in-memory database"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Structure: `__init__.py` (app factory), `extensions.py` (db, etc.), `models/`, `routes/` (blueprints), `services/` (business logic), `config.py` (environment configs). Import blueprints inside `create_app()` to avoid circular imports.",
+          "pseudo_code": "",
+          "actual_code": "# myapp/__init__.py\ndef create_app(config='development'):\n    app = Flask(__name__)\n    app.config.from_object(config_map[config])\n    db.init_app(app)\n    from .routes.api import api_bp\n    app.register_blueprint(api_bp)\n    return app",
+          "code_language": "python",
+          "key_points": [
+            "App factory + extensions file + blueprints",
+            "Import blueprints inside create_app"
+          ],
+          "gotchas": [
+            "Circular imports are the #1 issue in Flask projects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Flask handle static files and how do you configure them for production?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": ["flask", "static-files", "production"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flask serves static files from the `static/` directory in your application package. In templates, use `url_for('static', filename='...')` to generate URLs.\n\n### Development:\nFlask's built-in server serves static files directly.\n\n### Production:\nNever use Flask to serve static files in production. Use:\n- **Nginx/Apache**: Configure to serve `/static/` directly\n- **CDN**: Upload static files to CloudFront, Cloudflare, etc.\n- **WhiteNoise**: WSGI middleware for simple deployments\n\n### Cache busting:\nAppend a version hash to filenames so browsers fetch updated files: `style.css?v=abc123`.",
+          "pseudo_code": "Development:\n  Flask serves /static/style.css from app/static/style.css\n\nProduction:\n  Nginx serves /static/ directly (faster, no Python involved)\n  Flask handles only dynamic routes",
+          "actual_code": "from flask import Flask, url_for, send_from_directory\nimport os\n\napp = Flask(__name__,\n            static_folder='static',      # default\n            static_url_path='/static')    # default\n\n# In Jinja2 templates:\n# <link rel=\"stylesheet\" href=\"{{ url_for('static', filename='css/style.css') }}\">\n# <script src=\"{{ url_for('static', filename='js/app.js') }}\"></script>\n# <img src=\"{{ url_for('static', filename='images/logo.png') }}\">\n\n# Custom static file route (for uploads, etc.)\n@app.route('/uploads/<path:filename>')\ndef serve_upload(filename):\n    uploads_dir = os.path.join(app.root_path, 'uploads')\n    return send_from_directory(uploads_dir, filename)\n\n# Blueprint with its own static folder\nfrom flask import Blueprint\n\nadmin_bp = Blueprint('admin', __name__,\n                     static_folder='admin_static',\n                     static_url_path='/admin/static')\n\n# In template: {{ url_for('admin.static', filename='admin.css') }}\n\n# Cache busting with config\napp.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0  # dev: no cache\n# production: set to 31536000 (1 year), use versioned filenames\n\n# Nginx configuration for production:\nnginx_config = \"\"\"\nserver {\n    listen 80;\n    server_name example.com;\n\n    # Serve static files directly (bypass Flask)\n    location /static/ {\n        alias /path/to/myapp/static/;\n        expires 1y;\n        add_header Cache-Control \"public, immutable\";\n    }\n\n    # Proxy dynamic requests to Flask (Gunicorn)\n    location / {\n        proxy_pass http://127.0.0.1:8000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n    }\n}\n\"\"\"\n\n# WhiteNoise for simple deployments (no Nginx)\n# pip install whitenoise\n# from whitenoise import WhiteNoise\n# app.wsgi_app = WhiteNoise(app.wsgi_app, root='static/', prefix='static/')\n\n# File structure:\n# myapp/\n#   static/\n#     css/\n#       style.css\n#     js/\n#       app.js\n#     images/\n#       logo.png\n#   templates/\n#     base.html",
+          "code_language": "python",
+          "key_points": [
+            "Flask serves from static/ directory; use url_for('static', filename=...) in templates",
+            "In production, use Nginx/CDN to serve static files, not Flask",
+            "send_from_directory for safely serving files from custom directories",
+            "Cache busting ensures browsers load updated files"
+          ],
+          "gotchas": [
+            "Never use Flask's built-in server to serve static files in production (slow, insecure)",
+            "send_from_directory prevents directory traversal attacks (never use open() for user paths)",
+            "Blueprint static files need their own static_folder parameter",
+            "SEND_FILE_MAX_AGE_DEFAULT=0 disables caching (development only)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Flask serves from `static/` directory. Use `url_for('static', filename='...')` in templates. In production, use Nginx/CDN -- never Flask's built-in server for static files.",
+          "pseudo_code": "",
+          "actual_code": "from flask import url_for, send_from_directory\n\n# In template:\n# <link href=\"{{ url_for('static', filename='css/style.css') }}\">\n\n# Custom file serving (safe):\n@app.route('/uploads/<path:filename>')\ndef upload(filename):\n    return send_from_directory('uploads', filename)",
+          "code_language": "python",
+          "key_points": [
+            "url_for('static', filename=...) for template URLs",
+            "Nginx/CDN for production static file serving"
+          ],
+          "gotchas": [
+            "Never serve static files with Flask in production"
+          ]
+        }
+      ]
+    }
+  ]
+}

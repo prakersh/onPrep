@@ -1,0 +1,619 @@
+{
+  "concept_slug": "database-orm",
+  "questions": [
+    {
+      "title": "What is SQLAlchemy and how does it differ from raw SQL?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "orm", "database"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy is a Python SQL toolkit and ORM that provides two main layers:\n\n1. **SQLAlchemy Core** - A SQL abstraction layer that lets you write SQL using Python expressions. It provides a `Table`, `Column`, and `select()` API that compiles to SQL for any supported database.\n\n2. **SQLAlchemy ORM** - A full Object-Relational Mapper built on top of Core. It maps Python classes to database tables and Python objects to rows, allowing you to work with data as native Python objects instead of raw tuples.\n\nKey differences from raw SQL:\n- **Portability**: Same Python code works across PostgreSQL, MySQL, SQLite, etc.\n- **Security**: Parameterized queries by default prevent SQL injection.\n- **Abstraction**: Work with Python objects instead of result tuples.\n- **Relationship management**: Automatic JOIN generation through relationship definitions.\n- **Session/Unit of Work**: Changes are batched and committed together, providing transactional integrity.",
+          "pseudo_code": "1. Import create_engine and declarative_base\n2. Define engine with connection URL\n3. Create a Base class for models\n4. Define model classes that inherit from Base\n5. Create tables with Base.metadata.create_all(engine)\n6. Create a Session to interact with the database\n7. Use session.add(), session.query(), session.commit()",
+          "actual_code": "from sqlalchemy import create_engine, Column, Integer, String\nfrom sqlalchemy.orm import declarative_base, Session\n\n# Core: create engine\nengine = create_engine('sqlite:///example.db', echo=True)\n\n# ORM: declarative base\nBase = declarative_base()\n\nclass User(Base):\n    __tablename__ = 'users'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(50), nullable=False)\n    email = Column(String(120), unique=True)\n\n    def __repr__(self):\n        return f\"<User(name='{self.name}', email='{self.email}')>\"\n\n# Create tables\nBase.metadata.create_all(engine)\n\n# Use the ORM\nwith Session(engine) as session:\n    user = User(name='Alice', email='alice@example.com')\n    session.add(user)\n    session.commit()\n\n    # Query\n    found = session.query(User).filter_by(name='Alice').first()\n    print(found)  # <User(name='Alice', email='alice@example.com')>",
+          "code_language": "python",
+          "key_points": [
+            "SQLAlchemy has two layers: Core (SQL expression language) and ORM (object mapping)",
+            "The engine manages database connections and connection pooling",
+            "declarative_base() creates a base class that links Python classes to database tables",
+            "The Session is the primary interface for persistence operations in ORM",
+            "SQLAlchemy automatically parameterizes queries to prevent SQL injection"
+          ],
+          "gotchas": [
+            "echo=True in create_engine logs all SQL, which is useful for debugging but noisy in production",
+            "Forgetting session.commit() means your changes are never written to the database",
+            "SQLAlchemy 2.0 uses declarative_base from sqlalchemy.orm, not sqlalchemy.ext.declarative"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SQLAlchemy is a Python ORM and SQL toolkit. Its ORM maps Python classes to database tables, letting you query and manipulate data as Python objects instead of writing raw SQL. It also provides connection pooling, portability across databases, and automatic SQL injection prevention.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import create_engine, Column, Integer, String\nfrom sqlalchemy.orm import declarative_base, Session\n\nBase = declarative_base()\n\nclass User(Base):\n    __tablename__ = 'users'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(50))\n\nengine = create_engine('sqlite:///app.db')\nBase.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    session.add(User(name='Alice'))\n    session.commit()",
+          "code_language": "python",
+          "key_points": [
+            "Two layers: Core (SQL expressions) and ORM (object mapping)",
+            "Portable across databases, parameterized by default"
+          ],
+          "gotchas": [
+            "Always call session.commit() or your changes are lost"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define a SQLAlchemy declarative model with columns and constraints?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "models", "columns", "constraints"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A declarative model in SQLAlchemy is a Python class that inherits from a declarative base and maps to a database table. You define columns using `Column()` objects and add constraints either inline or as table-level arguments.\n\n**Column types**: `Integer`, `String(length)`, `Float`, `Boolean`, `DateTime`, `Text`, `Numeric`, `LargeBinary`, `Enum`.\n\n**Column options**:\n- `primary_key=True` - Makes the column a primary key\n- `nullable=False` - NOT NULL constraint\n- `unique=True` - UNIQUE constraint\n- `default=value` - Default value (Python-side)\n- `server_default='value'` - Default value (database-side)\n- `index=True` - Creates an index on the column\n\n**Table-level constraints**: Use `__table_args__` for composite constraints like unique together, composite indexes, or check constraints.",
+          "pseudo_code": "1. Import Column types from sqlalchemy\n2. Create a class inheriting from Base\n3. Set __tablename__ to the desired table name\n4. Define columns with Column() and appropriate types\n5. Add constraints inline or via __table_args__\n6. Optionally add __repr__ for debugging",
+          "actual_code": "from sqlalchemy import (\n    Column, Integer, String, Float, Boolean,\n    DateTime, Text, ForeignKey, UniqueConstraint,\n    CheckConstraint, Index\n)\nfrom sqlalchemy.orm import declarative_base\nfrom datetime import datetime\n\nBase = declarative_base()\n\nclass Product(Base):\n    __tablename__ = 'products'\n\n    # Primary key (auto-increment by default for Integer)\n    id = Column(Integer, primary_key=True)\n\n    # Required string with max length\n    name = Column(String(200), nullable=False)\n\n    # Optional text field\n    description = Column(Text, nullable=True)\n\n    # Numeric with constraints\n    price = Column(Float, nullable=False)\n    quantity = Column(Integer, default=0)\n\n    # Boolean with server-side default\n    is_active = Column(Boolean, server_default='1')\n\n    # DateTime with Python-side default\n    created_at = Column(DateTime, default=datetime.utcnow)\n\n    # Indexed and unique columns\n    sku = Column(String(50), unique=True, index=True)\n\n    # Foreign key\n    category_id = Column(Integer, ForeignKey('categories.id'), nullable=False)\n\n    # Table-level constraints\n    __table_args__ = (\n        UniqueConstraint('name', 'category_id', name='uq_product_name_category'),\n        CheckConstraint('price >= 0', name='ck_positive_price'),\n        Index('ix_product_category_active', 'category_id', 'is_active'),\n    )\n\n    def __repr__(self):\n        return f\"<Product(name='{self.name}', price={self.price})>\"",
+          "code_language": "python",
+          "key_points": [
+            "__tablename__ is required and maps the class to a database table",
+            "Column types map to SQL types: String -> VARCHAR, Integer -> INTEGER, Text -> TEXT",
+            "default= runs in Python, server_default= adds a DEFAULT in the SQL schema",
+            "__table_args__ is a tuple of table-level constraints and must end with a comma if single element",
+            "ForeignKey references another table's column as 'tablename.column'"
+          ],
+          "gotchas": [
+            "String requires a length argument for most databases (except SQLite), e.g., String(50)",
+            "default=datetime.utcnow (no parentheses) passes the function; default=datetime.utcnow() passes a fixed timestamp",
+            "__table_args__ must be a tuple, not a list; for a single constraint use a trailing comma: (constraint,)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define a class inheriting from `declarative_base()`, set `__tablename__`, and add `Column()` attributes with types like `Integer`, `String`, `Float`, etc. Constraints go inline (`nullable=False`, `unique=True`) or in `__table_args__` for composite constraints.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import Column, Integer, String, UniqueConstraint\nfrom sqlalchemy.orm import declarative_base\n\nBase = declarative_base()\n\nclass User(Base):\n    __tablename__ = 'users'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100), nullable=False)\n    email = Column(String(120), unique=True, index=True)\n\n    __table_args__ = (\n        UniqueConstraint('name', 'email', name='uq_user_name_email'),\n    )",
+          "code_language": "python",
+          "key_points": [
+            "__tablename__ maps the class to a table; columns use Column() with SQL types",
+            "Use __table_args__ tuple for composite constraints"
+          ],
+          "gotchas": [
+            "default=func passes the callable; default=func() passes a fixed value computed once"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define one-to-many relationships in SQLAlchemy?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "relationships", "one-to-many", "foreign-key"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A one-to-many relationship means one record in a parent table relates to multiple records in a child table. In SQLAlchemy, this is defined with:\n\n1. A `ForeignKey` column on the child (many side) pointing to the parent's primary key.\n2. A `relationship()` on the parent (one side) that provides a Python-level collection of children.\n3. Optionally, a `back_populates` or `backref` to create the reverse reference.\n\n**back_populates vs backref**:\n- `back_populates` requires defining `relationship()` on both sides explicitly (recommended for clarity).\n- `backref` auto-creates the reverse relationship on the other model (less code but implicit).\n\n**Cascade options**: Control what happens to children when parent operations occur. Common cascades: `all`, `delete-orphan`, `save-update`, `merge`.",
+          "pseudo_code": "1. Define parent model with a relationship() attribute\n2. Define child model with a ForeignKey column to parent\n3. Add back_populates on both sides (or backref on one side)\n4. Configure cascade behavior if needed\n5. Access children via parent.children or parent via child.parent",
+          "actual_code": "from sqlalchemy import create_engine, Column, Integer, String, ForeignKey\nfrom sqlalchemy.orm import declarative_base, relationship, Session\n\nBase = declarative_base()\n\nclass Author(Base):\n    __tablename__ = 'authors'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100), nullable=False)\n\n    # One author has many books\n    books = relationship('Book', back_populates='author',\n                         cascade='all, delete-orphan')\n\n    def __repr__(self):\n        return f\"<Author(name='{self.name}')>\"\n\nclass Book(Base):\n    __tablename__ = 'books'\n    id = Column(Integer, primary_key=True)\n    title = Column(String(200), nullable=False)\n    author_id = Column(Integer, ForeignKey('authors.id'), nullable=False)\n\n    # Each book belongs to one author\n    author = relationship('Author', back_populates='books')\n\n    def __repr__(self):\n        return f\"<Book(title='{self.title}')>\"\n\n# Usage\nengine = create_engine('sqlite:///:memory:')\nBase.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    author = Author(name='George Orwell')\n    author.books.append(Book(title='1984'))\n    author.books.append(Book(title='Animal Farm'))\n    session.add(author)\n    session.commit()\n\n    # Access the relationship\n    loaded = session.query(Author).first()\n    print(loaded.books)  # [<Book(title='1984')>, <Book(title='Animal Farm')>]\n    print(loaded.books[0].author)  # <Author(name='George Orwell')>",
+          "code_language": "python",
+          "key_points": [
+            "ForeignKey goes on the child (many side); relationship() goes on the parent (one side) or both",
+            "back_populates requires explicit relationship() on both models; backref auto-creates it",
+            "cascade='all, delete-orphan' deletes children when the parent is deleted",
+            "You can append to the collection (author.books.append) and SQLAlchemy handles the ForeignKey"
+          ],
+          "gotchas": [
+            "Forgetting nullable=False on ForeignKey allows orphan records with NULL parent references",
+            "Without cascade='delete-orphan', removing a book from author.books leaves it in the DB with a NULL FK",
+            "back_populates values must match the attribute names exactly on each side"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Put a `ForeignKey` on the child model pointing to the parent, then use `relationship()` on the parent with `back_populates` to link both directions. Optionally set `cascade='all, delete-orphan'` to auto-delete children when the parent is removed.",
+          "pseudo_code": "",
+          "actual_code": "class Author(Base):\n    __tablename__ = 'authors'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100))\n    books = relationship('Book', back_populates='author',\n                         cascade='all, delete-orphan')\n\nclass Book(Base):\n    __tablename__ = 'books'\n    id = Column(Integer, primary_key=True)\n    title = Column(String(200))\n    author_id = Column(Integer, ForeignKey('authors.id'))\n    author = relationship('Author', back_populates='books')",
+          "code_language": "python",
+          "key_points": [
+            "ForeignKey on child, relationship() on parent (or both with back_populates)",
+            "cascade='all, delete-orphan' for automatic child cleanup"
+          ],
+          "gotchas": [
+            "back_populates strings must exactly match the attribute name on the other model"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define many-to-many relationships in SQLAlchemy?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "relationships", "many-to-many", "association-table"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Many-to-many relationships require an **association table** (also called a junction/bridge table) that holds foreign keys to both sides. SQLAlchemy offers two approaches:\n\n1. **Simple association table** using `Table()` - When the join table only has the two foreign keys and no extra columns.\n2. **Association object** using a full model class - When the join table has additional columns (e.g., `enrolled_date`, `grade`).\n\nFor the simple case, define the association table with `Table()`, then use `relationship()` with the `secondary` parameter pointing to that table.",
+          "pseudo_code": "1. Define an association table with Table() containing two ForeignKeys\n2. On one model, define relationship() with secondary=association_table\n3. On the other model, define relationship() with back_populates\n4. Use collection.append() to add links\n5. For extra columns, use an Association Object pattern instead",
+          "actual_code": "from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Table\nfrom sqlalchemy.orm import declarative_base, relationship, Session\n\nBase = declarative_base()\n\n# Simple association table (no extra columns)\nstudent_course = Table(\n    'student_course', Base.metadata,\n    Column('student_id', Integer, ForeignKey('students.id'), primary_key=True),\n    Column('course_id', Integer, ForeignKey('courses.id'), primary_key=True),\n)\n\nclass Student(Base):\n    __tablename__ = 'students'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100))\n    courses = relationship('Course', secondary=student_course,\n                           back_populates='students')\n\nclass Course(Base):\n    __tablename__ = 'courses'\n    id = Column(Integer, primary_key=True)\n    title = Column(String(200))\n    students = relationship('Student', secondary=student_course,\n                            back_populates='courses')\n\n# Usage\nengine = create_engine('sqlite:///:memory:')\nBase.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    math = Course(title='Mathematics')\n    physics = Course(title='Physics')\n    alice = Student(name='Alice', courses=[math, physics])\n    bob = Student(name='Bob', courses=[math])\n\n    session.add_all([alice, bob])\n    session.commit()\n\n    # Query through the relationship\n    math_students = session.query(Course).filter_by(title='Mathematics').first()\n    print([s.name for s in math_students.students])  # ['Alice', 'Bob']\n\n# --- Association Object (with extra columns) ---\nclass Enrollment(Base):\n    __tablename__ = 'enrollments'\n    student_id = Column(Integer, ForeignKey('students.id'), primary_key=True)\n    course_id = Column(Integer, ForeignKey('courses.id'), primary_key=True)\n    grade = Column(String(2))\n    student = relationship('Student', backref='enrollments')\n    course = relationship('Course', backref='enrollments')",
+          "code_language": "python",
+          "key_points": [
+            "Use Table() for simple join tables with only foreign keys",
+            "Pass secondary=table to relationship() on both sides",
+            "Use an Association Object (full model class) when the join table has extra columns",
+            "Both columns in the association table should be primary keys (composite PK)"
+          ],
+          "gotchas": [
+            "Using secondary= with an Association Object model causes conflicts; use explicit relationships instead",
+            "Deleting from the collection (student.courses.remove(course)) only deletes the association row, not the course",
+            "The association Table must be defined before the models that reference it, or use a string reference"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create an association `Table()` with two `ForeignKey` columns, then use `relationship(secondary=table)` on both models. For extra columns on the join table, use an Association Object (a full model class) instead.",
+          "pseudo_code": "",
+          "actual_code": "student_course = Table(\n    'student_course', Base.metadata,\n    Column('student_id', Integer, ForeignKey('students.id'), primary_key=True),\n    Column('course_id', Integer, ForeignKey('courses.id'), primary_key=True),\n)\n\nclass Student(Base):\n    __tablename__ = 'students'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100))\n    courses = relationship('Course', secondary=student_course, back_populates='students')\n\nclass Course(Base):\n    __tablename__ = 'courses'\n    id = Column(Integer, primary_key=True)\n    title = Column(String(200))\n    students = relationship('Student', secondary=student_course, back_populates='courses')",
+          "code_language": "python",
+          "key_points": [
+            "Table() with two ForeignKey PKs + relationship(secondary=table) on both sides",
+            "Use Association Object pattern when join table needs extra columns"
+          ],
+          "gotchas": [
+            "Do not use secondary= alongside an Association Object model"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you query with filter, filter_by, and common query methods in SQLAlchemy?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "queries", "filter", "filter_by"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy provides a rich Query API for retrieving data. The two main filtering methods are:\n\n- **`filter_by(**kwargs)`** - Simple equality filters using keyword arguments. Good for simple `column = value` checks.\n- **`filter(expression)`** - Full SQL expression filters. Supports all operators: `==`, `!=`, `<`, `>`, `like()`, `in_()`, `between()`, `is_(None)`, `and_()`, `or_()`.\n\n**Result methods**:\n- `.all()` - Returns a list of all results\n- `.first()` - Returns the first result or None\n- `.one()` - Returns exactly one result; raises if 0 or >1\n- `.one_or_none()` - Returns one result or None; raises if >1\n- `.scalar()` - Returns the first column of the first row\n- `.count()` - Returns the count of rows\n\n**Ordering and limiting**:\n- `.order_by(Model.column.desc())`\n- `.limit(n)` and `.offset(n)`\n- `.distinct()`",
+          "pseudo_code": "1. session.query(Model) starts a query\n2. Chain .filter() or .filter_by() for conditions\n3. Use .order_by(), .limit(), .offset() as needed\n4. Terminate with .all(), .first(), .one(), or .count()\n5. Use and_(), or_() from sqlalchemy for complex conditions",
+          "actual_code": "from sqlalchemy import and_, or_, func\nfrom sqlalchemy.orm import Session\n\nwith Session(engine) as session:\n    # filter_by: keyword equality only\n    user = session.query(User).filter_by(name='Alice', is_active=True).first()\n\n    # filter: full expression support\n    users = session.query(User).filter(User.age >= 18).all()\n\n    # Comparison operators\n    session.query(User).filter(User.name != 'Bob').all()\n    session.query(User).filter(User.age.between(18, 30)).all()\n    session.query(User).filter(User.name.like('%ali%')).all()\n    session.query(User).filter(User.name.ilike('%ALI%')).all()  # case-insensitive\n    session.query(User).filter(User.id.in_([1, 2, 3])).all()\n    session.query(User).filter(User.email.is_(None)).all()\n\n    # Combining conditions\n    session.query(User).filter(\n        and_(User.age >= 18, User.is_active == True)\n    ).all()\n\n    session.query(User).filter(\n        or_(User.name == 'Alice', User.name == 'Bob')\n    ).all()\n\n    # Chaining filters (implicit AND)\n    session.query(User).filter(User.age >= 18).filter(User.is_active == True).all()\n\n    # Ordering and limiting\n    session.query(User).order_by(User.name.asc()).limit(10).offset(20).all()\n\n    # Aggregation\n    count = session.query(func.count(User.id)).scalar()\n    avg_age = session.query(func.avg(User.age)).scalar()\n\n    # Result terminators\n    first_user = session.query(User).first()         # first or None\n    exact_one = session.query(User).filter_by(id=1).one()  # exactly 1 or raise\n    maybe_one = session.query(User).filter_by(id=1).one_or_none()",
+          "code_language": "python",
+          "key_points": [
+            "filter_by() uses keyword args (equality only); filter() uses SQL expressions (full operators)",
+            "Chaining .filter() multiple times is an implicit AND",
+            ".first() returns None if no match; .one() raises NoResultFound or MultipleResultsFound",
+            "Use func.count(), func.avg(), func.sum() for aggregations",
+            ".in_() takes a list; .like() and .ilike() for pattern matching"
+          ],
+          "gotchas": [
+            "Comparing to None with == None works but .is_(None) is more explicit and correct SQL",
+            ".one() raises MultipleResultsFound if the query returns more than one row",
+            "filter_by uses Python keyword syntax (name='x'), filter uses SQL expression syntax (Model.name == 'x')"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`filter_by(col=val)` is for simple equality; `filter(Model.col == val)` supports all SQL operators. Chain `.all()`, `.first()`, `.one()`, or `.count()` to get results. Chain multiple `.filter()` calls for implicit AND, or use `and_()` / `or_()` for complex logic.",
+          "pseudo_code": "",
+          "actual_code": "# Simple equality\nuser = session.query(User).filter_by(name='Alice').first()\n\n# Complex expression\nusers = session.query(User).filter(\n    and_(User.age >= 18, User.is_active == True)\n).order_by(User.name).limit(10).all()\n\n# Aggregation\ncount = session.query(func.count(User.id)).scalar()",
+          "code_language": "python",
+          "key_points": [
+            "filter_by for equality kwargs; filter for full SQL expressions",
+            ".first() returns None; .one() raises on 0 or >1 results"
+          ],
+          "gotchas": [
+            "Use .is_(None) instead of == None for proper SQL IS NULL"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you perform JOINs and subqueries in SQLAlchemy ORM?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "joins", "subqueries"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy ORM supports several JOIN approaches:\n\n1. **Implicit joins** via relationships: When you access a relationship attribute, SQLAlchemy generates the JOIN.\n2. **Explicit `.join()`**: Chain `.join()` on a query to perform inner joins.\n3. **`.outerjoin()`**: For LEFT OUTER JOINs.\n4. **Subqueries**: Use `.subquery()` to wrap a query as a derived table, then join or filter against it.\n5. **`contains_eager()`**: Tell SQLAlchemy you are already joining a relationship, so it can populate the attribute from the joined data.\n\nThe `.join()` method can take a model class (auto-detects the FK), an explicit ON condition, or a relationship attribute.",
+          "pseudo_code": "1. Basic join: session.query(A).join(B).filter(B.col == val)\n2. Outer join: session.query(A).outerjoin(B)\n3. Subquery: sub = session.query(...).subquery()\n4. Use sub.c.column_name to reference subquery columns\n5. Join against subquery: session.query(A).join(sub, A.id == sub.c.a_id)",
+          "actual_code": "from sqlalchemy import func\nfrom sqlalchemy.orm import Session, contains_eager\n\nwith Session(engine) as session:\n    # Basic inner join (auto-detect FK)\n    results = (\n        session.query(Author, Book)\n        .join(Book)\n        .filter(Book.title.like('%Python%'))\n        .all()\n    )\n    # Each result is a tuple of (Author, Book)\n\n    # Join with explicit condition\n    results = (\n        session.query(Author)\n        .join(Book, Author.id == Book.author_id)\n        .filter(Book.price > 20)\n        .all()\n    )\n\n    # Left outer join\n    results = (\n        session.query(Author, func.count(Book.id).label('book_count'))\n        .outerjoin(Book)\n        .group_by(Author.id)\n        .all()\n    )\n\n    # Subquery: find authors with more than 5 books\n    subq = (\n        session.query(\n            Book.author_id,\n            func.count(Book.id).label('book_count')\n        )\n        .group_by(Book.author_id)\n        .having(func.count(Book.id) > 5)\n        .subquery()\n    )\n\n    prolific_authors = (\n        session.query(Author)\n        .join(subq, Author.id == subq.c.author_id)\n        .all()\n    )\n\n    # contains_eager: populate relationship from explicit join\n    authors_with_books = (\n        session.query(Author)\n        .join(Author.books)\n        .options(contains_eager(Author.books))\n        .filter(Book.is_published == True)\n        .all()\n    )",
+          "code_language": "python",
+          "key_points": [
+            ".join(Model) auto-detects the foreign key; .join(Model, condition) for explicit ON clause",
+            ".outerjoin() produces LEFT OUTER JOIN",
+            ".subquery() wraps a query as a derived table; access columns with .c.column_name",
+            "contains_eager() populates a relationship from an already-joined table",
+            "Use .label('name') to give computed columns a reference name"
+          ],
+          "gotchas": [
+            "Joining without relationships requires an explicit ON condition if there are multiple FKs between tables",
+            "subquery().c gives you column references, not model attributes",
+            "A .join() without .filter() on the joined table still restricts to rows with matches (inner join behavior)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `.join(Model)` for INNER JOINs, `.outerjoin(Model)` for LEFT JOINs. For subqueries, create a query, call `.subquery()`, then join against it using `subq.c.column` to reference its columns.",
+          "pseudo_code": "",
+          "actual_code": "# Inner join\nresults = session.query(Author).join(Book).filter(Book.price > 20).all()\n\n# Subquery\nsubq = session.query(Book.author_id, func.count(Book.id).label('cnt')\n    ).group_by(Book.author_id).having(func.count(Book.id) > 5).subquery()\n\nauthors = session.query(Author).join(subq, Author.id == subq.c.author_id).all()",
+          "code_language": "python",
+          "key_points": [
+            ".join() for inner join, .outerjoin() for left join",
+            ".subquery() + .c.column for derived table references"
+          ],
+          "gotchas": [
+            "Subquery columns are accessed via .c, not as model attributes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the N+1 query problem and how do you solve it in SQLAlchemy?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "n+1", "eager-loading", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **N+1 problem** occurs when you load N parent objects and then access a relationship on each one, triggering a separate SQL query for each parent. So 1 query loads the parents, then N additional queries load the children -- hence N+1 total queries.\n\nThis is caused by **lazy loading**, which is SQLAlchemy's default: relationships are not loaded until you access them.\n\n**Solutions (eager loading strategies)**:\n\n1. **`joinedload()`** - Uses a LEFT OUTER JOIN to load the relationship in the same query. Best for one-to-one and many-to-one.\n2. **`subqueryload()`** - Fires a second query using a subquery (SELECT ... WHERE parent_id IN (SELECT ...)). Best for one-to-many collections.\n3. **`selectinload()`** - Fires a second query using IN: `SELECT ... WHERE parent_id IN (1,2,3...)`. Generally the best default for collections.\n4. **`lazy='joined'`** on the relationship definition - Always eager load.\n5. **`contains_eager()`** - Use when you have already joined manually.",
+          "pseudo_code": "1. Identify the N+1: accessing relationship in a loop triggers lazy loads\n2. Add .options(selectinload(Parent.children)) to the query\n3. Or use joinedload for to-one relationships\n4. Or set lazy='selectin' on the relationship definition\n5. Verify with echo=True that only 1-2 queries are fired",
+          "actual_code": "from sqlalchemy.orm import selectinload, joinedload, subqueryload, Session\n\n# THE PROBLEM: N+1 queries\nwith Session(engine) as session:\n    authors = session.query(Author).all()  # Query 1\n    for author in authors:\n        print(author.books)  # Query 2, 3, 4, ... N+1 (one per author!)\n\n# SOLUTION 1: selectinload (best general-purpose for collections)\nwith Session(engine) as session:\n    authors = (\n        session.query(Author)\n        .options(selectinload(Author.books))\n        .all()\n    )\n    # Only 2 queries total:\n    # 1) SELECT * FROM authors\n    # 2) SELECT * FROM books WHERE author_id IN (1, 2, 3, ...)\n    for author in authors:\n        print(author.books)  # No additional queries\n\n# SOLUTION 2: joinedload (best for to-one or small collections)\nwith Session(engine) as session:\n    books = (\n        session.query(Book)\n        .options(joinedload(Book.author))\n        .all()\n    )\n    # 1 query with LEFT OUTER JOIN\n    for book in books:\n        print(book.author)  # Already loaded\n\n# SOLUTION 3: subqueryload\nwith Session(engine) as session:\n    authors = (\n        session.query(Author)\n        .options(subqueryload(Author.books))\n        .all()\n    )\n\n# SOLUTION 4: Set default on the relationship\nclass Author(Base):\n    __tablename__ = 'authors'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100))\n    books = relationship('Book', back_populates='author',\n                         lazy='selectin')  # Always eager load\n\n# Nested eager loading\nwith Session(engine) as session:\n    authors = (\n        session.query(Author)\n        .options(\n            selectinload(Author.books)\n            .selectinload(Book.reviews)  # Also eager load reviews of books\n        )\n        .all()\n    )",
+          "code_language": "python",
+          "key_points": [
+            "N+1 = 1 query for parents + N queries for children when accessing lazy-loaded relationships in a loop",
+            "selectinload() is the best general-purpose solution for collections (uses IN clause)",
+            "joinedload() uses a JOIN and is best for to-one relationships",
+            "You can chain eager loads for nested relationships: selectinload(A.b).selectinload(B.c)",
+            "Set lazy='selectin' on relationship() to always eager load"
+          ],
+          "gotchas": [
+            "joinedload on large collections can produce massive result sets due to the Cartesian product",
+            "joinedload may interfere with .limit() and .offset() because the JOIN multiplies rows",
+            "Setting echo=True on the engine is the quickest way to detect N+1 problems during development"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "N+1 means loading N parents triggers N extra queries to load their children (lazy loading). Fix it with eager loading: `selectinload()` (uses IN clause, best for collections), `joinedload()` (uses JOIN, best for to-one), or set `lazy='selectin'` on the relationship.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.orm import selectinload\n\n# Bad: N+1\nauthors = session.query(Author).all()\nfor a in authors:\n    print(a.books)  # triggers a query per author\n\n# Good: 2 queries total\nauthors = session.query(Author).options(selectinload(Author.books)).all()\nfor a in authors:\n    print(a.books)  # already loaded",
+          "code_language": "python",
+          "key_points": [
+            "selectinload for collections, joinedload for to-one relationships",
+            "Lazy loading is the default and causes N+1 when accessed in loops"
+          ],
+          "gotchas": [
+            "joinedload with .limit() can return fewer results than expected due to JOIN row multiplication"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do eager loading and lazy loading differ in SQLAlchemy?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "eager-loading", "lazy-loading"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Lazy loading** (default): Related objects are not loaded from the database until you access the relationship attribute. Each access triggers a new SQL query.\n\n**Eager loading**: Related objects are loaded upfront, either in the same query or in a follow-up query, before you access them.\n\nSQLAlchemy offers several loading strategies set via `lazy=` parameter on `relationship()` or via query `.options()`:\n\n| Strategy | `lazy=` | `.options()` | SQL Behavior |\n|----------|---------|--------------|-------------|\n| Lazy (select) | `'select'` (default) | N/A | Separate SELECT on access |\n| Joined | `'joined'` | `joinedload()` | LEFT OUTER JOIN |\n| Subquery | `'subquery'` | `subqueryload()` | Subquery IN clause |\n| Select In | `'selectin'` | `selectinload()` | SELECT ... WHERE id IN (...) |\n| Raise | `'raise'` | `raiseload()` | Raises error if accessed (prevents lazy) |\n| No load | `'noload'` | `noload()` | Never loads, returns default (None/[]) |",
+          "pseudo_code": "1. Default is lazy='select' - loads on attribute access\n2. Use .options(joinedload/selectinload/subqueryload) per-query\n3. Or set lazy='selectin' on the relationship for global behavior\n4. Use lazy='raise' to catch accidental lazy loads during development\n5. raiseload('*') prevents lazy loading on all relationships of a model",
+          "actual_code": "from sqlalchemy.orm import (\n    relationship, Session,\n    joinedload, selectinload, subqueryload, raiseload, noload\n)\n\n# Strategy on the relationship definition\nclass Author(Base):\n    __tablename__ = 'authors'\n    id = Column(Integer, primary_key=True)\n    name = Column(String(100))\n\n    # Always eager load with selectin\n    books = relationship('Book', lazy='selectin', back_populates='author')\n\n# Strategy per-query (overrides relationship setting)\nwith Session(engine) as session:\n    # joinedload: single query with JOIN\n    authors = session.query(Author).options(joinedload(Author.books)).all()\n\n    # selectinload: 2 queries (parent + IN clause)\n    authors = session.query(Author).options(selectinload(Author.books)).all()\n\n    # raiseload: raises InvalidRequestError if you try to lazy load\n    authors = session.query(Author).options(raiseload(Author.books)).all()\n    # authors[0].books  # Raises! Forces you to eager load explicitly.\n\n    # Wildcard raiseload: prevent ALL lazy loading\n    authors = session.query(Author).options(raiseload('*')).all()\n\n    # noload: relationship is never loaded (returns None or empty list)\n    authors = session.query(Author).options(noload(Author.books)).all()\n    print(authors[0].books)  # [] (empty, not loaded)",
+          "code_language": "python",
+          "key_points": [
+            "Lazy (select) is the default: loads on attribute access with a new query",
+            "joinedload uses a JOIN, selectinload uses an IN clause, subqueryload uses a subquery",
+            "raiseload prevents accidental lazy loading by raising an error",
+            "Per-query .options() override the relationship-level lazy= setting",
+            "selectinload is generally the safest default for collections"
+          ],
+          "gotchas": [
+            "Lazy loading works only within an active session; accessing outside raises DetachedInstanceError",
+            "joinedload can produce duplicated parent rows that SQLAlchemy de-duplicates but it inflates data transfer",
+            "raiseload('*') is a great development tool but make sure you don't deploy it without proper eager loading"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Lazy loading (default) loads related objects on access, triggering a new query each time. Eager loading loads them upfront via JOIN (`joinedload`), IN clause (`selectinload`), or subquery (`subqueryload`). Set strategy on the relationship (`lazy='selectin'`) or per-query (`.options(selectinload(...))`).",
+          "pseudo_code": "",
+          "actual_code": "# Lazy (default) - new query on access\nclass Author(Base):\n    books = relationship('Book', lazy='select')  # default\n\n# Eager - set globally\nclass Author(Base):\n    books = relationship('Book', lazy='selectin')\n\n# Eager - per query\nauthors = session.query(Author).options(selectinload(Author.books)).all()",
+          "code_language": "python",
+          "key_points": [
+            "Default is lazy='select'; best default eager strategy is selectinload",
+            "Use raiseload to catch unintended lazy loads"
+          ],
+          "gotchas": [
+            "Accessing a lazy relationship outside a session raises DetachedInstanceError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does connection pooling work in SQLAlchemy?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "connection-pooling", "engine"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy's `create_engine()` automatically manages a **connection pool** -- a cache of database connections that are reused rather than created and destroyed for every operation.\n\nThe default pool is **QueuePool**, which maintains a fixed-size pool of connections.\n\n**Key pool parameters**:\n- `pool_size=5` - Number of persistent connections to keep in the pool\n- `max_overflow=10` - Extra connections allowed beyond pool_size (temporary)\n- `pool_timeout=30` - Seconds to wait for a connection before raising an error\n- `pool_recycle=3600` - Seconds after which a connection is recycled (important for MySQL which closes idle connections after 8 hours)\n- `pool_pre_ping=True` - Test connections before using them (handles stale connections)\n\n**Pool types**:\n- `QueuePool` - Default, fixed-size with overflow\n- `NullPool` - No pooling, new connection every time (good for multiprocessing)\n- `StaticPool` - Single connection reused (good for testing with in-memory SQLite)\n- `SingletonThreadPool` - One connection per thread",
+          "pseudo_code": "1. create_engine() creates a pool automatically\n2. Configure pool_size, max_overflow, pool_recycle\n3. Use pool_pre_ping=True for production reliability\n4. Use NullPool for multiprocessing scenarios\n5. Use StaticPool for in-memory SQLite testing",
+          "actual_code": "from sqlalchemy import create_engine, event\nfrom sqlalchemy.pool import QueuePool, NullPool, StaticPool\n\n# Production configuration\nengine = create_engine(\n    'postgresql://user:pass@localhost/mydb',\n    pool_size=10,           # 10 persistent connections\n    max_overflow=20,        # Up to 30 total (10 + 20 overflow)\n    pool_timeout=30,        # Wait 30s for a connection\n    pool_recycle=1800,      # Recycle connections after 30 minutes\n    pool_pre_ping=True,     # Test connections before use\n)\n\n# Check pool status\nprint(engine.pool.status())  # Pool size: 10 Connections in pool: 0\n\n# NullPool for multiprocessing (no shared connections)\nfrom sqlalchemy.pool import NullPool\n\nengine_mp = create_engine(\n    'postgresql://user:pass@localhost/mydb',\n    poolclass=NullPool,     # No pooling\n)\n\n# StaticPool for testing with in-memory SQLite\nengine_test = create_engine(\n    'sqlite://',\n    poolclass=StaticPool,                   # Same connection always\n    connect_args={'check_same_thread': False},  # Allow cross-thread\n)\n\n# Listening to pool events\n@event.listens_for(engine, 'checkout')\ndef on_checkout(dbapi_conn, connection_rec, connection_proxy):\n    print('Connection checked out from pool')\n\n@event.listens_for(engine, 'checkin')\ndef on_checkin(dbapi_conn, connection_rec):\n    print('Connection returned to pool')\n\n# Explicit connection management\nwith engine.connect() as conn:\n    result = conn.execute(text('SELECT 1'))\n    # Connection returned to pool when context manager exits\n\n# Dispose all pooled connections (e.g., after fork)\nengine.dispose()",
+          "code_language": "python",
+          "key_points": [
+            "QueuePool is the default with pool_size=5 and max_overflow=10",
+            "pool_pre_ping=True prevents stale connection errors in production",
+            "pool_recycle is critical for MySQL which drops idle connections after 8 hours",
+            "Use NullPool with multiprocessing to avoid shared connection issues",
+            "engine.dispose() drops all pooled connections (useful after process fork)"
+          ],
+          "gotchas": [
+            "Forking a process with active pooled connections causes corruption; call engine.dispose() after fork",
+            "SQLite in-memory databases need StaticPool or they create separate databases per connection",
+            "pool_recycle should be less than the database server's connection timeout (e.g., MySQL wait_timeout)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SQLAlchemy automatically pools connections via `QueuePool` (default). Configure with `pool_size`, `max_overflow`, `pool_recycle`, and `pool_pre_ping=True` in `create_engine()`. Use `NullPool` for multiprocessing and `StaticPool` for in-memory SQLite tests.",
+          "pseudo_code": "",
+          "actual_code": "engine = create_engine(\n    'postgresql://user:pass@localhost/db',\n    pool_size=10,\n    max_overflow=20,\n    pool_recycle=1800,\n    pool_pre_ping=True,\n)",
+          "code_language": "python",
+          "key_points": [
+            "Default QueuePool reuses connections; pool_pre_ping=True prevents stale connections",
+            "NullPool for multiprocessing, StaticPool for in-memory SQLite"
+          ],
+          "gotchas": [
+            "Always call engine.dispose() after forking a process to avoid connection corruption"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you execute raw SQL in SQLAlchemy?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "raw-sql", "text"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Sometimes you need to execute raw SQL for complex queries, database-specific features, or performance. SQLAlchemy provides several ways:\n\n1. **`text()`** - Wraps a raw SQL string as an executable object. Supports named parameters with `:param` syntax.\n2. **`engine.connect()`** - Execute raw SQL through a connection.\n3. **`session.execute()`** - Execute raw SQL within an ORM session (participates in the session's transaction).\n4. **`from_statement()`** - Map raw SQL results to ORM models.\n\nAlways use `text()` with bound parameters (`:param_name`) instead of f-strings or string concatenation to prevent SQL injection.",
+          "pseudo_code": "1. Import text from sqlalchemy\n2. Write SQL with :named_param placeholders\n3. Execute via session.execute(text(sql), params)\n4. Fetch results with .fetchall(), .fetchone(), .mappings()\n5. For ORM mapping, use from_statement(text(sql))",
+          "actual_code": "from sqlalchemy import text, create_engine\nfrom sqlalchemy.orm import Session\n\nengine = create_engine('sqlite:///example.db')\n\n# Method 1: Via engine connection\nwith engine.connect() as conn:\n    # Simple query\n    result = conn.execute(text('SELECT * FROM users WHERE age > :age'), {'age': 18})\n    rows = result.fetchall()\n    for row in rows:\n        print(row.name, row.age)  # Access by column name\n\n    # As dictionaries\n    result = conn.execute(text('SELECT * FROM users'))\n    for row in result.mappings():\n        print(row['name'], row['age'])\n\n    # INSERT/UPDATE/DELETE\n    conn.execute(\n        text('INSERT INTO users (name, age) VALUES (:name, :age)'),\n        {'name': 'Alice', 'age': 30}\n    )\n    conn.commit()  # Must commit with engine.connect()\n\n# Method 2: Via ORM session\nwith Session(engine) as session:\n    result = session.execute(\n        text('SELECT * FROM users WHERE name = :name'),\n        {'name': 'Alice'}\n    )\n    user_row = result.fetchone()\n    print(user_row.name)\n\n    # Bulk insert with executemany\n    session.execute(\n        text('INSERT INTO users (name, age) VALUES (:name, :age)'),\n        [{'name': 'Bob', 'age': 25}, {'name': 'Charlie', 'age': 35}]\n    )\n    session.commit()\n\n# Method 3: Map results to ORM models\nwith Session(engine) as session:\n    stmt = text('SELECT id, name, email FROM users WHERE age > :age')\n    users = session.query(User).from_statement(stmt).params(age=18).all()\n    for user in users:\n        print(user.name)  # Returns User objects, not raw rows\n\n# Method 4: text() with type coercion\nfrom sqlalchemy import Integer\nstmt = text('SELECT id, name FROM users').columns(id=Integer)\nresult = session.execute(stmt)",
+          "code_language": "python",
+          "key_points": [
+            "Always use text() with :named_params for safety (never f-strings)",
+            "session.execute() participates in the session transaction; engine.connect() does not",
+            ".fetchall() returns a list of Row objects; .mappings() returns dict-like objects",
+            "from_statement() maps raw SQL results to ORM model objects",
+            "Pass a list of dicts to execute() for bulk operations"
+          ],
+          "gotchas": [
+            "engine.connect() requires explicit conn.commit(); session.execute() uses session.commit()",
+            "Column names in raw SQL must match model attributes for from_statement() to work",
+            "Never use f-strings or .format() in SQL strings -- always use :param_name for injection prevention"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `text()` to wrap raw SQL and pass parameters with `:name` syntax. Execute via `session.execute(text(sql), params)` or `engine.connect()`. Use `from_statement()` to map results back to ORM models.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import text\n\nwith Session(engine) as session:\n    result = session.execute(\n        text('SELECT * FROM users WHERE age > :age'),\n        {'age': 18}\n    )\n    for row in result.fetchall():\n        print(row.name)",
+          "code_language": "python",
+          "key_points": [
+            "Use text() with :named_params, never f-strings or concatenation",
+            "session.execute() for ORM context; engine.connect() for raw context"
+          ],
+          "gotchas": [
+            "Never interpolate user input directly into SQL strings"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Alembic for database migrations with SQLAlchemy?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["alembic", "migrations", "sqlalchemy", "schema"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Alembic** is the official database migration tool for SQLAlchemy. It tracks schema changes (adding/removing tables, columns, indexes) in versioned migration scripts, allowing you to evolve your database schema incrementally and rollback if needed.\n\n**Key concepts**:\n- **Migration script**: A Python file with `upgrade()` and `downgrade()` functions.\n- **Revision**: A unique identifier for each migration.\n- **alembic_version table**: Tracks the current migration version in the database.\n- **Autogenerate**: Alembic can compare your models to the database and generate migration scripts automatically.\n\n**Workflow**:\n1. `alembic init migrations` - Initialize Alembic in your project.\n2. Edit `alembic.ini` and `env.py` to configure your database URL and model metadata.\n3. `alembic revision --autogenerate -m \"message\"` - Generate a migration.\n4. Review the generated script.\n5. `alembic upgrade head` - Apply all pending migrations.\n6. `alembic downgrade -1` - Roll back one migration.",
+          "pseudo_code": "1. alembic init migrations (creates directory structure)\n2. Configure sqlalchemy.url in alembic.ini\n3. Import target_metadata in env.py from your models\n4. alembic revision --autogenerate -m 'add users table'\n5. Review the generated migration file\n6. alembic upgrade head (apply)\n7. alembic downgrade -1 (rollback if needed)",
+          "actual_code": "# Terminal commands:\n# pip install alembic\n# alembic init migrations\n\n# --- env.py (key parts) ---\nfrom app.models import Base  # Your declarative base\ntarget_metadata = Base.metadata\n\n# --- alembic.ini (key line) ---\n# sqlalchemy.url = sqlite:///app.db\n\n# --- Generate a migration ---\n# alembic revision --autogenerate -m \"create users table\"\n\n# --- Generated migration file (example) ---\n\"\"\"create users table\n\nRevision ID: a1b2c3d4e5f6\nRevises:\nCreate Date: 2024-01-15 10:30:00.000000\n\"\"\"\nfrom alembic import op\nimport sqlalchemy as sa\n\nrevision = 'a1b2c3d4e5f6'\ndown_revision = None\nbranch_labels = None\ndepends_on = None\n\ndef upgrade():\n    op.create_table(\n        'users',\n        sa.Column('id', sa.Integer(), primary_key=True),\n        sa.Column('name', sa.String(100), nullable=False),\n        sa.Column('email', sa.String(120), unique=True),\n        sa.Column('created_at', sa.DateTime(), server_default=sa.func.now()),\n    )\n    op.create_index('ix_users_email', 'users', ['email'])\n\ndef downgrade():\n    op.drop_index('ix_users_email', 'users')\n    op.drop_table('users')\n\n# --- Common Alembic operations ---\n# Add a column\ndef upgrade():\n    op.add_column('users', sa.Column('age', sa.Integer(), nullable=True))\n\ndef downgrade():\n    op.drop_column('users', 'age')\n\n# Rename a column\ndef upgrade():\n    op.alter_column('users', 'name', new_column_name='full_name')\n\n# Terminal: Apply and manage migrations\n# alembic upgrade head          # Apply all\n# alembic downgrade -1          # Rollback one\n# alembic history               # Show migration history\n# alembic current               # Show current version\n# alembic stamp head            # Mark DB as up-to-date without running migrations",
+          "code_language": "python",
+          "key_points": [
+            "Alembic tracks schema changes as versioned migration scripts with upgrade/downgrade",
+            "--autogenerate compares models to the database and generates the diff",
+            "Always review autogenerated migrations before applying them",
+            "alembic upgrade head applies all pending migrations; downgrade -1 rolls back one",
+            "target_metadata in env.py must point to your Base.metadata for autogenerate to work"
+          ],
+          "gotchas": [
+            "Autogenerate does not detect table renames, column type changes, or constraint name changes",
+            "Running downgrade in production is risky if data was already written to new columns",
+            "Always run migrations in a transaction; some databases (MySQL) do not support transactional DDL",
+            "Forgetting to import all model modules before autogenerate results in empty migrations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Alembic tracks SQLAlchemy schema changes as migration scripts. Initialize with `alembic init`, configure `env.py` with your `Base.metadata`, generate migrations with `alembic revision --autogenerate -m 'message'`, and apply with `alembic upgrade head`.",
+          "pseudo_code": "",
+          "actual_code": "# Setup\n# alembic init migrations\n# Configure env.py: target_metadata = Base.metadata\n\n# Generate migration\n# alembic revision --autogenerate -m \"add users table\"\n\n# Apply\n# alembic upgrade head\n\n# Rollback\n# alembic downgrade -1",
+          "code_language": "python",
+          "key_points": [
+            "autogenerate compares models to DB and creates migration scripts",
+            "Always review generated migrations before applying"
+          ],
+          "gotchas": [
+            "Autogenerate cannot detect renames or some type changes; review the output carefully"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you manage transactions in SQLAlchemy?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "transactions", "session", "commit", "rollback"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **transaction** groups multiple database operations into an atomic unit: either all succeed or all are rolled back.\n\nSQLAlchemy provides transactions at two levels:\n\n1. **Session-level (ORM)**: The Session automatically manages a transaction. Call `session.commit()` to persist, `session.rollback()` to undo. Using `Session` as a context manager auto-rolls back on exceptions.\n\n2. **Connection-level (Core)**: `engine.connect()` starts a transaction implicitly. Use `conn.commit()` or `conn.rollback()`. `engine.begin()` auto-commits on success and auto-rolls back on exception.\n\n**Nested transactions (savepoints)**: Use `session.begin_nested()` to create a savepoint within a transaction. You can roll back to the savepoint without rolling back the entire transaction.\n\n**AUTOCOMMIT mode**: In SQLAlchemy 2.0, connections start in \"autobegin\" mode. Each operation begins a transaction automatically, but you must explicitly commit.",
+          "pseudo_code": "1. Use Session as context manager for auto-rollback on exception\n2. session.commit() to save, session.rollback() to undo\n3. engine.begin() for auto-commit/rollback at connection level\n4. session.begin_nested() for savepoints\n5. Wrap multi-step operations in try/except with rollback",
+          "actual_code": "from sqlalchemy import create_engine, text\nfrom sqlalchemy.orm import Session\n\nengine = create_engine('sqlite:///example.db')\n\n# Session-level transaction (ORM)\nwith Session(engine) as session:\n    try:\n        user1 = User(name='Alice')\n        user2 = User(name='Bob')\n        session.add_all([user1, user2])\n\n        # More operations...\n        session.execute(text('UPDATE accounts SET balance = balance - 100 WHERE id = 1'))\n        session.execute(text('UPDATE accounts SET balance = balance + 100 WHERE id = 2'))\n\n        session.commit()  # All or nothing\n    except Exception:\n        session.rollback()  # Undo everything\n        raise\n\n# Auto-rollback with context manager\nwith Session(engine) as session:\n    with session.begin():  # Auto commits on exit, rollback on exception\n        session.add(User(name='Alice'))\n        session.add(User(name='Bob'))\n        # No need to call session.commit()\n\n# Connection-level transaction (Core)\nwith engine.begin() as conn:  # Auto-commit on success, rollback on exception\n    conn.execute(text('INSERT INTO users (name) VALUES (:name)'), {'name': 'Alice'})\n    conn.execute(text('INSERT INTO users (name) VALUES (:name)'), {'name': 'Bob'})\n\n# Nested transaction (savepoint)\nwith Session(engine) as session:\n    session.add(User(name='Alice'))  # This will be committed\n\n    try:\n        with session.begin_nested():  # SAVEPOINT\n            session.add(User(name='Bob'))  # This might fail\n            session.add(User(name='DuplicateEmail'))  # Causes IntegrityError\n    except Exception:\n        pass  # Savepoint is rolled back, but Alice is still pending\n\n    session.commit()  # Only Alice is committed",
+          "code_language": "python",
+          "key_points": [
+            "Session context manager auto-rolls back on unhandled exceptions",
+            "session.begin() auto-commits on success; no explicit commit() needed",
+            "engine.begin() provides auto-commit/rollback at the connection level",
+            "begin_nested() creates a savepoint for partial rollback within a transaction",
+            "SQLAlchemy 2.0 uses autobegin: transactions start automatically but require explicit commit"
+          ],
+          "gotchas": [
+            "After a rollback, all objects loaded in that session become expired and may raise DetachedInstanceError",
+            "Calling session.commit() inside a session.begin() block causes an error; let the context manager handle it",
+            "SQLite does not support true nested transactions (savepoints work differently)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `Session` as a context manager for auto-rollback on exceptions. `session.commit()` to persist, `session.rollback()` to undo. `session.begin()` auto-commits on success. Use `session.begin_nested()` for savepoints (partial rollback).",
+          "pseudo_code": "",
+          "actual_code": "# Auto-commit/rollback\nwith Session(engine) as session:\n    with session.begin():\n        session.add(User(name='Alice'))\n        session.add(User(name='Bob'))\n        # Commits automatically; rolls back on exception\n\n# Savepoint\nwith Session(engine) as session:\n    session.add(User(name='Alice'))\n    try:\n        with session.begin_nested():\n            session.add(User(name='Bad'))  # fails\n    except Exception:\n        pass\n    session.commit()  # Only Alice is saved",
+          "code_language": "python",
+          "key_points": [
+            "session.begin() auto-commits; session.begin_nested() creates a savepoint",
+            "Context managers handle rollback on exceptions automatically"
+          ],
+          "gotchas": [
+            "After rollback, session objects are expired and may not be usable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use SQLAlchemy Sessions and the connection context manager pattern?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "session", "context-manager", "scoped-session"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Session** is the ORM's interface to the database. It manages the identity map (cache of loaded objects), tracks changes, and handles transactions.\n\n**Session lifecycle patterns**:\n\n1. **Context manager (recommended)**: `with Session(engine) as session:` automatically closes the session on exit.\n2. **sessionmaker**: A factory that creates configured Session instances.\n3. **scoped_session**: Thread-local Session registry (common in web apps). Each thread gets its own Session.\n\n**Key Session behaviors**:\n- **Identity map**: If you query the same row twice, you get the same Python object.\n- **Dirty tracking**: SQLAlchemy tracks which objects have been modified.\n- **Flush vs Commit**: `flush()` writes pending changes to the DB (within the transaction). `commit()` flushes + commits the transaction.\n- **Expunge**: `session.expunge(obj)` removes an object from the session so it can live independently.",
+          "pseudo_code": "1. Create engine\n2. Create sessionmaker bound to engine\n3. Use SessionLocal() as context manager\n4. For web apps, use scoped_session for thread-safety\n5. Always close sessions after use",
+          "actual_code": "from sqlalchemy import create_engine\nfrom sqlalchemy.orm import Session, sessionmaker, scoped_session\n\nengine = create_engine('sqlite:///app.db')\n\n# Pattern 1: Direct Session context manager\nwith Session(engine) as session:\n    user = session.query(User).first()\n    user.name = 'Updated'\n    session.commit()\n# Session is closed automatically\n\n# Pattern 2: sessionmaker factory\nSessionLocal = sessionmaker(bind=engine)\n\nwith SessionLocal() as session:\n    session.add(User(name='Alice'))\n    session.commit()\n\n# Pattern 3: sessionmaker without context manager\nsession = SessionLocal()\ntry:\n    session.add(User(name='Bob'))\n    session.commit()\nexcept Exception:\n    session.rollback()\n    raise\nfinally:\n    session.close()\n\n# Pattern 4: scoped_session (thread-local, common in Flask/web apps)\ndb_session = scoped_session(sessionmaker(bind=engine))\n\n# Each thread gets its own session\nuser = db_session.query(User).first()  # Uses thread-local session\ndb_session.commit()\ndb_session.remove()  # Clean up after the request\n\n# Flask-style pattern with dependency injection\ndef get_db():\n    \"\"\"Yield a database session, ensuring cleanup.\"\"\"\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\n# Identity map demonstration\nwith Session(engine) as session:\n    user1 = session.query(User).get(1)\n    user2 = session.query(User).get(1)\n    assert user1 is user2  # Same Python object!\n\n# Flush vs Commit\nwith Session(engine) as session:\n    user = User(name='Alice')\n    session.add(user)\n    session.flush()      # SQL INSERT runs, user.id is set, but NOT committed\n    print(user.id)       # ID is available now\n    session.commit()     # Transaction is committed\n\n# Expunge: detach object from session\nwith Session(engine) as session:\n    user = session.query(User).first()\n    session.expunge(user)  # Detach from session\n# user can be used outside the session now (attributes already loaded are accessible)",
+          "code_language": "python",
+          "key_points": [
+            "Session as context manager is the recommended pattern; auto-closes on exit",
+            "sessionmaker creates a factory for configured sessions; scoped_session adds thread-local behavior",
+            "flush() writes to DB within the transaction; commit() finalizes the transaction",
+            "Identity map ensures the same DB row maps to the same Python object within a session",
+            "scoped_session.remove() is required at the end of web requests to clean up"
+          ],
+          "gotchas": [
+            "Accessing relationships on an object after session.close() raises DetachedInstanceError",
+            "session.flush() can raise IntegrityError even before commit() if constraints are violated",
+            "scoped_session without remove() can leak sessions and exhaust the connection pool"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `Session(engine)` as a context manager or `sessionmaker(bind=engine)` as a factory. `flush()` writes SQL without committing; `commit()` finalizes. Use `scoped_session` for thread-local sessions in web apps, always calling `.remove()` after each request.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.orm import sessionmaker, Session\n\nSessionLocal = sessionmaker(bind=engine)\n\n# Recommended: context manager\nwith SessionLocal() as session:\n    session.add(User(name='Alice'))\n    session.commit()\n\n# flush vs commit\nwith Session(engine) as session:\n    user = User(name='Alice')\n    session.add(user)\n    session.flush()   # INSERT runs, user.id set, not yet committed\n    session.commit()  # Finalized",
+          "code_language": "python",
+          "key_points": [
+            "sessionmaker for factories, Session context manager for lifecycle",
+            "flush() writes SQL, commit() finalizes the transaction"
+          ],
+          "gotchas": [
+            "Accessing lazy-loaded relationships after session.close() raises DetachedInstanceError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you perform bulk insert, update, and delete operations in SQLAlchemy?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "bulk-operations", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "For large datasets, using `session.add()` in a loop is very slow because SQLAlchemy emits individual INSERT statements and tracks each object in the identity map.\n\n**Bulk operation strategies (fastest to slowest)**:\n\n1. **Core `insert()`** - Bypasses the ORM entirely. Fastest.\n2. **`session.bulk_insert_mappings()`** - Accepts dicts, skips identity map. Fast.\n3. **`session.bulk_save_objects()`** - Accepts model instances, skips some tracking. Medium.\n4. **`session.add_all()`** - Full ORM tracking. Slowest but safest.\n\nFor bulk updates and deletes, use `.update()` and `.delete()` on queries to generate a single UPDATE/DELETE statement instead of loading all objects into Python.",
+          "pseudo_code": "1. For inserts: prefer Core insert() or bulk_insert_mappings()\n2. For updates: use session.query(Model).filter(...).update({...})\n3. For deletes: use session.query(Model).filter(...).delete()\n4. Set synchronize_session=False for best performance\n5. Batch large operations into chunks",
+          "actual_code": "from sqlalchemy import insert, update, delete\nfrom sqlalchemy.orm import Session\n\n# --- BULK INSERT ---\n\n# Method 1: Core insert (fastest)\nwith Session(engine) as session:\n    session.execute(\n        insert(User),\n        [\n            {'name': 'Alice', 'age': 30},\n            {'name': 'Bob', 'age': 25},\n            {'name': 'Charlie', 'age': 35},\n        ]\n    )\n    session.commit()\n\n# Method 2: bulk_insert_mappings (fast, ORM-aware)\nwith Session(engine) as session:\n    session.bulk_insert_mappings(User, [\n        {'name': 'Alice', 'age': 30},\n        {'name': 'Bob', 'age': 25},\n    ])\n    session.commit()\n\n# Method 3: bulk_save_objects (uses model instances)\nwith Session(engine) as session:\n    users = [User(name=f'User_{i}', age=20+i) for i in range(1000)]\n    session.bulk_save_objects(users)\n    session.commit()\n\n# Method 4: add_all (slowest, full tracking)\nwith Session(engine) as session:\n    session.add_all([User(name='Alice'), User(name='Bob')])\n    session.commit()\n\n# --- BULK UPDATE ---\n\n# ORM bulk update (single UPDATE statement)\nwith Session(engine) as session:\n    session.query(User).filter(User.age < 18).update(\n        {'is_active': False},\n        synchronize_session='fetch'  # or False for speed\n    )\n    session.commit()\n\n# Core update\nwith Session(engine) as session:\n    session.execute(\n        update(User).where(User.age < 18).values(is_active=False)\n    )\n    session.commit()\n\n# --- BULK DELETE ---\n\n# ORM bulk delete\nwith Session(engine) as session:\n    deleted_count = session.query(User).filter(User.is_active == False).delete(\n        synchronize_session='fetch'\n    )\n    print(f'Deleted {deleted_count} users')\n    session.commit()\n\n# --- Chunked processing for very large datasets ---\ndef bulk_insert_chunked(session, data, chunk_size=1000):\n    for i in range(0, len(data), chunk_size):\n        chunk = data[i:i + chunk_size]\n        session.bulk_insert_mappings(User, chunk)\n        session.flush()  # Write chunk to DB\n    session.commit()",
+          "code_language": "python",
+          "key_points": [
+            "Core insert() is the fastest; it bypasses the ORM identity map entirely",
+            "bulk_insert_mappings() takes dicts and is much faster than add_all()",
+            ".update() and .delete() on queries generate single SQL statements without loading objects",
+            "synchronize_session='fetch' keeps the session in sync; False is faster but session may be stale",
+            "Chunk large operations to avoid memory issues"
+          ],
+          "gotchas": [
+            "bulk_save_objects() and bulk_insert_mappings() skip relationship cascades and events",
+            "synchronize_session=False means in-memory objects are not updated after bulk update/delete",
+            "Bulk operations do not trigger ORM events (before_insert, after_update, etc.)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use Core `insert()` or `bulk_insert_mappings()` for fast bulk inserts (bypasses ORM tracking). Use `session.query(Model).filter(...).update({})` and `.delete()` for bulk updates/deletes without loading objects into Python.",
+          "pseudo_code": "",
+          "actual_code": "# Bulk insert (fast)\nsession.execute(insert(User), [{'name': 'Alice'}, {'name': 'Bob'}])\nsession.commit()\n\n# Bulk update (single SQL UPDATE)\nsession.query(User).filter(User.age < 18).update({'is_active': False})\nsession.commit()\n\n# Bulk delete\nsession.query(User).filter(User.is_active == False).delete()\nsession.commit()",
+          "code_language": "python",
+          "key_points": [
+            "Core insert() and bulk_insert_mappings() bypass ORM overhead",
+            ".update() and .delete() on queries execute single SQL statements"
+          ],
+          "gotchas": [
+            "Bulk operations skip ORM events and relationship cascades"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are hybrid properties in SQLAlchemy and when do you use them?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["sqlalchemy", "hybrid-property", "computed-columns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **hybrid property** is a descriptor that behaves differently at the Python (instance) level and the SQL (class/query) level:\n\n- **At the instance level**: Acts like a regular Python `@property`, computing a value from the instance's attributes.\n- **At the class level (in queries)**: Generates SQL expressions so the computation happens in the database.\n\nThis is powerful because you can use the same attribute name for both Python logic and SQL filtering/ordering.\n\nUse cases:\n- Computed fields (full name from first + last)\n- Status flags derived from dates or amounts\n- Case-insensitive lookups\n- Virtual columns that should be filterable",
+          "pseudo_code": "1. Import hybrid_property from sqlalchemy.ext.hybrid\n2. Define a @hybrid_property method for instance-level computation\n3. Define a @name.expression classmethod for SQL-level expression\n4. Use in queries: session.query(Model).filter(Model.hybrid_attr == value)",
+          "actual_code": "from sqlalchemy import Column, Integer, String, case, func\nfrom sqlalchemy.ext.hybrid import hybrid_property, hybrid_method\nfrom sqlalchemy.orm import declarative_base, Session\n\nBase = declarative_base()\n\nclass User(Base):\n    __tablename__ = 'users'\n    id = Column(Integer, primary_key=True)\n    first_name = Column(String(50))\n    last_name = Column(String(50))\n    salary = Column(Integer)\n\n    # Hybrid property: full_name\n    @hybrid_property\n    def full_name(self):\n        \"\"\"Python-level: concatenate strings.\"\"\"\n        return f\"{self.first_name} {self.last_name}\"\n\n    @full_name.expression\n    def full_name(cls):\n        \"\"\"SQL-level: use || or concat.\"\"\"\n        return cls.first_name + ' ' + cls.last_name\n\n    # Hybrid property with setter\n    @hybrid_property\n    def email_lower(self):\n        return self._email.lower() if self._email else None\n\n    # Hybrid property for status\n    @hybrid_property\n    def salary_tier(self):\n        if self.salary >= 100000:\n            return 'senior'\n        elif self.salary >= 50000:\n            return 'mid'\n        return 'junior'\n\n    @salary_tier.expression\n    def salary_tier(cls):\n        return case(\n            (cls.salary >= 100000, 'senior'),\n            (cls.salary >= 50000, 'mid'),\n            else_='junior'\n        )\n\n# Usage in queries\nwith Session(engine) as session:\n    # Filter using hybrid property (generates SQL)\n    user = session.query(User).filter(User.full_name == 'John Doe').first()\n\n    # Order by hybrid property\n    users = session.query(User).order_by(User.full_name).all()\n\n    # Filter by salary tier\n    seniors = session.query(User).filter(User.salary_tier == 'senior').all()\n\n    # Use on an instance (runs Python)\n    user = session.query(User).first()\n    print(user.full_name)       # \"Alice Smith\" (Python)\n    print(user.salary_tier)     # \"senior\" (Python)",
+          "code_language": "python",
+          "key_points": [
+            "hybrid_property works at both Python (instance) and SQL (class) levels",
+            "The @expression classmethod defines the SQL version used in filter/order_by",
+            "Without an @expression, the property works on instances but not in queries",
+            "Use case() for SQL CASE WHEN expressions in the SQL-level definition",
+            "Hybrid properties keep business logic DRY: same name for Python and SQL"
+          ],
+          "gotchas": [
+            "Without the @expression classmethod, filtering/ordering by the hybrid property raises an error",
+            "SQL expressions may behave differently than Python (e.g., NULL handling, string concatenation)",
+            "Complex hybrid expressions can generate slow SQL; check the query plan with echo=True"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A `hybrid_property` works as a Python `@property` on instances and as a SQL expression in queries. Define the Python version with `@hybrid_property` and the SQL version with `@name.expression`. This lets you filter/order by computed attributes in the database.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.ext.hybrid import hybrid_property\n\nclass User(Base):\n    __tablename__ = 'users'\n    first_name = Column(String(50))\n    last_name = Column(String(50))\n\n    @hybrid_property\n    def full_name(self):\n        return f\"{self.first_name} {self.last_name}\"\n\n    @full_name.expression\n    def full_name(cls):\n        return cls.first_name + ' ' + cls.last_name\n\n# Works in queries: User.full_name == 'John Doe' generates SQL",
+          "code_language": "python",
+          "key_points": [
+            "@hybrid_property for Python; @name.expression for SQL",
+            "Allows filtering and ordering by computed attributes"
+          ],
+          "gotchas": [
+            "Without @expression, the property only works on instances, not in queries"
+          ]
+        }
+      ]
+    }
+  ]
+}

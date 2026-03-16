@@ -1,0 +1,744 @@
+{
+  "concept_slug": "design-patterns",
+  "questions": [
+    {
+      "title": "How do you implement the Singleton pattern in Python?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["singleton", "creational", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Singleton pattern** ensures a class has only one instance and provides a global point of access to it. In Python, there are several ways to implement it:\n\n1. **Module-level variable** (most Pythonic): Python modules are singletons by nature. Import the same module twice and you get the same object.\n2. **`__new__` override**: Control instance creation by caching the first instance.\n3. **Metaclass**: A metaclass that intercepts class creation.\n4. **Decorator**: Wrap a class to cache its instance.\n\nThe module-level approach is the most Pythonic because Python modules are already singletons.",
+          "pseudo_code": "Module-level: Just use a module variable\n__new__: Override __new__ to return cached instance\nMetaclass: type.__call__ checks for existing instance\nDecorator: Wrap class; return same instance on repeated calls",
+          "actual_code": "# Method 1: Module-level singleton (most Pythonic)\n# config.py\nclass _Config:\n    def __init__(self):\n        self.debug = False\n        self.database_url = 'sqlite:///app.db'\n\nconfig = _Config()  # Module-level instance\n# Usage: from config import config\n# Every import gets the same instance\n\n# Method 2: __new__ override\nclass Singleton:\n    _instance = None\n\n    def __new__(cls, *args, **kwargs):\n        if cls._instance is None:\n            cls._instance = super().__new__(cls)\n        return cls._instance\n\n    def __init__(self, value=None):\n        if not hasattr(self, '_initialized'):\n            self.value = value\n            self._initialized = True\n\na = Singleton('first')\nb = Singleton('second')\nprint(a is b)       # True\nprint(a.value)      # 'first' (not overwritten)\n\n# Method 3: Metaclass singleton\nclass SingletonMeta(type):\n    _instances = {}\n\n    def __call__(cls, *args, **kwargs):\n        if cls not in cls._instances:\n            cls._instances[cls] = super().__call__(*args, **kwargs)\n        return cls._instances[cls]\n\nclass Database(metaclass=SingletonMeta):\n    def __init__(self, url='sqlite:///app.db'):\n        self.url = url\n        print(f'Connecting to {url}')\n\ndb1 = Database()                     # 'Connecting to sqlite:///app.db'\ndb2 = Database('postgres://...')      # No output; returns existing instance\nprint(db1 is db2)                     # True\n\n# Method 4: Decorator singleton\ndef singleton(cls):\n    instances = {}\n    def get_instance(*args, **kwargs):\n        if cls not in instances:\n            instances[cls] = cls(*args, **kwargs)\n        return instances[cls]\n    return get_instance\n\n@singleton\nclass Logger:\n    def __init__(self, name='app'):\n        self.name = name\n\n    def log(self, message):\n        print(f'[{self.name}] {message}')\n\nlogger1 = Logger()\nlogger2 = Logger('other')  # Ignored; returns existing\nprint(logger1 is logger2)  # True",
+          "code_language": "python",
+          "key_points": [
+            "Module-level variables are the most Pythonic singleton (modules are cached after first import)",
+            "__new__ is called before __init__; override it to return a cached instance",
+            "Metaclass approach is cleanest for multiple singleton classes",
+            "Decorator approach is simple but changes the class to a function (breaks isinstance)",
+            "Guard __init__ with a flag to prevent re-initialization"
+          ],
+          "gotchas": [
+            "__init__ is called every time even with __new__ singleton; guard with _initialized flag",
+            "The decorator approach replaces the class with a function, breaking isinstance checks",
+            "Singletons make unit testing harder because state persists between tests",
+            "Thread safety: add threading.Lock() for multithreaded singleton creation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Most Pythonic: use a module-level instance (modules are singletons). Alternatives: override `__new__` to cache the instance, use a metaclass, or a decorator. Guard `__init__` with a flag to prevent re-initialization.",
+          "pseudo_code": "",
+          "actual_code": "# Module singleton (best)\n# config.py\nclass _Config:\n    debug = False\nconfig = _Config()\n\n# __new__ singleton\nclass Singleton:\n    _instance = None\n    def __new__(cls):\n        if cls._instance is None:\n            cls._instance = super().__new__(cls)\n        return cls._instance",
+          "code_language": "python",
+          "key_points": [
+            "Module-level is most Pythonic; __new__ or metaclass for OOP approach",
+            "Guard __init__ to prevent re-initialization"
+          ],
+          "gotchas": [
+            "Singletons make testing harder; consider dependency injection instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Factory pattern in Python?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["factory", "creational", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Factory pattern** encapsulates object creation, letting you create objects without specifying their exact class. Python supports several factory variants:\n\n1. **Simple Factory**: A function or method that returns different classes based on input.\n2. **Factory Method**: A method in a base class that subclasses override to create specific objects.\n3. **Abstract Factory**: A factory that produces families of related objects.\n\nIn Python, simple factories are often just functions (no need for a Factory class). Dictionaries mapping names to classes are a clean Pythonic approach.",
+          "pseudo_code": "Simple Factory: function returns different classes based on input\nFactory Method: base class defines create(); subclasses override\nAbstract Factory: create families of related objects\nPythonic: dict mapping names to classes",
+          "actual_code": "from abc import ABC, abstractmethod\n\n# --- Simple Factory ---\nclass Dog:\n    def speak(self) -> str:\n        return \"Woof!\"\n\nclass Cat:\n    def speak(self) -> str:\n        return \"Meow!\"\n\nclass Bird:\n    def speak(self) -> str:\n        return \"Tweet!\"\n\n# Pythonic simple factory using a dict\ndef create_animal(animal_type: str):\n    animals = {\n        'dog': Dog,\n        'cat': Cat,\n        'bird': Bird,\n    }\n    cls = animals.get(animal_type.lower())\n    if cls is None:\n        raise ValueError(f\"Unknown animal type: {animal_type}\")\n    return cls()\n\ndog = create_animal('dog')\nprint(dog.speak())  # \"Woof!\"\n\n# --- Factory Method ---\nclass Document(ABC):\n    @abstractmethod\n    def create_page(self) -> 'Page':\n        ...\n\n    def render(self) -> str:\n        page = self.create_page()  # Factory method\n        return page.content()\n\nclass Page(ABC):\n    @abstractmethod\n    def content(self) -> str:\n        ...\n\nclass HTMLPage(Page):\n    def content(self) -> str:\n        return \"<html><body>Hello</body></html>\"\n\nclass PDFPage(Page):\n    def content(self) -> str:\n        return \"%PDF-1.4 Hello\"\n\nclass HTMLDocument(Document):\n    def create_page(self) -> Page:\n        return HTMLPage()\n\nclass PDFDocument(Document):\n    def create_page(self) -> Page:\n        return PDFPage()\n\ndoc = HTMLDocument()\nprint(doc.render())  # \"<html><body>Hello</body></html>\"\n\n# --- Abstract Factory ---\nclass Button(ABC):\n    @abstractmethod\n    def render(self) -> str: ...\n\nclass TextBox(ABC):\n    @abstractmethod\n    def render(self) -> str: ...\n\nclass UIFactory(ABC):\n    @abstractmethod\n    def create_button(self) -> Button: ...\n    @abstractmethod\n    def create_textbox(self) -> TextBox: ...\n\n# Light theme family\nclass LightButton(Button):\n    def render(self) -> str:\n        return \"[Light Button]\"\n\nclass LightTextBox(TextBox):\n    def render(self) -> str:\n        return \"[Light TextBox]\"\n\nclass LightUIFactory(UIFactory):\n    def create_button(self) -> Button:\n        return LightButton()\n    def create_textbox(self) -> TextBox:\n        return LightTextBox()\n\n# Dark theme family\nclass DarkButton(Button):\n    def render(self) -> str:\n        return \"[Dark Button]\"\n\nclass DarkTextBox(TextBox):\n    def render(self) -> str:\n        return \"[Dark TextBox]\"\n\nclass DarkUIFactory(UIFactory):\n    def create_button(self) -> Button:\n        return DarkButton()\n    def create_textbox(self) -> TextBox:\n        return DarkTextBox()\n\ndef build_ui(factory: UIFactory) -> str:\n    btn = factory.create_button()\n    txt = factory.create_textbox()\n    return f\"{btn.render()} {txt.render()}\"\n\nprint(build_ui(DarkUIFactory()))  # \"[Dark Button] [Dark TextBox]\"",
+          "code_language": "python",
+          "key_points": [
+            "Simple Factory: a function/dict that returns instances based on input (most Pythonic)",
+            "Factory Method: base class defines creation interface; subclasses implement it",
+            "Abstract Factory: creates families of related objects (e.g., themed UI components)",
+            "Dict-based factories are cleaner in Python than class hierarchies for simple cases",
+            "Factory patterns decouple creation from usage, enabling flexibility and testability"
+          ],
+          "gotchas": [
+            "Over-engineering: a simple dict factory often suffices; avoid factory classes when unnecessary",
+            "Factory Method requires inheritance; in Python, passing a callable is often simpler",
+            "Type hints for factories returning different types need Union or Protocol"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Simple Factory: a function/dict maps names to classes. Factory Method: base class defines a creation method, subclasses override it. Abstract Factory: creates families of related objects. In Python, dict-based factories are the most common.",
+          "pseudo_code": "",
+          "actual_code": "# Simple factory (Pythonic)\ndef create_animal(kind: str):\n    animals = {'dog': Dog, 'cat': Cat, 'bird': Bird}\n    cls = animals.get(kind)\n    if not cls:\n        raise ValueError(f\"Unknown: {kind}\")\n    return cls()\n\n# Factory method\nclass Document(ABC):\n    @abstractmethod\n    def create_page(self) -> Page: ...\n    def render(self):\n        return self.create_page().content()",
+          "code_language": "python",
+          "key_points": [
+            "Dict mapping is the most Pythonic factory; avoid over-engineering",
+            "Factory Method uses inheritance; Abstract Factory for related object families"
+          ],
+          "gotchas": [
+            "A dict factory often replaces the need for Factory classes in Python"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Observer pattern in Python?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["observer", "behavioral", "events", "callbacks"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Observer pattern** (also called Publish-Subscribe) defines a one-to-many dependency so that when one object (subject) changes state, all its dependents (observers) are notified.\n\nPython implementations:\n1. **Callback-based** (most Pythonic): Store a list of callback functions.\n2. **Class-based**: Define an Observer interface with an `update()` method.\n3. **Event system**: Named events with multiple handlers per event.\n\nThe callback-based approach is most natural in Python due to first-class functions.",
+          "pseudo_code": "1. Subject maintains a list of callbacks/observers\n2. Observers register via subscribe(callback)\n3. When state changes, subject calls all registered callbacks\n4. Observers unregister via unsubscribe(callback)",
+          "actual_code": "from typing import Callable, Any\n\n# Method 1: Callback-based (most Pythonic)\nclass EventEmitter:\n    def __init__(self):\n        self._listeners: dict[str, list[Callable]] = {}\n\n    def on(self, event: str, callback: Callable) -> None:\n        self._listeners.setdefault(event, []).append(callback)\n\n    def off(self, event: str, callback: Callable) -> None:\n        if event in self._listeners:\n            self._listeners[event].remove(callback)\n\n    def emit(self, event: str, *args: Any, **kwargs: Any) -> None:\n        for callback in self._listeners.get(event, []):\n            callback(*args, **kwargs)\n\n# Usage\nclass UserService(EventEmitter):\n    def create_user(self, name: str) -> dict:\n        user = {'name': name, 'id': 1}\n        self.emit('user_created', user)\n        return user\n\n    def delete_user(self, user_id: int) -> None:\n        self.emit('user_deleted', user_id)\n\n# Subscribe to events\nservice = UserService()\nservice.on('user_created', lambda user: print(f\"Welcome email to {user['name']}\"))\nservice.on('user_created', lambda user: print(f\"Audit log: created {user['name']}\"))\nservice.on('user_deleted', lambda uid: print(f\"Cleanup for user {uid}\"))\n\nservice.create_user('Alice')\n# Output:\n# Welcome email to Alice\n# Audit log: created Alice\n\n# Method 2: Class-based Observer\nfrom abc import ABC, abstractmethod\n\nclass Observer(ABC):\n    @abstractmethod\n    def update(self, event: str, data: Any) -> None:\n        ...\n\nclass Subject:\n    def __init__(self):\n        self._observers: list[Observer] = []\n\n    def attach(self, observer: Observer) -> None:\n        self._observers.append(observer)\n\n    def detach(self, observer: Observer) -> None:\n        self._observers.remove(observer)\n\n    def notify(self, event: str, data: Any = None) -> None:\n        for observer in self._observers:\n            observer.update(event, data)\n\nclass EmailNotifier(Observer):\n    def update(self, event: str, data: Any) -> None:\n        if event == 'order_placed':\n            print(f\"Sending order confirmation for {data}\")\n\nclass InventoryManager(Observer):\n    def update(self, event: str, data: Any) -> None:\n        if event == 'order_placed':\n            print(f\"Updating inventory for {data}\")\n\nclass OrderService(Subject):\n    def place_order(self, item: str) -> None:\n        print(f\"Order placed: {item}\")\n        self.notify('order_placed', item)\n\norder_service = OrderService()\norder_service.attach(EmailNotifier())\norder_service.attach(InventoryManager())\norder_service.place_order('Laptop')\n# Order placed: Laptop\n# Sending order confirmation for Laptop\n# Updating inventory for Laptop",
+          "code_language": "python",
+          "key_points": [
+            "Callback-based is most Pythonic; class-based is more traditional",
+            "EventEmitter pattern supports multiple named events with multiple handlers",
+            "Observers are decoupled from the subject (loose coupling)",
+            "on/off for subscribe/unsubscribe; emit to notify all observers",
+            "Useful for cross-cutting concerns: logging, email, audit, cache invalidation"
+          ],
+          "gotchas": [
+            "Storing lambda callbacks makes unsubscribing difficult (lambdas are not equal by identity)",
+            "Exceptions in one observer can prevent others from being notified; wrap in try/except",
+            "Memory leaks: observers hold references to subjects; use weakref for long-lived observers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Observer lets objects subscribe to events. Pythonic approach: store callback functions in a dict by event name. Call all registered callbacks when an event occurs. Decouples event producers from consumers.",
+          "pseudo_code": "",
+          "actual_code": "class EventEmitter:\n    def __init__(self):\n        self._listeners = {}\n    def on(self, event, callback):\n        self._listeners.setdefault(event, []).append(callback)\n    def emit(self, event, *args):\n        for cb in self._listeners.get(event, []):\n            cb(*args)\n\nemitter = EventEmitter()\nemitter.on('save', lambda data: print(f'Saved: {data}'))\nemitter.emit('save', {'id': 1})",
+          "code_language": "python",
+          "key_points": [
+            "Dict of event->callback list is the Pythonic approach",
+            "Decouples producers from consumers"
+          ],
+          "gotchas": [
+            "Wrap observer calls in try/except to prevent one failure from blocking others"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Strategy pattern in Python?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["strategy", "behavioral", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Strategy pattern** defines a family of algorithms, encapsulates each one, and makes them interchangeable. The client can switch algorithms at runtime.\n\nPython makes this trivially easy because functions are first-class objects -- you can pass them around. There is no need for a Strategy interface class in most cases.\n\n**Two approaches**:\n1. **Function-based** (Pythonic): Pass strategy functions directly.\n2. **Class-based** (traditional): Define a Strategy ABC with concrete implementations.",
+          "pseudo_code": "1. Define strategy as a function or class with a common interface\n2. Pass the strategy to the context (client)\n3. Context calls the strategy without knowing its internals\n4. Switch strategies at runtime by passing a different one",
+          "actual_code": "from typing import Callable\n\n# Method 1: Function-based (most Pythonic)\ndef sort_by_name(users: list[dict]) -> list[dict]:\n    return sorted(users, key=lambda u: u['name'])\n\ndef sort_by_age(users: list[dict]) -> list[dict]:\n    return sorted(users, key=lambda u: u['age'])\n\ndef sort_by_score(users: list[dict]) -> list[dict]:\n    return sorted(users, key=lambda u: u['score'], reverse=True)\n\ndef display_users(users: list[dict], strategy: Callable) -> None:\n    sorted_users = strategy(users)\n    for user in sorted_users:\n        print(f\"{user['name']}: age={user['age']}, score={user['score']}\")\n\nusers = [\n    {'name': 'Charlie', 'age': 30, 'score': 85},\n    {'name': 'Alice', 'age': 25, 'score': 92},\n    {'name': 'Bob', 'age': 35, 'score': 78},\n]\n\ndisplay_users(users, sort_by_name)   # Alice, Bob, Charlie\ndisplay_users(users, sort_by_score)  # Alice, Charlie, Bob\n\n# Method 2: Class-based (for complex strategies with state)\nfrom abc import ABC, abstractmethod\n\nclass PricingStrategy(ABC):\n    @abstractmethod\n    def calculate(self, base_price: float) -> float:\n        ...\n\nclass RegularPricing(PricingStrategy):\n    def calculate(self, base_price: float) -> float:\n        return base_price\n\nclass DiscountPricing(PricingStrategy):\n    def __init__(self, discount_percent: float):\n        self.discount = discount_percent / 100\n\n    def calculate(self, base_price: float) -> float:\n        return base_price * (1 - self.discount)\n\nclass BulkPricing(PricingStrategy):\n    def __init__(self, threshold: int, discount_percent: float):\n        self.threshold = threshold\n        self.discount = discount_percent / 100\n\n    def calculate(self, base_price: float) -> float:\n        return base_price * (1 - self.discount)\n\nclass ShoppingCart:\n    def __init__(self, pricing: PricingStrategy):\n        self.pricing = pricing\n        self.items: list[tuple[str, float]] = []\n\n    def add_item(self, name: str, price: float) -> None:\n        self.items.append((name, price))\n\n    def set_pricing(self, pricing: PricingStrategy) -> None:\n        self.pricing = pricing  # Change strategy at runtime\n\n    def total(self) -> float:\n        return sum(self.pricing.calculate(price) for _, price in self.items)\n\ncart = ShoppingCart(RegularPricing())\ncart.add_item('Widget', 100)\ncart.add_item('Gadget', 200)\nprint(f\"Regular: ${cart.total()}\")  # $300.0\n\ncart.set_pricing(DiscountPricing(20))\nprint(f\"20% off: ${cart.total()}\")  # $240.0\n\n# Method 3: Dict-based strategy selection\nstrategies = {\n    'regular': RegularPricing(),\n    'holiday': DiscountPricing(15),\n    'bulk': BulkPricing(10, 25),\n}\n\ndef get_pricing(name: str) -> PricingStrategy:\n    if name not in strategies:\n        raise ValueError(f\"Unknown strategy: {name}\")\n    return strategies[name]",
+          "code_language": "python",
+          "key_points": [
+            "Function-based is most Pythonic: pass functions as strategies (no class needed)",
+            "Class-based when strategies have state or complex logic",
+            "Strategies can be swapped at runtime via setter or constructor",
+            "Dict mapping names to strategies is clean for configuration-driven selection",
+            "Follows Open/Closed principle: add new strategies without modifying existing code"
+          ],
+          "gotchas": [
+            "Over-engineering: if you only have 2-3 strategies, a simple if/else may be clearer",
+            "Function strategies cannot hold state; use classes or closures for stateful strategies",
+            "Make sure all strategies have the same interface (same parameters and return type)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Strategy encapsulates interchangeable algorithms. In Python, simply pass functions (first-class objects) as strategies. Use classes when strategies need state. Swap strategies at runtime.",
+          "pseudo_code": "",
+          "actual_code": "# Function-based (Pythonic)\ndef sort_by_name(items): return sorted(items, key=lambda x: x['name'])\ndef sort_by_date(items): return sorted(items, key=lambda x: x['date'])\n\ndef display(items, strategy):\n    for item in strategy(items):\n        print(item)\n\ndisplay(items, sort_by_name)  # Switch strategy easily",
+          "code_language": "python",
+          "key_points": [
+            "Pass functions as strategies; no class needed in Python",
+            "Use classes for stateful strategies"
+          ],
+          "gotchas": [
+            "All strategies must have the same signature"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between the Decorator pattern and Python decorators?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["decorator-pattern", "python-decorators", "structural"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "These share a name but are different concepts:\n\n**Decorator Pattern** (GoF design pattern): A structural pattern that adds behavior to an object by wrapping it in another object with the same interface. Each wrapper adds a layer of functionality.\n\n**Python Decorators** (`@decorator`): A language feature that modifies or wraps functions/classes. Uses the `@` syntax. More like a general-purpose wrapper mechanism.\n\nPython decorators CAN implement the Decorator Pattern, but they are more general -- they can do anything: add logging, check permissions, cache results, register routes, etc.",
+          "pseudo_code": "Decorator Pattern: Wrap object in layers, each adding behavior\nPython @decorator: Wrap function/class to modify behavior\nKey difference: Pattern wraps objects; @ wraps functions/classes",
+          "actual_code": "# --- Decorator PATTERN (GoF) ---\nfrom abc import ABC, abstractmethod\n\nclass Coffee(ABC):\n    @abstractmethod\n    def cost(self) -> float: ...\n    @abstractmethod\n    def description(self) -> str: ...\n\nclass SimpleCoffee(Coffee):\n    def cost(self) -> float:\n        return 2.00\n    def description(self) -> str:\n        return \"Simple coffee\"\n\n# Decorators wrap the same interface\nclass CoffeeDecorator(Coffee):\n    def __init__(self, coffee: Coffee):\n        self._coffee = coffee\n\nclass MilkDecorator(CoffeeDecorator):\n    def cost(self) -> float:\n        return self._coffee.cost() + 0.50\n    def description(self) -> str:\n        return self._coffee.description() + \", milk\"\n\nclass SugarDecorator(CoffeeDecorator):\n    def cost(self) -> float:\n        return self._coffee.cost() + 0.25\n    def description(self) -> str:\n        return self._coffee.description() + \", sugar\"\n\nclass WhipDecorator(CoffeeDecorator):\n    def cost(self) -> float:\n        return self._coffee.cost() + 0.75\n    def description(self) -> str:\n        return self._coffee.description() + \", whip\"\n\n# Stack decorators\ncoffee = SimpleCoffee()\ncoffee = MilkDecorator(coffee)\ncoffee = SugarDecorator(coffee)\ncoffee = WhipDecorator(coffee)\nprint(f\"{coffee.description()}: ${coffee.cost():.2f}\")\n# \"Simple coffee, milk, sugar, whip: $3.50\"\n\n# --- Python @DECORATOR ---\nimport functools\nimport time\n\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__} took {time.time() - start:.3f}s\")\n        return result\n    return wrapper\n\ndef cache(func):\n    memo = {}\n    @functools.wraps(func)\n    def wrapper(*args):\n        if args not in memo:\n            memo[args] = func(*args)\n        return memo[args]\n    return wrapper\n\n@timer\n@cache\ndef fibonacci(n: int) -> int:\n    if n < 2:\n        return n\n    return fibonacci(n - 1) + fibonacci(n - 2)\n\n# Stacked decorators: cache wraps fibonacci, then timer wraps the result\nprint(fibonacci(30))",
+          "code_language": "python",
+          "key_points": [
+            "Decorator Pattern: wraps objects with same interface to add behavior layers",
+            "Python @decorator: wraps functions/classes, more general-purpose",
+            "Pattern decorators are stackable objects; Python decorators are stackable function wrappers",
+            "Both use composition over inheritance to extend behavior",
+            "Python decorators are more common and flexible; Pattern is for object decoration"
+          ],
+          "gotchas": [
+            "Always use @functools.wraps in Python decorators to preserve __name__ and __doc__",
+            "Decorator Pattern requires all decorators to implement the same interface",
+            "Stacking order matters: @timer @cache is different from @cache @timer"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Decorator Pattern wraps objects in layers with the same interface. Python @decorator wraps functions/classes. Both add behavior through composition, but @decorator is more general. Pattern is for object wrapping; @decorator is a language feature.",
+          "pseudo_code": "",
+          "actual_code": "# Decorator Pattern: object wrapping\ncoffee = SimpleCoffee()\ncoffee = MilkDecorator(coffee)   # Same interface, adds milk\ncoffee = SugarDecorator(coffee)  # Same interface, adds sugar\n\n# Python @decorator: function wrapping\n@timer\n@cache\ndef expensive(n): ...",
+          "code_language": "python",
+          "key_points": [
+            "Pattern wraps objects (same interface); @decorator wraps functions/classes",
+            "Both use composition to extend behavior"
+          ],
+          "gotchas": [
+            "Use @functools.wraps to preserve wrapped function metadata"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Iterator pattern in Python?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["iterator", "behavioral", "dunder-methods"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Iterator pattern** provides a way to access elements of a collection sequentially without exposing its underlying representation. Python has built-in support through the iterator protocol:\n\n- **Iterable**: An object with `__iter__()` that returns an iterator.\n- **Iterator**: An object with `__next__()` that returns the next value or raises `StopIteration`.\n\nPython also provides **generators** (`yield`), which are the easiest way to create iterators.",
+          "pseudo_code": "1. Iterable: class with __iter__() returning an iterator\n2. Iterator: class with __next__() and __iter__() (returns self)\n3. Generator: function with yield (simplest approach)\n4. for loop automatically calls __iter__() then __next__() repeatedly",
+          "actual_code": "# Method 1: Iterator class\nclass Countdown:\n    def __init__(self, start: int):\n        self.start = start\n\n    def __iter__(self):\n        return CountdownIterator(self.start)\n\nclass CountdownIterator:\n    def __init__(self, current: int):\n        self.current = current\n\n    def __iter__(self):\n        return self  # Iterators return themselves\n\n    def __next__(self) -> int:\n        if self.current <= 0:\n            raise StopIteration\n        value = self.current\n        self.current -= 1\n        return value\n\nfor num in Countdown(5):\n    print(num)  # 5, 4, 3, 2, 1\n\n# Method 2: Generator function (much simpler)\ndef countdown(start: int):\n    current = start\n    while current > 0:\n        yield current\n        current -= 1\n\nfor num in countdown(5):\n    print(num)  # 5, 4, 3, 2, 1\n\n# Method 3: Class with __iter__ as generator\nclass FileLines:\n    def __init__(self, filepath: str):\n        self.filepath = filepath\n\n    def __iter__(self):\n        with open(self.filepath) as f:\n            for line in f:\n                yield line.strip()\n\n# Lazy iteration (memory efficient)\nfor line in FileLines('data.txt'):\n    print(line)\n\n# Real-world: paginated API iterator\nclass PaginatedAPI:\n    def __init__(self, base_url: str, per_page: int = 100):\n        self.base_url = base_url\n        self.per_page = per_page\n\n    def __iter__(self):\n        page = 1\n        while True:\n            import requests\n            resp = requests.get(\n                self.base_url,\n                params={'page': page, 'per_page': self.per_page}\n            )\n            items = resp.json().get('results', [])\n            if not items:\n                return  # StopIteration\n            yield from items  # Yield each item\n            page += 1\n\n# Iterate through all pages transparently\n# for user in PaginatedAPI('https://api.example.com/users'):\n#     print(user['name'])",
+          "code_language": "python",
+          "key_points": [
+            "__iter__ returns an iterator; __next__ returns values or raises StopIteration",
+            "Generator functions (yield) are the simplest way to create iterators",
+            "yield from delegates to a sub-iterator",
+            "Iterators are lazy; they compute values on demand (memory efficient)",
+            "for loops automatically handle the iterator protocol"
+          ],
+          "gotchas": [
+            "Iterators are single-use: once exhausted, calling next() keeps raising StopIteration",
+            "To iterate multiple times, the iterable must create a new iterator each time in __iter__",
+            "A generator function returns a generator object; it does not run until you iterate"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement `__iter__` (returns iterator) and `__next__` (returns next value / raises StopIteration). Easiest: use `yield` in a generator function. Iterators are lazy and memory-efficient.",
+          "pseudo_code": "",
+          "actual_code": "# Generator (simplest)\ndef countdown(n):\n    while n > 0:\n        yield n\n        n -= 1\n\nfor x in countdown(5):\n    print(x)  # 5, 4, 3, 2, 1\n\n# Class-based\nclass Range:\n    def __init__(self, n):\n        self.n = n\n    def __iter__(self):\n        i = 0\n        while i < self.n:\n            yield i\n            i += 1",
+          "code_language": "python",
+          "key_points": [
+            "yield is the simplest iterator; __iter__/__next__ for class-based",
+            "Iterators are single-use and lazy"
+          ],
+          "gotchas": [
+            "Iterators exhaust after one pass; create a new one for re-iteration"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Command pattern in Python?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["command", "behavioral", "undo"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Command pattern** encapsulates a request as an object, letting you parameterize clients with different requests, queue or log requests, and support undoable operations.\n\nKey components:\n- **Command**: Object with `execute()` (and optionally `undo()`).\n- **Invoker**: Triggers commands (e.g., a button, a queue processor).\n- **Receiver**: The actual object that performs the work.\n\nIn Python, commands can be simple callables (functions, lambdas) or class instances for complex cases like undo/redo.",
+          "pseudo_code": "1. Define Command objects with execute() and undo() methods\n2. Invoker stores and executes commands\n3. Receiver performs the actual work\n4. History stack enables undo/redo\n5. Pythonic: use callables for simple commands",
+          "actual_code": "from abc import ABC, abstractmethod\nfrom typing import Any\n\n# Command interface\nclass Command(ABC):\n    @abstractmethod\n    def execute(self) -> None: ...\n    @abstractmethod\n    def undo(self) -> None: ...\n\n# Receiver: the actual text document\nclass TextDocument:\n    def __init__(self):\n        self.content = \"\"\n\n    def insert(self, text: str, position: int) -> None:\n        self.content = self.content[:position] + text + self.content[position:]\n\n    def delete(self, position: int, length: int) -> str:\n        deleted = self.content[position:position + length]\n        self.content = self.content[:position] + self.content[position + length:]\n        return deleted\n\n# Concrete commands\nclass InsertCommand(Command):\n    def __init__(self, document: TextDocument, text: str, position: int):\n        self.document = document\n        self.text = text\n        self.position = position\n\n    def execute(self) -> None:\n        self.document.insert(self.text, self.position)\n\n    def undo(self) -> None:\n        self.document.delete(self.position, len(self.text))\n\nclass DeleteCommand(Command):\n    def __init__(self, document: TextDocument, position: int, length: int):\n        self.document = document\n        self.position = position\n        self.length = length\n        self._deleted_text = \"\"\n\n    def execute(self) -> None:\n        self._deleted_text = self.document.delete(self.position, self.length)\n\n    def undo(self) -> None:\n        self.document.insert(self._deleted_text, self.position)\n\n# Invoker with undo/redo\nclass Editor:\n    def __init__(self):\n        self._history: list[Command] = []\n        self._redo_stack: list[Command] = []\n\n    def execute(self, command: Command) -> None:\n        command.execute()\n        self._history.append(command)\n        self._redo_stack.clear()\n\n    def undo(self) -> None:\n        if self._history:\n            command = self._history.pop()\n            command.undo()\n            self._redo_stack.append(command)\n\n    def redo(self) -> None:\n        if self._redo_stack:\n            command = self._redo_stack.pop()\n            command.execute()\n            self._history.append(command)\n\n# Usage\ndoc = TextDocument()\neditor = Editor()\n\neditor.execute(InsertCommand(doc, \"Hello \", 0))\nprint(doc.content)  # \"Hello \"\n\neditor.execute(InsertCommand(doc, \"World!\", 6))\nprint(doc.content)  # \"Hello World!\"\n\neditor.undo()\nprint(doc.content)  # \"Hello \"\n\neditor.redo()\nprint(doc.content)  # \"Hello World!\"\n\neditor.execute(DeleteCommand(doc, 5, 1))\nprint(doc.content)  # \"HelloWorld!\"\n\neditor.undo()\nprint(doc.content)  # \"Hello World!\"",
+          "code_language": "python",
+          "key_points": [
+            "Command encapsulates action + undo as an object",
+            "Invoker stores command history for undo/redo",
+            "Commands capture all data needed to execute AND reverse the operation",
+            "Delete commands must save deleted content for undo",
+            "Clear redo stack when a new command is executed"
+          ],
+          "gotchas": [
+            "Undo requires storing enough state to reverse the operation",
+            "Complex operations may need composite commands (macro commands)",
+            "Memory usage grows with history; consider limiting history size"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Command encapsulates an action as an object with `execute()` and `undo()`. An invoker stores command history for undo/redo. Commands must capture all data needed to reverse the operation.",
+          "pseudo_code": "",
+          "actual_code": "class InsertCommand:\n    def __init__(self, doc, text, pos):\n        self.doc, self.text, self.pos = doc, text, pos\n    def execute(self):\n        self.doc.insert(self.text, self.pos)\n    def undo(self):\n        self.doc.delete(self.pos, len(self.text))\n\n# Invoker tracks history\nclass Editor:\n    def __init__(self):\n        self._history = []\n    def execute(self, cmd):\n        cmd.execute()\n        self._history.append(cmd)\n    def undo(self):\n        if self._history:\n            self._history.pop().undo()",
+          "code_language": "python",
+          "key_points": [
+            "Command = execute + undo; Invoker = history stack",
+            "Commands capture data needed to reverse operations"
+          ],
+          "gotchas": [
+            "Delete commands must store what was deleted for undo"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Template Method pattern in Python?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["template-method", "behavioral", "inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Template Method** pattern defines the skeleton of an algorithm in a base class, deferring some steps to subclasses. Subclasses override specific steps without changing the overall structure.\n\nThis is naturally supported in Python through abstract methods and inheritance.",
+          "pseudo_code": "1. Base class defines the template method (algorithm skeleton)\n2. Template method calls abstract hook methods\n3. Subclasses implement the hook methods\n4. Template method is NOT overridden; only hooks are",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass DataPipeline(ABC):\n    \"\"\"Template: extract -> transform -> load.\"\"\"\n\n    def run(self) -> dict:\n        \"\"\"Template method - defines the algorithm skeleton.\"\"\"\n        raw_data = self.extract()\n        cleaned = self.transform(raw_data)\n        result = self.load(cleaned)\n        self.notify(result)  # Optional hook with default\n        return result\n\n    @abstractmethod\n    def extract(self) -> list:\n        \"\"\"Step 1: Extract data from source.\"\"\"\n        ...\n\n    @abstractmethod\n    def transform(self, data: list) -> list:\n        \"\"\"Step 2: Transform/clean data.\"\"\"\n        ...\n\n    @abstractmethod\n    def load(self, data: list) -> dict:\n        \"\"\"Step 3: Load data to destination.\"\"\"\n        ...\n\n    def notify(self, result: dict) -> None:\n        \"\"\"Optional hook (not abstract, has default).\"\"\"\n        print(f\"Pipeline complete: {result.get('count', 0)} records\")\n\nclass CSVToDatabase(DataPipeline):\n    def extract(self) -> list:\n        print(\"Reading CSV file...\")\n        return [{'name': 'Alice', 'age': '30'}, {'name': 'Bob', 'age': '25'}]\n\n    def transform(self, data: list) -> list:\n        print(\"Converting ages to int...\")\n        return [{'name': d['name'], 'age': int(d['age'])} for d in data]\n\n    def load(self, data: list) -> dict:\n        print(f\"Inserting {len(data)} records into database...\")\n        return {'count': len(data), 'status': 'success'}\n\nclass APIToFile(DataPipeline):\n    def extract(self) -> list:\n        print(\"Fetching from API...\")\n        return [{'id': 1, 'value': 'data'}]\n\n    def transform(self, data: list) -> list:\n        print(\"Formatting for file...\")\n        return [f\"{d['id']},{d['value']}\" for d in data]\n\n    def load(self, data: list) -> dict:\n        print(f\"Writing {len(data)} lines to file...\")\n        return {'count': len(data), 'status': 'success'}\n\n    def notify(self, result: dict) -> None:\n        print(f\"Sending Slack notification: {result}\")\n\n# Same template, different implementations\npipeline1 = CSVToDatabase()\npipeline1.run()\n\npipeline2 = APIToFile()\npipeline2.run()",
+          "code_language": "python",
+          "key_points": [
+            "Template method in base class defines the algorithm skeleton",
+            "Abstract methods are mandatory steps subclasses must implement",
+            "Hook methods have default implementations that subclasses may override",
+            "Template method itself is NOT abstract (subclasses do not override it)",
+            "Follows 'Hollywood Principle': don't call us, we'll call you"
+          ],
+          "gotchas": [
+            "Overriding the template method defeats the purpose of the pattern",
+            "Too many abstract methods make subclasses burdensome; use hooks with defaults",
+            "In Python, consider composition (Strategy) over inheritance (Template Method) for flexibility"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Template Method defines an algorithm skeleton in a base class with abstract steps that subclasses implement. The skeleton method is not overridden; only the individual steps are.",
+          "pseudo_code": "",
+          "actual_code": "class Pipeline(ABC):\n    def run(self):  # Template method (not overridden)\n        data = self.extract()\n        data = self.transform(data)\n        self.load(data)\n\n    @abstractmethod\n    def extract(self): ...\n    @abstractmethod\n    def transform(self, data): ...\n    @abstractmethod\n    def load(self, data): ...\n\nclass CSVPipeline(Pipeline):\n    def extract(self): return read_csv()\n    def transform(self, data): return clean(data)\n    def load(self, data): write_db(data)",
+          "code_language": "python",
+          "key_points": [
+            "Base class defines skeleton; subclasses fill in the steps",
+            "Template method is final (not overridden)"
+          ],
+          "gotchas": [
+            "Prefer Strategy (composition) over Template Method (inheritance) for flexibility"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Adapter pattern in Python?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["adapter", "structural", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Adapter pattern** converts the interface of one class to the interface expected by clients. It lets classes work together that otherwise could not due to incompatible interfaces.\n\n**Two approaches**:\n1. **Object adapter** (composition): Wraps the adaptee in a new class.\n2. **Class adapter** (inheritance): Inherits from both the target and adaptee.\n\nIn Python, the object adapter (composition) is preferred because Python supports duck typing -- you just need to match the expected interface.",
+          "pseudo_code": "1. Client expects a specific interface (e.g., method .read())\n2. Adaptee has a different interface (e.g., method .fetch())\n3. Adapter wraps the adaptee, translating .read() to .fetch()\n4. Client uses the adapter without knowing about the adaptee",
+          "actual_code": "# Existing system expects this interface\nclass MediaPlayer:\n    def play(self, filename: str) -> str:\n        return f\"Playing {filename}\"\n\n# Third-party library with different interface\nclass VLCPlayer:\n    def play_media(self, file_path: str, volume: int = 100) -> str:\n        return f\"VLC playing {file_path} at volume {volume}\"\n\nclass FFmpegPlayer:\n    def stream(self, source: str) -> str:\n        return f\"FFmpeg streaming {source}\"\n\n# Adapters translate interfaces\nclass VLCAdapter:\n    def __init__(self, vlc: VLCPlayer):\n        self._vlc = vlc\n\n    def play(self, filename: str) -> str:\n        return self._vlc.play_media(filename)\n\nclass FFmpegAdapter:\n    def __init__(self, ffmpeg: FFmpegPlayer):\n        self._ffmpeg = ffmpeg\n\n    def play(self, filename: str) -> str:\n        return self._ffmpeg.stream(filename)\n\n# Client code works with any player that has .play()\ndef play_song(player, filename: str) -> None:\n    print(player.play(filename))\n\nplay_song(MediaPlayer(), \"song.mp3\")\nplay_song(VLCAdapter(VLCPlayer()), \"song.mp3\")\nplay_song(FFmpegAdapter(FFmpegPlayer()), \"song.mp3\")\n\n# Real-world: adapting different database interfaces\nclass PostgresDB:\n    def execute_query(self, sql: str) -> list:\n        return [{'result': 'postgres data'}]\n\nclass MongoDB:\n    def find(self, collection: str, query: dict) -> list:\n        return [{'result': 'mongo data'}]\n\n# Unified interface\nclass DatabaseAdapter:\n    def __init__(self, db):\n        self._db = db\n\n    def query(self, query_str: str) -> list:\n        if isinstance(self._db, PostgresDB):\n            return self._db.execute_query(query_str)\n        elif isinstance(self._db, MongoDB):\n            return self._db.find('default', {'raw': query_str})\n        raise TypeError(f\"Unsupported database: {type(self._db)}\")\n\ndb = DatabaseAdapter(PostgresDB())\nresult = db.query('SELECT * FROM users')",
+          "code_language": "python",
+          "key_points": [
+            "Adapter translates one interface to another expected by the client",
+            "Object adapter (composition) is preferred in Python over class adapter (inheritance)",
+            "Duck typing means you just need to match the expected methods",
+            "Useful for integrating third-party libraries with incompatible interfaces",
+            "Keeps client code unchanged when swapping underlying implementations"
+          ],
+          "gotchas": [
+            "Adapters add a layer of indirection; too many adapters can obscure the code",
+            "isinstance checks in the adapter defeat the purpose; prefer one adapter per adaptee",
+            "If you control both interfaces, refactoring is better than adapting"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Adapter wraps an object with an incompatible interface, translating method calls to match what the client expects. Use composition (object adapter) in Python. Duck typing makes this natural -- just implement the expected methods.",
+          "pseudo_code": "",
+          "actual_code": "class VLCAdapter:\n    def __init__(self, vlc):\n        self._vlc = vlc\n    def play(self, filename):  # Expected interface\n        return self._vlc.play_media(filename)  # Adapted call\n\n# Client code works with any object that has .play()\nplayer = VLCAdapter(VLCPlayer())\nplayer.play('song.mp3')",
+          "code_language": "python",
+          "key_points": [
+            "Wraps incompatible interface to match expected one",
+            "Composition preferred; duck typing makes it natural"
+          ],
+          "gotchas": [
+            "One adapter per adaptee; avoid isinstance checks inside adapters"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Facade pattern in Python?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["facade", "structural", "simplification"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Facade pattern** provides a simplified interface to a complex subsystem. Instead of interacting with many classes and methods, clients use a single facade with high-level methods.\n\nFacades do not add new functionality; they organize existing functionality into a simpler API. The subsystem classes are still accessible for advanced use.",
+          "pseudo_code": "1. Identify a complex subsystem with many classes\n2. Create a Facade class with simple high-level methods\n3. Facade delegates to subsystem classes internally\n4. Clients use the facade; advanced users access subsystem directly",
+          "actual_code": "# Complex subsystem classes\nclass VideoDecoder:\n    def decode(self, filename: str) -> bytes:\n        print(f\"Decoding video: {filename}\")\n        return b\"decoded_video\"\n\nclass AudioDecoder:\n    def decode(self, filename: str) -> bytes:\n        print(f\"Decoding audio: {filename}\")\n        return b\"decoded_audio\"\n\nclass VideoRenderer:\n    def render(self, video_data: bytes, resolution: str) -> bytes:\n        print(f\"Rendering video at {resolution}\")\n        return b\"rendered\"\n\nclass AudioMixer:\n    def mix(self, audio_data: bytes, volume: float) -> bytes:\n        print(f\"Mixing audio at volume {volume}\")\n        return b\"mixed\"\n\nclass FileWriter:\n    def write(self, filename: str, data: bytes) -> None:\n        print(f\"Writing to {filename}\")\n\n# Facade: simple interface for video conversion\nclass VideoConverter:\n    \"\"\"Facade that simplifies video conversion.\"\"\"\n\n    def __init__(self):\n        self._video_decoder = VideoDecoder()\n        self._audio_decoder = AudioDecoder()\n        self._renderer = VideoRenderer()\n        self._mixer = AudioMixer()\n        self._writer = FileWriter()\n\n    def convert(self, input_file: str, output_file: str,\n                resolution: str = \"1080p\", volume: float = 1.0) -> None:\n        \"\"\"Convert a video file with one simple call.\"\"\"\n        video = self._video_decoder.decode(input_file)\n        audio = self._audio_decoder.decode(input_file)\n        rendered = self._renderer.render(video, resolution)\n        mixed = self._mixer.mix(audio, volume)\n        self._writer.write(output_file, rendered + mixed)\n        print(f\"Conversion complete: {output_file}\")\n\n# Client uses the simple facade\nconverter = VideoConverter()\nconverter.convert(\"input.avi\", \"output.mp4\", resolution=\"720p\")\n# vs. manually calling 5 subsystem classes\n\n# Real-world: email sending facade\nclass SMTPConnection:\n    def connect(self, host: str, port: int) -> None: ...\n    def authenticate(self, user: str, password: str) -> None: ...\n    def send(self, data: bytes) -> None: ...\n    def disconnect(self) -> None: ...\n\nclass EmailComposer:\n    def compose(self, to: str, subject: str, body: str) -> bytes: ...\n\nclass EmailFacade:\n    def __init__(self, host: str, port: int, user: str, password: str):\n        self._host = host\n        self._port = port\n        self._user = user\n        self._password = password\n\n    def send_email(self, to: str, subject: str, body: str) -> None:\n        composer = EmailComposer()\n        data = composer.compose(to, subject, body)\n\n        conn = SMTPConnection()\n        conn.connect(self._host, self._port)\n        conn.authenticate(self._user, self._password)\n        conn.send(data)\n        conn.disconnect()\n\n# One-liner instead of 6 steps\n# email = EmailFacade('smtp.gmail.com', 587, 'user', 'pass')\n# email.send_email('bob@example.com', 'Hello', 'Hi Bob!')",
+          "code_language": "python",
+          "key_points": [
+            "Facade provides a simple interface to a complex subsystem",
+            "Does not add new functionality; organizes existing functionality",
+            "Subsystem classes remain accessible for advanced use",
+            "Common in libraries: high-level API wraps low-level details",
+            "Reduces coupling between client and subsystem"
+          ],
+          "gotchas": [
+            "A facade that does too much becomes a 'god object'; keep it focused",
+            "Facades should not prevent access to the underlying subsystem",
+            "If the facade grows too large, consider splitting into multiple facades"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Facade provides a simple interface to a complex subsystem. One high-level method delegates to many internal classes. Does not add functionality; simplifies the API.",
+          "pseudo_code": "",
+          "actual_code": "class VideoConverter:  # Facade\n    def __init__(self):\n        self._decoder = VideoDecoder()\n        self._renderer = VideoRenderer()\n        self._writer = FileWriter()\n\n    def convert(self, input_file, output_file):\n        data = self._decoder.decode(input_file)\n        rendered = self._renderer.render(data, '1080p')\n        self._writer.write(output_file, rendered)\n\n# Simple: converter.convert('in.avi', 'out.mp4')",
+          "code_language": "python",
+          "key_points": [
+            "Simple interface to complex subsystem; delegates internally",
+            "Subsystem still accessible for advanced use"
+          ],
+          "gotchas": [
+            "Do not make the facade a god object; keep it focused"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Repository pattern in Python?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["repository", "data-access", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Repository pattern** abstracts data access behind a collection-like interface, separating business logic from data storage. The domain layer works with repository interfaces, not database queries directly.\n\n**Benefits**:\n- Swap data sources (SQLAlchemy, in-memory, API) without changing business logic.\n- Easy to mock in tests.\n- Centralized query logic.\n\nIn Python, use Protocol or ABC to define the repository interface, then implement concrete repositories for different backends.",
+          "pseudo_code": "1. Define a Repository interface (Protocol or ABC)\n2. Implement concrete repositories (SQLAlchemy, in-memory, etc.)\n3. Business logic depends on the interface, not the implementation\n4. Inject the repository into services/controllers\n5. Use in-memory repository for testing",
+          "actual_code": "from abc import ABC, abstractmethod\nfrom typing import Protocol\nfrom dataclasses import dataclass\n\n@dataclass\nclass User:\n    id: int | None\n    name: str\n    email: str\n\n# Repository interface\nclass UserRepository(Protocol):\n    def get_by_id(self, user_id: int) -> User | None: ...\n    def get_by_email(self, email: str) -> User | None: ...\n    def get_all(self) -> list[User]: ...\n    def save(self, user: User) -> User: ...\n    def delete(self, user_id: int) -> None: ...\n\n# In-memory implementation (great for testing)\nclass InMemoryUserRepository:\n    def __init__(self):\n        self._users: dict[int, User] = {}\n        self._next_id = 1\n\n    def get_by_id(self, user_id: int) -> User | None:\n        return self._users.get(user_id)\n\n    def get_by_email(self, email: str) -> User | None:\n        for user in self._users.values():\n            if user.email == email:\n                return user\n        return None\n\n    def get_all(self) -> list[User]:\n        return list(self._users.values())\n\n    def save(self, user: User) -> User:\n        if user.id is None:\n            user.id = self._next_id\n            self._next_id += 1\n        self._users[user.id] = user\n        return user\n\n    def delete(self, user_id: int) -> None:\n        self._users.pop(user_id, None)\n\n# SQLAlchemy implementation\nclass SQLAlchemyUserRepository:\n    def __init__(self, session):\n        self._session = session\n\n    def get_by_id(self, user_id: int) -> User | None:\n        row = self._session.query(UserModel).get(user_id)\n        return self._to_entity(row) if row else None\n\n    def get_by_email(self, email: str) -> User | None:\n        row = self._session.query(UserModel).filter_by(email=email).first()\n        return self._to_entity(row) if row else None\n\n    def get_all(self) -> list[User]:\n        rows = self._session.query(UserModel).all()\n        return [self._to_entity(r) for r in rows]\n\n    def save(self, user: User) -> User:\n        model = UserModel(id=user.id, name=user.name, email=user.email)\n        self._session.merge(model)\n        self._session.flush()\n        user.id = model.id\n        return user\n\n    def delete(self, user_id: int) -> None:\n        self._session.query(UserModel).filter_by(id=user_id).delete()\n\n    @staticmethod\n    def _to_entity(row) -> User:\n        return User(id=row.id, name=row.name, email=row.email)\n\n# Service layer uses the repository interface\nclass UserService:\n    def __init__(self, repo: UserRepository):\n        self._repo = repo\n\n    def register(self, name: str, email: str) -> User:\n        if self._repo.get_by_email(email):\n            raise ValueError(f\"Email {email} already registered\")\n        user = User(id=None, name=name, email=email)\n        return self._repo.save(user)\n\n# Production\n# service = UserService(SQLAlchemyUserRepository(session))\n\n# Testing\nservice = UserService(InMemoryUserRepository())\nuser = service.register('Alice', 'alice@example.com')\nprint(user)  # User(id=1, name='Alice', email='alice@example.com')",
+          "code_language": "python",
+          "key_points": [
+            "Repository abstracts data access behind a collection-like interface",
+            "Use Protocol or ABC to define the interface; implement per backend",
+            "InMemoryRepository for testing; SQLAlchemy/API repositories for production",
+            "Business logic depends on the interface, making it testable and backend-agnostic",
+            "Centralizes query logic in one place"
+          ],
+          "gotchas": [
+            "Repositories should return domain objects, not ORM models (keep layers separate)",
+            "Do not put business logic in repositories; keep them focused on data access",
+            "Too many custom query methods can bloat the repository; consider a specification pattern"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Repository abstracts data access behind a collection-like interface (get, save, delete). Define with Protocol/ABC, implement per backend (SQLAlchemy, in-memory). Services depend on the interface, not the implementation.",
+          "pseudo_code": "",
+          "actual_code": "class UserRepository(Protocol):\n    def get_by_id(self, id: int) -> User | None: ...\n    def save(self, user: User) -> User: ...\n    def delete(self, id: int) -> None: ...\n\nclass InMemoryUserRepo:\n    def __init__(self):\n        self._users = {}\n    def get_by_id(self, id):\n        return self._users.get(id)\n    def save(self, user):\n        self._users[user.id] = user\n        return user\n\nservice = UserService(InMemoryUserRepo())  # Easy to test",
+          "code_language": "python",
+          "key_points": [
+            "Interface separates business logic from data storage",
+            "In-memory implementation for tests; real DB for production"
+          ],
+          "gotchas": [
+            "Return domain objects, not ORM models"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement Dependency Injection in Python?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["dependency-injection", "di", "inversion-of-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Dependency Injection (DI)** is a technique where an object receives its dependencies from the outside rather than creating them itself. This follows the **Dependency Inversion Principle** (the 'D' in SOLID): depend on abstractions, not concretions.\n\n**DI methods**:\n1. **Constructor injection**: Pass dependencies via `__init__`.\n2. **Method injection**: Pass dependencies as method parameters.\n3. **Setter injection**: Set dependencies via setter methods.\n\nPython does not need a DI framework for most cases; constructor injection is simple and effective.",
+          "pseudo_code": "1. Define interfaces (Protocol/ABC) for dependencies\n2. Pass concrete implementations via constructor\n3. Classes depend on interfaces, not implementations\n4. In production, wire up real implementations\n5. In tests, inject mocks or in-memory implementations",
+          "actual_code": "from typing import Protocol\n\n# Interfaces\nclass EmailSender(Protocol):\n    def send(self, to: str, subject: str, body: str) -> None: ...\n\nclass Logger(Protocol):\n    def info(self, message: str) -> None: ...\n    def error(self, message: str) -> None: ...\n\nclass UserRepository(Protocol):\n    def save(self, user: dict) -> dict: ...\n    def get_by_email(self, email: str) -> dict | None: ...\n\n# Service with injected dependencies\nclass UserService:\n    def __init__(self, repo: UserRepository, email: EmailSender, logger: Logger):\n        self._repo = repo\n        self._email = email\n        self._logger = logger\n\n    def register(self, name: str, email: str) -> dict:\n        self._logger.info(f\"Registering user: {email}\")\n\n        if self._repo.get_by_email(email):\n            self._logger.error(f\"Email already exists: {email}\")\n            raise ValueError(\"Email already registered\")\n\n        user = self._repo.save({'name': name, 'email': email})\n        self._email.send(email, \"Welcome!\", f\"Hi {name}, welcome!\")\n        self._logger.info(f\"User registered: {user}\")\n        return user\n\n# Production implementations\nclass SMTPEmailSender:\n    def send(self, to: str, subject: str, body: str) -> None:\n        print(f\"SMTP: Sending '{subject}' to {to}\")\n\nclass ConsoleLogger:\n    def info(self, message: str) -> None:\n        print(f\"[INFO] {message}\")\n    def error(self, message: str) -> None:\n        print(f\"[ERROR] {message}\")\n\nclass SQLUserRepository:\n    def save(self, user: dict) -> dict:\n        user['id'] = 1\n        return user\n    def get_by_email(self, email: str) -> dict | None:\n        return None\n\n# Wire up dependencies\nservice = UserService(\n    repo=SQLUserRepository(),\n    email=SMTPEmailSender(),\n    logger=ConsoleLogger(),\n)\nservice.register('Alice', 'alice@example.com')\n\n# Test with mocks (no framework needed)\nclass MockEmailSender:\n    def __init__(self):\n        self.sent = []\n    def send(self, to, subject, body):\n        self.sent.append((to, subject, body))\n\nclass MockRepo:\n    def __init__(self):\n        self.users = {}\n    def save(self, user):\n        user['id'] = len(self.users) + 1\n        self.users[user['email']] = user\n        return user\n    def get_by_email(self, email):\n        return self.users.get(email)\n\n# Test\nmock_email = MockEmailSender()\nmock_repo = MockRepo()\ntest_service = UserService(mock_repo, mock_email, ConsoleLogger())\ntest_service.register('Test', 'test@example.com')\nassert len(mock_email.sent) == 1\nassert mock_email.sent[0][0] == 'test@example.com'",
+          "code_language": "python",
+          "key_points": [
+            "Constructor injection: pass dependencies via __init__ (most common)",
+            "Depend on abstractions (Protocol/ABC), not concrete classes",
+            "No DI framework needed in Python for most cases",
+            "In tests, inject mocks or fakes instead of real implementations",
+            "DI makes code testable, flexible, and follows SOLID principles"
+          ],
+          "gotchas": [
+            "Too many constructor parameters suggest the class has too many responsibilities",
+            "DI frameworks (inject, dependency-injector) add complexity; use them only for large apps",
+            "Do not inject everything; only inject things that have alternative implementations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pass dependencies via `__init__` instead of creating them inside the class. Depend on interfaces (Protocol), not concrete classes. In tests, inject mocks. No framework needed in Python.",
+          "pseudo_code": "",
+          "actual_code": "class UserService:\n    def __init__(self, repo: UserRepository, email: EmailSender):\n        self._repo = repo\n        self._email = email\n\n# Production\nservice = UserService(SQLRepo(), SMTPEmail())\n\n# Testing\nservice = UserService(MockRepo(), MockEmail())",
+          "code_language": "python",
+          "key_points": [
+            "Constructor injection; depend on interfaces, not implementations",
+            "Inject mocks for testing; no framework needed"
+          ],
+          "gotchas": [
+            "Too many injected deps = too many responsibilities (split the class)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the SOLID principles and how do they apply in Python?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["solid", "principles", "design"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**SOLID** is a set of five design principles for writing maintainable, flexible code:\n\n1. **S - Single Responsibility Principle (SRP)**: A class should have only one reason to change.\n2. **O - Open/Closed Principle (OCP)**: Open for extension, closed for modification.\n3. **L - Liskov Substitution Principle (LSP)**: Subtypes must be substitutable for their base types.\n4. **I - Interface Segregation Principle (ISP)**: Many specific interfaces are better than one general-purpose interface.\n5. **D - Dependency Inversion Principle (DIP)**: Depend on abstractions, not concretions.",
+          "pseudo_code": "S: One class = one responsibility\nO: Add behavior by extending, not modifying\nL: Subclasses can replace parent without breaking\nI: Small, focused interfaces instead of fat ones\nD: Depend on abstractions (Protocol/ABC)",
+          "actual_code": "from abc import ABC, abstractmethod\nfrom typing import Protocol\n\n# S - Single Responsibility\n# BAD: one class does everything\nclass BadUserManager:\n    def create_user(self, data): ...      # Business logic\n    def save_to_db(self, user): ...       # Persistence\n    def send_welcome_email(self, user): ...  # Email\n    def generate_report(self, users): ...    # Reporting\n\n# GOOD: separate responsibilities\nclass UserService:\n    def create_user(self, data): ...\n\nclass UserRepository:\n    def save(self, user): ...\n\nclass EmailService:\n    def send_welcome(self, user): ...\n\n# O - Open/Closed\n# BAD: modify existing code for each new shape\ndef bad_area(shape):\n    if shape.type == 'circle':\n        return 3.14 * shape.radius ** 2\n    elif shape.type == 'rectangle':  # Must modify for each new shape\n        return shape.width * shape.height\n\n# GOOD: extend by adding new classes\nclass Shape(Protocol):\n    def area(self) -> float: ...\n\nclass Circle:\n    def __init__(self, radius: float):\n        self.radius = radius\n    def area(self) -> float:\n        return 3.14 * self.radius ** 2\n\nclass Rectangle:\n    def __init__(self, width: float, height: float):\n        self.width = width\n        self.height = height\n    def area(self) -> float:\n        return self.width * self.height\n\ndef total_area(shapes: list[Shape]) -> float:\n    return sum(s.area() for s in shapes)  # No modification needed for new shapes\n\n# L - Liskov Substitution\n# BAD: Square breaks Rectangle's contract\nclass BadRectangle:\n    def __init__(self, w, h):\n        self.width = w\n        self.height = h\n\nclass BadSquare(BadRectangle):  # Violates LSP\n    def __init__(self, side):\n        super().__init__(side, side)\n    # Setting width should not change height, but in a square it must\n\n# GOOD: separate classes, shared interface\nclass Shape(Protocol):\n    def area(self) -> float: ...\n\n# I - Interface Segregation\n# BAD: fat interface\nclass BadWorker(ABC):\n    @abstractmethod\n    def work(self): ...\n    @abstractmethod\n    def eat(self): ...   # Robots don't eat!\n\n# GOOD: small, focused interfaces\nclass Workable(Protocol):\n    def work(self) -> None: ...\n\nclass Feedable(Protocol):\n    def eat(self) -> None: ...\n\nclass Human:\n    def work(self) -> None: print(\"Working\")\n    def eat(self) -> None: print(\"Eating\")\n\nclass Robot:\n    def work(self) -> None: print(\"Working\")\n    # No eat() needed\n\n# D - Dependency Inversion\n# BAD: depends on concrete class\nclass BadNotifier:\n    def __init__(self):\n        self.sender = SMTPSender()  # Concrete dependency\n\n# GOOD: depends on abstraction\nclass Sender(Protocol):\n    def send(self, to: str, msg: str) -> None: ...\n\nclass Notifier:\n    def __init__(self, sender: Sender):  # Depends on abstraction\n        self.sender = sender",
+          "code_language": "python",
+          "key_points": [
+            "SRP: Split classes by responsibility (persistence, business logic, email, etc.)",
+            "OCP: Use polymorphism (Protocol/ABC) to add behavior without modifying existing code",
+            "LSP: Subclasses must honor the parent's contract (pre/post conditions)",
+            "ISP: Use Protocol for small, focused interfaces; classes implement only what they need",
+            "DIP: Inject dependencies via constructor; depend on Protocol, not concrete classes"
+          ],
+          "gotchas": [
+            "Over-applying SOLID to simple code creates unnecessary complexity",
+            "Python's duck typing naturally supports ISP (no need to formally implement interfaces)",
+            "SRP does not mean one method per class; it means one reason to change"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**S**ingle responsibility (one reason to change), **O**pen/closed (extend, don't modify), **L**iskov substitution (subtypes replaceable), **I**nterface segregation (small interfaces), **D**ependency inversion (depend on abstractions). Python's Protocol and duck typing make these natural.",
+          "pseudo_code": "",
+          "actual_code": "# SRP: separate classes per concern\nclass UserService:     ...  # Business logic\nclass UserRepository:  ...  # Data access\nclass EmailService:    ...  # Email\n\n# OCP: add new shapes without modifying total_area\nclass Shape(Protocol):\n    def area(self) -> float: ...\n\n# DIP: depend on Protocol, not concrete class\nclass Notifier:\n    def __init__(self, sender: Sender): ...",
+          "code_language": "python",
+          "key_points": [
+            "SOLID principles guide maintainable, flexible design",
+            "Python's duck typing and Protocol make ISP and DIP natural"
+          ],
+          "gotchas": [
+            "Over-engineering: apply SOLID pragmatically, not dogmatically"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Proxy pattern in Python?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["proxy", "structural", "lazy-loading", "caching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Proxy pattern** provides a surrogate or placeholder for another object to control access to it. The proxy has the same interface as the real object.\n\n**Types of proxies**:\n1. **Virtual proxy** (lazy loading): Delays expensive object creation until needed.\n2. **Protection proxy** (access control): Checks permissions before delegating.\n3. **Caching proxy**: Caches results of expensive operations.\n4. **Logging proxy**: Logs access to the real object.",
+          "pseudo_code": "1. Proxy has same interface as the real subject\n2. Proxy holds a reference to the real subject\n3. Proxy intercepts calls, adds behavior, then delegates\n4. Client cannot tell the difference between proxy and real object",
+          "actual_code": "from typing import Protocol\nimport time\n\n# Subject interface\nclass Database(Protocol):\n    def query(self, sql: str) -> list: ...\n\n# Real subject (expensive)\nclass RealDatabase:\n    def __init__(self, connection_string: str):\n        print(f\"Connecting to {connection_string}...\")\n        time.sleep(0.1)  # Simulate slow connection\n        self._conn = connection_string\n\n    def query(self, sql: str) -> list:\n        print(f\"Executing: {sql}\")\n        return [{'id': 1, 'name': 'Alice'}]\n\n# Virtual proxy (lazy loading)\nclass LazyDatabase:\n    def __init__(self, connection_string: str):\n        self._connection_string = connection_string\n        self._db: RealDatabase | None = None\n\n    def _get_db(self) -> RealDatabase:\n        if self._db is None:\n            self._db = RealDatabase(self._connection_string)\n        return self._db\n\n    def query(self, sql: str) -> list:\n        return self._get_db().query(sql)\n\n# No connection made yet\ndb = LazyDatabase('postgres://...')\nprint(\"DB object created, no connection yet\")\n# Connection made on first query\nresult = db.query('SELECT * FROM users')\n\n# Caching proxy\nclass CachingDatabase:\n    def __init__(self, db: Database):\n        self._db = db\n        self._cache: dict[str, list] = {}\n\n    def query(self, sql: str) -> list:\n        if sql in self._cache:\n            print(f\"Cache hit: {sql}\")\n            return self._cache[sql]\n        print(f\"Cache miss: {sql}\")\n        result = self._db.query(sql)\n        self._cache[sql] = result\n        return result\n\n    def invalidate(self, sql: str | None = None) -> None:\n        if sql:\n            self._cache.pop(sql, None)\n        else:\n            self._cache.clear()\n\n# Protection proxy\nclass ProtectedDatabase:\n    def __init__(self, db: Database, allowed_users: set[str]):\n        self._db = db\n        self._allowed = allowed_users\n        self._current_user: str | None = None\n\n    def login(self, username: str) -> None:\n        self._current_user = username\n\n    def query(self, sql: str) -> list:\n        if self._current_user not in self._allowed:\n            raise PermissionError(f\"User '{self._current_user}' not authorized\")\n        return self._db.query(sql)\n\n# Stack proxies\nreal_db = RealDatabase('postgres://...')\ncached = CachingDatabase(real_db)\nprotected = ProtectedDatabase(cached, {'admin', 'analyst'})\n\nprotected.login('admin')\nresult = protected.query('SELECT * FROM users')  # Cache miss\nresult = protected.query('SELECT * FROM users')  # Cache hit",
+          "code_language": "python",
+          "key_points": [
+            "Proxy has the same interface as the real object (transparent to client)",
+            "Virtual proxy delays creation; caching proxy stores results; protection proxy checks access",
+            "Proxies can be stacked (caching wraps real, protection wraps caching)",
+            "Python's __getattr__ can create generic proxies that delegate all attribute access",
+            "Useful for lazy loading, access control, logging, and caching"
+          ],
+          "gotchas": [
+            "Proxy must faithfully replicate the interface; missing methods break transparency",
+            "Caching proxies must handle cache invalidation (stale data)",
+            "Lazy proxies can surprise with delayed initialization side effects"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Proxy wraps a real object with the same interface, adding behavior like lazy loading, caching, or access control. Client cannot tell proxy from real object. Proxies can be stacked.",
+          "pseudo_code": "",
+          "actual_code": "class LazyDB:\n    def __init__(self, conn_str):\n        self._conn_str = conn_str\n        self._db = None\n    def query(self, sql):\n        if self._db is None:\n            self._db = RealDB(self._conn_str)  # Lazy init\n        return self._db.query(sql)\n\nclass CachingDB:\n    def __init__(self, db):\n        self._db, self._cache = db, {}\n    def query(self, sql):\n        if sql not in self._cache:\n            self._cache[sql] = self._db.query(sql)\n        return self._cache[sql]",
+          "code_language": "python",
+          "key_points": [
+            "Same interface as real object; adds lazy/cache/access control behavior",
+            "Stackable: CachingDB wraps LazyDB wraps RealDB"
+          ],
+          "gotchas": [
+            "Cache invalidation is the hardest part of caching proxies"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the State pattern in Python?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["state", "behavioral", "state-machine"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **State pattern** allows an object to alter its behavior when its internal state changes. The object appears to change its class. Instead of large if/elif chains checking state, each state is a separate class with its own behavior.",
+          "pseudo_code": "1. Define a State interface with action methods\n2. Create concrete state classes implementing the interface\n3. Context holds a reference to the current state\n4. State transitions change the context's state object\n5. Actions are delegated to the current state",
+          "actual_code": "from abc import ABC, abstractmethod\n\n# State interface\nclass OrderState(ABC):\n    @abstractmethod\n    def process(self, order: 'Order') -> str: ...\n    @abstractmethod\n    def cancel(self, order: 'Order') -> str: ...\n    @abstractmethod\n    def ship(self, order: 'Order') -> str: ...\n\n# Concrete states\nclass PendingState(OrderState):\n    def process(self, order: 'Order') -> str:\n        order.state = ProcessingState()\n        return \"Order is now being processed\"\n\n    def cancel(self, order: 'Order') -> str:\n        order.state = CancelledState()\n        return \"Order cancelled\"\n\n    def ship(self, order: 'Order') -> str:\n        return \"Cannot ship: order is not yet processed\"\n\nclass ProcessingState(OrderState):\n    def process(self, order: 'Order') -> str:\n        return \"Order is already being processed\"\n\n    def cancel(self, order: 'Order') -> str:\n        order.state = CancelledState()\n        return \"Order cancelled during processing\"\n\n    def ship(self, order: 'Order') -> str:\n        order.state = ShippedState()\n        return \"Order has been shipped!\"\n\nclass ShippedState(OrderState):\n    def process(self, order: 'Order') -> str:\n        return \"Cannot process: order already shipped\"\n\n    def cancel(self, order: 'Order') -> str:\n        return \"Cannot cancel: order already shipped\"\n\n    def ship(self, order: 'Order') -> str:\n        return \"Order is already shipped\"\n\nclass CancelledState(OrderState):\n    def process(self, order: 'Order') -> str:\n        return \"Cannot process: order is cancelled\"\n\n    def cancel(self, order: 'Order') -> str:\n        return \"Order is already cancelled\"\n\n    def ship(self, order: 'Order') -> str:\n        return \"Cannot ship: order is cancelled\"\n\n# Context\nclass Order:\n    def __init__(self, order_id: int):\n        self.order_id = order_id\n        self.state: OrderState = PendingState()\n\n    def process(self) -> str:\n        return self.state.process(self)\n\n    def cancel(self) -> str:\n        return self.state.cancel(self)\n\n    def ship(self) -> str:\n        return self.state.ship(self)\n\n    @property\n    def status(self) -> str:\n        return type(self.state).__name__.replace('State', '')\n\n# Usage\norder = Order(1)\nprint(order.status)      # Pending\nprint(order.ship())      # Cannot ship: order is not yet processed\nprint(order.process())   # Order is now being processed\nprint(order.status)      # Processing\nprint(order.ship())      # Order has been shipped!\nprint(order.status)      # Shipped\nprint(order.cancel())    # Cannot cancel: order already shipped",
+          "code_language": "python",
+          "key_points": [
+            "Each state is a separate class with its own behavior for each action",
+            "Context delegates actions to the current state object",
+            "State transitions happen by replacing the state object on the context",
+            "Eliminates complex if/elif state-checking code",
+            "Each state controls which transitions are valid"
+          ],
+          "gotchas": [
+            "Many states with many actions creates many small classes (can feel verbose)",
+            "State objects should not hold mutable data; they should be stateless or shared",
+            "For simple state machines, an enum with a dict of transitions may be simpler"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "State pattern: each state is a class with action methods. The context delegates actions to its current state. Transitions swap the state object. Eliminates if/elif chains for state checks.",
+          "pseudo_code": "",
+          "actual_code": "class PendingState:\n    def process(self, order):\n        order.state = ProcessingState()\n        return \"Processing\"\n    def cancel(self, order):\n        order.state = CancelledState()\n        return \"Cancelled\"\n\nclass Order:\n    def __init__(self):\n        self.state = PendingState()\n    def process(self):\n        return self.state.process(self)",
+          "code_language": "python",
+          "key_points": [
+            "Each state is a class; context delegates to current state",
+            "Transitions swap the state object"
+          ],
+          "gotchas": [
+            "For simple cases, an enum + dict of transitions may be cleaner"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Chain of Responsibility pattern in Python?",
+      "display_order": 16,
+      "difficulty": "advanced",
+      "tags": ["chain-of-responsibility", "behavioral", "middleware"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Chain of Responsibility** pattern passes a request along a chain of handlers. Each handler decides either to process the request or pass it to the next handler in the chain.\n\nThis is exactly how middleware works in web frameworks (Flask, Django) and is also used in logging handlers, validation chains, and event processing.",
+          "pseudo_code": "1. Define a Handler base with handle() and a reference to next\n2. Each handler checks if it can process the request\n3. If yes, process it; if no, pass to the next handler\n4. Build the chain by linking handlers together",
+          "actual_code": "from abc import ABC, abstractmethod\nfrom typing import Any\n\n# Abstract handler\nclass Handler(ABC):\n    def __init__(self):\n        self._next: Handler | None = None\n\n    def set_next(self, handler: 'Handler') -> 'Handler':\n        self._next = handler\n        return handler  # For chaining: a.set_next(b).set_next(c)\n\n    def handle(self, request: dict) -> str | None:\n        if self._next:\n            return self._next.handle(request)\n        return None\n\n# Concrete handlers\nclass AuthHandler(Handler):\n    def handle(self, request: dict) -> str | None:\n        if 'token' not in request:\n            return \"Error: Authentication required\"\n        print(\"Auth: Token verified\")\n        return super().handle(request)\n\nclass RateLimitHandler(Handler):\n    def __init__(self, max_requests: int = 10):\n        super().__init__()\n        self._count = 0\n        self._max = max_requests\n\n    def handle(self, request: dict) -> str | None:\n        self._count += 1\n        if self._count > self._max:\n            return \"Error: Rate limit exceeded\"\n        print(f\"RateLimit: {self._count}/{self._max}\")\n        return super().handle(request)\n\nclass ValidationHandler(Handler):\n    def handle(self, request: dict) -> str | None:\n        if 'body' not in request or not request['body']:\n            return \"Error: Request body is required\"\n        print(\"Validation: Body present\")\n        return super().handle(request)\n\nclass BusinessLogicHandler(Handler):\n    def handle(self, request: dict) -> str | None:\n        print(f\"Processing: {request['body']}\")\n        return f\"Success: Processed '{request['body']}'\"\n\n# Build the chain\nauth = AuthHandler()\nrate_limit = RateLimitHandler(max_requests=5)\nvalidation = ValidationHandler()\nlogic = BusinessLogicHandler()\n\nauth.set_next(rate_limit).set_next(validation).set_next(logic)\n\n# Process requests through the chain\nresult = auth.handle({'token': 'abc', 'body': 'Hello'})\nprint(result)\n# Auth: Token verified\n# RateLimit: 1/5\n# Validation: Body present\n# Processing: Hello\n# Success: Processed 'Hello'\n\n# Missing token\nresult = auth.handle({'body': 'Hello'})\nprint(result)  # Error: Authentication required\n\n# Pythonic: function-based chain (middleware pattern)\ndef create_chain(*handlers):\n    def chain(request):\n        for handler in handlers:\n            result = handler(request)\n            if result is not None:  # Handler consumed the request\n                return result\n        return None\n    return chain\n\ndef check_auth(request):\n    if 'token' not in request:\n        return \"Error: No token\"\n    return None  # Pass to next\n\ndef check_body(request):\n    if 'body' not in request:\n        return \"Error: No body\"\n    return None\n\ndef process(request):\n    return f\"OK: {request['body']}\"\n\npipeline = create_chain(check_auth, check_body, process)\nprint(pipeline({'token': 'x', 'body': 'data'}))  # OK: data",
+          "code_language": "python",
+          "key_points": [
+            "Each handler decides to process or pass the request to the next handler",
+            "set_next() returns the handler for fluent chaining: a.set_next(b).set_next(c)",
+            "If no handler processes the request, it falls through (return None)",
+            "Pythonic: use a list of functions instead of a class chain for simple cases",
+            "This is the middleware pattern used in Flask, Django, and Express"
+          ],
+          "gotchas": [
+            "If no handler processes the request, the result is None; handle this case",
+            "Long chains can be hard to debug; add logging to each handler",
+            "Order matters: auth before validation before business logic"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Chain of Responsibility passes requests through a sequence of handlers. Each handler processes or passes to the next. This is how middleware works in web frameworks. Pythonic approach: list of functions.",
+          "pseudo_code": "",
+          "actual_code": "# Function-based chain (Pythonic)\ndef auth(req):\n    if 'token' not in req: return 'Unauthorized'\n    return None  # pass to next\n\ndef validate(req):\n    if 'body' not in req: return 'Bad Request'\n    return None\n\ndef process(req):\n    return f\"OK: {req['body']}\"\n\nfor handler in [auth, validate, process]:\n    result = handler(request)\n    if result is not None:\n        break",
+          "code_language": "python",
+          "key_points": [
+            "Handlers process or pass; list of functions is Pythonic",
+            "Same pattern as web middleware"
+          ],
+          "gotchas": [
+            "Handler order matters; handle the 'no handler matched' case"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you combine the Decorator pattern with the Strategy pattern for flexible pipelines?",
+      "display_order": 17,
+      "difficulty": "advanced",
+      "tags": ["decorator", "strategy", "pipeline", "composition"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Combining patterns creates powerful, flexible architectures. A common combination is **Strategy + Decorator**: strategies define what to do, decorators add cross-cutting concerns (logging, timing, retry, validation) around them.\n\nThis creates a **pipeline** where data flows through composable, stackable layers of behavior.",
+          "pseudo_code": "1. Define a strategy interface for the core operation\n2. Create concrete strategies (different algorithms)\n3. Create decorator wrappers that add cross-cutting behavior\n4. Stack decorators around a strategy\n5. Client uses the composed pipeline transparently",
+          "actual_code": "from typing import Callable, Any\nimport functools\nimport time\n\n# Strategy: text processing\ndef uppercase(text: str) -> str:\n    return text.upper()\n\ndef reverse(text: str) -> str:\n    return text[::-1]\n\ndef censor(text: str) -> str:\n    bad_words = {'bad', 'ugly'}\n    words = text.split()\n    return ' '.join('***' if w.lower() in bad_words else w for w in words)\n\n# Decorator wrappers (cross-cutting concerns)\ndef with_logging(func: Callable[[str], str]) -> Callable[[str], str]:\n    @functools.wraps(func)\n    def wrapper(text: str) -> str:\n        print(f\"[LOG] Input: {text!r}\")\n        result = func(text)\n        print(f\"[LOG] Output: {result!r}\")\n        return result\n    return wrapper\n\ndef with_timing(func: Callable[[str], str]) -> Callable[[str], str]:\n    @functools.wraps(func)\n    def wrapper(text: str) -> str:\n        start = time.time()\n        result = func(text)\n        print(f\"[TIME] {func.__name__}: {time.time()-start:.4f}s\")\n        return result\n    return wrapper\n\ndef with_strip(func: Callable[[str], str]) -> Callable[[str], str]:\n    @functools.wraps(func)\n    def wrapper(text: str) -> str:\n        return func(text.strip())\n    return wrapper\n\n# Compose: strategy + decorators\npipeline = with_logging(with_timing(with_strip(uppercase)))\nresult = pipeline(\"  hello world  \")\n# [LOG] Input: '  hello world  '\n# [TIME] uppercase: 0.0000s\n# [LOG] Output: 'HELLO WORLD'\n\n# Pipeline builder\nclass Pipeline:\n    def __init__(self):\n        self._steps: list[Callable[[str], str]] = []\n\n    def add_step(self, step: Callable[[str], str]) -> 'Pipeline':\n        self._steps.append(step)\n        return self\n\n    def execute(self, data: str) -> str:\n        result = data\n        for step in self._steps:\n            result = step(result)\n        return result\n\npipeline = (\n    Pipeline()\n    .add_step(str.strip)\n    .add_step(censor)\n    .add_step(uppercase)\n    .add_step(reverse)\n)\n\nresult = pipeline.execute(\"  This is a bad example  \")\nprint(result)  # ELPMAXE *** A SI SIHT",
+          "code_language": "python",
+          "key_points": [
+            "Strategy defines the core algorithm; decorators add cross-cutting behavior",
+            "Compose by wrapping: with_logging(with_timing(strategy))",
+            "Pipeline builder collects steps and executes them in sequence",
+            "Each step is a simple function, making them easy to test independently",
+            "This pattern is used in data processing, middleware, and plugin systems"
+          ],
+          "gotchas": [
+            "Deeply nested wrappers are hard to read; use a Pipeline class for clarity",
+            "Decorator order matters: with_logging(with_timing(f)) logs the timing, not the other way around",
+            "Ensure all steps have compatible signatures (str -> str in this example)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Combine Strategy (what to do) with Decorator (cross-cutting concerns). Stack decorators around strategies, or use a Pipeline class that chains processing steps. Each step is a simple function.",
+          "pseudo_code": "",
+          "actual_code": "# Strategy functions\ndef uppercase(text): return text.upper()\ndef censor(text): return text.replace('bad', '***')\n\n# Decorator wrapper\ndef with_logging(func):\n    def wrapper(text):\n        print(f\"Input: {text}\")\n        result = func(text)\n        print(f\"Output: {result}\")\n        return result\n    return wrapper\n\n# Compose\npipeline = with_logging(uppercase)\npipeline(\"hello\")  # Logged and uppercased",
+          "code_language": "python",
+          "key_points": [
+            "Strategy = core logic; Decorator = cross-cutting behavior",
+            "Compose by wrapping or use a Pipeline builder"
+          ],
+          "gotchas": [
+            "Decorator stacking order matters; innermost runs first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use inheritance vs composition in Python design?",
+      "display_order": 18,
+      "difficulty": "advanced",
+      "tags": ["composition", "inheritance", "design-principles"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Inheritance** (is-a relationship): A subclass inherits behavior from a parent. Dog IS an Animal. Use when there is a genuine hierarchical relationship and you want to reuse a common interface.\n\n**Composition** (has-a relationship): A class contains instances of other classes. Car HAS an Engine. Use when you want to combine behaviors from multiple sources.\n\n**Favor composition over inheritance** is a key principle because:\n- Inheritance creates tight coupling between parent and child.\n- Changes to the parent can break all children.\n- Python supports single inheritance well but multiple inheritance gets complex (MRO issues).\n- Composition is more flexible: swap components at runtime.\n\n**When to use inheritance**: Abstract base classes, frameworks requiring subclassing, clear is-a relationships.\n**When to use composition**: Combining behaviors, has-a relationships, wanting runtime flexibility.",
+          "pseudo_code": "Inheritance: class Dog(Animal) - Dog IS an Animal\nComposition: class Car: engine = Engine() - Car HAS an Engine\nPrefer composition for flexibility and loose coupling\nUse inheritance for genuine is-a hierarchies and ABCs",
+          "actual_code": "# BAD: Inheritance for code reuse (not an is-a relationship)\nclass JSONLogger:\n    def log(self, message):\n        import json\n        print(json.dumps({'msg': message}))\n\nclass UserService(JSONLogger):  # UserService IS NOT a logger\n    def create_user(self, name):\n        self.log(f\"Creating user: {name}\")\n        return {'name': name}\n\n# GOOD: Composition\nclass Logger:\n    def log(self, message: str) -> None:\n        print(f\"[LOG] {message}\")\n\nclass JSONLogger:\n    def log(self, message: str) -> None:\n        import json\n        print(json.dumps({'msg': message}))\n\nclass UserService:\n    def __init__(self, logger: Logger):\n        self._logger = logger  # HAS a logger\n\n    def create_user(self, name: str) -> dict:\n        self._logger.log(f\"Creating user: {name}\")\n        return {'name': name}\n\n# Swap logger at runtime\nservice = UserService(Logger())         # Console logging\nservice = UserService(JSONLogger())     # JSON logging\n\n# GOOD: Inheritance for genuine is-a\nfrom abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def area(self) -> float: ...\n\n    @abstractmethod\n    def perimeter(self) -> float: ...\n\nclass Circle(Shape):  # Circle IS a Shape\n    def __init__(self, radius: float):\n        self.radius = radius\n\n    def area(self) -> float:\n        return 3.14159 * self.radius ** 2\n\n    def perimeter(self) -> float:\n        return 2 * 3.14159 * self.radius\n\n# Composition with mixins (combine behaviors)\nclass Serializable:\n    def to_json(self) -> str:\n        import json\n        return json.dumps(self.__dict__)\n\nclass Validatable:\n    def validate(self) -> bool:\n        return all(v is not None for v in self.__dict__.values())\n\n# Combine via composition instead of multiple inheritance\nclass User:\n    def __init__(self, name: str, email: str):\n        self.name = name\n        self.email = email\n        self.serializer = Serializable()\n        self.validator = Validatable()\n\n    def to_json(self) -> str:\n        self.serializer.__dict__ = self.__dict__.copy()\n        return self.serializer.to_json()\n\n# Or use Protocol + delegation for maximum flexibility\nclass Cacheable:\n    def __init__(self):\n        self._cache = {}\n\n    def get_cached(self, key: str):\n        return self._cache.get(key)\n\n    def set_cached(self, key: str, value):\n        self._cache[key] = value\n\nclass ProductService:\n    def __init__(self, cache: Cacheable):\n        self._cache = cache\n\n    def get_product(self, product_id: int) -> dict:\n        cached = self._cache.get_cached(f\"product:{product_id}\")\n        if cached:\n            return cached\n        product = {'id': product_id, 'name': 'Widget'}  # fetch from DB\n        self._cache.set_cached(f\"product:{product_id}\", product)\n        return product",
+          "code_language": "python",
+          "key_points": [
+            "Inheritance = is-a; Composition = has-a. Favor composition for flexibility.",
+            "Inheritance creates tight coupling; composition allows runtime swapping",
+            "Use inheritance for genuine hierarchies (Shape -> Circle) and ABCs",
+            "Use composition for combining behaviors and dependencies (UserService HAS a Logger)",
+            "Composition makes testing easier (inject mocks); inheritance makes it harder"
+          ],
+          "gotchas": [
+            "Inheriting for code reuse alone (not is-a) creates fragile, tightly coupled code",
+            "Multiple inheritance in Python can cause MRO conflicts and diamond problems",
+            "Composition requires more explicit delegation code but is more maintainable long-term"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Inheritance = is-a (Dog IS an Animal). Composition = has-a (Car HAS an Engine). **Favor composition**: it is more flexible, loosely coupled, and easier to test. Use inheritance for genuine hierarchies and ABCs.",
+          "pseudo_code": "",
+          "actual_code": "# BAD: inheritance for code reuse\nclass UserService(Logger):  # UserService is NOT a logger\n    pass\n\n# GOOD: composition\nclass UserService:\n    def __init__(self, logger: Logger):  # HAS a logger\n        self._logger = logger\n\n# GOOD: inheritance for is-a\nclass Circle(Shape):  # Circle IS a shape\n    def area(self): return 3.14 * self.r ** 2",
+          "code_language": "python",
+          "key_points": [
+            "Favor composition: more flexible, testable, loosely coupled",
+            "Inheritance for genuine is-a; composition for has-a"
+          ],
+          "gotchas": [
+            "Inheriting for code reuse alone creates fragile, coupled code"
+          ]
+        }
+      ]
+    }
+  ]
+}

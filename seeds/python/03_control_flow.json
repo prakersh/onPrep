@@ -1,0 +1,635 @@
+{
+  "concept_slug": "control-flow",
+  "questions": [
+    {
+      "title": "How do if/elif/else statements work in Python?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["if-elif-else", "conditional", "branching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's conditional statement uses `if`, `elif` (else if), and `else`:\n\n```\nif condition1:\n    # runs if condition1 is truthy\nelif condition2:\n    # runs if condition1 is falsy and condition2 is truthy\nelse:\n    # runs if all conditions are falsy\n```\n\n**Key rules:**\n- `if` is required; `elif` and `else` are optional\n- You can have any number of `elif` blocks\n- Only the first matching branch executes (top-down)\n- There is no `switch` statement in Python < 3.10 (use `match` in 3.10+)\n- Python uses indentation (not braces) to define blocks\n- The condition can be any expression; Python evaluates its **truthiness**\n\n**Truthiness:** Falsy values are `False`, `None`, `0`, `0.0`, `\"\"`, `[]`, `()`, `{}`, `set()`. Everything else is truthy.",
+          "pseudo_code": "if condition:\n    action_a\nelif other_condition:\n    action_b\nelse:\n    action_c\n\n- Only one branch executes\n- Top-down evaluation, first True wins\n- else catches everything remaining",
+          "actual_code": "# Basic if/elif/else\nscore = 85\n\nif score >= 90:\n    grade = \"A\"\nelif score >= 80:\n    grade = \"B\"\nelif score >= 70:\n    grade = \"C\"\nelif score >= 60:\n    grade = \"D\"\nelse:\n    grade = \"F\"\n\nprint(f\"Score: {score}, Grade: {grade}\")  # Score: 85, Grade: B\n\n# Truthiness in conditions\nname = \"\"\nif name:\n    print(f\"Hello, {name}\")\nelse:\n    print(\"Name is empty\")  # This runs\n\n# Multiple conditions with logical operators\nage = 25\nhas_license = True\n\nif age >= 18 and has_license:\n    print(\"Can drive\")\nelif age >= 18:\n    print(\"Old enough but no license\")\nelse:\n    print(\"Too young\")\n\n# Nested if (sometimes better as elif)\nx = 10\nif x > 0:\n    if x > 100:\n        print(\"Large positive\")\n    else:\n        print(\"Small positive\")  # This runs\nelse:\n    print(\"Non-positive\")\n\n# if without else\ntemperature = 100\nif temperature > 95:\n    print(\"Warning: high temperature!\")  # This runs\n\n# Checking multiple values\ncolor = \"red\"\nif color in (\"red\", \"orange\", \"yellow\"):\n    print(\"Warm color\")\nelif color in (\"blue\", \"green\", \"purple\"):\n    print(\"Cool color\")\nelse:\n    print(\"Unknown color\")",
+          "code_language": "python",
+          "key_points": [
+            "Only the first matching branch executes (top-down)",
+            "elif and else are optional",
+            "Any expression can be a condition (truthiness is evaluated)",
+            "Python uses indentation to define blocks, not braces",
+            "Use 'in' for checking membership instead of chained 'or'"
+          ],
+          "gotchas": [
+            "if x = 5 is a SyntaxError -- use == for comparison, not =",
+            "if x == True is redundant and sometimes wrong -- just use if x",
+            "An empty if block requires pass as a placeholder",
+            "Order matters: if score >= 70 before score >= 80 would give wrong grade"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python uses `if`/`elif`/`else` for branching. Only the first matching branch runs. Conditions evaluate truthiness. Use indentation for blocks.",
+          "pseudo_code": "",
+          "actual_code": "score = 85\nif score >= 90:\n    grade = \"A\"\nelif score >= 80:\n    grade = \"B\"\nelse:\n    grade = \"C or below\"\nprint(grade)  # B",
+          "code_language": "python",
+          "key_points": [
+            "First matching branch wins",
+            "elif and else are optional"
+          ],
+          "gotchas": [
+            "Order of elif matters -- check most specific conditions first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do for loops work in Python and what makes them different from C-style loops?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["for-loop", "iteration", "iterable"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `for` loop iterates over **any iterable** (list, tuple, string, dict, set, file, generator, etc.). It does NOT use index-based counting like C/Java.\n\n```\nfor item in iterable:\n    # use item\n```\n\nInternally, Python calls `iter()` on the iterable to get an iterator, then calls `next()` repeatedly until `StopIteration` is raised.\n\n**Key differences from C-style loops:**\n- No index variable needed\n- Iterates over values, not indices\n- Works with any iterable, not just arrays\n- Use `enumerate()` when you need both index and value\n- Use `range()` when you need a counting loop\n\n**Loop variable scope:**\nThe loop variable persists after the loop ends with the last value.",
+          "pseudo_code": "for item in iterable:\n    process(item)\n\nEquivalent to:\n  iterator = iter(iterable)\n  while True:\n      try:\n          item = next(iterator)\n          process(item)\n      except StopIteration:\n          break",
+          "actual_code": "# Iterate over a list\nfruits = [\"apple\", \"banana\", \"cherry\"]\nfor fruit in fruits:\n    print(fruit)\n# apple, banana, cherry\n\n# Iterate over a string\nfor char in \"hello\":\n    print(char, end=\" \")\nprint()  # h e l l o\n\n# Iterate over a dict (keys by default)\nuser = {\"name\": \"Alice\", \"age\": 30}\nfor key in user:\n    print(f\"{key}: {user[key]}\")\n\n# Iterate over dict items (key-value pairs)\nfor key, value in user.items():\n    print(f\"{key}: {value}\")\n\n# Iterate with index using enumerate()\ncolors = [\"red\", \"green\", \"blue\"]\nfor i, color in enumerate(colors):\n    print(f\"{i}: {color}\")\n# 0: red, 1: green, 2: blue\n\n# Custom start index\nfor i, color in enumerate(colors, start=1):\n    print(f\"{i}: {color}\")\n# 1: red, 2: green, 3: blue\n\n# Counting loop with range()\nfor i in range(5):\n    print(i, end=\" \")\nprint()  # 0 1 2 3 4\n\n# range with start, stop, step\nfor i in range(2, 10, 3):\n    print(i, end=\" \")\nprint()  # 2 5 8\n\n# Reverse iteration\nfor i in range(5, 0, -1):\n    print(i, end=\" \")\nprint()  # 5 4 3 2 1\n\n# Loop variable persists after loop\nfor x in [1, 2, 3]:\n    pass\nprint(x)  # 3 (last value)\n\n# Iterating over multiple lists with zip()\nnames = [\"Alice\", \"Bob\", \"Charlie\"]\nages = [30, 25, 35]\nfor name, age in zip(names, ages):\n    print(f\"{name} is {age}\")",
+          "code_language": "python",
+          "key_points": [
+            "For loops iterate over any iterable, not indices",
+            "Use enumerate() for index + value",
+            "Use range() for counting loops",
+            "Use zip() to iterate over multiple iterables in parallel",
+            "Loop variable persists after the loop with the last value"
+          ],
+          "gotchas": [
+            "Modifying a list while iterating over it can skip elements or cause errors",
+            "The loop variable leaks into the enclosing scope",
+            "for i in range(len(lst)) is un-Pythonic -- use enumerate() instead",
+            "Iterating over a dict gives keys, not key-value pairs -- use .items()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python's `for` loop iterates over any iterable (list, str, dict, etc.). Use `enumerate()` for index+value, `range()` for counting, `zip()` for parallel iteration.",
+          "pseudo_code": "",
+          "actual_code": "for fruit in [\"apple\", \"banana\"]:\n    print(fruit)\n\nfor i, val in enumerate([\"a\", \"b\", \"c\"]):\n    print(i, val)\n\nfor i in range(5):\n    print(i, end=\" \")  # 0 1 2 3 4",
+          "code_language": "python",
+          "key_points": [
+            "Iterates over values, not indices",
+            "Use enumerate() when you need the index"
+          ],
+          "gotchas": [
+            "Do not modify a list while iterating over it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do while loops work in Python and when should you use them instead of for loops?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["while-loop", "iteration", "condition"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `while` loop repeats as long as a condition is truthy:\n\n```\nwhile condition:\n    body\n```\n\n**When to use while vs for:**\n- Use `for` when iterating over a known collection or range\n- Use `while` when the number of iterations is unknown (e.g., reading input until sentinel, converging algorithms, polling)\n\n**Common patterns:**\n1. **Sentinel loop:** `while (line := input()) != 'quit':`\n2. **Flag loop:** `while not done:`\n3. **Infinite loop with break:** `while True:` ... `break`\n4. **Counter loop:** `while count > 0:` (usually `for` is better)\n5. **Convergence:** `while abs(diff) > tolerance:`",
+          "pseudo_code": "while condition:\n    body\n    # condition re-evaluated each iteration\n\nwhile True:\n    data = get_input()\n    if data == sentinel:\n        break\n    process(data)",
+          "actual_code": "# Basic while loop\ncount = 5\nwhile count > 0:\n    print(count, end=\" \")\n    count -= 1\nprint()  # 5 4 3 2 1\n\n# While with unknown iterations\nimport random\nrandom.seed(42)\nattempts = 0\ntarget = 7\nwhile True:\n    guess = random.randint(1, 10)\n    attempts += 1\n    if guess == target:\n        break\nprint(f\"Found {target} after {attempts} attempts\")\n\n# While with else clause\nn = 10\nwhile n > 0:\n    if n == 5:\n        print(\"Found 5, breaking\")\n        break\n    n -= 1\nelse:\n    print(\"Loop completed without break\")  # does not run\n\n# Convergence example: Newton's method for sqrt\ndef newton_sqrt(n, tolerance=1e-10):\n    guess = n / 2.0\n    while True:\n        new_guess = (guess + n / guess) / 2\n        if abs(new_guess - guess) < tolerance:\n            return new_guess\n        guess = new_guess\n\nprint(newton_sqrt(25))  # 5.0\nprint(newton_sqrt(2))   # 1.4142135623730951\n\n# Processing a stack/queue\nstack = [1, 2, 3, 4, 5]\nwhile stack:\n    item = stack.pop()\n    print(item, end=\" \")\nprint()  # 5 4 3 2 1\n\n# Two-pointer pattern\ndef is_palindrome(s):\n    left, right = 0, len(s) - 1\n    while left < right:\n        if s[left] != s[right]:\n            return False\n        left += 1\n        right -= 1\n    return True\n\nprint(is_palindrome(\"racecar\"))  # True\nprint(is_palindrome(\"hello\"))   # False",
+          "code_language": "python",
+          "key_points": [
+            "while loops repeat as long as condition is truthy",
+            "Use while when number of iterations is unknown",
+            "while True + break is a common pattern for input loops",
+            "Condition is re-evaluated at the start of each iteration",
+            "while can have an else clause (runs if no break)"
+          ],
+          "gotchas": [
+            "Forgetting to update the loop variable creates an infinite loop",
+            "while lst: is idiomatic but modifying lst during iteration can cause issues",
+            "while True without a break creates an infinite loop",
+            "while condition vs if condition: while re-checks, if checks once"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`while` loops repeat as long as the condition is truthy. Use `while` when the number of iterations is unknown. `while True` + `break` is a common pattern.",
+          "pseudo_code": "",
+          "actual_code": "count = 3\nwhile count > 0:\n    print(count)\n    count -= 1\n# 3, 2, 1\n\nwhile True:\n    data = input(\"Enter (q to quit): \")\n    if data == \"q\":\n        break",
+          "code_language": "python",
+          "key_points": [
+            "Use while when iterations are unknown",
+            "while True + break is a common pattern"
+          ],
+          "gotchas": [
+            "Forgetting to update the loop variable causes infinite loops"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What do break, continue, and pass do in Python?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["break", "continue", "pass", "loop-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`break`:** Immediately exits the **innermost** loop. Skips the `else` clause of the loop.\n\n**`continue`:** Skips the rest of the current iteration and jumps to the **next iteration** of the innermost loop.\n\n**`pass`:** Does nothing. A no-op placeholder used where a statement is syntactically required but no action is needed.\n\n**Key differences:**\n- `break` exits the loop entirely\n- `continue` skips to the next iteration\n- `pass` does nothing (the loop continues normally)\n\n**In nested loops:** `break` and `continue` only affect the **innermost** loop. To break out of multiple loops, use a flag variable, a function with `return`, or restructure with exceptions.",
+          "pseudo_code": "break: exit loop immediately, skip else clause\ncontinue: skip rest of this iteration, go to next\npass: do nothing, placeholder\n\nfor item in items:\n    if should_skip(item):\n        continue      # skip to next item\n    if should_stop(item):\n        break         # exit loop\n    process(item)",
+          "actual_code": "# break -- exit the loop\nfor i in range(10):\n    if i == 5:\n        break\n    print(i, end=\" \")\nprint()  # 0 1 2 3 4\n\n# continue -- skip to next iteration\nfor i in range(10):\n    if i % 2 == 0:\n        continue  # skip even numbers\n    print(i, end=\" \")\nprint()  # 1 3 5 7 9\n\n# pass -- do nothing placeholder\nfor i in range(5):\n    if i == 3:\n        pass  # TODO: handle this case later\n    print(i, end=\" \")\nprint()  # 0 1 2 3 4 (pass does nothing)\n\n# pass in empty class/function definition\nclass NotImplementedYet:\n    pass\n\ndef future_feature():\n    pass\n\n# break only affects innermost loop\nfor i in range(3):\n    for j in range(3):\n        if j == 1:\n            break  # only breaks inner loop\n        print(f\"({i},{j})\", end=\" \")\n    print()  # inner loop restarted for each i\n# (0,0) (1,0) (2,0)\n\n# break + else: finding an element\ndef find_first_negative(numbers):\n    for n in numbers:\n        if n < 0:\n            print(f\"Found negative: {n}\")\n            break\n    else:\n        print(\"No negatives found\")\n\nfind_first_negative([1, 2, -3, 4])   # Found negative: -3\nfind_first_negative([1, 2, 3, 4])    # No negatives found\n\n# Practical: skip invalid data with continue\nraw_data = [\"42\", \"hello\", \"17\", \"\", \"99\", \"world\"]\nnumbers = []\nfor item in raw_data:\n    if not item.isdigit():\n        continue\n    numbers.append(int(item))\nprint(numbers)  # [42, 17, 99]\n\n# Breaking out of nested loops with function\ndef find_in_matrix(matrix, target):\n    for i, row in enumerate(matrix):\n        for j, val in enumerate(row):\n            if val == target:\n                return (i, j)\n    return None\n\nmatrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\nprint(find_in_matrix(matrix, 5))  # (1, 1)",
+          "code_language": "python",
+          "key_points": [
+            "break exits the innermost loop entirely",
+            "continue skips to the next iteration",
+            "pass is a no-op placeholder",
+            "break skips the loop's else clause",
+            "break/continue only affect the innermost loop"
+          ],
+          "gotchas": [
+            "break/continue only affect the innermost loop in nested loops",
+            "Using continue in a while loop: make sure the loop variable is updated before continue",
+            "pass and continue are different: pass continues executing the rest of the loop body",
+            "There is no 'goto' in Python -- use functions or exceptions for multi-level breaks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`break` exits the loop. `continue` skips to the next iteration. `pass` does nothing (placeholder). All three only affect the innermost loop.",
+          "pseudo_code": "",
+          "actual_code": "for i in range(10):\n    if i == 5:\n        break      # exits: prints 0-4\n    if i % 2 == 0:\n        continue   # skips even\n    print(i, end=\" \")  # 1 3",
+          "code_language": "python",
+          "key_points": [
+            "break = exit loop, continue = skip iteration, pass = do nothing",
+            "Only affect innermost loop"
+          ],
+          "gotchas": [
+            "In while loops, make sure to update the counter before continue"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do range(), enumerate(), and zip() work and when should you use each?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["range", "enumerate", "zip", "iteration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`range(start, stop, step)`:** Generates a sequence of integers. Lazy (does not store all values in memory).\n- `range(5)` -> 0, 1, 2, 3, 4\n- `range(2, 8)` -> 2, 3, 4, 5, 6, 7\n- `range(0, 10, 2)` -> 0, 2, 4, 6, 8\n\n**`enumerate(iterable, start=0)`:** Yields `(index, value)` pairs. Use when you need both index and value.\n\n**`zip(*iterables)`:** Pairs up elements from multiple iterables. Stops at the shortest iterable.\n\n**`zip_longest(*iterables, fillvalue=None)`:** From `itertools`, pads shorter iterables.\n\nThese three functions are the building blocks of Pythonic iteration. Using them avoids `range(len(...))` antipatterns.",
+          "pseudo_code": "range(n): 0, 1, ..., n-1\nrange(a, b): a, a+1, ..., b-1\nrange(a, b, s): a, a+s, a+2s, ... (while < b)\n\nenumerate(iterable): (0, item0), (1, item1), ...\nenumerate(iterable, start=1): (1, item0), (2, item1), ...\n\nzip(a, b): (a[0], b[0]), (a[1], b[1]), ... (stops at shortest)\nzip(*matrix): transpose",
+          "actual_code": "# range() basics\nprint(list(range(5)))         # [0, 1, 2, 3, 4]\nprint(list(range(2, 8)))      # [2, 3, 4, 5, 6, 7]\nprint(list(range(0, 10, 2)))  # [0, 2, 4, 6, 8]\nprint(list(range(10, 0, -1))) # [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]\n\n# range is lazy (memory efficient)\nr = range(1_000_000)\nprint(999_999 in r)   # True (uses __contains__, not iteration)\nprint(r[500_000])     # 500000 (supports indexing)\nprint(len(r))         # 1000000\n\n# enumerate() -- index + value\nfruits = [\"apple\", \"banana\", \"cherry\"]\nfor i, fruit in enumerate(fruits):\n    print(f\"{i}: {fruit}\")\n# 0: apple, 1: banana, 2: cherry\n\n# enumerate with custom start\nfor i, fruit in enumerate(fruits, start=1):\n    print(f\"{i}. {fruit}\")\n# 1. apple, 2. banana, 3. cherry\n\n# zip() -- parallel iteration\nnames = [\"Alice\", \"Bob\", \"Charlie\"]\nscores = [95, 87, 92]\nfor name, score in zip(names, scores):\n    print(f\"{name}: {score}\")\n\n# zip stops at the shortest\nshort = [1, 2]\nlong = [10, 20, 30]\nprint(list(zip(short, long)))  # [(1, 10), (2, 20)]\n\n# zip_longest for padding\nfrom itertools import zip_longest\nprint(list(zip_longest(short, long, fillvalue=0)))  # [(1, 10), (2, 20), (0, 30)]\n\n# zip to create dicts\nkeys = [\"name\", \"age\", \"city\"]\nvalues = [\"Alice\", 30, \"NYC\"]\nperson = dict(zip(keys, values))\nprint(person)  # {'name': 'Alice', 'age': 30, 'city': 'NYC'}\n\n# zip to transpose a matrix\nmatrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\ntransposed = list(zip(*matrix))\nprint(transposed)  # [(1, 4, 7), (2, 5, 8), (3, 6, 9)]\n\n# Unzip with zip(*)\npairs = [(1, \"a\"), (2, \"b\"), (3, \"c\")]\nnums, letters = zip(*pairs)\nprint(nums)     # (1, 2, 3)\nprint(letters)  # ('a', 'b', 'c')\n\n# Anti-pattern vs Pythonic\n# BAD: for i in range(len(fruits)):\n#          print(fruits[i])\n# GOOD: for fruit in fruits:\n#           print(fruit)\n# GOOD: for i, fruit in enumerate(fruits):\n#           print(i, fruit)",
+          "code_language": "python",
+          "key_points": [
+            "range() is lazy and supports membership testing and indexing",
+            "enumerate() gives (index, value) pairs -- avoid range(len(...))",
+            "zip() pairs elements from multiple iterables, stops at shortest",
+            "zip(*matrix) transposes a matrix",
+            "dict(zip(keys, values)) creates a dict from two lists"
+          ],
+          "gotchas": [
+            "range(5) does not include 5 -- it's [0, 5)",
+            "zip() silently truncates to the shortest iterable -- use zip_longest if needed",
+            "range() returns a range object, not a list -- use list(range(...)) to get a list",
+            "enumerate() returns an iterator -- it's exhausted after one pass"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`range(n)` generates 0 to n-1. `enumerate(iterable)` gives (index, value) pairs. `zip(a, b)` pairs elements from multiple iterables. All three are lazy (memory efficient).",
+          "pseudo_code": "",
+          "actual_code": "for i in range(3):           # 0, 1, 2\n    print(i)\nfor i, v in enumerate([\"a\",\"b\"]):  # (0,'a'), (1,'b')\n    print(i, v)\nfor a, b in zip([1,2], [3,4]):     # (1,3), (2,4)\n    print(a, b)",
+          "code_language": "python",
+          "key_points": [
+            "range for counting, enumerate for index+value, zip for parallel",
+            "All are lazy iterators"
+          ],
+          "gotchas": [
+            "zip stops at the shortest iterable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the ternary conditional expression in Python?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["ternary", "conditional-expression", "inline-if"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's ternary expression (conditional expression) has the syntax:\n\n```\nvalue_if_true if condition else value_if_false\n```\n\nThis is different from most languages which use `condition ? true_val : false_val`.\n\n**Key properties:**\n- It is an **expression**, not a statement (returns a value)\n- Short-circuits: only the selected branch is evaluated\n- Can be nested (but should not be for readability)\n- Can be used in assignments, function calls, list comprehensions, etc.\n\n**When to use:**\n- Simple value selection based on a condition\n- Inline in assignments or return statements\n- Inside comprehensions and f-strings\n\n**When NOT to use:**\n- Complex logic with multiple branches (use if/elif/else)\n- When it hurts readability (nested ternaries are hard to read)",
+          "pseudo_code": "result = value_if_true if condition else value_if_false\n\nEquivalent to:\n  if condition:\n      result = value_if_true\n  else:\n      result = value_if_false",
+          "actual_code": "# Basic ternary\nage = 20\nstatus = \"adult\" if age >= 18 else \"minor\"\nprint(status)  # adult\n\n# In a function return\ndef abs_value(n):\n    return n if n >= 0 else -n\n\nprint(abs_value(-5))  # 5\nprint(abs_value(3))   # 3\n\n# In an f-string\ncount = 1\nprint(f\"Found {count} item{'s' if count != 1 else ''}\")  # Found 1 item\ncount = 5\nprint(f\"Found {count} item{'s' if count != 1 else ''}\")  # Found 5 items\n\n# In a list comprehension\nnumbers = [1, -2, 3, -4, 5]\nabsolutes = [x if x >= 0 else -x for x in numbers]\nprint(absolutes)  # [1, 2, 3, 4, 5]\n\n# Short-circuit: only one branch is evaluated\ndef expensive_a():\n    print(\"computing a\")\n    return \"A\"\n\ndef expensive_b():\n    print(\"computing b\")\n    return \"B\"\n\nresult = expensive_a() if True else expensive_b()\n# Only prints \"computing a\"\nprint(result)  # A\n\n# Nested ternary (avoid this -- hard to read)\nx = 0\nresult = \"positive\" if x > 0 else \"negative\" if x < 0 else \"zero\"\nprint(result)  # zero\n\n# Better: use if/elif/else for multi-branch\nif x > 0:\n    result = \"positive\"\nelif x < 0:\n    result = \"negative\"\nelse:\n    result = \"zero\"\n\n# Ternary in function arguments\nprint(\"yes\" if True else \"no\")  # yes\n\n# Ternary with assignment (common pattern)\ndefault = \"world\"\nname = input_name if (input_name := \"\") else default  # uses walrus operator",
+          "code_language": "python",
+          "key_points": [
+            "Syntax: value_if_true if condition else value_if_false",
+            "It is an expression that returns a value",
+            "Short-circuits: only the chosen branch evaluates",
+            "Perfect for simple value selection in assignments",
+            "Avoid nested ternaries for readability"
+          ],
+          "gotchas": [
+            "Python's ternary reads differently from C/JS: value first, then condition",
+            "Nested ternaries are hard to read -- prefer if/elif/else",
+            "Ternary has very low precedence: x = 1 + (2 if True else 3) -- use parentheses",
+            "Cannot use statements (print, assignments) inside ternary -- only expressions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python's ternary: `value_if_true if condition else value_if_false`. Returns a value, short-circuits. Use for simple value selection, avoid nesting.",
+          "pseudo_code": "",
+          "actual_code": "status = \"adult\" if age >= 18 else \"minor\"\n\n# In list comprehension\nresult = [x if x > 0 else 0 for x in [-1, 2, -3, 4]]\nprint(result)  # [0, 2, 0, 4]",
+          "code_language": "python",
+          "key_points": [
+            "Syntax: true_val if condition else false_val",
+            "It's an expression that returns a value"
+          ],
+          "gotchas": [
+            "Reads value-first, unlike C's condition ? true : false"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the match/case statement work in Python 3.10+?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["match-case", "pattern-matching", "python3.10"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.10 introduced **structural pattern matching** with `match`/`case` (PEP 634). It is far more powerful than a simple switch statement.\n\n**Pattern types:**\n1. **Literal patterns:** Match specific values\n2. **Capture patterns:** Bind to a variable\n3. **Wildcard pattern:** `_` matches anything (discards value)\n4. **Sequence patterns:** `[a, b, *rest]` matches sequences\n5. **Mapping patterns:** `{\"key\": value}` matches dicts\n6. **Class patterns:** `Point(x=0, y=0)` matches objects\n7. **OR patterns:** `pattern1 | pattern2`\n8. **Guard clauses:** `case x if x > 0:`\n\nPatterns are checked top-down; the first match wins. The `_` wildcard is the catch-all (like `default` in switch).",
+          "pseudo_code": "match subject:\n    case pattern1:\n        action1\n    case pattern2 if guard:\n        action2\n    case _:\n        default_action\n\nPatterns: literal, capture, wildcard, sequence, mapping, class, OR, guard",
+          "actual_code": "# Literal pattern matching\ndef http_status(status):\n    match status:\n        case 200:\n            return \"OK\"\n        case 301:\n            return \"Moved Permanently\"\n        case 404:\n            return \"Not Found\"\n        case 500:\n            return \"Internal Server Error\"\n        case _:\n            return \"Unknown\"\n\nprint(http_status(200))  # OK\nprint(http_status(404))  # Not Found\nprint(http_status(999))  # Unknown\n\n# OR patterns\ndef categorize_status(status):\n    match status:\n        case 200 | 201 | 204:\n            return \"Success\"\n        case 301 | 302:\n            return \"Redirect\"\n        case 400 | 401 | 403 | 404:\n            return \"Client Error\"\n        case 500 | 502 | 503:\n            return \"Server Error\"\n        case _:\n            return \"Unknown\"\n\nprint(categorize_status(201))  # Success\n\n# Sequence pattern matching\ndef process_command(command):\n    match command.split():\n        case [\"quit\"]:\n            return \"Quitting\"\n        case [\"go\", direction]:\n            return f\"Going {direction}\"\n        case [\"get\", item, \"from\", location]:\n            return f\"Getting {item} from {location}\"\n        case [\"say\", *words]:\n            return f\"Saying: {' '.join(words)}\"\n        case _:\n            return \"Unknown command\"\n\nprint(process_command(\"quit\"))                     # Quitting\nprint(process_command(\"go north\"))                 # Going north\nprint(process_command(\"get sword from chest\"))     # Getting sword from chest\nprint(process_command(\"say hello world\"))          # Saying: hello world\n\n# Mapping pattern matching\ndef process_event(event):\n    match event:\n        case {\"type\": \"click\", \"button\": button}:\n            return f\"Clicked {button} button\"\n        case {\"type\": \"keypress\", \"key\": key}:\n            return f\"Pressed {key}\"\n        case {\"type\": \"scroll\", \"direction\": direction}:\n            return f\"Scrolled {direction}\"\n        case _:\n            return \"Unknown event\"\n\nprint(process_event({\"type\": \"click\", \"button\": \"left\", \"x\": 100}))\n# Clicked left button (extra keys are ignored)\n\n# Guard clauses\ndef classify_number(n):\n    match n:\n        case n if n < 0:\n            return \"negative\"\n        case 0:\n            return \"zero\"\n        case n if n < 100:\n            return \"small positive\"\n        case _:\n            return \"large positive\"\n\nprint(classify_number(-5))   # negative\nprint(classify_number(0))    # zero\nprint(classify_number(42))   # small positive\nprint(classify_number(500))  # large positive",
+          "code_language": "python",
+          "key_points": [
+            "match/case uses structural pattern matching (not just value comparison)",
+            "_ is the wildcard catch-all pattern",
+            "OR patterns use | (pipe)",
+            "Sequence patterns can capture with * for variable length",
+            "Guard clauses add conditions with 'if'"
+          ],
+          "gotchas": [
+            "match/case requires Python 3.10+ -- not available in earlier versions",
+            "case variable: captures any value into variable -- it does NOT compare to existing variable",
+            "To match against a constant variable, use dotted names: case Status.OK:",
+            "Mapping patterns ignore extra keys -- {'key': val} matches {'key': 1, 'extra': 2}"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python 3.10+ `match`/`case` provides structural pattern matching. Supports literals, sequences, mappings, OR patterns (`|`), guards (`if`), and wildcards (`_`). Much more powerful than a switch statement.",
+          "pseudo_code": "",
+          "actual_code": "def handle(command):\n    match command.split():\n        case [\"go\", direction]:\n            return f\"Going {direction}\"\n        case [\"quit\"]:\n            return \"Bye\"\n        case _:\n            return \"Unknown\"\n\nprint(handle(\"go north\"))  # Going north",
+          "code_language": "python",
+          "key_points": [
+            "Structural pattern matching, not just value comparison",
+            "Requires Python 3.10+"
+          ],
+          "gotchas": [
+            "case var: captures any value -- does NOT compare to existing variable 'var'"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the else clause on loops (for/while...else) and when is it useful?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["for-else", "while-else", "loop-else"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Python, both `for` and `while` loops can have an `else` clause. The `else` block runs **only if the loop completed normally** (was NOT terminated by `break`).\n\nThink of it as: \"if no break occurred.\"\n\n**When `else` runs:**\n- Loop finishes all iterations naturally\n- Loop condition becomes False (for `while`)\n- Loop iterable is exhausted (for `for`)\n- Loop body never executes (empty iterable or False condition)\n\n**When `else` does NOT run:**\n- `break` is executed\n\n**Common use case:** Searching for an item -- the `else` handles the \"not found\" case.\n\nThe name `else` is widely considered confusing. Many Python developers think `nobreak` would have been a better keyword.",
+          "pseudo_code": "for item in collection:\n    if found(item):\n        break       # else does NOT run\nelse:\n    not_found()     # runs only if no break\n\n# Equivalent without for/else:\nfound_flag = False\nfor item in collection:\n    if found(item):\n        found_flag = True\n        break\nif not found_flag:\n    not_found()",
+          "actual_code": "# for...else: search pattern\ndef find_prime_factor(n):\n    for i in range(2, n):\n        if n % i == 0:\n            print(f\"{n} has factor {i}\")\n            break\n    else:\n        print(f\"{n} is prime\")  # runs if no break (no factor found)\n\nfind_prime_factor(7)    # 7 is prime\nfind_prime_factor(12)   # 12 has factor 2\nfind_prime_factor(97)   # 97 is prime\n\n# while...else\ndef search_list(lst, target):\n    index = 0\n    while index < len(lst):\n        if lst[index] == target:\n            print(f\"Found {target} at index {index}\")\n            break\n        index += 1\n    else:\n        print(f\"{target} not found\")  # runs if while condition became False\n\nsearch_list([10, 20, 30], 20)  # Found 20 at index 1\nsearch_list([10, 20, 30], 99)  # 99 not found\n\n# else runs even if loop body never executes\nfor item in []:\n    print(\"never runs\")\nelse:\n    print(\"else runs!\")  # prints: else runs!\n\n# Practical: checking if all elements satisfy a condition\ndef all_positive(numbers):\n    for n in numbers:\n        if n <= 0:\n            print(f\"Found non-positive: {n}\")\n            break\n    else:\n        print(\"All numbers are positive\")\n\nall_positive([1, 2, 3])     # All numbers are positive\nall_positive([1, -2, 3])    # Found non-positive: -2\n\n# Nested loop with else\ndef find_in_matrix(matrix, target):\n    for i, row in enumerate(matrix):\n        for j, val in enumerate(row):\n            if val == target:\n                print(f\"Found at ({i}, {j})\")\n                break\n        else:\n            continue  # inner loop did not break, continue outer\n        break  # inner loop broke, break outer too\n    else:\n        print(\"Not found\")\n\nfind_in_matrix([[1,2],[3,4],[5,6]], 4)   # Found at (1, 1)\nfind_in_matrix([[1,2],[3,4],[5,6]], 99)  # Not found",
+          "code_language": "python",
+          "key_points": [
+            "else on a loop runs only if the loop was NOT terminated by break",
+            "Think of it as 'nobreak' rather than 'else'",
+            "Useful for search patterns: 'not found' handling",
+            "else runs even if the loop body never executes (empty iterable)",
+            "Works on both for and while loops"
+          ],
+          "gotchas": [
+            "The name 'else' is misleading -- it means 'if no break happened'",
+            "else runs on empty iterables (for x in []: else: runs)",
+            "else does NOT run if an exception occurs inside the loop",
+            "Many Python developers avoid this feature due to its confusing semantics"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The `else` clause on a loop runs **only if no `break` occurred**. Think of it as \"nobreak\". Useful for search patterns where you need to handle the \"not found\" case.",
+          "pseudo_code": "",
+          "actual_code": "for n in [2, 3, 5, 7]:\n    if n % 2 == 0:\n        print(f\"Found even: {n}\")\n        break\nelse:\n    print(\"No even found\")\n# Output: Found even: 2 (else does NOT run)",
+          "code_language": "python",
+          "key_points": [
+            "else runs only if no break occurred",
+            "Think of it as 'nobreak'"
+          ],
+          "gotchas": [
+            "else runs even for empty iterables -- the loop 'completed' trivially"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do nested loops work and what are common patterns for working with them?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["nested-loops", "iteration", "matrix"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Nested loops are loops within loops. The inner loop completes all its iterations for each iteration of the outer loop.\n\n**Common patterns:**\n1. **Matrix/grid traversal:** Iterating over rows and columns\n2. **Cartesian product:** All combinations of two sequences\n3. **Triangle patterns:** Inner loop depends on outer variable\n4. **Finding pairs:** All pairs from a collection\n\n**Performance:** Nested loops multiply iteration counts. Two loops of n iterations each give n^2 iterations. Be cautious with large datasets.\n\n**Breaking out of nested loops:**\n- Use a function with `return`\n- Use a flag variable\n- Use `itertools.product()` for Cartesian product\n- Use the for/else + continue/break pattern",
+          "pseudo_code": "Outer loop: n iterations\n  Inner loop: m iterations\n  Total iterations: n * m\n\nPatterns:\n  Grid: for row in range(R): for col in range(C):\n  Pairs: for i in range(n): for j in range(i+1, n):\n  Product: itertools.product(a, b)",
+          "actual_code": "# Matrix traversal\nmatrix = [\n    [1, 2, 3],\n    [4, 5, 6],\n    [7, 8, 9]\n]\n\nfor row in matrix:\n    for val in row:\n        print(val, end=\" \")\n    print()\n# 1 2 3\n# 4 5 6\n# 7 8 9\n\n# With indices\nfor i in range(len(matrix)):\n    for j in range(len(matrix[i])):\n        print(f\"({i},{j})={matrix[i][j]}\", end=\"  \")\n    print()\n\n# All pairs from a list\nnumbers = [1, 2, 3, 4]\nfor i in range(len(numbers)):\n    for j in range(i + 1, len(numbers)):\n        print(f\"({numbers[i]}, {numbers[j]})\", end=\" \")\nprint()\n# (1,2) (1,3) (1,4) (2,3) (2,4) (3,4)\n\n# Multiplication table\nfor i in range(1, 6):\n    for j in range(1, 6):\n        print(f\"{i*j:3}\", end=\"\")\n    print()\n\n# itertools.product -- cleaner Cartesian product\nfrom itertools import product\n\ncolors = [\"red\", \"blue\"]\nsizes = [\"S\", \"M\", \"L\"]\nfor color, size in product(colors, sizes):\n    print(f\"{color}-{size}\", end=\" \")\nprint()\n# red-S red-M red-L blue-S blue-M blue-L\n\n# Breaking out of nested loops with a function\ndef find_target(matrix, target):\n    for i, row in enumerate(matrix):\n        for j, val in enumerate(row):\n            if val == target:\n                return (i, j)\n    return None\n\nresult = find_target(matrix, 5)\nprint(result)  # (1, 1)\n\n# Triangle pattern\nn = 5\nfor i in range(1, n + 1):\n    for j in range(i):\n        print(\"*\", end=\"\")\n    print()\n# *\n# **\n# ***\n# ****\n# *****\n\n# Flattening nested loops with comprehension\nflat = [val for row in matrix for val in row]\nprint(flat)  # [1, 2, 3, 4, 5, 6, 7, 8, 9]",
+          "code_language": "python",
+          "key_points": [
+            "Inner loop fully executes for each outer iteration",
+            "Use itertools.product() for cleaner Cartesian products",
+            "Use a function + return to break out of nested loops",
+            "Nested loops multiply iteration count: O(n * m)",
+            "List comprehensions can replace simple nested loops"
+          ],
+          "gotchas": [
+            "break only exits the innermost loop",
+            "Nested loops can be O(n^2) or worse -- watch performance",
+            "In list comprehensions, the outer loop comes first: [x for row in matrix for x in row]",
+            "Modifying a list while iterating over it in nested loops is especially dangerous"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Nested loops: inner loop runs completely for each outer iteration. Use `itertools.product()` for Cartesian products. Use a function + `return` to break out of multiple levels.",
+          "pseudo_code": "",
+          "actual_code": "# Matrix traversal\nfor row in [[1,2],[3,4]]:\n    for val in row:\n        print(val, end=\" \")\n    print()\n# 1 2\n# 3 4\n\nfrom itertools import product\nfor a, b in product(\"ab\", \"12\"):\n    print(f\"{a}{b}\", end=\" \")  # a1 a2 b1 b2",
+          "code_language": "python",
+          "key_points": [
+            "Inner loop fully executes per outer iteration",
+            "Use itertools.product for Cartesian products"
+          ],
+          "gotchas": [
+            "break only exits the innermost loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create and use infinite loops in Python?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["infinite-loop", "while-true", "loop-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An infinite loop runs forever until explicitly stopped with `break`, `return`, or an unhandled exception.\n\nThe standard pattern is `while True:` with a `break` condition inside.\n\n**Common use cases:**\n1. **Interactive prompts:** Keep asking for input until sentinel\n2. **Event loops:** GUI, game loops, server request handlers\n3. **Retry logic:** Keep trying until success or max attempts\n4. **Daemon processes:** Background services\n5. **Menu systems:** Display menu, process choice, repeat\n\n**Avoiding accidental infinite loops:**\n- Always ensure a path to `break` or `return`\n- Update loop variables in `while` conditions\n- Use timeouts or max iteration limits\n- Ctrl+C sends KeyboardInterrupt to stop a stuck loop",
+          "pseudo_code": "while True:\n    data = get_input()\n    if exit_condition(data):\n        break\n    process(data)\n\nwhile True:\n    try:\n        result = risky_operation()\n        break  # success, exit loop\n    except RetryableError:\n        continue  # try again",
+          "actual_code": "# Input loop with sentinel\nwhile True:\n    response = input(\"Enter command (quit to exit): \")\n    if response.lower() == \"quit\":\n        print(\"Goodbye!\")\n        break\n    print(f\"Processing: {response}\")\n\n# Retry with max attempts\nimport random\n\ndef unreliable_operation():\n    if random.random() < 0.7:\n        raise ConnectionError(\"Network error\")\n    return \"Success!\"\n\nmax_retries = 5\nfor attempt in range(1, max_retries + 1):\n    try:\n        result = unreliable_operation()\n        print(f\"Attempt {attempt}: {result}\")\n        break\n    except ConnectionError as e:\n        print(f\"Attempt {attempt}: {e}\")\n        if attempt == max_retries:\n            print(\"All retries exhausted\")\n\n# Menu system\ndef show_menu():\n    menu = {\n        \"1\": (\"Add item\", lambda: print(\"Adding...\")),\n        \"2\": (\"List items\", lambda: print(\"Listing...\")),\n        \"3\": (\"Exit\", None)\n    }\n\n    while True:\n        print(\"\\n--- Menu ---\")\n        for key, (label, _) in menu.items():\n            print(f\"  {key}. {label}\")\n\n        choice = input(\"Choose: \")\n        if choice == \"3\":\n            print(\"Exiting...\")\n            break\n        elif choice in menu:\n            _, action = menu[choice]\n            if action:\n                action()\n        else:\n            print(\"Invalid choice\")\n\n# Infinite generator\ndef counter(start=0):\n    n = start\n    while True:\n        yield n\n        n += 1\n\nc = counter()\nprint(next(c))  # 0\nprint(next(c))  # 1\nprint(next(c))  # 2\n\n# Using itertools for controlled infinite iteration\nfrom itertools import islice, count\n\n# Take first 5 from infinite counter\nfor n in islice(count(10), 5):\n    print(n, end=\" \")\nprint()  # 10 11 12 13 14",
+          "code_language": "python",
+          "key_points": [
+            "while True + break is the standard infinite loop pattern",
+            "Always ensure a path to break/return",
+            "Common for input loops, menus, retry logic, and generators",
+            "Ctrl+C sends KeyboardInterrupt to stop a stuck loop",
+            "Use itertools for controlled infinite sequences"
+          ],
+          "gotchas": [
+            "Forgetting the break condition creates a truly infinite loop",
+            "In while loops, make sure continue does not skip the variable update",
+            "Infinite generators are memory-efficient but must be consumed carefully",
+            "time.sleep() in a loop prevents CPU spinning but slows responsiveness"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`while True:` with `break` is the standard infinite loop pattern. Used for input loops, menus, retry logic, and event loops. Always ensure a path to `break`.",
+          "pseudo_code": "",
+          "actual_code": "while True:\n    cmd = input(\"Command (q=quit): \")\n    if cmd == \"q\":\n        break\n    print(f\"Running: {cmd}\")",
+          "code_language": "python",
+          "key_points": [
+            "while True + break is the standard pattern",
+            "Always have a break condition"
+          ],
+          "gotchas": [
+            "Forgetting break creates a truly infinite loop -- use Ctrl+C to stop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does loop unpacking work in Python?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["unpacking", "iteration", "destructuring"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Loop unpacking (also called loop destructuring) lets you unpack each element of an iterable directly into multiple variables in the `for` statement.\n\nWhen iterating over an iterable of tuples/lists, you can assign each element to a separate variable.\n\n**Works with:**\n- `for k, v in dict.items()`\n- `for i, val in enumerate(lst)`\n- `for a, b in zip(list1, list2)`\n- `for x, y, z in list_of_tuples`\n- `for first, *rest in nested_lists`\n\nYou can also nest unpacking and use the star `*` operator for extended unpacking.",
+          "pseudo_code": "for a, b in [(1, 2), (3, 4)]:\n    use a and b\n\nfor key, value in dict.items():\n    use key and value\n\nfor first, *rest in [[1,2,3], [4,5,6]]:\n    first is 1 or 4, rest is [2,3] or [5,6]",
+          "actual_code": "# Basic tuple unpacking in loop\npoints = [(1, 2), (3, 4), (5, 6)]\nfor x, y in points:\n    print(f\"x={x}, y={y}\")\n# x=1, y=2 / x=3, y=4 / x=5, y=6\n\n# Dict items unpacking\nuser = {\"name\": \"Alice\", \"age\": 30, \"city\": \"NYC\"}\nfor key, value in user.items():\n    print(f\"{key}: {value}\")\n\n# Enumerate unpacking\nfruits = [\"apple\", \"banana\", \"cherry\"]\nfor index, fruit in enumerate(fruits, 1):\n    print(f\"{index}. {fruit}\")\n\n# Zip unpacking\nnames = [\"Alice\", \"Bob\"]\nscores = [95, 87]\nfor name, score in zip(names, scores):\n    print(f\"{name}: {score}\")\n\n# Extended unpacking with *\ndata = [(\"Alice\", 95, 87, 92), (\"Bob\", 80, 75, 88)]\nfor name, *grades in data:\n    print(f\"{name}: avg = {sum(grades)/len(grades):.1f}\")\n# Alice: avg = 91.3\n# Bob: avg = 81.0\n\n# Nested unpacking\nnested = [((1, 2), \"a\"), ((3, 4), \"b\")]\nfor (x, y), label in nested:\n    print(f\"{label}: ({x}, {y})\")\n# a: (1, 2) / b: (3, 4)\n\n# Ignoring values with _\nrecords = [(\"Alice\", 30, \"NYC\"), (\"Bob\", 25, \"LA\")]\nfor name, _, city in records:\n    print(f\"{name} from {city}\")\n# Alice from NYC / Bob from LA\n\n# Unpacking in comprehension\npairs = [(1, \"one\"), (2, \"two\"), (3, \"three\")]\nresult = {num: word for num, word in pairs}\nprint(result)  # {1: 'one', 2: 'two', 3: 'three'}\n\n# Real-world: CSV-like data\ncsv_data = [\n    \"Alice,30,NYC\",\n    \"Bob,25,LA\",\n    \"Charlie,35,Chicago\"\n]\nfor line in csv_data:\n    name, age, city = line.split(\",\")\n    print(f\"{name} (age {age}) lives in {city}\")",
+          "code_language": "python",
+          "key_points": [
+            "Unpack tuples/lists directly in for statement",
+            "Works with dict.items(), enumerate(), zip()",
+            "Star unpacking (*rest) captures remaining elements",
+            "Nested unpacking for complex structures",
+            "Use _ to ignore unwanted values"
+          ],
+          "gotchas": [
+            "ValueError if the number of variables does not match tuple size",
+            "_ is a valid variable -- it gets overwritten in each iteration",
+            "Star unpacking always creates a list, even if empty",
+            "Nested unpacking requires matching parentheses structure"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Unpack each element directly in the `for` statement: `for x, y in points:`, `for k, v in dict.items():`. Use `*` for extended unpacking and `_` to ignore values.",
+          "pseudo_code": "",
+          "actual_code": "for k, v in {\"a\": 1, \"b\": 2}.items():\n    print(k, v)\n\nfor name, *grades in [(\"Alice\", 90, 85), (\"Bob\", 80, 75)]:\n    print(name, sum(grades) / len(grades))",
+          "code_language": "python",
+          "key_points": [
+            "Unpack directly in for statement",
+            "Star * captures remaining elements"
+          ],
+          "gotchas": [
+            "ValueError if tuple size does not match number of variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the 'pass' statement differ from Ellipsis (...) as a placeholder?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["pass", "ellipsis", "placeholder", "stub"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`pass` is a **statement** that does nothing. It is used as a placeholder where a statement is syntactically required.\n\n`...` (Ellipsis) is a **literal value** (an object of type `ellipsis`). It was originally for NumPy slicing but is now commonly used as a placeholder in function bodies, especially with type stubs.\n\n**When to use `pass`:**\n- Empty class bodies\n- Empty loop bodies\n- Empty `except` blocks (to silently ignore)\n- Any place requiring a statement but no action\n\n**When to use `...` (Ellipsis):**\n- Type stub files (.pyi)\n- Abstract method bodies (in conjunction with `@abstractmethod`)\n- As a sentinel value in function signatures\n- In Protocol definitions\n\nFunctionally, both work as placeholders. `pass` is the traditional choice; `...` is gaining popularity in type-hinted code.",
+          "pseudo_code": "pass: explicit no-op statement\n  - Traditional placeholder\n  - Required where a statement is needed\n\n...: Ellipsis literal object\n  - Modern placeholder in type stubs\n  - Also used in NumPy for advanced slicing\n  - Used in Protocol definitions",
+          "actual_code": "# pass as placeholder\nclass NotImplementedYet:\n    pass\n\ndef future_feature():\n    pass\n\nfor i in range(10):\n    pass  # TODO: implement\n\ntry:\n    risky_operation()\nexcept Exception:\n    pass  # silently ignore (usually bad practice)\n\n# Ellipsis as placeholder\nclass MyProtocol:\n    def method(self) -> None: ...\n\ndef stub_function() -> int: ...\n\n# Ellipsis in type hints\nfrom typing import Callable, Tuple\n\n# Function that takes any arguments\nhandler: Callable[..., None]  # ... means any signature\n\n# Variable-length homogeneous tuple\ncoords: Tuple[int, ...]  # any number of ints\n\n# Ellipsis is an object\nprint(type(...))       # <class 'ellipsis'>\nprint(... is Ellipsis)  # True (singleton)\nprint(bool(...))       # True (truthy)\n\n# Ellipsis in NumPy (advanced use)\nimport numpy as np\narr = np.zeros((2, 3, 4))\nprint(arr[..., 0].shape)  # (2, 3) -- select first element along last axis\n\n# Both work as function body placeholders\ndef with_pass():\n    pass\n\ndef with_ellipsis():\n    ...\n\n# Both return None\nprint(with_pass())      # None\nprint(with_ellipsis())  # None\n\n# Convention: pass = \"intentionally empty\"\n#             ... = \"to be implemented\" or \"type stub\"",
+          "code_language": "python",
+          "key_points": [
+            "pass is a no-op statement, ... is the Ellipsis literal object",
+            "Both work as placeholders in function/class bodies",
+            "pass is traditional; ... is modern/type-stub style",
+            "Ellipsis is used in type hints: Callable[..., int], Tuple[int, ...]",
+            "Ellipsis is a singleton: ... is Ellipsis"
+          ],
+          "gotchas": [
+            "pass can only be used as a statement; ... can be used as a value/expression",
+            "Ellipsis in except blocks returns ... instead of None if it's the last expression",
+            "An empty function body without pass or ... is a SyntaxError",
+            "Using pass in except: to silently swallow exceptions is usually bad practice"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pass` is a no-op statement for empty blocks. `...` (Ellipsis) is a literal object used as a modern placeholder (especially in type stubs). Both work as function body placeholders.",
+          "pseudo_code": "",
+          "actual_code": "# Traditional placeholder\ndef todo():\n    pass\n\n# Modern/type-stub style\ndef stub() -> int: ...\n\n# Ellipsis in type hints\nfrom typing import Callable\nhandler: Callable[..., None]  # any args, returns None",
+          "code_language": "python",
+          "key_points": [
+            "pass = no-op statement, ... = Ellipsis object",
+            "Both work as placeholders"
+          ],
+          "gotchas": [
+            "An empty function body without pass or ... is a SyntaxError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you iterate over a dictionary in Python?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["dictionary", "iteration", "dict-methods"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are several ways to iterate over a dictionary:\n\n1. **`for key in dict:`** -- iterates over keys (default)\n2. **`for key in dict.keys():`** -- explicitly iterates over keys\n3. **`for value in dict.values():`** -- iterates over values\n4. **`for key, value in dict.items():`** -- iterates over key-value pairs\n\nSince Python 3.7, dictionaries maintain **insertion order** (this was an implementation detail in CPython 3.6 and became a language guarantee in 3.7).\n\n**Performance note:** `.keys()`, `.values()`, and `.items()` return **view objects**, not lists. They are dynamic views that reflect changes to the dict. They are lightweight and memory-efficient.",
+          "pseudo_code": "for key in dict:           # keys only\nfor key in dict.keys():    # keys only (explicit)\nfor value in dict.values(): # values only\nfor key, value in dict.items(): # key-value pairs\n\nAll views are dynamic -- reflect dict changes\nDicts maintain insertion order (Python 3.7+)",
+          "actual_code": "user = {\"name\": \"Alice\", \"age\": 30, \"city\": \"NYC\"}\n\n# Iterate over keys (default)\nfor key in user:\n    print(key, end=\" \")\nprint()  # name age city\n\n# Iterate over values\nfor value in user.values():\n    print(value, end=\" \")\nprint()  # Alice 30 NYC\n\n# Iterate over key-value pairs\nfor key, value in user.items():\n    print(f\"{key}: {value}\")\n# name: Alice / age: 30 / city: NYC\n\n# View objects are dynamic\nkeys_view = user.keys()\nprint(list(keys_view))  # ['name', 'age', 'city']\n\nuser[\"email\"] = \"alice@example.com\"\nprint(list(keys_view))  # ['name', 'age', 'city', 'email'] -- view updated!\n\n# Sorted iteration\nfor key in sorted(user):\n    print(f\"{key}: {user[key]}\")\n\n# Reverse iteration (Python 3.8+)\nfor key in reversed(user):\n    print(key, end=\" \")\nprint()\n\n# Dict comprehension from iteration\nscores = {\"Alice\": 95, \"Bob\": 87, \"Charlie\": 92}\nhigh_scorers = {name: score for name, score in scores.items() if score >= 90}\nprint(high_scorers)  # {'Alice': 95, 'Charlie': 92}\n\n# Common pattern: modify dict while iterating (use copy)\nprices = {\"apple\": 1.0, \"banana\": 0.5, \"cherry\": 2.0}\n# Cannot modify dict size during iteration\nfor item, price in list(prices.items()):  # list() creates a copy\n    if price < 1.0:\n        del prices[item]\nprint(prices)  # {'apple': 1.0, 'cherry': 2.0}\n\n# Checking membership\nprint(\"name\" in user)           # True (checks keys)\nprint(\"Alice\" in user.values())  # True (checks values)",
+          "code_language": "python",
+          "key_points": [
+            "Default iteration is over keys",
+            ".items() gives key-value pairs, .values() gives values",
+            "Views are dynamic and memory-efficient",
+            "Dicts maintain insertion order since Python 3.7",
+            "Use list(dict.items()) to safely modify dict during iteration"
+          ],
+          "gotchas": [
+            "Modifying dict size during iteration raises RuntimeError -- iterate over a copy",
+            "'in' on a dict checks keys, not values",
+            "dict.keys() returns a view, not a list -- use list() if you need a list",
+            "Iterating over a dict gives strings (keys), not tuples -- use .items() for pairs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Iterate keys with `for k in d:`, values with `for v in d.values():`, pairs with `for k, v in d.items():`. Dicts maintain insertion order (Python 3.7+). Views are dynamic.",
+          "pseudo_code": "",
+          "actual_code": "d = {\"a\": 1, \"b\": 2}\nfor k, v in d.items():\n    print(k, v)\n# a 1\n# b 2\n\n# Modify during iteration: use list() copy\nfor k in list(d.keys()):\n    if d[k] < 2:\n        del d[k]",
+          "code_language": "python",
+          "key_points": [
+            "Default iteration = keys",
+            "Use .items() for key-value pairs"
+          ],
+          "gotchas": [
+            "Cannot modify dict size during iteration without copying first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are some common loop patterns and anti-patterns in Python?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["patterns", "anti-patterns", "pythonic", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Anti-patterns (avoid these):**\n\n1. `for i in range(len(lst))` -- use `for item in lst` or `enumerate()`\n2. Manual index tracking -- use `enumerate()`\n3. Building string with `+=` in loop -- use `join()`\n4. Checking existence before accessing -- use EAFP (try/except)\n5. Nested loops for simple transforms -- use comprehensions\n\n**Pythonic patterns (use these):**\n\n1. `enumerate()` for index+value\n2. `zip()` for parallel iteration\n3. `any()`/`all()` for existence/universal checks\n4. List comprehensions for simple transforms\n5. `itertools` for complex iteration patterns\n6. `reversed()` and `sorted()` for order control",
+          "pseudo_code": "Anti-patterns:\n  for i in range(len(lst)):  -> for item in lst:\n  for i in range(len(lst)):  -> for i, item in enumerate(lst):\n  s = '' loop s += x         -> ''.join(items)\n  found = False; for...      -> any(condition for x in items)\n\nGood patterns:\n  enumerate(), zip(), any(), all()\n  list comprehensions\n  itertools functions",
+          "actual_code": "# ANTI-PATTERN: range(len(...))\nfruits = [\"apple\", \"banana\", \"cherry\"]\n\n# Bad\nfor i in range(len(fruits)):\n    print(fruits[i])\n\n# Good\nfor fruit in fruits:\n    print(fruit)\n\n# ANTI-PATTERN: manual index\n# Bad\ni = 0\nfor fruit in fruits:\n    print(f\"{i}: {fruit}\")\n    i += 1\n\n# Good\nfor i, fruit in enumerate(fruits):\n    print(f\"{i}: {fruit}\")\n\n# ANTI-PATTERN: string concatenation in loop\nwords = [\"hello\", \"world\", \"python\"]\n\n# Bad (creates many temporary strings)\nresult = \"\"\nfor word in words:\n    result += word + \" \"\n\n# Good\nresult = \" \".join(words)\nprint(result)  # hello world python\n\n# ANTI-PATTERN: flag variable for search\nnumbers = [1, 3, 5, 8, 9]\n\n# Bad\nfound_even = False\nfor n in numbers:\n    if n % 2 == 0:\n        found_even = True\n        break\n\n# Good\nfound_even = any(n % 2 == 0 for n in numbers)\nprint(found_even)  # True\n\n# ANTI-PATTERN: building list with append\n# Bad\nsquares = []\nfor n in range(10):\n    squares.append(n ** 2)\n\n# Good\nsquares = [n ** 2 for n in range(10)]\nprint(squares)\n\n# PATTERN: use zip for parallel lists\nnames = [\"Alice\", \"Bob\"]\nscores = [95, 87]\n\n# Bad\nfor i in range(len(names)):\n    print(f\"{names[i]}: {scores[i]}\")\n\n# Good\nfor name, score in zip(names, scores):\n    print(f\"{name}: {score}\")\n\n# PATTERN: all() for universal check\ndef all_positive(numbers):\n    return all(n > 0 for n in numbers)\n\nprint(all_positive([1, 2, 3]))   # True\nprint(all_positive([1, -2, 3]))  # False\n\n# PATTERN: dict comprehension from two lists\nkeys = [\"a\", \"b\", \"c\"]\nvals = [1, 2, 3]\nresult = dict(zip(keys, vals))\nprint(result)  # {'a': 1, 'b': 2, 'c': 3}\n\n# PATTERN: itertools for complex iteration\nfrom itertools import chain, groupby\n\n# Flatten multiple lists\nlists = [[1, 2], [3, 4], [5, 6]]\nflat = list(chain.from_iterable(lists))\nprint(flat)  # [1, 2, 3, 4, 5, 6]",
+          "code_language": "python",
+          "key_points": [
+            "Avoid range(len(...)) -- use direct iteration or enumerate()",
+            "Use join() instead of += for string building",
+            "Use any()/all() instead of flag variables",
+            "Use comprehensions for simple transforms",
+            "Use zip() for parallel iteration"
+          ],
+          "gotchas": [
+            "any() and all() short-circuit -- efficient for large iterables",
+            "Comprehensions can be less readable when logic is complex -- use loops then",
+            "join() only works on strings -- convert elements first: ' '.join(str(x) for x in nums)",
+            "Modifying a list while iterating: iterate over a copy or build a new list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Avoid `range(len(...))` (use `enumerate`), string `+=` in loops (use `join`), and flag variables (use `any()`/`all()`). Prefer comprehensions, `zip()`, and `itertools` for Pythonic code.",
+          "pseudo_code": "",
+          "actual_code": "# Bad: range(len(...))\nfor i in range(len(lst)): print(lst[i])\n# Good: direct or enumerate\nfor item in lst: print(item)\nfor i, item in enumerate(lst): print(i, item)\n\n# Bad: += in loop. Good: join\nresult = \" \".join(words)\n\n# Bad: flag. Good: any()\nhas_even = any(n % 2 == 0 for n in numbers)",
+          "code_language": "python",
+          "key_points": [
+            "Use enumerate, zip, join, any/all, comprehensions",
+            "Avoid range(len), manual counters, string += in loops"
+          ],
+          "gotchas": [
+            "join() only works on strings -- convert non-strings first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you iterate in reverse or sorted order in Python?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["reversed", "sorted", "iteration", "ordering"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`reversed(seq)`:** Returns a reverse iterator over a sequence. Works with lists, tuples, strings, ranges, and any object with `__reversed__` or `__len__`+`__getitem__`.\n\n**`sorted(iterable, key=None, reverse=False)`:** Returns a **new** sorted list. Works with any iterable. Does not modify the original.\n\n**`list.sort(key=None, reverse=False)`:** Sorts a list **in-place**. Returns `None`.\n\n**`key` parameter:** A function applied to each element for comparison. Common keys: `str.lower`, `len`, `lambda x: x[1]`.\n\n**Differences:**\n- `reversed()` is O(1) memory, `sorted()` is O(n)\n- `reversed()` returns an iterator, `sorted()` returns a list\n- `reversed()` preserves the original, `list.sort()` modifies in-place",
+          "pseudo_code": "reversed(seq) -> iterator in reverse order\nsorted(iterable) -> new sorted list\nlist.sort() -> sorts in-place, returns None\n\nsorted(data, key=func) -> sort by func(element)\nsorted(data, reverse=True) -> descending order",
+          "actual_code": "# reversed() -- reverse iteration\nfor i in reversed([1, 2, 3, 4, 5]):\n    print(i, end=\" \")\nprint()  # 5 4 3 2 1\n\n# reversed() with range\nfor i in reversed(range(5)):\n    print(i, end=\" \")\nprint()  # 4 3 2 1 0\n\n# reversed() with string\nfor c in reversed(\"hello\"):\n    print(c, end=\"\")\nprint()  # olleh\n\n# sorted() -- returns a NEW sorted list\nnumbers = [3, 1, 4, 1, 5, 9, 2, 6]\nprint(sorted(numbers))        # [1, 1, 2, 3, 4, 5, 6, 9]\nprint(numbers)                # [3, 1, 4, 1, 5, 9, 2, 6] -- original unchanged\nprint(sorted(numbers, reverse=True))  # [9, 6, 5, 4, 3, 2, 1, 1]\n\n# sorted() with key function\nwords = [\"banana\", \"apple\", \"cherry\", \"date\"]\nprint(sorted(words))                    # ['apple', 'banana', 'cherry', 'date']\nprint(sorted(words, key=len))            # ['date', 'apple', 'banana', 'cherry']\nprint(sorted(words, key=str.lower))      # case-insensitive sort\n\n# Sort complex objects by attribute\nstudents = [\n    {\"name\": \"Charlie\", \"grade\": 85},\n    {\"name\": \"Alice\", \"grade\": 95},\n    {\"name\": \"Bob\", \"grade\": 90}\n]\n\nby_grade = sorted(students, key=lambda s: s[\"grade\"], reverse=True)\nfor s in by_grade:\n    print(f\"{s['name']}: {s['grade']}\")\n# Alice: 95 / Bob: 90 / Charlie: 85\n\n# list.sort() -- in-place, returns None\nnums = [3, 1, 4, 1, 5]\nresult = nums.sort()\nprint(result)  # None!\nprint(nums)    # [1, 1, 3, 4, 5]\n\n# Sort by multiple criteria\nfrom operator import itemgetter\n\ndata = [(\"Alice\", 95), (\"Bob\", 87), (\"Charlie\", 95), (\"David\", 87)]\n# Sort by grade desc, then name asc\nresult = sorted(data, key=lambda x: (-x[1], x[0]))\nprint(result)  # [('Alice', 95), ('Charlie', 95), ('Bob', 87), ('David', 87)]\n\n# Stable sort: equal elements maintain relative order\n# Python's sort is Timsort (stable)\n\n# Iterate sorted dict by value\nscores = {\"Alice\": 95, \"Bob\": 87, \"Charlie\": 92}\nfor name in sorted(scores, key=scores.get, reverse=True):\n    print(f\"{name}: {scores[name]}\")\n# Alice: 95 / Charlie: 92 / Bob: 87",
+          "code_language": "python",
+          "key_points": [
+            "reversed() returns an iterator, sorted() returns a new list",
+            "sorted() accepts key and reverse parameters",
+            "list.sort() modifies in-place and returns None",
+            "Python's sort is stable (Timsort)",
+            "Use lambda or operator.itemgetter for custom sort keys"
+          ],
+          "gotchas": [
+            "list.sort() returns None -- do not assign it: sorted_list = nums.sort() is a bug",
+            "sorted() creates a new list (memory cost), list.sort() does not",
+            "reversed() returns an iterator that can only be consumed once",
+            "Sorting mixed types (int and str) raises TypeError in Python 3"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`reversed(seq)` gives a reverse iterator. `sorted(iterable)` returns a new sorted list. `list.sort()` sorts in-place (returns None). Use `key=` for custom sort criteria.",
+          "pseudo_code": "",
+          "actual_code": "print(sorted([3, 1, 4], reverse=True))  # [4, 3, 1]\nprint(sorted([\"c\", \"a\", \"b\"]))          # ['a', 'b', 'c']\n\nfor i in reversed(range(5)):\n    print(i, end=\" \")  # 4 3 2 1 0",
+          "code_language": "python",
+          "key_points": [
+            "sorted() returns new list, list.sort() modifies in-place",
+            "Use key= for custom sort criteria"
+          ],
+          "gotchas": [
+            "list.sort() returns None -- do not assign its result"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,845 @@
+{
+  "concept_slug": "data-structures",
+  "questions": [
+    {
+      "title": "What are lists in Python and what are the most common list operations?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["lists", "mutable", "sequence"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `list` is a mutable, ordered sequence that can hold items of any type. Lists are the most versatile data structure in Python.\n\n**Creation:** `[]`, `list()`, list comprehension\n\n**Key operations:**\n- **Add:** `append(x)`, `extend(iterable)`, `insert(i, x)`, `+` (concatenation)\n- **Remove:** `remove(x)`, `pop(i)`, `del lst[i]`, `clear()`\n- **Search:** `index(x)`, `count(x)`, `x in lst`\n- **Sort:** `sort()`, `sorted()`, `reverse()`\n- **Other:** `copy()`, `len()`, slicing\n\n**Internals:** CPython lists are dynamic arrays (not linked lists). This means:\n- Index access: O(1)\n- Append: O(1) amortized\n- Insert/delete at beginning: O(n)\n- Search: O(n)",
+          "pseudo_code": "Create: [], list(), [x for x in iterable]\nAdd: append(x), extend(iter), insert(i, x)\nRemove: remove(x), pop(i), del lst[i]\nSearch: index(x), count(x), x in lst\nSort: sort() in-place, sorted() new list\n\nPerformance:\n  Index: O(1), Append: O(1), Insert/Delete at 0: O(n), Search: O(n)",
+          "actual_code": "# Creation\nlst = [1, 2, 3]\nlst2 = list(range(5))      # [0, 1, 2, 3, 4]\nlst3 = [x**2 for x in range(5)]  # [0, 1, 4, 9, 16]\n\n# Adding elements\nlst = [1, 2, 3]\nlst.append(4)          # [1, 2, 3, 4]\nlst.extend([5, 6])     # [1, 2, 3, 4, 5, 6]\nlst.insert(0, 0)       # [0, 1, 2, 3, 4, 5, 6]\nlst += [7, 8]          # [0, 1, 2, 3, 4, 5, 6, 7, 8]\n\n# Removing elements\nlst = [1, 2, 3, 2, 4]\nlst.remove(2)          # [1, 3, 2, 4] (removes first occurrence)\nlast = lst.pop()       # last=4, lst=[1, 3, 2]\nfirst = lst.pop(0)     # first=1, lst=[3, 2]\n\nlst = [1, 2, 3, 4, 5]\ndel lst[1]             # [1, 3, 4, 5]\ndel lst[1:3]           # [1, 5]\n\n# Searching\nlst = [10, 20, 30, 20, 40]\nprint(lst.index(20))    # 1 (first occurrence)\nprint(lst.count(20))    # 2\nprint(20 in lst)        # True\nprint(50 in lst)        # False\n\n# Sorting\nlst = [3, 1, 4, 1, 5, 9]\nlst.sort()              # [1, 1, 3, 4, 5, 9] in-place\nlst.sort(reverse=True)  # [9, 5, 4, 3, 1, 1]\n\nlst = [3, 1, 4]\nnew = sorted(lst)       # new=[1, 3, 4], lst unchanged\n\n# Reversing\nlst = [1, 2, 3]\nlst.reverse()           # [3, 2, 1] in-place\nnew = list(reversed(lst))  # creates new list\n\n# Slicing (creates new list)\nlst = [0, 1, 2, 3, 4]\nprint(lst[1:3])    # [1, 2]\nprint(lst[::-1])   # [4, 3, 2, 1, 0]\n\n# Copying\nimport copy\nlst = [[1, 2], [3, 4]]\nshallow = lst.copy()        # or lst[:] or list(lst)\ndeep = copy.deepcopy(lst)   # for nested structures\n\n# Nested lists\nmatrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]\nprint(matrix[1][2])  # 6",
+          "code_language": "python",
+          "key_points": [
+            "Lists are mutable, ordered, and can hold mixed types",
+            "append() adds one item, extend() adds from iterable",
+            "sort() modifies in-place (returns None), sorted() returns new list",
+            "Lists are dynamic arrays: O(1) index, O(1) append, O(n) insert at 0",
+            "Slicing always creates a new list"
+          ],
+          "gotchas": [
+            "append([4,5]) adds a single list element, extend([4,5]) adds two elements",
+            "sort() returns None -- do not assign: sorted_lst = lst.sort() is a bug",
+            "remove() raises ValueError if element not found",
+            "[[]] * 3 creates three references to the SAME inner list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Lists are mutable ordered sequences. Key methods: `append()`, `extend()`, `pop()`, `remove()`, `sort()`, `index()`. Dynamic arrays internally: O(1) index/append, O(n) insert at beginning.",
+          "pseudo_code": "",
+          "actual_code": "lst = [3, 1, 4]\nlst.append(5)       # [3, 1, 4, 5]\nlst.sort()          # [1, 3, 4, 5]\nlst.pop()           # 5, lst=[1, 3, 4]\nprint(3 in lst)     # True",
+          "code_language": "python",
+          "key_points": [
+            "Mutable, ordered, dynamic array",
+            "O(1) index and append, O(n) insert at 0"
+          ],
+          "gotchas": [
+            "sort() returns None, sorted() returns a new list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are tuples and how do they differ from lists?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["tuples", "immutable", "sequence"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `tuple` is an **immutable**, ordered sequence. Once created, elements cannot be added, removed, or modified.\n\n**Key differences from lists:**\n| Feature | List | Tuple |\n|---------|------|-------|\n| Mutable | Yes | No |\n| Syntax | `[1, 2, 3]` | `(1, 2, 3)` |\n| Hashable | No | Yes (if all elements are hashable) |\n| As dict key | No | Yes |\n| Performance | Slightly slower | Slightly faster |\n| Memory | More | Less |\n\n**When to use tuples:**\n- Fixed collections that should not change (coordinates, RGB values)\n- Dictionary keys (must be hashable)\n- Return multiple values from functions\n- Unpacking: `a, b = func()`\n- Data integrity: signal that the data is constant",
+          "pseudo_code": "Create: (), (1,), (1, 2, 3), tuple(iterable)\nSingle element: (1,) NOT (1) -- comma is required\nAccess: t[0], t[1:3], t[-1]\nOperations: +, *, in, len(), count(), index()\nImmutable: t[0] = 99 -> TypeError",
+          "actual_code": "# Creation\nt = (1, 2, 3)\nt2 = 1, 2, 3          # parentheses optional\nt3 = tuple([1, 2, 3])  # from iterable\nt4 = tuple(\"hello\")    # ('h', 'e', 'l', 'l', 'o')\n\n# Single element tuple -- comma is required!\nt_single = (42,)      # tuple with one element\nnot_tuple = (42)      # just an int!\nprint(type(t_single))  # <class 'tuple'>\nprint(type(not_tuple)) # <class 'int'>\n\n# Empty tuple\nt_empty = ()\nt_empty2 = tuple()\n\n# Access (same as lists)\nt = (10, 20, 30, 40, 50)\nprint(t[0])       # 10\nprint(t[-1])      # 50\nprint(t[1:3])     # (20, 30)\n\n# Immutability\ntry:\n    t[0] = 99\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # 'tuple' object does not support item assignment\n\n# Operations\nprint((1, 2) + (3, 4))   # (1, 2, 3, 4)\nprint((1, 2) * 3)         # (1, 2, 1, 2, 1, 2)\nprint(2 in (1, 2, 3))     # True\nprint(len((1, 2, 3)))     # 3\nprint((1, 2, 2, 3).count(2))  # 2\nprint((1, 2, 3).index(2))     # 1\n\n# Tuple as dict key (hashable)\ncoordinates = {(0, 0): \"origin\", (1, 0): \"right\"}\nprint(coordinates[(0, 0)])  # 'origin'\n\n# Return multiple values\ndef min_max(lst):\n    return min(lst), max(lst)  # returns a tuple\n\nlo, hi = min_max([3, 1, 4, 1, 5])\nprint(f\"min={lo}, max={hi}\")  # min=1, max=5\n\n# Named tuples\nfrom collections import namedtuple\n\nPoint = namedtuple('Point', ['x', 'y'])\np = Point(3, 4)\nprint(p.x, p.y)   # 3 4\nprint(p[0], p[1])  # 3 4 (indexable too)\n\n# Tuple with mutable element (tricky!)\nt = ([1, 2], [3, 4])\nt[0].append(99)    # modifying the list inside the tuple\nprint(t)            # ([1, 2, 99], [3, 4]) -- allowed!\n# The tuple itself is unchanged (still points to the same lists)",
+          "code_language": "python",
+          "key_points": [
+            "Tuples are immutable ordered sequences",
+            "Single element tuple needs a trailing comma: (42,)",
+            "Tuples are hashable and can be dict keys (if all elements are hashable)",
+            "Tuples use less memory and are slightly faster than lists",
+            "Named tuples provide named access to fields"
+          ],
+          "gotchas": [
+            "(42) is an int, not a tuple -- use (42,) with trailing comma",
+            "A tuple containing mutable objects (lists) can have its contents changed",
+            "Tuple with mutable element is not hashable: hash(([1,2],)) raises TypeError",
+            "Tuples support + and * but create new tuples (immutable)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Tuples are immutable ordered sequences. Created with `()` or just commas. Single element needs trailing comma: `(42,)`. Hashable (usable as dict keys). Use for fixed collections and multiple return values.",
+          "pseudo_code": "",
+          "actual_code": "t = (1, 2, 3)\nprint(t[0])         # 1\n# t[0] = 99         # TypeError!\n\nsingle = (42,)      # tuple, not int\ncoords = {(0,0): \"origin\"}  # tuple as dict key",
+          "code_language": "python",
+          "key_points": [
+            "Immutable, ordered, hashable (if elements are)",
+            "Single element needs trailing comma"
+          ],
+          "gotchas": [
+            "(42) is an int, (42,) is a tuple"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are sets in Python and what operations do they support?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["sets", "unique", "set-operations"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `set` is an **unordered** collection of **unique** elements. Sets are mutable but can only contain **hashable** (immutable) elements.\n\n**Creation:** `{1, 2, 3}`, `set(iterable)`\n\n**Mathematical set operations:**\n- Union: `a | b` or `a.union(b)`\n- Intersection: `a & b` or `a.intersection(b)`\n- Difference: `a - b` or `a.difference(b)`\n- Symmetric difference: `a ^ b` or `a.symmetric_difference(b)`\n- Subset: `a <= b` or `a.issubset(b)`\n- Superset: `a >= b` or `a.issuperset(b)`\n\n**Performance:** Sets use hash tables internally, so membership testing (`in`), add, and remove are all O(1) average.\n\n**frozenset:** An immutable version of set -- can be used as dict key or set element.",
+          "pseudo_code": "Create: {1, 2, 3}, set(iterable)\nEmpty set: set() NOT {} (that's a dict)\n\nAdd: add(x), update(iterable)\nRemove: remove(x) raises, discard(x) silent, pop()\n\nSet ops: | union, & intersection, - difference, ^ symmetric diff\nTests: <= subset, >= superset, in membership\n\nAll O(1) for membership, add, remove",
+          "actual_code": "# Creation\ns = {1, 2, 3}\ns2 = set([1, 2, 2, 3, 3])  # {1, 2, 3} (duplicates removed)\ns3 = set(\"hello\")           # {'h', 'e', 'l', 'o'}\nempty = set()                # NOT {} (that's an empty dict!)\n\n# Adding and removing\ns = {1, 2, 3}\ns.add(4)          # {1, 2, 3, 4}\ns.update([5, 6])  # {1, 2, 3, 4, 5, 6}\ns.remove(6)       # {1, 2, 3, 4, 5} -- raises KeyError if not found\ns.discard(99)     # no error if not found\nitem = s.pop()    # removes and returns arbitrary element\n\n# Set operations\na = {1, 2, 3, 4}\nb = {3, 4, 5, 6}\n\nprint(a | b)   # {1, 2, 3, 4, 5, 6} union\nprint(a & b)   # {3, 4} intersection\nprint(a - b)   # {1, 2} difference (in a but not b)\nprint(b - a)   # {5, 6} difference (in b but not a)\nprint(a ^ b)   # {1, 2, 5, 6} symmetric difference\n\n# Subset and superset\nprint({1, 2} <= {1, 2, 3})   # True (subset)\nprint({1, 2} < {1, 2, 3})    # True (proper subset)\nprint({1, 2, 3} >= {1, 2})   # True (superset)\nprint({1, 2} <= {1, 2})      # True (subset or equal)\nprint({1, 2} < {1, 2})       # False (not proper subset)\n\n# Membership test -- O(1)\nbig_set = set(range(1000000))\nprint(999999 in big_set)  # True (instant)\n\n# Remove duplicates from list (preserving order with dict)\nlst = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]\nunique = list(dict.fromkeys(lst))  # [3, 1, 4, 5, 9, 2, 6]\nprint(unique)\n\n# Set comprehension\nsquares = {x**2 for x in range(-5, 6)}\nprint(squares)  # {0, 1, 4, 9, 16, 25}\n\n# frozenset -- immutable set\nfs = frozenset([1, 2, 3])\n# fs.add(4)  # AttributeError\nprint({fs: \"value\"})  # frozenset as dict key\n\n# Sets can only contain hashable elements\ntry:\n    bad_set = {[1, 2], [3, 4]}  # lists are unhashable\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # unhashable type: 'list'\n\n# Use frozenset for sets of sets\nset_of_sets = {frozenset([1, 2]), frozenset([3, 4])}\nprint(set_of_sets)",
+          "code_language": "python",
+          "key_points": [
+            "Sets hold unique elements only, unordered",
+            "O(1) membership testing, add, and remove",
+            "Support mathematical set operations: |, &, -, ^",
+            "Empty set is set(), NOT {} (which is an empty dict)",
+            "frozenset is an immutable set (usable as dict key)"
+          ],
+          "gotchas": [
+            "{} creates an empty dict, not a set -- use set()",
+            "Sets are unordered -- iteration order is not guaranteed",
+            "remove() raises KeyError if not found, discard() does not",
+            "Sets can only contain hashable elements (no lists or dicts)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Sets hold unique elements, unordered. O(1) lookup. Operations: `|` (union), `&` (intersection), `-` (difference), `^` (symmetric diff). Empty set is `set()` not `{}`.",
+          "pseudo_code": "",
+          "actual_code": "s = {1, 2, 3}\ns.add(4)\nprint(3 in s)    # True (O(1))\nprint({1,2} | {2,3})  # {1, 2, 3}\nprint({1,2} & {2,3})  # {2}",
+          "code_language": "python",
+          "key_points": [
+            "Unique, unordered, O(1) lookup",
+            "set() for empty set, NOT {}"
+          ],
+          "gotchas": [
+            "{} is an empty dict, not a set"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are dictionaries and what are the most common dict operations?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["dictionaries", "mapping", "key-value"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `dict` is a mutable mapping of unique keys to values. Since Python 3.7, dicts maintain **insertion order**.\n\n**Creation:** `{}`, `dict()`, dict comprehension, `dict(zip(keys, values))`\n\n**Key operations:**\n- **Access:** `d[key]`, `d.get(key, default)`\n- **Set:** `d[key] = value`, `d.setdefault(key, default)`\n- **Remove:** `del d[key]`, `d.pop(key, default)`, `d.popitem()`\n- **Merge:** `d.update(other)`, `d | other` (Python 3.9+), `{**d1, **d2}`\n- **Views:** `d.keys()`, `d.values()`, `d.items()`\n\n**Performance:** Hash table internally. O(1) average for get, set, delete, membership.\n\n**Keys must be hashable** (immutable): str, int, float, tuple, frozenset.",
+          "pseudo_code": "Create: {}, dict(), {k: v for ...}, dict(zip(keys, values))\nAccess: d[key] (KeyError if missing), d.get(key, default)\nSet: d[key] = value, d.setdefault(key, default)\nRemove: del d[key], d.pop(key), d.popitem()\nMerge: d.update(other), d | other (3.9+)\nViews: d.keys(), d.values(), d.items()",
+          "actual_code": "# Creation\nd = {\"name\": \"Alice\", \"age\": 30}\nd2 = dict(name=\"Alice\", age=30)  # same\nd3 = dict([(\"name\", \"Alice\"), (\"age\", 30)])\nd4 = dict(zip([\"name\", \"age\"], [\"Alice\", 30]))\n\n# Access\nprint(d[\"name\"])           # 'Alice'\nprint(d.get(\"name\"))       # 'Alice'\nprint(d.get(\"email\", \"N/A\"))  # 'N/A' (default for missing key)\n# d[\"email\"]  # raises KeyError\n\n# Set\nd[\"email\"] = \"alice@example.com\"\nd.setdefault(\"city\", \"NYC\")  # sets only if key missing\nprint(d)  # {'name': 'Alice', 'age': 30, 'email': 'alice@example.com', 'city': 'NYC'}\n\n# Remove\ndel d[\"email\"]              # removes key\nage = d.pop(\"age\")          # removes and returns value\nprint(age)                  # 30\nitem = d.popitem()          # removes last inserted pair\nprint(item)                 # ('city', 'NYC')\n\n# Merge\nd1 = {\"a\": 1, \"b\": 2}\nd2 = {\"b\": 3, \"c\": 4}\n\nd1.update(d2)        # d1 = {'a': 1, 'b': 3, 'c': 4} (d2 overwrites)\nmerged = {**d1, **d2}  # unpacking merge\n# Python 3.9+\n# merged = d1 | d2\n\n# Views\nd = {\"a\": 1, \"b\": 2, \"c\": 3}\nprint(list(d.keys()))    # ['a', 'b', 'c']\nprint(list(d.values()))  # [1, 2, 3]\nprint(list(d.items()))   # [('a', 1), ('b', 2), ('c', 3)]\n\n# Iteration\nfor key, value in d.items():\n    print(f\"{key}: {value}\")\n\n# Membership (checks keys)\nprint(\"a\" in d)       # True\nprint(1 in d)          # False (1 is a value, not a key)\nprint(1 in d.values()) # True\n\n# Dict comprehension\nsquares = {x: x**2 for x in range(6)}\nprint(squares)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16, 5: 25}\n\n# Filter dict\noriginal = {\"a\": 1, \"b\": 2, \"c\": 3, \"d\": 4}\nfiltered = {k: v for k, v in original.items() if v > 2}\nprint(filtered)  # {'c': 3, 'd': 4}\n\n# Invert dict\noriginal = {\"a\": 1, \"b\": 2, \"c\": 3}\ninverted = {v: k for k, v in original.items()}\nprint(inverted)  # {1: 'a', 2: 'b', 3: 'c'}",
+          "code_language": "python",
+          "key_points": [
+            "O(1) average for get, set, delete, membership",
+            "Maintains insertion order (Python 3.7+)",
+            "get() with default avoids KeyError",
+            "Keys must be hashable (immutable types)",
+            "Dict comprehensions for transforming dicts"
+          ],
+          "gotchas": [
+            "d[key] raises KeyError for missing keys -- use d.get(key, default)",
+            "'in' checks keys, not values -- use 'in d.values()' for values",
+            "Cannot modify dict size during iteration -- iterate over list(d.items())",
+            "setdefault() returns the existing value if key already exists"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dicts map unique keys to values. O(1) access. Use `get(key, default)` to avoid KeyError. Maintains insertion order (3.7+). Keys must be hashable.",
+          "pseudo_code": "",
+          "actual_code": "d = {\"name\": \"Alice\", \"age\": 30}\nprint(d.get(\"email\", \"N/A\"))  # 'N/A'\nd[\"city\"] = \"NYC\"\nfor k, v in d.items():\n    print(k, v)",
+          "code_language": "python",
+          "key_points": [
+            "O(1) access, insertion-ordered",
+            "Use get() for safe access"
+          ],
+          "gotchas": [
+            "'in' checks keys only, not values"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between list append() and extend()?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["lists", "append", "extend"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`append(x)` adds `x` as a **single element** to the end of the list.\n`extend(iterable)` adds **each element** from the iterable to the list.\n\nThis is one of the most common points of confusion for Python beginners.\n\n**append(x):**\n- Adds exactly one element\n- If x is a list, it adds the entire list as a single nested element\n- O(1) amortized\n\n**extend(iterable):**\n- Adds each element from the iterable\n- Equivalent to `for item in iterable: lst.append(item)` but faster\n- O(k) where k is the length of the iterable\n\n**Alternative:** `lst += iterable` behaves like `extend()` for lists (calls `__iadd__` which calls `extend`).",
+          "pseudo_code": "lst.append(x):  adds x as ONE element\n  [1, 2].append([3, 4]) -> [1, 2, [3, 4]]\n\nlst.extend(iterable):  adds EACH element\n  [1, 2].extend([3, 4]) -> [1, 2, 3, 4]\n\nlst += iterable:  same as extend() for lists",
+          "actual_code": "# append -- adds one element\nlst = [1, 2]\nlst.append(3)\nprint(lst)  # [1, 2, 3]\n\nlst.append([4, 5])  # adds the LIST as a single element\nprint(lst)  # [1, 2, 3, [4, 5]]\n\n# extend -- adds each element from iterable\nlst = [1, 2]\nlst.extend([3, 4, 5])\nprint(lst)  # [1, 2, 3, 4, 5]\n\nlst.extend(\"abc\")  # strings are iterable\nprint(lst)  # [1, 2, 3, 4, 5, 'a', 'b', 'c']\n\n# += is like extend for lists\nlst = [1, 2]\nlst += [3, 4]\nprint(lst)  # [1, 2, 3, 4]\n\n# Comparison\na = [1, 2]\nb = [1, 2]\n\na.append([3, 4])\nb.extend([3, 4])\n\nprint(a)  # [1, 2, [3, 4]] -- list as element\nprint(b)  # [1, 2, 3, 4]   -- elements unpacked\n\n# extend works with any iterable\nlst = []\nlst.extend(range(5))      # [0, 1, 2, 3, 4]\nlst.extend({\"a\": 1})      # adds keys: [0, 1, 2, 3, 4, 'a']\nlst.extend((10, 20))      # [0, 1, 2, 3, 4, 'a', 10, 20]\n\n# append with non-iterable\nlst = [1, 2]\nlst.append(3)    # OK -- 3 is a single element\n# lst.extend(3)  # TypeError -- 3 is not iterable",
+          "code_language": "python",
+          "key_points": [
+            "append(x) adds x as one element, extend(iterable) adds each element",
+            "append([1,2]) nests the list, extend([1,2]) unpacks it",
+            "+= works like extend() for lists",
+            "extend() accepts any iterable (list, tuple, set, string, range)",
+            "extend() is faster than repeated append() calls"
+          ],
+          "gotchas": [
+            "append('abc') adds one string; extend('abc') adds 'a', 'b', 'c' separately",
+            "extend(3) raises TypeError -- 3 is not iterable; use append(3) for single values",
+            "extend(dict) adds only the keys, not key-value pairs",
+            "+= with a non-list on the right: lst += 'abc' extends with characters"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`append(x)` adds x as one element. `extend(iterable)` adds each element from the iterable. `append([1,2])` nests; `extend([1,2])` unpacks.",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2]\na.append([3, 4])   # [1, 2, [3, 4]]\n\nb = [1, 2]\nb.extend([3, 4])   # [1, 2, 3, 4]",
+          "code_language": "python",
+          "key_points": [
+            "append = one element, extend = each element",
+            "+= works like extend"
+          ],
+          "gotchas": [
+            "extend('abc') adds 'a', 'b', 'c' separately"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are named tuples and when should you use them?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["namedtuple", "structured-data", "collections"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Named tuples are tuples with named fields, created using `collections.namedtuple()` or `typing.NamedTuple`. They provide named access while remaining immutable and tuple-compatible.\n\n**Benefits over plain tuples:**\n- Self-documenting: `point.x` vs `point[0]`\n- Still supports indexing, unpacking, iteration\n- Immutable (safer than dicts for fixed structures)\n- Memory efficient (no per-instance `__dict__`)\n\n**Benefits over dicts:**\n- Immutable\n- Less memory\n- Dot access syntax\n- Can be used as dict keys\n\n**When to use:**\n- Simple data containers with named fields\n- Return values from functions\n- Records from database queries or CSV files\n- Any time you would use a tuple but want named access",
+          "pseudo_code": "from collections import namedtuple\nPoint = namedtuple('Point', ['x', 'y'])\np = Point(3, 4)\np.x, p.y  # named access\np[0], p[1]  # index access\n\nfrom typing import NamedTuple\nclass Point(NamedTuple):\n    x: float\n    y: float",
+          "actual_code": "# collections.namedtuple\nfrom collections import namedtuple\n\nPoint = namedtuple('Point', ['x', 'y'])\np = Point(3, 4)\nprint(p.x, p.y)     # 3 4 (named access)\nprint(p[0], p[1])    # 3 4 (index access)\nprint(*p)            # 3 4 (unpacking)\n\n# Still a tuple\nprint(isinstance(p, tuple))  # True\nprint(len(p))                # 2\nx, y = p                     # unpacking works\n\n# typing.NamedTuple (modern, with type hints)\nfrom typing import NamedTuple\n\nclass Employee(NamedTuple):\n    name: str\n    department: str\n    salary: float = 50000.0  # default value\n\nemp = Employee(\"Alice\", \"Engineering\")\nprint(emp)              # Employee(name='Alice', department='Engineering', salary=50000.0)\nprint(emp.name)         # Alice\nprint(emp.salary)       # 50000.0\n\n# Immutable -- cannot modify\ntry:\n    emp.salary = 60000\nexcept AttributeError as e:\n    print(f\"Error: {e}\")  # can't set attribute\n\n# _replace creates a new instance with changed fields\nupdated = emp._replace(salary=75000)\nprint(updated)  # Employee(name='Alice', department='Engineering', salary=75000.0)\nprint(emp)      # original unchanged\n\n# Convert to dict\nprint(emp._asdict())  # {'name': 'Alice', 'department': 'Engineering', 'salary': 50000.0}\n\n# Create from dict\ndata = {\"name\": \"Bob\", \"department\": \"Sales\", \"salary\": 60000}\nbob = Employee(**data)\nprint(bob)\n\n# Practical: function returning named tuple\nfrom collections import namedtuple\n\nResult = namedtuple('Result', ['mean', 'median', 'mode'])\n\ndef analyze(data):\n    from statistics import mean, median, mode\n    return Result(mean=mean(data), median=median(data), mode=mode(data))\n\nresult = analyze([1, 2, 2, 3, 4])\nprint(f\"Mean: {result.mean}, Median: {result.median}, Mode: {result.mode}\")\n\n# Named tuples as dict keys\nColor = namedtuple('Color', ['r', 'g', 'b'])\nred = Color(255, 0, 0)\ncolor_names = {red: \"red\", Color(0, 255, 0): \"green\"}\nprint(color_names[red])  # 'red'",
+          "code_language": "python",
+          "key_points": [
+            "Named tuples provide named field access while remaining immutable",
+            "Two ways: collections.namedtuple and typing.NamedTuple",
+            "typing.NamedTuple supports type hints and default values",
+            "_replace() creates a new instance with changed fields",
+            "_asdict() converts to an OrderedDict/dict"
+          ],
+          "gotchas": [
+            "Named tuples are immutable -- use _replace() to create modified copies",
+            "_replace, _asdict, _fields start with _ but are NOT private -- they avoid name conflicts",
+            "For mutable named containers, consider dataclasses instead",
+            "namedtuple field names must be valid identifiers and not start with _"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Named tuples are tuples with named fields. Use `collections.namedtuple` or `typing.NamedTuple`. Immutable, memory-efficient, support both `p.x` and `p[0]` access.",
+          "pseudo_code": "",
+          "actual_code": "from typing import NamedTuple\n\nclass Point(NamedTuple):\n    x: float\n    y: float\n\np = Point(3, 4)\nprint(p.x, p.y)  # 3 4\nprint(p[0])       # 3",
+          "code_language": "python",
+          "key_points": [
+            "Named access + tuple compatibility",
+            "Immutable and memory efficient"
+          ],
+          "gotchas": [
+            "Use dataclasses for mutable named containers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between dict.get() and dict.setdefault()?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["dict", "get", "setdefault"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`dict.get(key, default)` returns the value for `key` if it exists, otherwise returns `default` (or `None`). It does **NOT** modify the dict.\n\n`dict.setdefault(key, default)` returns the value for `key` if it exists. If the key does NOT exist, it **inserts** `key` with `default` as the value and returns `default`.\n\n**Key difference:** `get()` is read-only, `setdefault()` may insert.\n\n**Use cases:**\n- `get()`: Safe access without KeyError\n- `setdefault()`: Building dicts with default values (e.g., grouping)\n- `collections.defaultdict`: Automatic defaults (more Pythonic for grouping)",
+          "pseudo_code": "d.get(key, default):\n  if key in d: return d[key]\n  else: return default  # dict NOT modified\n\nd.setdefault(key, default):\n  if key in d: return d[key]\n  else: d[key] = default; return default  # dict IS modified",
+          "actual_code": "# get() -- read only\nd = {\"a\": 1, \"b\": 2}\nprint(d.get(\"a\"))        # 1\nprint(d.get(\"c\"))        # None (key missing)\nprint(d.get(\"c\", 0))     # 0 (custom default)\nprint(d)                  # {'a': 1, 'b': 2} -- unchanged\n\n# setdefault() -- inserts if missing\nd = {\"a\": 1, \"b\": 2}\nprint(d.setdefault(\"a\", 99))   # 1 (existing, not modified)\nprint(d.setdefault(\"c\", 3))    # 3 (inserted)\nprint(d)                        # {'a': 1, 'b': 2, 'c': 3}\n\n# Practical: grouping with setdefault\nwords = [\"apple\", \"banana\", \"avocado\", \"blueberry\", \"cherry\"]\ngrouped = {}\nfor word in words:\n    grouped.setdefault(word[0], []).append(word)\nprint(grouped)\n# {'a': ['apple', 'avocado'], 'b': ['banana', 'blueberry'], 'c': ['cherry']}\n\n# Same with defaultdict (more Pythonic)\nfrom collections import defaultdict\ngrouped = defaultdict(list)\nfor word in words:\n    grouped[word[0]].append(word)\nprint(dict(grouped))\n\n# Counting with setdefault vs Counter\ntext = \"hello world\"\ncounts = {}\nfor char in text:\n    counts[char] = counts.get(char, 0) + 1  # get() for counting\nprint(counts)\n\n# Better: use Counter\nfrom collections import Counter\nprint(dict(Counter(text)))",
+          "code_language": "python",
+          "key_points": [
+            "get() returns default without modifying the dict",
+            "setdefault() inserts default if key missing, then returns value",
+            "setdefault() is useful for building lists/dicts as values",
+            "defaultdict is often more Pythonic than setdefault()",
+            "get() with default avoids KeyError and is cleaner than try/except"
+          ],
+          "gotchas": [
+            "get() returns None by default, not KeyError -- this can mask bugs",
+            "setdefault() evaluates the default argument even if key exists (matters for expensive expressions)",
+            "defaultdict creates entries on ANY access (even just reading), which may have side effects",
+            "d.get(key) is None vs key not in d: get() cannot distinguish 'key has None value' from 'key missing'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`get(key, default)` returns default without modifying dict. `setdefault(key, default)` inserts default if key missing, then returns value. Use `get()` for reading, `setdefault()` for building.",
+          "pseudo_code": "",
+          "actual_code": "d = {\"a\": 1}\nprint(d.get(\"b\", 0))        # 0, d unchanged\nprint(d.setdefault(\"b\", 0)) # 0, d now has 'b': 0\nprint(d)                     # {'a': 1, 'b': 0}",
+          "code_language": "python",
+          "key_points": [
+            "get() is read-only, setdefault() may insert",
+            "defaultdict is often better for grouping"
+          ],
+          "gotchas": [
+            "get() returns None by default -- cannot distinguish None value from missing key"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is defaultdict and how does it differ from regular dict?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["defaultdict", "collections", "dict"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`collections.defaultdict` is a dict subclass that provides a default value for missing keys. When you access a missing key, it calls a **factory function** to create the default value and inserts it.\n\n**Constructor:** `defaultdict(default_factory)`\n\nCommon factory functions:\n- `int` -- default 0 (for counting)\n- `list` -- default [] (for grouping)\n- `set` -- default set() (for unique grouping)\n- `lambda: 'default'` -- custom default value\n\n**Key difference from dict:** Accessing a missing key in `defaultdict` creates the entry. In a regular dict, it raises `KeyError`.",
+          "pseudo_code": "from collections import defaultdict\n\ndd = defaultdict(list)\ndd['key'].append('value')  # auto-creates empty list for 'key'\n\ndd = defaultdict(int)\ndd['key'] += 1  # auto-creates 0 for 'key'\n\nRegular dict:\nd['missing_key']  # KeyError!\ndefaultdict:\ndd['missing_key']  # creates and returns default",
+          "actual_code": "from collections import defaultdict\n\n# Counting with defaultdict(int)\ntext = \"the cat sat on the mat\"\nword_count = defaultdict(int)\nfor word in text.split():\n    word_count[word] += 1  # missing keys auto-initialize to 0\nprint(dict(word_count))  # {'the': 2, 'cat': 1, 'sat': 1, 'on': 1, 'mat': 1}\n\n# Grouping with defaultdict(list)\nstudents = [\n    (\"Alice\", \"Math\"),\n    (\"Bob\", \"Science\"),\n    (\"Alice\", \"Science\"),\n    (\"Bob\", \"Math\"),\n    (\"Charlie\", \"Math\")\n]\n\nby_student = defaultdict(list)\nfor name, subject in students:\n    by_student[name].append(subject)\nprint(dict(by_student))\n# {'Alice': ['Math', 'Science'], 'Bob': ['Science', 'Math'], 'Charlie': ['Math']}\n\n# Unique grouping with defaultdict(set)\nby_subject = defaultdict(set)\nfor name, subject in students:\n    by_subject[subject].add(name)\nprint(dict(by_subject))\n# {'Math': {'Alice', 'Bob', 'Charlie'}, 'Science': {'Alice', 'Bob'}}\n\n# Custom default with lambda\nconfig = defaultdict(lambda: \"unknown\")\nconfig[\"name\"] = \"Alice\"\nprint(config[\"name\"])    # Alice\nprint(config[\"email\"])   # 'unknown' (auto-created)\nprint(dict(config))      # {'name': 'Alice', 'email': 'unknown'}\n\n# Nested defaultdict\ntree = defaultdict(lambda: defaultdict(int))\ntree[\"sales\"][\"q1\"] = 100\ntree[\"sales\"][\"q2\"] = 200\nprint(dict(tree[\"sales\"]))  # {'q1': 100, 'q2': 200}\n\n# defaultdict vs regular dict\nregular = {}\ntry:\n    regular[\"missing\"]\nexcept KeyError:\n    print(\"KeyError with regular dict\")\n\ndd = defaultdict(int)\nprint(dd[\"missing\"])  # 0 (auto-created, no error)\nprint(\"missing\" in dd)  # True (key was created!)\n\n# CAUTION: accessing creates entries\ndd = defaultdict(list)\nif dd[\"key\"]:  # creates empty list even if just checking!\n    pass\nprint(dict(dd))  # {'key': []} -- entry was created!",
+          "code_language": "python",
+          "key_points": [
+            "defaultdict auto-creates missing keys using a factory function",
+            "Common factories: int (0), list ([]), set (set())",
+            "Eliminates the need for key-existence checks",
+            "Perfect for counting, grouping, and accumulating",
+            "Accessing a missing key CREATES the entry"
+          ],
+          "gotchas": [
+            "Accessing a missing key creates it -- even with 'if dd[key]:' check",
+            "Use 'key in dd' instead of 'dd[key]' to check without creating",
+            "default_factory=None makes it behave like a regular dict",
+            "Convert to regular dict before serializing (JSON, etc.)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`defaultdict(factory)` auto-creates missing keys. `defaultdict(int)` for counting, `defaultdict(list)` for grouping. Unlike regular dict, accessing missing keys does not raise KeyError.",
+          "pseudo_code": "",
+          "actual_code": "from collections import defaultdict\n\ncounts = defaultdict(int)\nfor word in \"a b a c b a\".split():\n    counts[word] += 1\nprint(dict(counts))  # {'a': 3, 'b': 2, 'c': 1}",
+          "code_language": "python",
+          "key_points": [
+            "Auto-creates missing keys with factory function",
+            "int for counting, list for grouping"
+          ],
+          "gotchas": [
+            "Accessing a missing key creates the entry"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is OrderedDict and is it still needed in modern Python?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["OrderedDict", "collections", "ordering"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Since Python 3.7, regular `dict` maintains insertion order as a **language guarantee**. Before that, `collections.OrderedDict` was the only way to get ordered dictionaries.\n\n**Is OrderedDict still useful?** Yes, in specific cases:\n\n1. **Equality comparison considers order:** `OrderedDict([('a',1),('b',2)]) != OrderedDict([('b',2),('a',1)])` but `{'a':1,'b':2} == {'b':2,'a':1}`\n2. **`move_to_end(key, last=True)`:** Reorder entries efficiently\n3. **`popitem(last=True)`:** Remove from either end\n4. **Explicit intent:** Signals that order matters in your code\n5. **LRU cache implementation:** move_to_end is useful\n\nFor most new code, regular `dict` is sufficient.",
+          "pseudo_code": "Regular dict (Python 3.7+):\n  Maintains insertion order\n  Equality ignores order: {'a':1,'b':2} == {'b':2,'a':1}\n\nOrderedDict:\n  Maintains insertion order\n  Equality considers order\n  Has move_to_end() and popitem(last=True/False)\n  More explicit about order being important",
+          "actual_code": "from collections import OrderedDict\n\n# Regular dict preserves insertion order (Python 3.7+)\nd = {\"b\": 2, \"a\": 1, \"c\": 3}\nprint(list(d.keys()))  # ['b', 'a', 'c']\n\n# OrderedDict\nod = OrderedDict([(\"b\", 2), (\"a\", 1), (\"c\", 3)])\nprint(list(od.keys()))  # ['b', 'a', 'c']\n\n# Key difference: equality\nd1 = {\"a\": 1, \"b\": 2}\nd2 = {\"b\": 2, \"a\": 1}\nprint(d1 == d2)  # True (dict ignores order in equality)\n\nod1 = OrderedDict([(\"a\", 1), (\"b\", 2)])\nod2 = OrderedDict([(\"b\", 2), (\"a\", 1)])\nprint(od1 == od2)  # False (OrderedDict considers order)\n\n# move_to_end\nod = OrderedDict([(\"a\", 1), (\"b\", 2), (\"c\", 3)])\nod.move_to_end(\"a\")        # move to end\nprint(list(od.keys()))      # ['b', 'c', 'a']\n\nod.move_to_end(\"a\", last=False)  # move to beginning\nprint(list(od.keys()))             # ['a', 'b', 'c']\n\n# popitem with last parameter\nod = OrderedDict([(\"a\", 1), (\"b\", 2), (\"c\", 3)])\nprint(od.popitem(last=True))   # ('c', 3) LIFO\nprint(od.popitem(last=False))  # ('a', 1) FIFO\n\n# LRU Cache pattern with OrderedDict\nclass LRUCache:\n    def __init__(self, capacity):\n        self.cache = OrderedDict()\n        self.capacity = capacity\n\n    def get(self, key):\n        if key in self.cache:\n            self.cache.move_to_end(key)\n            return self.cache[key]\n        return -1\n\n    def put(self, key, value):\n        if key in self.cache:\n            self.cache.move_to_end(key)\n        self.cache[key] = value\n        if len(self.cache) > self.capacity:\n            self.cache.popitem(last=False)  # remove oldest\n\nlru = LRUCache(3)\nlru.put(\"a\", 1)\nlru.put(\"b\", 2)\nlru.put(\"c\", 3)\nlru.get(\"a\")        # moves 'a' to end\nlru.put(\"d\", 4)     # evicts 'b' (oldest)\nprint(list(lru.cache.keys()))  # ['c', 'a', 'd']",
+          "code_language": "python",
+          "key_points": [
+            "Regular dict maintains insertion order since Python 3.7",
+            "OrderedDict equality considers order; regular dict does not",
+            "OrderedDict has move_to_end() and popitem(last=True/False)",
+            "OrderedDict is useful for LRU cache implementations",
+            "For most cases, regular dict is sufficient"
+          ],
+          "gotchas": [
+            "OrderedDict uses more memory than regular dict",
+            "OrderedDict is slightly slower than regular dict",
+            "In Python 3.7+, dict ordering is guaranteed, not just implementation detail",
+            "OrderedDict equality: od1 == regular_dict compares without order"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Regular dict maintains insertion order since Python 3.7. OrderedDict is still useful when equality should consider order, or when you need `move_to_end()` and `popitem(last=False)` for LRU caches.",
+          "pseudo_code": "",
+          "actual_code": "from collections import OrderedDict\n\n# Equality difference\nprint({\"a\":1,\"b\":2} == {\"b\":2,\"a\":1})  # True (dict)\nod1 = OrderedDict(a=1, b=2)\nod2 = OrderedDict(b=2, a=1)\nprint(od1 == od2)  # False (OrderedDict)",
+          "code_language": "python",
+          "key_points": [
+            "Dict is ordered since 3.7",
+            "OrderedDict for order-sensitive equality and move_to_end()"
+          ],
+          "gotchas": [
+            "OrderedDict uses more memory than regular dict"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is collections.deque and when should you use it instead of a list?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["deque", "collections", "queue", "stack"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`collections.deque` (double-ended queue) is optimized for **O(1) append and pop from both ends**.\n\n**When to use deque over list:**\n- When you need a queue (FIFO): `appendleft()` + `pop()`\n- When you need a stack with two ends\n- When you frequently insert/remove at the beginning\n- When you need a fixed-size sliding window (`maxlen`)\n\n**Performance comparison:**\n| Operation | list | deque |\n|-----------|------|-------|\n| Append right | O(1) | O(1) |\n| Pop right | O(1) | O(1) |\n| Append left | O(n) | O(1) |\n| Pop left | O(n) | O(1) |\n| Index access | O(1) | O(n) |\n\n**Trade-off:** deque has O(n) random access, so use lists when you need frequent indexing.",
+          "pseudo_code": "from collections import deque\n\nQueue (FIFO): append() + popleft()\nStack (LIFO): append() + pop()\nSliding window: deque(maxlen=n)\n\nO(1) both ends, O(n) random access",
+          "actual_code": "from collections import deque\n\n# Basic deque\nd = deque([1, 2, 3])\nd.append(4)         # right: [1, 2, 3, 4]\nd.appendleft(0)     # left:  [0, 1, 2, 3, 4]\n\nright = d.pop()     # 4, deque: [0, 1, 2, 3]\nleft = d.popleft()  # 0, deque: [1, 2, 3]\n\n# Extend both ends\nd.extend([4, 5])        # right: [1, 2, 3, 4, 5]\nd.extendleft([0, -1])   # left:  [-1, 0, 1, 2, 3, 4, 5]\n# Note: extendleft reverses the order\n\n# Fixed-size deque (sliding window)\nrecent = deque(maxlen=3)\nfor i in range(5):\n    recent.append(i)\n    print(list(recent))\n# [0]\n# [0, 1]\n# [0, 1, 2]\n# [1, 2, 3]  -- 0 was dropped\n# [2, 3, 4]  -- 1 was dropped\n\n# Queue implementation (FIFO)\nqueue = deque()\nqueue.append(\"first\")    # enqueue\nqueue.append(\"second\")\nqueue.append(\"third\")\nprint(queue.popleft())   # 'first' (dequeue) -- O(1)\nprint(queue.popleft())   # 'second'\n\n# Rotate\nd = deque([1, 2, 3, 4, 5])\nd.rotate(2)     # rotate right by 2\nprint(list(d))  # [4, 5, 1, 2, 3]\n\nd.rotate(-2)    # rotate left by 2\nprint(list(d))  # [1, 2, 3, 4, 5]\n\n# Performance comparison\nimport timeit\n\n# List: insert at beginning is O(n)\nlst_time = timeit.timeit(\n    lambda: [0] + list(range(1000)),\n    number=1000\n)\n\n# Deque: appendleft is O(1)\ndef deque_test():\n    d = deque(range(1000))\n    d.appendleft(0)\n\ndeq_time = timeit.timeit(deque_test, number=1000)\nprint(f\"List insert(0): {lst_time:.4f}s\")\nprint(f\"Deque appendleft: {deq_time:.4f}s\")\n\n# BFS with deque\ndef bfs(graph, start):\n    visited = set()\n    queue = deque([start])\n    order = []\n    while queue:\n        node = queue.popleft()\n        if node not in visited:\n            visited.add(node)\n            order.append(node)\n            queue.extend(graph.get(node, []))\n    return order\n\ngraph = {\"A\": [\"B\", \"C\"], \"B\": [\"D\"], \"C\": [\"D\"], \"D\": []}\nprint(bfs(graph, \"A\"))  # ['A', 'B', 'C', 'D']",
+          "code_language": "python",
+          "key_points": [
+            "O(1) append/pop from both ends",
+            "Use for queues, stacks, and sliding windows",
+            "maxlen creates a fixed-size deque (drops from opposite end)",
+            "rotate() efficiently shifts elements",
+            "O(n) random access -- use list if you need frequent indexing"
+          ],
+          "gotchas": [
+            "deque has O(n) random access: d[500] is slow",
+            "extendleft() reverses the order of added elements",
+            "deque does not support slicing directly: use itertools.islice()",
+            "maxlen deque silently drops elements from the opposite end"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`deque` provides O(1) append/pop from both ends. Use for queues (`append` + `popleft`), sliding windows (`maxlen`), and any operation needing fast insertion at the beginning.",
+          "pseudo_code": "",
+          "actual_code": "from collections import deque\n\nq = deque()\nq.append(\"a\"); q.append(\"b\")\nprint(q.popleft())  # 'a' (O(1))\n\nwindow = deque(maxlen=3)\nfor i in range(5):\n    window.append(i)\nprint(list(window))  # [2, 3, 4]",
+          "code_language": "python",
+          "key_points": [
+            "O(1) both ends, O(n) random access",
+            "maxlen for sliding windows"
+          ],
+          "gotchas": [
+            "O(n) random access -- use list for frequent indexing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use a list vs tuple vs set vs dict?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["data-structures", "comparison", "when-to-use"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**List** -- ordered, mutable, duplicates allowed\n- Use for: ordered collections that may change, stacks, sequences\n- Examples: shopping cart items, task queue, log entries\n\n**Tuple** -- ordered, immutable, duplicates allowed\n- Use for: fixed data, function return values, dict keys, data integrity\n- Examples: coordinates (x, y), RGB colors, database row\n\n**Set** -- unordered, mutable, NO duplicates\n- Use for: unique collections, membership testing, set operations\n- Examples: tags, visited nodes, removing duplicates\n\n**Dict** -- ordered (3.7+), mutable, unique keys\n- Use for: key-value mapping, lookup tables, configuration\n- Examples: user profiles, word counts, caches\n\n**Performance cheat sheet:**\n| Operation | list | set | dict |\n|-----------|------|-----|------|\n| Lookup | O(n) | O(1) | O(1) |\n| Insert | O(1)* | O(1) | O(1) |\n| Delete | O(n) | O(1) | O(1) |",
+          "pseudo_code": "Need order + mutation? -> list\nNeed order + immutability? -> tuple\nNeed uniqueness + fast lookup? -> set\nNeed key-value pairs? -> dict\n\nNeed fast lookup in ordered data? -> dict (or list + set)\nNeed stack? -> list (append/pop)\nNeed queue? -> collections.deque",
+          "actual_code": "# List: ordered, mutable, allows duplicates\ntasks = [\"write code\", \"test code\", \"write code\"]\ntasks.append(\"deploy\")\ntasks.remove(\"write code\")  # removes first occurrence\nprint(tasks)  # ['test code', 'write code', 'deploy']\n\n# Tuple: ordered, immutable, allows duplicates\ncoord = (3.14, 2.72)\nrgb_red = (255, 0, 0)\n# Hashable: can be dict key\ncolor_map = {(255, 0, 0): \"red\", (0, 255, 0): \"green\"}\n\n# Set: unordered, unique elements, fast membership\ntags = {\"python\", \"programming\", \"tutorial\"}\ntags.add(\"python\")  # no duplicate added\nprint(\"python\" in tags)  # True -- O(1)\n\n# Remove duplicates from list\nlst = [1, 2, 2, 3, 3, 4]\nunique = list(set(lst))  # order not preserved\nunique_ordered = list(dict.fromkeys(lst))  # order preserved\n\n# Dict: key-value mapping, fast lookup\nuser = {\"name\": \"Alice\", \"age\": 30}\nprint(user[\"name\"])  # O(1) lookup\n\n# Decision flowchart example\ndef choose_structure(needs_order, needs_unique, needs_kv, needs_mutable):\n    if needs_kv:\n        return \"dict\"\n    if needs_unique:\n        if needs_mutable:\n            return \"set\"\n        return \"frozenset\"\n    if needs_order:\n        if needs_mutable:\n            return \"list\"\n        return \"tuple\"\n    return \"set\"  # default for unique, unordered\n\n# Performance demonstration\nimport timeit\n\ndata_list = list(range(100000))\ndata_set = set(range(100000))\ndata_dict = {i: True for i in range(100000)}\n\nprint(\"Lookup 99999:\")\nprint(f\"  list: {timeit.timeit(lambda: 99999 in data_list, number=1000):.4f}s\")\nprint(f\"  set:  {timeit.timeit(lambda: 99999 in data_set, number=1000):.4f}s\")\nprint(f\"  dict: {timeit.timeit(lambda: 99999 in data_dict, number=1000):.4f}s\")",
+          "code_language": "python",
+          "key_points": [
+            "List: ordered mutable sequence with duplicates",
+            "Tuple: ordered immutable sequence (hashable)",
+            "Set: unordered unique collection with O(1) lookup",
+            "Dict: key-value mapping with O(1) lookup",
+            "Choose based on: order, uniqueness, mutability, lookup speed needs"
+          ],
+          "gotchas": [
+            "set() removes duplicates but does not preserve order",
+            "dict preserves insertion order in Python 3.7+ but is not the same as OrderedDict",
+            "Converting list to set and back loses order -- use dict.fromkeys() to preserve",
+            "Sets and dict keys require hashable elements"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**List**: ordered, mutable, duplicates OK. **Tuple**: ordered, immutable. **Set**: unique, O(1) lookup. **Dict**: key-value, O(1) lookup. Choose based on whether you need order, uniqueness, mutability, or key-value pairs.",
+          "pseudo_code": "",
+          "actual_code": "# List for ordered, mutable sequences\ntasks = [\"a\", \"b\", \"c\"]\n# Tuple for fixed, hashable data\npoint = (3, 4)\n# Set for unique, fast lookup\ntags = {\"py\", \"js\", \"go\"}\n# Dict for key-value pairs\nconfig = {\"debug\": True}",
+          "code_language": "python",
+          "key_points": [
+            "List=ordered mutable, Tuple=ordered immutable, Set=unique, Dict=key-value",
+            "Set/dict for O(1) lookup, list for O(1) index"
+          ],
+          "gotchas": [
+            "set() loses order when deduplicating"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between shallow copy and deep copy for nested data structures?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["copy", "shallow", "deep", "nested"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "For nested data structures (list of lists, dict of dicts, etc.), the copy behavior matters critically:\n\n**Shallow copy:** Copies the outer container but inner objects are shared references.\n**Deep copy:** Recursively copies everything -- fully independent.\n\n**Shallow copy methods:**\n- `list.copy()`, `dict.copy()`\n- Slice: `lst[:]`\n- Constructors: `list(original)`, `dict(original)`\n- `copy.copy()`\n\n**Deep copy:**\n- `copy.deepcopy()`\n\nThe difference only matters when you have **nested mutable objects** (lists within lists, dicts within dicts). For flat structures with only immutable elements, shallow copy is sufficient.",
+          "pseudo_code": "Shallow: new outer, shared inner\n  modify inner -> both affected\n  modify outer (add/remove) -> only copy affected\n\nDeep: new outer, new inner (recursive)\n  modify anything -> only copy affected",
+          "actual_code": "import copy\n\n# Shallow copy -- inner lists are shared\noriginal = {\"users\": [\"Alice\", \"Bob\"], \"config\": {\"debug\": True}}\nshallow = original.copy()\n\n# Modifying outer level -- only affects copy\nshallow[\"new_key\"] = \"value\"\nprint(\"new_key\" in original)  # False -- outer not shared\n\n# Modifying inner level -- affects both!\nshallow[\"users\"].append(\"Charlie\")\nprint(original[\"users\"])  # ['Alice', 'Bob', 'Charlie'] -- shared!\n\nshallow[\"config\"][\"debug\"] = False\nprint(original[\"config\"])  # {'debug': False} -- shared!\n\n# Deep copy -- fully independent\noriginal = {\"users\": [\"Alice\", \"Bob\"], \"config\": {\"debug\": True}}\ndeep = copy.deepcopy(original)\n\ndeep[\"users\"].append(\"Charlie\")\nprint(original[\"users\"])  # ['Alice', 'Bob'] -- not affected!\n\ndeep[\"config\"][\"debug\"] = False\nprint(original[\"config\"])  # {'debug': True} -- not affected!\n\n# List of lists example\nmatrix = [[1, 2], [3, 4]]\nshallow = [row[:] for row in matrix]  # shallow copy of each row = effective deep copy for 2D\nshallow[0][0] = 99\nprint(matrix[0][0])  # 1 (unaffected because we copied each inner list)\n\n# But for 3+ levels deep, need deepcopy\nnested = [[[1, 2]], [[3, 4]]]\nshallow_2d = [row[:] for row in nested]  # only copies one level\nshallow_2d[0][0].append(99)\nprint(nested[0][0])  # [1, 2, 99] -- inner-inner is shared!\n\ndeep = copy.deepcopy(nested)\ndeep[0][0].append(100)\nprint(nested[0][0])  # [1, 2, 99] -- not affected\n\n# Deep copy handles circular references\na = [1, 2]\na.append(a)  # circular reference\nb = copy.deepcopy(a)  # handles this correctly\nprint(b[0])  # 1\nprint(b[2] is b)  # True (circular ref preserved in copy)",
+          "code_language": "python",
+          "key_points": [
+            "Shallow copy: new outer container, shared inner references",
+            "Deep copy: fully recursive independent copy",
+            "Only matters for nested mutable objects",
+            "[row[:] for row in matrix] gives effective deep copy for 2D lists",
+            "copy.deepcopy() handles circular references"
+          ],
+          "gotchas": [
+            "dict.copy() and list.copy() are SHALLOW -- a common source of bugs",
+            "deepcopy is slow for large structures -- use only when necessary",
+            "deepcopy preserves object identity within the copy (circular refs work)",
+            "Custom objects may need __copy__ and __deepcopy__ methods"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Shallow copy shares inner objects; deep copy is fully independent. Use `copy.deepcopy()` for nested mutable structures. `dict.copy()` and `list.copy()` are shallow.",
+          "pseudo_code": "",
+          "actual_code": "import copy\norig = {\"list\": [1, 2]}\nshallow = orig.copy()\nshallow[\"list\"].append(3)\nprint(orig[\"list\"])  # [1, 2, 3] -- shared!\n\ndeep = copy.deepcopy(orig)\ndeep[\"list\"].append(4)\nprint(orig[\"list\"])  # [1, 2, 3] -- unaffected",
+          "code_language": "python",
+          "key_points": [
+            "Shallow shares inner objects, deep is independent",
+            "Use deepcopy for nested mutable structures"
+          ],
+          "gotchas": [
+            "dict.copy() is shallow -- nested dicts are shared"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dict comprehensions work?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["dict-comprehension", "comprehension", "dict"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dict comprehensions create dictionaries using a concise syntax:\n```\n{key_expr: value_expr for item in iterable if condition}\n```\n\nThey work similarly to list comprehensions but produce dictionaries.\n\n**Common patterns:**\n1. Transform values: `{k: v*2 for k, v in d.items()}`\n2. Filter entries: `{k: v for k, v in d.items() if v > 0}`\n3. Invert dict: `{v: k for k, v in d.items()}`\n4. From two lists: `{k: v for k, v in zip(keys, values)}`\n5. From iterable: `{x: x**2 for x in range(5)}`",
+          "pseudo_code": "Basic: {key: value for item in iterable}\nFiltered: {key: value for item in iterable if condition}\nFrom items: {k: transform(v) for k, v in dict.items()}\nInvert: {v: k for k, v in dict.items()}",
+          "actual_code": "# Basic dict comprehension\nsquares = {x: x**2 for x in range(6)}\nprint(squares)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16, 5: 25}\n\n# From two lists\nkeys = [\"name\", \"age\", \"city\"]\nvalues = [\"Alice\", 30, \"NYC\"]\nperson = {k: v for k, v in zip(keys, values)}\nprint(person)  # {'name': 'Alice', 'age': 30, 'city': 'NYC'}\n# Or simpler: dict(zip(keys, values))\n\n# Filter entries\nscores = {\"Alice\": 95, \"Bob\": 60, \"Charlie\": 85, \"David\": 45}\npassing = {name: score for name, score in scores.items() if score >= 70}\nprint(passing)  # {'Alice': 95, 'Charlie': 85}\n\n# Transform values\nprices = {\"apple\": 1.00, \"banana\": 0.50, \"cherry\": 2.00}\ntaxed = {item: round(price * 1.08, 2) for item, price in prices.items()}\nprint(taxed)  # {'apple': 1.08, 'banana': 0.54, 'cherry': 2.16}\n\n# Invert dict (swap keys and values)\noriginal = {\"a\": 1, \"b\": 2, \"c\": 3}\ninverted = {v: k for k, v in original.items()}\nprint(inverted)  # {1: 'a', 2: 'b', 3: 'c'}\n\n# Transform keys\ndata = {\"First Name\": \"Alice\", \"Last Name\": \"Smith\"}\nnormalized = {k.lower().replace(\" \", \"_\"): v for k, v in data.items()}\nprint(normalized)  # {'first_name': 'Alice', 'last_name': 'Smith'}\n\n# Conditional value assignment\nnumbers = range(-5, 6)\nsign_map = {n: (\"positive\" if n > 0 else \"negative\" if n < 0 else \"zero\") for n in numbers}\nprint(sign_map)  # {-5: 'negative', ..., 0: 'zero', ..., 5: 'positive'}\n\n# Nested comprehension: flatten nested dict\nnested = {\"math\": {\"Alice\": 95, \"Bob\": 87}, \"science\": {\"Alice\": 92, \"Bob\": 88}}\nflat = {f\"{subject}_{student}\": grade\n        for subject, students in nested.items()\n        for student, grade in students.items()}\nprint(flat)  # {'math_Alice': 95, 'math_Bob': 87, 'science_Alice': 92, 'science_Bob': 88}\n\n# Count character frequency\ntext = \"hello world\"\nfreq = {char: text.count(char) for char in set(text)}\nprint(freq)  # {'h': 1, 'e': 1, 'l': 3, 'o': 2, ...}",
+          "code_language": "python",
+          "key_points": [
+            "Syntax: {key: value for item in iterable if condition}",
+            "Can transform keys, values, or both",
+            "Can filter with if clause",
+            "Common for inverting dicts, normalizing keys, filtering entries",
+            "More readable than dict() with map/filter for simple transforms"
+          ],
+          "gotchas": [
+            "Inverting a dict loses values if multiple keys map to the same value",
+            "Dict comprehension evaluates key expression first, then value",
+            "Duplicate keys: last value wins (just like regular dict)",
+            "For complex logic, a regular for loop is more readable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dict comprehensions: `{key: value for item in iterable if condition}`. Used to transform, filter, and create dicts concisely.",
+          "pseudo_code": "",
+          "actual_code": "squares = {x: x**2 for x in range(5)}\nprint(squares)  # {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}\n\n# Filter\nd = {\"a\": 1, \"b\": 2, \"c\": 3}\nfiltered = {k: v for k, v in d.items() if v > 1}\nprint(filtered)  # {'b': 2, 'c': 3}",
+          "code_language": "python",
+          "key_points": [
+            "{key: value for item in iterable if condition}",
+            "Concise way to create/transform dicts"
+          ],
+          "gotchas": [
+            "Duplicate keys: last value wins"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you sort lists of complex objects in Python?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["sorting", "key-function", "custom-sort"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `sorted()` and `list.sort()` accept a `key` parameter -- a function applied to each element before comparison.\n\n**Common key functions:**\n- `key=len` -- sort by length\n- `key=str.lower` -- case-insensitive sort\n- `key=lambda x: x[1]` -- sort by second element\n- `key=lambda x: x.attribute` -- sort by attribute\n- `key=operator.itemgetter(1)` -- faster than lambda for items\n- `key=operator.attrgetter('name')` -- faster than lambda for attributes\n\n**Multi-key sort:**\n- Return a tuple: `key=lambda x: (x.grade, x.name)`\n- Use negative values for reverse on specific keys: `key=lambda x: (-x.grade, x.name)`\n\nPython's sort is **stable** (Timsort): equal elements maintain their original order.",
+          "pseudo_code": "sorted(data, key=func)  # sort by func(element)\nsorted(data, key=lambda x: x.attr)  # sort by attribute\nsorted(data, key=lambda x: (x.a, x.b))  # multi-key\nsorted(data, key=lambda x: (-x.a, x.b))  # desc a, asc b",
+          "actual_code": "# Sort by length\nwords = [\"banana\", \"apple\", \"fig\", \"cherry\"]\nprint(sorted(words, key=len))  # ['fig', 'apple', 'banana', 'cherry']\n\n# Case-insensitive sort\nwords = [\"Banana\", \"apple\", \"Cherry\"]\nprint(sorted(words, key=str.lower))  # ['apple', 'Banana', 'Cherry']\n\n# Sort tuples by second element\npairs = [(1, 'b'), (3, 'a'), (2, 'c')]\nprint(sorted(pairs, key=lambda x: x[1]))  # [(3, 'a'), (1, 'b'), (2, 'c')]\n\n# Sort dicts by value\nscores = {\"Alice\": 95, \"Bob\": 87, \"Charlie\": 92}\nsorted_names = sorted(scores, key=scores.get, reverse=True)\nprint(sorted_names)  # ['Alice', 'Charlie', 'Bob']\n\n# Sort objects by attribute\nclass Student:\n    def __init__(self, name, grade):\n        self.name = name\n        self.grade = grade\n    def __repr__(self):\n        return f\"Student({self.name}, {self.grade})\"\n\nstudents = [\n    Student(\"Alice\", 95),\n    Student(\"Bob\", 87),\n    Student(\"Charlie\", 92)\n]\n\nby_grade = sorted(students, key=lambda s: s.grade, reverse=True)\nprint(by_grade)  # [Student(Alice, 95), Student(Charlie, 92), Student(Bob, 87)]\n\n# Multi-key sort: grade desc, name asc\nstudents = [\n    Student(\"Alice\", 95),\n    Student(\"Bob\", 95),\n    Student(\"Charlie\", 87),\n    Student(\"David\", 87)\n]\nresult = sorted(students, key=lambda s: (-s.grade, s.name))\nprint(result)  # Alice(95), Bob(95), Charlie(87), David(87)\n\n# operator.itemgetter and attrgetter (faster than lambda)\nfrom operator import itemgetter, attrgetter\n\npairs = [(\"b\", 2), (\"a\", 3), (\"c\", 1)]\nprint(sorted(pairs, key=itemgetter(1)))  # by second element\nprint(sorted(pairs, key=itemgetter(0)))  # by first element\n\nresult = sorted(students, key=attrgetter('grade'), reverse=True)\nprint(result)\n\n# Stable sort: equal elements keep original order\ndata = [(\"a\", 2), (\"b\", 1), (\"c\", 2), (\"d\", 1)]\nresult = sorted(data, key=lambda x: x[1])\nprint(result)  # [('b', 1), ('d', 1), ('a', 2), ('c', 2)]\n# b before d, a before c -- original order preserved for equal keys",
+          "code_language": "python",
+          "key_points": [
+            "key= parameter takes a function applied to each element",
+            "lambda for simple custom keys, operator.itemgetter for tuples",
+            "Return tuple for multi-key sort",
+            "Negate numeric values for descending on specific keys",
+            "Python's sort is stable (Timsort) -- equal elements keep original order"
+          ],
+          "gotchas": [
+            "key function is called once per element, not per comparison",
+            "Cannot negate strings for reverse -- use two separate sorts instead",
+            "sort() returns None (in-place), sorted() returns a new list",
+            "Sorting mixed types (int and str) raises TypeError"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `key=` parameter for custom sorting. `key=len` for length, `key=lambda x: x[1]` for element access. Return tuples for multi-key sort. Python sort is stable.",
+          "pseudo_code": "",
+          "actual_code": "words = [\"banana\", \"fig\", \"cherry\"]\nprint(sorted(words, key=len))  # ['fig', 'banana', 'cherry']\n\npairs = [(1,'b'), (2,'a')]\nprint(sorted(pairs, key=lambda x: x[1]))  # [(2,'a'), (1,'b')]",
+          "code_language": "python",
+          "key_points": [
+            "key= takes a function applied to each element",
+            "Stable sort preserves order of equal elements"
+          ],
+          "gotchas": [
+            "sort() returns None, sorted() returns a new list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you remove duplicates from a list while preserving order?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["duplicates", "unique", "list", "order"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Several approaches with different trade-offs:\n\n**1. `dict.fromkeys()` (best for simple cases):**\nDicts preserve insertion order (Python 3.7+). `dict.fromkeys(lst)` creates a dict with list elements as keys (duplicates removed), then convert back.\n\n**2. `set()` with tracking (manual):**\nIterate and track seen items.\n\n**3. `set()` alone (does NOT preserve order):**\n`list(set(lst))` -- fast but loses order.\n\n**4. `more_itertools.unique_everseen()`:**\nThird-party, handles unhashable elements.\n\n**5. Pandas `Series.drop_duplicates()`:**\nFor data analysis contexts.",
+          "pseudo_code": "Preserving order:\n  list(dict.fromkeys(lst))  # simplest, Python 3.7+\n  seen = set(); [x for x in lst if not (x in seen or seen.add(x))]\n\nNot preserving order:\n  list(set(lst))  # fast but unordered",
+          "actual_code": "# Method 1: dict.fromkeys() -- simplest, preserves order\nlst = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]\nunique = list(dict.fromkeys(lst))\nprint(unique)  # [3, 1, 4, 5, 9, 2, 6]\n\n# Method 2: set with tracking\ndef unique_ordered(lst):\n    seen = set()\n    result = []\n    for item in lst:\n        if item not in seen:\n            seen.add(item)\n            result.append(item)\n    return result\n\nprint(unique_ordered([3, 1, 4, 1, 5, 9]))  # [3, 1, 4, 5, 9]\n\n# Method 3: set comprehension trick (clever but less readable)\nlst = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]\nseen = set()\nunique = [x for x in lst if not (x in seen or seen.add(x))]\nprint(unique)  # [3, 1, 4, 5, 9, 2, 6]\n\n# Method 4: set() alone -- does NOT preserve order\nlst = [3, 1, 4, 1, 5, 9]\nunique_unordered = list(set(lst))  # order not guaranteed\nprint(unique_unordered)\n\n# For unhashable elements (e.g., lists)\ndef unique_unhashable(lst):\n    result = []\n    for item in lst:\n        if item not in result:  # O(n) check each time\n            result.append(item)\n    return result\n\nprint(unique_unhashable([[1, 2], [3, 4], [1, 2]]))  # [[1, 2], [3, 4]]\n\n# Remove duplicates from list of dicts by key\nusers = [\n    {\"id\": 1, \"name\": \"Alice\"},\n    {\"id\": 2, \"name\": \"Bob\"},\n    {\"id\": 1, \"name\": \"Alice Duplicate\"}\n]\n\nseen_ids = set()\nunique_users = []\nfor user in users:\n    if user[\"id\"] not in seen_ids:\n        seen_ids.add(user[\"id\"])\n        unique_users.append(user)\nprint(unique_users)  # [{'id': 1, 'name': 'Alice'}, {'id': 2, 'name': 'Bob'}]\n\n# Performance comparison\nimport timeit\n\nlst = list(range(1000)) * 10  # 10000 items with dupes\n\nprint(\"dict.fromkeys:\", timeit.timeit(lambda: list(dict.fromkeys(lst)), number=1000))\nprint(\"set tracking:\", timeit.timeit(lambda: unique_ordered(lst), number=1000))\nprint(\"set (no order):\", timeit.timeit(lambda: list(set(lst)), number=1000))",
+          "code_language": "python",
+          "key_points": [
+            "dict.fromkeys(lst) is simplest for order-preserving dedup",
+            "set() tracking loop for more control",
+            "list(set(lst)) is fastest but loses order",
+            "For unhashable elements, use 'in' check (O(n^2))",
+            "dict.fromkeys() requires hashable elements"
+          ],
+          "gotchas": [
+            "list(set(lst)) does NOT preserve order",
+            "dict.fromkeys() only works with hashable elements",
+            "The set comprehension trick (seen.add(x)) relies on add() returning None",
+            "For very large lists, set-based approaches are much faster than O(n^2) 'in' checks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Preserve order:** `list(dict.fromkeys(lst))`. **No order:** `list(set(lst))`. For unhashable elements, use a tracking loop.",
+          "pseudo_code": "",
+          "actual_code": "lst = [3, 1, 4, 1, 5, 3]\n\n# Preserving order\nprint(list(dict.fromkeys(lst)))  # [3, 1, 4, 5]\n\n# Not preserving order\nprint(list(set(lst)))  # order varies",
+          "code_language": "python",
+          "key_points": [
+            "dict.fromkeys() preserves order",
+            "set() is faster but unordered"
+          ],
+          "gotchas": [
+            "list(set(lst)) does NOT preserve order"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is frozenset and when would you use it?",
+      "display_order": 16,
+      "difficulty": "beginner",
+      "tags": ["frozenset", "immutable-set", "hashable"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`frozenset` is an **immutable** version of `set`. Since it is immutable, it is **hashable** and can be used as:\n- A dictionary key\n- An element of another set\n- An element of a frozenset\n\nIt supports all read-only set operations (`|`, `&`, `-`, `^`, `in`, `len`) but NOT mutating operations (`add`, `remove`, `update`, etc.).\n\n**When to use:**\n- When you need a set as a dict key or set element\n- When you want to guarantee a set will not be modified\n- For representing fixed collections of unique items",
+          "pseudo_code": "frozenset([1, 2, 3])  # immutable set\n\nSupports: |, &, -, ^, in, len, iteration\nDoes NOT support: add, remove, update, discard\n\nHashable: can be dict key or set element",
+          "actual_code": "# Creation\nfs = frozenset([1, 2, 3, 2, 1])\nprint(fs)       # frozenset({1, 2, 3})\nprint(type(fs)) # <class 'frozenset'>\n\n# Immutable -- cannot modify\ntry:\n    fs.add(4)\nexcept AttributeError as e:\n    print(f\"Error: {e}\")  # 'frozenset' has no attribute 'add'\n\n# Set operations work (return new frozensets)\nfs1 = frozenset([1, 2, 3])\nfs2 = frozenset([2, 3, 4])\nprint(fs1 | fs2)   # frozenset({1, 2, 3, 4})\nprint(fs1 & fs2)   # frozenset({2, 3})\nprint(fs1 - fs2)   # frozenset({1})\nprint(fs1 ^ fs2)   # frozenset({1, 4})\n\n# As dict key\npermissions = {\n    frozenset([\"read\"]): \"viewer\",\n    frozenset([\"read\", \"write\"]): \"editor\",\n    frozenset([\"read\", \"write\", \"admin\"]): \"admin\"\n}\n\nuser_perms = frozenset([\"read\", \"write\"])\nprint(permissions[user_perms])  # 'editor'\n\n# As set element\ngroups = {\n    frozenset([1, 2]),\n    frozenset([3, 4]),\n    frozenset([1, 2])  # duplicate, ignored\n}\nprint(len(groups))  # 2\n\n# Convert between set and frozenset\ns = {1, 2, 3}\nfs = frozenset(s)\ns2 = set(fs)\nprint(s == s2)  # True\n\n# Membership and iteration\nfs = frozenset([10, 20, 30])\nprint(20 in fs)  # True\nfor item in fs:\n    print(item, end=\" \")\nprint()  # 10 20 30",
+          "code_language": "python",
+          "key_points": [
+            "frozenset is an immutable, hashable set",
+            "Can be used as dict key or set element",
+            "Supports all read-only set operations",
+            "Cannot add, remove, or modify elements",
+            "frozenset operations return new frozensets"
+          ],
+          "gotchas": [
+            "frozenset operations with regular sets return frozensets",
+            "An empty frozenset is frozenset(), not {}",
+            "frozenset([1,2]) == {1,2} is True (cross-type equality)",
+            "Cannot create a frozenset literal -- must use frozenset() constructor"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`frozenset` is an immutable set. Hashable, so it can be a dict key or set element. Supports read-only operations (`|`, `&`, `-`, `in`) but not mutation (`add`, `remove`).",
+          "pseudo_code": "",
+          "actual_code": "fs = frozenset([1, 2, 3])\n# fs.add(4)  # AttributeError!\n\n# As dict key\nd = {frozenset([\"read\", \"write\"]): \"editor\"}\nprint(d[frozenset([\"read\", \"write\"])])  # 'editor'",
+          "code_language": "python",
+          "key_points": [
+            "Immutable and hashable",
+            "Can be dict key or set element"
+          ],
+          "gotchas": [
+            "Cannot modify -- no add, remove, update"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the 'in' operator performance differ across data structures?",
+      "display_order": 17,
+      "difficulty": "beginner",
+      "tags": ["performance", "membership", "in-operator", "big-o"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `in` operator checks membership, but its performance varies dramatically by data structure:\n\n| Data Structure | `in` Performance | How it works |\n|----------------|------------------|-------------|\n| `list` | O(n) | Linear scan |\n| `tuple` | O(n) | Linear scan |\n| `set` | O(1) average | Hash lookup |\n| `frozenset` | O(1) average | Hash lookup |\n| `dict` | O(1) average (keys) | Hash lookup |\n| `str` | O(n) | Substring search |\n| `range` | O(1) | Mathematical check |\n\n**Practical advice:**\n- If you check membership repeatedly, convert a list to a set first\n- For 'x in dict', it checks keys, not values\n- `range()` has O(1) membership testing (mathematical, not iterative)\n- The O(1) for sets/dicts is average case; worst case is O(n) due to hash collisions",
+          "pseudo_code": "list/tuple: x in [1,2,...n] -> O(n) linear scan\nset/dict: x in {1,2,...n} -> O(1) hash lookup\nrange: x in range(n) -> O(1) mathematical\nstr: sub in string -> O(n*m) substring search\n\nTip: convert list to set for repeated membership checks",
+          "actual_code": "import timeit\n\n# Create test data\nn = 100_000\ndata_list = list(range(n))\ndata_tuple = tuple(range(n))\ndata_set = set(range(n))\ndata_dict = {i: True for i in range(n)}\ndata_range = range(n)\n\ntarget = n - 1  # worst case for linear search\n\n# Benchmark membership testing\nprint(\"Membership test for element at end:\")\nprint(f\"  list:  {timeit.timeit(lambda: target in data_list, number=100):.4f}s\")\nprint(f\"  tuple: {timeit.timeit(lambda: target in data_tuple, number=100):.4f}s\")\nprint(f\"  set:   {timeit.timeit(lambda: target in data_set, number=100):.6f}s\")\nprint(f\"  dict:  {timeit.timeit(lambda: target in data_dict, number=100):.6f}s\")\nprint(f\"  range: {timeit.timeit(lambda: target in data_range, number=100):.6f}s\")\n\n# Practical: repeated lookups\ndef find_common_bad(list1, list2):\n    \"\"\"O(n*m) -- checks membership in list\"\"\"\n    return [x for x in list1 if x in list2]\n\ndef find_common_good(list1, list2):\n    \"\"\"O(n+m) -- convert to set first\"\"\"\n    set2 = set(list2)\n    return [x for x in list1 if x in set2]\n\na = list(range(10000))\nb = list(range(5000, 15000))\n\nprint(f\"\\nFinding common elements:\")\nprint(f\"  list lookup: {timeit.timeit(lambda: find_common_bad(a, b), number=10):.4f}s\")\nprint(f\"  set lookup:  {timeit.timeit(lambda: find_common_good(a, b), number=10):.4f}s\")\n\n# range has O(1) membership\nprint(999_999_999 in range(1_000_000_000))  # True (instant, O(1))\n\n# str 'in' checks substring\nprint(\"hello\" in \"say hello world\")  # True (substring search)\nprint(\"xyz\" in \"say hello world\")    # False",
+          "code_language": "python",
+          "key_points": [
+            "set/dict/frozenset: O(1) average membership testing",
+            "list/tuple: O(n) linear scan",
+            "range: O(1) mathematical check (not iteration)",
+            "Convert list to set for repeated membership checks",
+            "str 'in' does substring search, not element search"
+          ],
+          "gotchas": [
+            "O(1) for sets/dicts is average case -- worst case is O(n) with hash collisions",
+            "dict 'in' checks keys, not values",
+            "range O(1) only works for integer membership",
+            "Creating a set from a list is O(n) -- only worthwhile if you check multiple times"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`in` on sets/dicts is O(1), on lists/tuples is O(n). Convert lists to sets for repeated membership checks. `range()` also has O(1) membership.",
+          "pseudo_code": "",
+          "actual_code": "# O(n) -- slow for large lists\nprint(99999 in list(range(100000)))   # slow\n\n# O(1) -- fast for sets\nprint(99999 in set(range(100000)))    # fast\n\n# O(1) -- range uses math\nprint(99999 in range(100000))         # instant",
+          "code_language": "python",
+          "key_points": [
+            "set/dict O(1), list/tuple O(n)",
+            "Convert to set for repeated lookups"
+          ],
+          "gotchas": [
+            "Creating a set is O(n) -- only saves time with multiple lookups"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you merge two dictionaries in Python?",
+      "display_order": 18,
+      "difficulty": "beginner",
+      "tags": ["dict", "merge", "update"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Several ways to merge dictionaries, from oldest to newest:\n\n**1. `d1.update(d2)`** -- modifies d1 in-place\n**2. `{**d1, **d2}`** -- unpacking (Python 3.5+)\n**3. `d1 | d2`** -- merge operator (Python 3.9+)\n**4. `d1 |= d2`** -- in-place merge (Python 3.9+)\n**5. `dict(d1, **d2)`** -- constructor (keys must be strings)\n**6. `ChainMap(d2, d1)`** -- lazy virtual merge\n\nIn all cases, if both dicts have the same key, the **right-side value wins** (d2 overwrites d1).",
+          "pseudo_code": "d1.update(d2)     -- modifies d1 in-place, d2 values win\n{**d1, **d2}      -- new dict, d2 values win\nd1 | d2           -- new dict, d2 values win (3.9+)\nd1 |= d2          -- in-place merge (3.9+)\n\nAll: right side wins on key conflicts",
+          "actual_code": "d1 = {\"a\": 1, \"b\": 2}\nd2 = {\"b\": 3, \"c\": 4}\n\n# Method 1: update() -- modifies d1 in-place\nmerged = d1.copy()\nmerged.update(d2)\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Method 2: ** unpacking (Python 3.5+)\nmerged = {**d1, **d2}\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Can merge more than two\nd3 = {\"d\": 5}\nmerged = {**d1, **d2, **d3}\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4, 'd': 5}\n\n# Method 3: | operator (Python 3.9+)\nmerged = d1 | d2\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Method 4: |= in-place (Python 3.9+)\nd1_copy = d1.copy()\nd1_copy |= d2\nprint(d1_copy)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Deep merge (nested dicts)\ndef deep_merge(d1, d2):\n    result = d1.copy()\n    for key, value in d2.items():\n        if key in result and isinstance(result[key], dict) and isinstance(value, dict):\n            result[key] = deep_merge(result[key], value)\n        else:\n            result[key] = value\n    return result\n\nconfig_default = {\"db\": {\"host\": \"localhost\", \"port\": 5432}, \"debug\": False}\nconfig_override = {\"db\": {\"port\": 3306}, \"debug\": True}\n\nmerged = deep_merge(config_default, config_override)\nprint(merged)  # {'db': {'host': 'localhost', 'port': 3306}, 'debug': True}\n\n# ChainMap -- lazy merge (doesn't create new dict)\nfrom collections import ChainMap\nchain = ChainMap(d2, d1)  # d2 checked first\nprint(chain[\"a\"])  # 1 (from d1)\nprint(chain[\"b\"])  # 3 (from d2, found first)\nprint(dict(chain))  # {'a': 1, 'b': 3, 'c': 4}",
+          "code_language": "python",
+          "key_points": [
+            "| operator (Python 3.9+) is the cleanest syntax",
+            "{**d1, **d2} works in Python 3.5+",
+            "update() modifies in-place",
+            "Right side wins on key conflicts",
+            "For nested dicts, implement deep_merge manually"
+          ],
+          "gotchas": [
+            "update() modifies the dict in-place and returns None",
+            "{**d1, **d2} creates a new dict (does not modify originals)",
+            "Shallow merge only -- nested dicts are not recursively merged",
+            "dict(d1, **d2) only works when d2 keys are strings"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Python 3.9+:** `d1 | d2` (new dict), `d1 |= d2` (in-place). **3.5+:** `{**d1, **d2}`. **Any version:** `d1.update(d2)` (in-place). Right side wins on conflicts.",
+          "pseudo_code": "",
+          "actual_code": "d1 = {\"a\": 1, \"b\": 2}\nd2 = {\"b\": 3, \"c\": 4}\n\nmerged = {**d1, **d2}  # {'a': 1, 'b': 3, 'c': 4}\n# or Python 3.9+:\n# merged = d1 | d2",
+          "code_language": "python",
+          "key_points": [
+            "| operator in 3.9+, ** unpacking in 3.5+",
+            "Right side wins on conflicts"
+          ],
+          "gotchas": [
+            "update() modifies in-place, | creates new dict"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you flatten a nested list in Python?",
+      "display_order": 19,
+      "difficulty": "beginner",
+      "tags": ["flatten", "nested-list", "itertools"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Flattening a nested list means converting `[[1,2],[3,4]]` to `[1,2,3,4]`.\n\n**For one level deep:**\n1. List comprehension: `[x for sub in nested for x in sub]`\n2. `itertools.chain.from_iterable(nested)`\n3. `sum(nested, [])` (slow, creates many intermediates)\n\n**For arbitrary depth:**\n4. Recursive function\n5. `collections.abc` + recursion for robustness\n\nThe list comprehension is the most Pythonic for single-level flattening.",
+          "pseudo_code": "One level: [x for sub in nested for x in sub]\nOne level: itertools.chain.from_iterable(nested)\n\nArbitrary depth: recursive function\n  if element is list: flatten recursively\n  else: yield element",
+          "actual_code": "# One level deep -- list comprehension\nnested = [[1, 2], [3, 4], [5, 6]]\nflat = [x for sub in nested for x in sub]\nprint(flat)  # [1, 2, 3, 4, 5, 6]\n\n# One level -- itertools.chain\nfrom itertools import chain\nflat = list(chain.from_iterable(nested))\nprint(flat)  # [1, 2, 3, 4, 5, 6]\n\n# One level -- sum (slow, avoid for large lists)\nflat = sum(nested, [])\nprint(flat)  # [1, 2, 3, 4, 5, 6]\n\n# Arbitrary depth -- recursive generator\ndef flatten(lst):\n    for item in lst:\n        if isinstance(item, (list, tuple)):\n            yield from flatten(item)\n        else:\n            yield item\n\ndeep = [1, [2, [3, [4, 5]], 6], 7]\nprint(list(flatten(deep)))  # [1, 2, 3, 4, 5, 6, 7]\n\n# More robust version using Iterable ABC\nfrom collections.abc import Iterable\n\ndef flatten_all(lst, ignore_types=(str, bytes)):\n    for item in lst:\n        if isinstance(item, Iterable) and not isinstance(item, ignore_types):\n            yield from flatten_all(item, ignore_types)\n        else:\n            yield item\n\nmixed = [1, \"hello\", [2, [3, \"world\"]], (4, 5)]\nprint(list(flatten_all(mixed)))  # [1, 'hello', 2, 3, 'world', 4, 5]\n\n# Flatten dict of lists\ndata = {\"a\": [1, 2], \"b\": [3, 4], \"c\": [5]}\nall_values = [v for values in data.values() for v in values]\nprint(all_values)  # [1, 2, 3, 4, 5]\n\n# Performance comparison for single level\nimport timeit\n\nnested = [[i] for i in range(10000)]\n\ncomp_time = timeit.timeit(lambda: [x for sub in nested for x in sub], number=1000)\nchain_time = timeit.timeit(lambda: list(chain.from_iterable(nested)), number=1000)\nprint(f\"Comprehension: {comp_time:.4f}s\")\nprint(f\"chain: {chain_time:.4f}s\")",
+          "code_language": "python",
+          "key_points": [
+            "List comprehension for one-level: [x for sub in nested for x in sub]",
+            "itertools.chain.from_iterable for one-level (more efficient)",
+            "Recursive generator with yield from for arbitrary depth",
+            "Exclude strings from flattening (they are iterable but should stay intact)",
+            "Avoid sum(nested, []) for large lists -- O(n^2)"
+          ],
+          "gotchas": [
+            "sum(nested, []) is O(n^2) because it creates intermediate lists",
+            "Strings are iterable -- recursive flatten must exclude them or it infinite-loops",
+            "Deep recursion can hit Python's recursion limit (default 1000)",
+            "Reading order: [x for sub in nested for x in sub] -- outer loop first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "One level: `[x for sub in nested for x in sub]` or `itertools.chain.from_iterable()`. Arbitrary depth: recursive generator with `yield from`.",
+          "pseudo_code": "",
+          "actual_code": "nested = [[1, 2], [3, 4], [5, 6]]\nflat = [x for sub in nested for x in sub]\nprint(flat)  # [1, 2, 3, 4, 5, 6]\n\nfrom itertools import chain\nflat = list(chain.from_iterable(nested))\nprint(flat)  # [1, 2, 3, 4, 5, 6]",
+          "code_language": "python",
+          "key_points": [
+            "Comprehension: [x for sub in nested for x in sub]",
+            "chain.from_iterable for performance"
+          ],
+          "gotchas": [
+            "Avoid sum(nested, []) -- it's O(n^2)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create and work with nested data structures in Python?",
+      "display_order": 20,
+      "difficulty": "beginner",
+      "tags": ["nested", "complex-structures", "json-like"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Nested data structures are combinations of lists, dicts, tuples, and sets within each other. They are very common in Python, especially when working with JSON data, configurations, and APIs.\n\n**Common patterns:**\n1. **List of dicts:** Records/rows of data\n2. **Dict of lists:** Grouped data\n3. **Dict of dicts:** Nested configuration, tree structures\n4. **List of lists:** Matrix, grid, table\n\n**Access:** Chain indexing: `data['key'][0]['nested_key']`\n\n**Safe access:** Use `.get()` for dicts and try/except for potential errors.\n\n**JSON-like structures** are the most common nested pattern since Python dicts map naturally to JSON objects.",
+          "pseudo_code": "List of dicts: [{\"name\": \"Alice\", \"age\": 30}, ...]\nDict of lists: {\"names\": [\"Alice\", \"Bob\"], \"ages\": [30, 25]}\nDict of dicts: {\"users\": {\"alice\": {\"age\": 30}}}\nList of lists: [[1, 2], [3, 4]] (matrix)\n\nAccess: data['users']['alice']['age']\nSafe: data.get('users', {}).get('alice', {}).get('age', None)",
+          "actual_code": "# List of dicts (most common: records/rows)\nusers = [\n    {\"name\": \"Alice\", \"age\": 30, \"skills\": [\"Python\", \"SQL\"]},\n    {\"name\": \"Bob\", \"age\": 25, \"skills\": [\"JavaScript\", \"React\"]},\n    {\"name\": \"Charlie\", \"age\": 35, \"skills\": [\"Python\", \"Go\"]}\n]\n\n# Access nested data\nprint(users[0][\"name\"])         # 'Alice'\nprint(users[1][\"skills\"][0])    # 'JavaScript'\n\n# Query: find users who know Python\npython_users = [u[\"name\"] for u in users if \"Python\" in u[\"skills\"]]\nprint(python_users)  # ['Alice', 'Charlie']\n\n# Dict of dicts (configuration, tree)\nconfig = {\n    \"database\": {\n        \"host\": \"localhost\",\n        \"port\": 5432,\n        \"credentials\": {\n            \"username\": \"admin\",\n            \"password\": \"secret\"\n        }\n    },\n    \"server\": {\n        \"host\": \"0.0.0.0\",\n        \"port\": 8080\n    }\n}\n\nprint(config[\"database\"][\"credentials\"][\"username\"])  # 'admin'\n\n# Safe nested access\ndef safe_get(data, *keys, default=None):\n    for key in keys:\n        if isinstance(data, dict):\n            data = data.get(key, default)\n        elif isinstance(data, (list, tuple)) and isinstance(key, int):\n            try:\n                data = data[key]\n            except IndexError:\n                return default\n        else:\n            return default\n    return data\n\nprint(safe_get(config, \"database\", \"port\"))            # 5432\nprint(safe_get(config, \"database\", \"missing\", default=\"N/A\"))  # 'N/A'\nprint(safe_get(config, \"nonexistent\", \"key\", default=None))   # None\n\n# Building nested structures\nfrom collections import defaultdict\n\n# Auto-vivifying dict (nested defaultdict)\ndef tree():\n    return defaultdict(tree)\n\nt = tree()\nt[\"users\"][\"alice\"][\"age\"] = 30\nt[\"users\"][\"bob\"][\"age\"] = 25\nprint(t[\"users\"][\"alice\"][\"age\"])  # 30\n\n# List of lists (matrix)\nmatrix = [\n    [1, 2, 3],\n    [4, 5, 6],\n    [7, 8, 9]\n]\n\n# Transpose\ntransposed = list(zip(*matrix))\nprint(transposed)  # [(1, 4, 7), (2, 5, 8), (3, 6, 9)]\n\n# Working with JSON\nimport json\n\njson_string = '{\"name\": \"Alice\", \"hobbies\": [\"reading\", \"coding\"]}'\ndata = json.loads(json_string)\nprint(data[\"hobbies\"][0])  # 'reading'\n\n# Convert back to JSON\nprint(json.dumps(data, indent=2))",
+          "code_language": "python",
+          "key_points": [
+            "Chain indexing for nested access: data['key'][0]['field']",
+            "Use .get() chains for safe nested dict access",
+            "List of dicts is the most common pattern (like database rows)",
+            "defaultdict(tree) creates auto-vivifying nested dicts",
+            "json.loads/dumps for JSON <-> Python conversion"
+          ],
+          "gotchas": [
+            "Deep nesting makes code hard to read -- consider flattening or using classes",
+            "Shallow copy of nested structures shares inner objects",
+            "JSON keys are always strings -- int keys become strings after json.dumps/loads",
+            "Modifying nested data in place can cause unexpected side effects with shared references"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Nested structures combine lists, dicts, tuples. Access with chained indexing: `data['key'][0]['field']`. Use `.get()` for safe access. List of dicts is the most common pattern.",
+          "pseudo_code": "",
+          "actual_code": "users = [{\"name\": \"Alice\", \"skills\": [\"Python\"]}]\nprint(users[0][\"skills\"][0])  # 'Python'\n\n# Safe access\nconfig = {\"db\": {\"port\": 5432}}\nprint(config.get(\"db\", {}).get(\"port\", 3306))  # 5432\nprint(config.get(\"cache\", {}).get(\"port\", 6379))  # 6379",
+          "code_language": "python",
+          "key_points": [
+            "Chain indexing for access",
+            "Use .get() chains for safety"
+          ],
+          "gotchas": [
+            "Shallow copy shares nested objects"
+          ]
+        }
+      ]
+    }
+  ]
+}

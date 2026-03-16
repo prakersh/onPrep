@@ -1,0 +1,746 @@
+{
+  "concept_slug": "rest-apis-http",
+  "questions": [
+    {
+      "title": "What are the main HTTP methods and when should you use each one?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["http", "methods", "rest"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "HTTP defines several methods (verbs) that indicate the desired action on a resource:\n\n| Method | Purpose | Idempotent | Safe | Has Body |\n|--------|---------|------------|------|----------|\n| **GET** | Retrieve a resource | Yes | Yes | No |\n| **POST** | Create a new resource | No | No | Yes |\n| **PUT** | Replace an entire resource | Yes | No | Yes |\n| **PATCH** | Partially update a resource | No* | No | Yes |\n| **DELETE** | Remove a resource | Yes | No | Optional |\n| **HEAD** | Like GET but returns only headers | Yes | Yes | No |\n| **OPTIONS** | Returns supported methods for a URL | Yes | Yes | No |\n\n**Idempotent** means making the same request multiple times has the same effect as making it once. GET, PUT, DELETE are idempotent. POST is not (each call may create a new resource).\n\n**Safe** means the request does not modify server state. GET, HEAD, OPTIONS are safe.\n\n*PATCH is technically not guaranteed idempotent by the spec, though implementations often make it so.",
+          "pseudo_code": "GET /users          -> List all users\nGET /users/123      -> Get user 123\nPOST /users         -> Create a new user\nPUT /users/123      -> Replace user 123 entirely\nPATCH /users/123    -> Update specific fields of user 123\nDELETE /users/123   -> Delete user 123\nHEAD /users         -> Check if /users exists (headers only)\nOPTIONS /users      -> What methods does /users support?",
+          "actual_code": "import requests\n\nbase_url = 'https://api.example.com'\n\n# GET - Retrieve\nresponse = requests.get(f'{base_url}/users')\nusers = response.json()\n\nresponse = requests.get(f'{base_url}/users/123')\nuser = response.json()\n\n# POST - Create\nresponse = requests.post(f'{base_url}/users', json={\n    'name': 'Alice',\n    'email': 'alice@example.com'\n})\nnew_user = response.json()  # Includes generated id\n\n# PUT - Full replace\nresponse = requests.put(f'{base_url}/users/123', json={\n    'name': 'Alice Updated',\n    'email': 'alice_new@example.com',\n    'age': 30  # Must include ALL fields\n})\n\n# PATCH - Partial update\nresponse = requests.patch(f'{base_url}/users/123', json={\n    'name': 'Alice Patched'  # Only the fields to change\n})\n\n# DELETE - Remove\nresponse = requests.delete(f'{base_url}/users/123')\n\n# HEAD - Headers only (no body)\nresponse = requests.head(f'{base_url}/users')\nprint(response.headers['Content-Length'])\n\n# OPTIONS - Supported methods\nresponse = requests.options(f'{base_url}/users')\nprint(response.headers.get('Allow'))  # e.g., 'GET, POST, OPTIONS'",
+          "code_language": "python",
+          "key_points": [
+            "GET retrieves data (safe, idempotent); POST creates (not idempotent)",
+            "PUT replaces the full resource; PATCH updates specific fields",
+            "DELETE removes a resource; idempotent (deleting twice returns 404 the second time)",
+            "HEAD is like GET but returns only headers (useful for checking existence or size)",
+            "Idempotent means repeated requests have the same effect"
+          ],
+          "gotchas": [
+            "PUT requires sending the complete resource; omitting a field may set it to null",
+            "POST is not idempotent: retrying a failed POST may create duplicate resources",
+            "Some APIs misuse POST for everything; proper method usage improves cacheability and semantics"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "GET retrieves, POST creates, PUT replaces entirely, PATCH updates partially, DELETE removes. GET/PUT/DELETE are idempotent (safe to retry). POST is not idempotent. HEAD returns headers only. OPTIONS lists supported methods.",
+          "pseudo_code": "",
+          "actual_code": "import requests\n\nrequests.get('https://api.example.com/users')           # List/retrieve\nrequests.post('https://api.example.com/users', json={})  # Create\nrequests.put('https://api.example.com/users/1', json={}) # Full replace\nrequests.patch('https://api.example.com/users/1', json={}) # Partial update\nrequests.delete('https://api.example.com/users/1')       # Delete",
+          "code_language": "python",
+          "key_points": [
+            "GET/PUT/DELETE are idempotent; POST is not",
+            "PUT replaces entire resource; PATCH updates specific fields"
+          ],
+          "gotchas": [
+            "PUT omitting a field may null it; always send the complete resource"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are HTTP status codes and which ones should you know for APIs?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["http", "status-codes", "rest"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "HTTP status codes are three-digit numbers grouped by category:\n\n**1xx Informational**\n- `100 Continue` - Server received headers, client should send body\n\n**2xx Success**\n- `200 OK` - Standard success (GET, PUT, PATCH)\n- `201 Created` - Resource created successfully (POST)\n- `204 No Content` - Success with no body (DELETE)\n- `202 Accepted` - Request accepted for async processing\n\n**3xx Redirection**\n- `301 Moved Permanently` - Resource URL changed permanently\n- `302 Found` - Temporary redirect\n- `304 Not Modified` - Cached version is still valid\n\n**4xx Client Errors**\n- `400 Bad Request` - Malformed request or validation error\n- `401 Unauthorized` - Authentication required\n- `403 Forbidden` - Authenticated but not authorized\n- `404 Not Found` - Resource does not exist\n- `405 Method Not Allowed` - HTTP method not supported\n- `409 Conflict` - State conflict (e.g., duplicate resource)\n- `422 Unprocessable Entity` - Validation failed (well-formed but semantically wrong)\n- `429 Too Many Requests` - Rate limit exceeded\n\n**5xx Server Errors**\n- `500 Internal Server Error` - Unhandled server exception\n- `502 Bad Gateway` - Upstream server error\n- `503 Service Unavailable` - Server overloaded or in maintenance\n- `504 Gateway Timeout` - Upstream server timed out",
+          "pseudo_code": "2xx = Success (200 OK, 201 Created, 204 No Content)\n3xx = Redirect (301 Permanent, 302 Temporary, 304 Cached)\n4xx = Client error (400 Bad Request, 401 Unauth, 403 Forbidden, 404 Not Found)\n5xx = Server error (500 Internal, 502 Bad Gateway, 503 Unavailable)",
+          "actual_code": "import requests\n\nresponse = requests.get('https://api.example.com/users/123')\n\n# Check status code\nprint(response.status_code)     # 200\nprint(response.reason)          # 'OK'\nprint(response.ok)              # True (status < 400)\n\n# Raise an exception for 4xx/5xx status codes\nresponse.raise_for_status()  # Raises HTTPError if status >= 400\n\n# Common pattern: handle different status codes\ndef get_user(user_id):\n    response = requests.get(f'https://api.example.com/users/{user_id}')\n\n    if response.status_code == 200:\n        return response.json()\n    elif response.status_code == 404:\n        return None  # User not found\n    elif response.status_code == 401:\n        raise PermissionError('Authentication required')\n    elif response.status_code == 429:\n        retry_after = int(response.headers.get('Retry-After', 60))\n        raise Exception(f'Rate limited. Retry after {retry_after}s')\n    else:\n        response.raise_for_status()  # Raise for unexpected errors\n\n# Flask API returning appropriate status codes\nfrom flask import Flask, jsonify, request\n\napp = Flask(__name__)\n\n@app.route('/users', methods=['POST'])\ndef create_user():\n    data = request.get_json()\n    if not data or 'name' not in data:\n        return jsonify({'error': 'name is required'}), 400\n    # ... create user ...\n    return jsonify({'id': 1, 'name': data['name']}), 201\n\n@app.route('/users/<int:user_id>', methods=['DELETE'])\ndef delete_user(user_id):\n    # ... delete user ...\n    return '', 204  # No content",
+          "code_language": "python",
+          "key_points": [
+            "2xx = success, 3xx = redirect, 4xx = client error, 5xx = server error",
+            "201 Created for POST success; 204 No Content for DELETE success",
+            "401 = not authenticated; 403 = authenticated but not authorized",
+            "response.raise_for_status() raises HTTPError for 4xx/5xx",
+            "429 Too Many Requests often includes a Retry-After header"
+          ],
+          "gotchas": [
+            "401 means 'not authenticated' despite being named 'Unauthorized'",
+            "Some APIs return 200 for everything and put the actual status in the body (bad practice)",
+            "404 may mean the resource does not exist OR the URL is wrong; check the endpoint"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Status codes: 2xx = success (200 OK, 201 Created, 204 No Content), 4xx = client error (400 Bad Request, 401 Unauth, 403 Forbidden, 404 Not Found, 429 Rate Limited), 5xx = server error (500, 502, 503). Use `response.raise_for_status()` to auto-raise on errors.",
+          "pseudo_code": "",
+          "actual_code": "response = requests.get('https://api.example.com/users/1')\nprint(response.status_code)  # 200\nresponse.raise_for_status()  # Raises HTTPError for 4xx/5xx\n\n# Return proper codes in Flask\nreturn jsonify(user), 200      # OK\nreturn jsonify(user), 201      # Created\nreturn '', 204                 # No Content (DELETE)\nreturn jsonify(error), 400     # Bad Request\nreturn jsonify(error), 404     # Not Found",
+          "code_language": "python",
+          "key_points": [
+            "200 OK, 201 Created, 204 No Content for success; 400/401/403/404 for client errors",
+            "response.raise_for_status() raises on 4xx/5xx"
+          ],
+          "gotchas": [
+            "401 means not authenticated, not 'not authorized' (that is 403)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use the requests library to make HTTP requests in Python?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["requests", "http", "api-client"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `requests` library is the standard Python library for making HTTP requests. It provides a simple, elegant API for all HTTP methods.\n\n**Key features**:\n- Simple API: `requests.get()`, `.post()`, `.put()`, `.patch()`, `.delete()`\n- Automatic JSON encoding/decoding with `json=` parameter\n- Support for headers, query parameters, form data, file uploads\n- Session objects for persistent settings and cookies\n- Timeout handling, redirect following, SSL verification\n\n**Response object attributes**:\n- `.status_code` - HTTP status code\n- `.json()` - Parse response body as JSON\n- `.text` - Response body as text\n- `.content` - Response body as bytes\n- `.headers` - Response headers (case-insensitive dict)\n- `.url` - Final URL (after redirects)\n- `.elapsed` - Time taken for the request",
+          "pseudo_code": "1. import requests\n2. Make a request: response = requests.get(url, params=, headers=)\n3. Check response.status_code or response.ok\n4. Parse body: response.json() or response.text\n5. Handle errors with response.raise_for_status()",
+          "actual_code": "import requests\n\n# GET with query parameters\nresponse = requests.get(\n    'https://api.example.com/users',\n    params={'page': 1, 'limit': 10, 'active': True},\n    headers={'Accept': 'application/json'}\n)\nprint(response.url)  # https://api.example.com/users?page=1&limit=10&active=True\nusers = response.json()\n\n# POST with JSON body\nresponse = requests.post(\n    'https://api.example.com/users',\n    json={'name': 'Alice', 'email': 'alice@example.com'},\n    headers={'Content-Type': 'application/json'}\n)\nnew_user = response.json()\n\n# POST with form data\nresponse = requests.post(\n    'https://api.example.com/login',\n    data={'username': 'alice', 'password': 'secret'}  # form-encoded\n)\n\n# PUT with full replacement\nresponse = requests.put(\n    'https://api.example.com/users/123',\n    json={'name': 'Alice Updated', 'email': 'alice@example.com', 'age': 30}\n)\n\n# PATCH with partial update\nresponse = requests.patch(\n    'https://api.example.com/users/123',\n    json={'name': 'Alice Patched'}\n)\n\n# DELETE\nresponse = requests.delete('https://api.example.com/users/123')\n\n# File upload\nwith open('photo.jpg', 'rb') as f:\n    response = requests.post(\n        'https://api.example.com/upload',\n        files={'image': ('photo.jpg', f, 'image/jpeg')}\n    )\n\n# Response inspection\nprint(response.status_code)          # 200\nprint(response.headers['Content-Type'])  # application/json\nprint(response.elapsed.total_seconds())  # 0.342\nprint(response.text)                 # Raw text body\nprint(response.content)              # Raw bytes body\nprint(response.encoding)             # utf-8\n\n# Error handling\ntry:\n    response.raise_for_status()\nexcept requests.exceptions.HTTPError as e:\n    print(f'HTTP error: {e}')\nexcept requests.exceptions.ConnectionError:\n    print('Connection failed')\nexcept requests.exceptions.Timeout:\n    print('Request timed out')",
+          "code_language": "python",
+          "key_points": [
+            "json= auto-serializes dict to JSON and sets Content-Type; data= sends form-encoded",
+            "params= adds query string parameters to the URL",
+            ".json() parses response body; .text for raw string; .content for bytes",
+            "response.raise_for_status() raises HTTPError for 4xx/5xx",
+            "files= for multipart file uploads"
+          ],
+          "gotchas": [
+            "json= and data= are mutually exclusive; using both causes unexpected behavior",
+            "response.json() raises ValueError if the body is not valid JSON; wrap in try/except",
+            "requests does not set a default timeout; always pass timeout= to avoid hanging"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `requests.get(url, params=)` for GET, `requests.post(url, json=)` for POST with JSON body, `data=` for form data. Access response with `.json()`, `.text`, `.status_code`. Always use `timeout=` and `raise_for_status()`.",
+          "pseudo_code": "",
+          "actual_code": "import requests\n\n# GET with params\nresp = requests.get('https://api.example.com/users', params={'page': 1}, timeout=10)\nusers = resp.json()\n\n# POST with JSON\nresp = requests.post('https://api.example.com/users',\n                     json={'name': 'Alice'}, timeout=10)\nresp.raise_for_status()\nnew_user = resp.json()",
+          "code_language": "python",
+          "key_points": [
+            "json= for JSON body; data= for form data; params= for query string",
+            "Always set timeout= and use raise_for_status()"
+          ],
+          "gotchas": [
+            "Without timeout=, requests can hang indefinitely"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle headers and authentication in HTTP requests?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["http", "headers", "authentication", "requests"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Headers** are key-value metadata sent with HTTP requests and responses. Common request headers include `Authorization`, `Content-Type`, `Accept`, `User-Agent`.\n\n**Authentication methods**:\n\n1. **Basic Auth**: Base64-encoded `username:password` in the Authorization header. Use `requests`' built-in support.\n2. **Bearer Token**: A token (JWT, OAuth, API key) in the Authorization header.\n3. **API Key**: Sent as a header (e.g., `X-API-Key`) or as a query parameter.\n4. **OAuth 2.0**: Token-based auth flow. Typically involves getting a token from an auth server first.\n\nThe `requests` library supports all of these through the `headers=` parameter, `auth=` parameter, or Session objects.",
+          "pseudo_code": "1. Set custom headers with headers={'Header-Name': 'value'}\n2. For Basic Auth: use auth=('username', 'password')\n3. For Bearer tokens: set Authorization header\n4. For OAuth: get token first, then send as Bearer\n5. Use Session() to persist auth across multiple requests",
+          "actual_code": "import requests\nfrom requests.auth import HTTPBasicAuth\n\n# Custom headers\nresponse = requests.get(\n    'https://api.example.com/data',\n    headers={\n        'Accept': 'application/json',\n        'User-Agent': 'MyApp/1.0',\n        'X-Custom-Header': 'some-value',\n    }\n)\n\n# Basic Authentication\nresponse = requests.get(\n    'https://api.example.com/protected',\n    auth=('username', 'password')  # Shorthand for HTTPBasicAuth\n)\n# Or explicitly:\nresponse = requests.get(\n    'https://api.example.com/protected',\n    auth=HTTPBasicAuth('username', 'password')\n)\n\n# Bearer Token (JWT, OAuth)\ntoken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'\nresponse = requests.get(\n    'https://api.example.com/me',\n    headers={'Authorization': f'Bearer {token}'}\n)\n\n# API Key in header\nresponse = requests.get(\n    'https://api.example.com/data',\n    headers={'X-API-Key': 'your-api-key-here'}\n)\n\n# API Key in query parameter\nresponse = requests.get(\n    'https://api.example.com/data',\n    params={'api_key': 'your-api-key-here'}\n)\n\n# OAuth 2.0 token flow\ndef get_oauth_token(client_id, client_secret):\n    response = requests.post(\n        'https://auth.example.com/oauth/token',\n        data={\n            'grant_type': 'client_credentials',\n            'client_id': client_id,\n            'client_secret': client_secret,\n        }\n    )\n    response.raise_for_status()\n    return response.json()['access_token']\n\ntoken = get_oauth_token('my_client_id', 'my_client_secret')\nresponse = requests.get(\n    'https://api.example.com/resource',\n    headers={'Authorization': f'Bearer {token}'}\n)\n\n# Persistent auth with Session\nsession = requests.Session()\nsession.headers.update({\n    'Authorization': f'Bearer {token}',\n    'Accept': 'application/json',\n})\n\n# All requests through this session use the same headers\nusers = session.get('https://api.example.com/users').json()\norders = session.get('https://api.example.com/orders').json()\nsession.close()",
+          "code_language": "python",
+          "key_points": [
+            "auth=('user', 'pass') for Basic Auth; headers={'Authorization': 'Bearer token'} for tokens",
+            "Session objects persist headers, cookies, and auth across multiple requests",
+            "API keys can go in headers (X-API-Key) or query params (params={'api_key': ...})",
+            "OAuth 2.0 typically requires a token exchange step before making API calls",
+            "Response headers are case-insensitive: response.headers['content-type'] works"
+          ],
+          "gotchas": [
+            "Never hardcode credentials in source code; use environment variables or secret managers",
+            "Basic Auth sends credentials base64-encoded (not encrypted); always use HTTPS",
+            "Bearer tokens expire; implement token refresh logic for long-running applications"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set headers with `headers={}`. Use `auth=('user', 'pass')` for Basic Auth, `headers={'Authorization': 'Bearer token'}` for tokens. Use `Session()` to persist auth across requests.",
+          "pseudo_code": "",
+          "actual_code": "import requests\n\n# Basic Auth\nresp = requests.get(url, auth=('user', 'pass'))\n\n# Bearer Token\nresp = requests.get(url, headers={'Authorization': f'Bearer {token}'})\n\n# Session for persistent auth\nsession = requests.Session()\nsession.headers['Authorization'] = f'Bearer {token}'\nresp = session.get(url)",
+          "code_language": "python",
+          "key_points": [
+            "auth= for Basic; Authorization header for Bearer tokens",
+            "Session persists headers and cookies across calls"
+          ],
+          "gotchas": [
+            "Never hardcode secrets; use environment variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle JSON data in HTTP requests and responses?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["json", "requests", "serialization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "JSON (JavaScript Object Notation) is the standard data format for REST APIs. Python's `json` module and the `requests` library provide seamless JSON support.\n\n**Sending JSON**:\n- `requests.post(url, json=data)` - Automatically serializes `data` to JSON and sets `Content-Type: application/json`.\n- `requests.post(url, data=json.dumps(data))` - Manual serialization (you must set Content-Type yourself).\n\n**Receiving JSON**:\n- `response.json()` - Parses the response body as JSON into a Python dict/list.\n\n**JSON mapping**:\n| JSON | Python |\n|------|--------|\n| object {} | dict |\n| array [] | list |\n| string | str |\n| number (int) | int |\n| number (float) | float |\n| true/false | True/False |\n| null | None |",
+          "pseudo_code": "1. Send JSON: requests.post(url, json=dict) (auto-serializes)\n2. Receive JSON: response.json() (auto-deserializes)\n3. For custom serialization, use json.dumps() / json.loads()\n4. Handle non-JSON responses with try/except on .json()\n5. Use json.dumps(data, indent=2) for pretty printing",
+          "actual_code": "import json\nimport requests\nfrom datetime import datetime\n\n# Sending JSON with requests\nresponse = requests.post(\n    'https://api.example.com/users',\n    json={'name': 'Alice', 'age': 30, 'active': True}  # Auto-serialized\n)\n\n# Receiving JSON\ndata = response.json()  # Parse JSON body into dict\nprint(data['name'])      # Alice\n\n# Safe JSON parsing\ntry:\n    data = response.json()\nexcept requests.exceptions.JSONDecodeError:\n    print('Response is not valid JSON')\n    print(response.text)  # Inspect the raw response\n\n# Manual JSON handling with json module\nuser_dict = {'name': 'Alice', 'age': 30}\njson_string = json.dumps(user_dict)          # dict -> JSON string\nparsed_dict = json.loads(json_string)        # JSON string -> dict\n\n# Pretty printing\nprint(json.dumps(user_dict, indent=2))\n# {\n#   \"name\": \"Alice\",\n#   \"age\": 30\n# }\n\n# Custom serialization for non-standard types\ndef json_serializer(obj):\n    if isinstance(obj, datetime):\n        return obj.isoformat()\n    if isinstance(obj, set):\n        return list(obj)\n    raise TypeError(f'Type {type(obj)} is not JSON serializable')\n\ndata = {\n    'name': 'Alice',\n    'created': datetime.now(),\n    'tags': {'python', 'developer'},\n}\njson_string = json.dumps(data, default=json_serializer)\nprint(json_string)\n# {\"name\": \"Alice\", \"created\": \"2024-01-15T10:30:00\", \"tags\": [\"python\", \"developer\"]}\n\n# Reading/writing JSON files\nwith open('data.json', 'w') as f:\n    json.dump(user_dict, f, indent=2)\n\nwith open('data.json', 'r') as f:\n    loaded = json.load(f)",
+          "code_language": "python",
+          "key_points": [
+            "json= parameter auto-serializes and sets Content-Type; data= does not",
+            "response.json() parses the body; wrap in try/except for safety",
+            "json.dumps() converts Python to JSON string; json.loads() reverses it",
+            "json.dump()/json.load() work with file objects directly",
+            "Use default= parameter in json.dumps() for custom type serialization"
+          ],
+          "gotchas": [
+            "datetime, set, and bytes are not JSON-serializable by default; use a custom serializer",
+            "json.dumps() outputs strings, not bytes; use .encode() if bytes are needed",
+            "JSON keys must be strings; dict keys that are int will be converted to strings"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `json=dict` in requests to auto-serialize and set Content-Type. Use `response.json()` to parse responses. For manual work, `json.dumps()` serializes and `json.loads()` parses. Custom types need a `default=` function.",
+          "pseudo_code": "",
+          "actual_code": "import requests, json\n\n# Send JSON\nresp = requests.post(url, json={'name': 'Alice'})\n\n# Receive JSON\ndata = resp.json()\n\n# Manual\njson_str = json.dumps({'name': 'Alice'}, indent=2)\nparsed = json.loads(json_str)",
+          "code_language": "python",
+          "key_points": [
+            "json= auto-serializes; response.json() auto-parses",
+            "json.dumps/loads for manual string conversion"
+          ],
+          "gotchas": [
+            "datetime and set are not JSON-serializable without a custom default function"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use request Sessions for connection reuse and persistent settings?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["requests", "session", "connection-pooling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `requests.Session()` object provides:\n\n1. **Connection pooling** - Reuses TCP connections to the same host, significantly faster for multiple requests.\n2. **Persistent settings** - Headers, auth, cookies, and other parameters persist across requests.\n3. **Cookie handling** - Cookies received in responses are automatically sent with subsequent requests.\n\nSessions are especially useful when making many requests to the same API, as they avoid the overhead of creating a new TCP connection for each request.",
+          "pseudo_code": "1. Create session = requests.Session()\n2. Set persistent headers with session.headers.update()\n3. Set auth with session.auth = ('user', 'pass')\n4. Make requests: session.get(), session.post()\n5. Cookies are automatically persisted\n6. Close with session.close() or use as context manager",
+          "actual_code": "import requests\n\n# Without Session: each request creates a new TCP connection\nfor i in range(100):\n    requests.get(f'https://api.example.com/items/{i}')  # Slow!\n\n# With Session: connections are reused\nwith requests.Session() as session:\n    # Persistent settings\n    session.headers.update({\n        'Authorization': 'Bearer my-token',\n        'Accept': 'application/json',\n        'User-Agent': 'MyApp/1.0',\n    })\n    session.auth = ('user', 'pass')  # For Basic Auth\n\n    # All requests reuse the TCP connection and include these headers\n    for i in range(100):\n        resp = session.get(f'https://api.example.com/items/{i}')  # Fast!\n\n    # Cookies persist automatically\n    session.post('https://example.com/login', data={'user': 'alice', 'pass': 'secret'})\n    # Subsequent requests include the login cookie\n    profile = session.get('https://example.com/profile').json()\n\n    # Per-request headers merge with session headers\n    resp = session.get(\n        'https://api.example.com/special',\n        headers={'X-Special': 'value'}  # Added to session headers\n    )\n\n    # Inspect cookies\n    print(session.cookies.get_dict())\n\n# Building a reusable API client\nclass APIClient:\n    def __init__(self, base_url, api_key):\n        self.base_url = base_url\n        self.session = requests.Session()\n        self.session.headers['X-API-Key'] = api_key\n        self.session.headers['Accept'] = 'application/json'\n\n    def get_users(self):\n        resp = self.session.get(f'{self.base_url}/users', timeout=10)\n        resp.raise_for_status()\n        return resp.json()\n\n    def close(self):\n        self.session.close()\n\n    def __enter__(self):\n        return self\n\n    def __exit__(self, *args):\n        self.close()\n\nwith APIClient('https://api.example.com', 'my-key') as client:\n    users = client.get_users()",
+          "code_language": "python",
+          "key_points": [
+            "Session reuses TCP connections (connection pooling) for massive speed improvement",
+            "Headers, auth, and cookies persist across all requests in a session",
+            "Per-request headers merge with (not replace) session headers",
+            "Use as a context manager (with Session() as s:) for automatic cleanup",
+            "Ideal for building reusable API client classes"
+          ],
+          "gotchas": [
+            "Forgetting to close a Session can leak connections; use context managers",
+            "Session is not thread-safe; use one session per thread",
+            "Per-request headers override session headers with the same key, not merge them"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`requests.Session()` reuses TCP connections and persists headers, auth, and cookies. Much faster for multiple requests to the same host. Use as a context manager for auto-cleanup.",
+          "pseudo_code": "",
+          "actual_code": "with requests.Session() as session:\n    session.headers['Authorization'] = 'Bearer token'\n    resp1 = session.get('https://api.example.com/users')   # Reuses connection\n    resp2 = session.get('https://api.example.com/orders')  # Same connection",
+          "code_language": "python",
+          "key_points": [
+            "Connection pooling + persistent headers/cookies",
+            "Use context manager for cleanup; not thread-safe"
+          ],
+          "gotchas": [
+            "Session is not thread-safe; use one per thread"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle timeouts and retries in HTTP requests?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["requests", "timeout", "retry", "resilience"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Timeouts** prevent your program from hanging indefinitely when a server is slow or unresponsive. `requests` supports two timeout values:\n\n- **connect timeout**: How long to wait for the TCP connection to be established.\n- **read timeout**: How long to wait for the server to send data.\n\n**Retries** handle transient failures (network blips, server overload). The `requests` library does not retry by default, but you can configure automatic retries using `urllib3.util.retry.Retry` with a custom adapter.\n\nCommon retry strategies:\n- Retry on specific status codes (429, 500, 502, 503, 504)\n- Exponential backoff between retries\n- Maximum retry count",
+          "pseudo_code": "1. Always set timeout=(connect, read) on every request\n2. Create a Retry object with total retries, backoff, status forcelist\n3. Mount the retry adapter on a Session\n4. All requests through the session will auto-retry on failure",
+          "actual_code": "import requests\nfrom requests.adapters import HTTPAdapter\nfrom urllib3.util.retry import Retry\n\n# Basic timeout\nresponse = requests.get(\n    'https://api.example.com/data',\n    timeout=5  # 5 seconds for both connect and read\n)\n\n# Separate connect and read timeouts\nresponse = requests.get(\n    'https://api.example.com/data',\n    timeout=(3.05, 27)  # (connect_timeout, read_timeout)\n)\n\n# Handling timeout exceptions\ntry:\n    response = requests.get('https://api.example.com/slow', timeout=5)\nexcept requests.exceptions.ConnectTimeout:\n    print('Connection timed out')\nexcept requests.exceptions.ReadTimeout:\n    print('Server took too long to respond')\nexcept requests.exceptions.Timeout:\n    print('Request timed out (generic)')\n\n# Automatic retries with exponential backoff\nretry_strategy = Retry(\n    total=3,                   # Max 3 retries\n    backoff_factor=1,          # Wait 1s, 2s, 4s between retries\n    status_forcelist=[429, 500, 502, 503, 504],  # Retry on these codes\n    allowed_methods=['GET', 'POST', 'PUT'],       # Which methods to retry\n    raise_on_status=False,     # Don't raise on exhausted retries\n)\n\nadapter = HTTPAdapter(max_retries=retry_strategy)\nsession = requests.Session()\nsession.mount('https://', adapter)\nsession.mount('http://', adapter)\n\n# All requests now auto-retry on failure\nresponse = session.get('https://api.example.com/data', timeout=10)\n\n# Manual retry with custom logic\nimport time\n\ndef request_with_retry(url, max_retries=3, backoff=1):\n    for attempt in range(max_retries + 1):\n        try:\n            response = requests.get(url, timeout=10)\n            if response.status_code == 429:\n                wait = int(response.headers.get('Retry-After', backoff * (2 ** attempt)))\n                time.sleep(wait)\n                continue\n            response.raise_for_status()\n            return response\n        except requests.exceptions.ConnectionError:\n            if attempt == max_retries:\n                raise\n            time.sleep(backoff * (2 ** attempt))\n    raise requests.exceptions.RetryError('Max retries exceeded')",
+          "code_language": "python",
+          "key_points": [
+            "Always set timeout=; without it, requests can hang forever",
+            "timeout=(connect, read) allows separate connect and read timeouts",
+            "Retry with backoff_factor for exponential wait (1s, 2s, 4s...)",
+            "status_forcelist specifies which HTTP codes trigger a retry",
+            "Mount adapters on both http:// and https:// for complete coverage"
+          ],
+          "gotchas": [
+            "Retry on POST can cause duplicate resources if the server processes the request but the response is lost",
+            "backoff_factor=1 means waits of 0s, 1s, 2s, 4s (first retry is immediate)",
+            "urllib3 Retry does not retry on all exceptions by default; only ConnectionError and some others"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Always set `timeout=` (default is None, which hangs forever). Use `urllib3.util.retry.Retry` with `HTTPAdapter` for automatic retries with exponential backoff on specific status codes.",
+          "pseudo_code": "",
+          "actual_code": "from requests.adapters import HTTPAdapter\nfrom urllib3.util.retry import Retry\n\nretry = Retry(total=3, backoff_factor=1, status_forcelist=[429, 500, 502, 503])\nsession = requests.Session()\nsession.mount('https://', HTTPAdapter(max_retries=retry))\n\nresp = session.get('https://api.example.com/data', timeout=(3, 10))",
+          "code_language": "python",
+          "key_points": [
+            "timeout=(connect, read) prevents hanging; Retry auto-retries on failure",
+            "backoff_factor=1 gives exponential wait: 1s, 2s, 4s..."
+          ],
+          "gotchas": [
+            "Retrying POST can create duplicates if the server already processed the request"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle query parameters and pagination in REST API requests?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["rest", "pagination", "query-parameters"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Query parameters** are key-value pairs appended to the URL after `?`. They are used for filtering, sorting, searching, and pagination.\n\n**Common pagination patterns**:\n\n1. **Offset/Limit**: `?page=2&limit=20` or `?offset=20&limit=20`\n2. **Cursor-based**: `?cursor=eyJpZCI6MTAwfQ==` (encoded position marker)\n3. **Link header**: The API returns `Link: <url>; rel=\"next\"` headers\n\nCursor-based pagination is preferred for large datasets because offset pagination degrades as offset grows (the DB must skip rows).",
+          "pseudo_code": "1. Pass query params with params= dict (auto-encoded)\n2. For offset pagination: increment page number until no more results\n3. For cursor pagination: follow the cursor/next_url from the response\n4. For Link headers: parse the Link header for the next URL",
+          "actual_code": "import requests\n\n# Sending query parameters\nresponse = requests.get(\n    'https://api.example.com/users',\n    params={\n        'search': 'alice',\n        'role': 'admin',\n        'sort': '-created_at',  # Descending by convention\n        'page': 1,\n        'per_page': 25,\n    }\n)\n# URL: https://api.example.com/users?search=alice&role=admin&sort=-created_at&page=1&per_page=25\n\n# Offset-based pagination (collect all pages)\ndef fetch_all_offset(base_url, per_page=100):\n    all_items = []\n    page = 1\n    while True:\n        response = requests.get(\n            base_url,\n            params={'page': page, 'per_page': per_page},\n            timeout=10\n        )\n        response.raise_for_status()\n        data = response.json()\n\n        items = data.get('results', [])\n        if not items:\n            break\n\n        all_items.extend(items)\n        page += 1\n\n        # Alternative: check total count\n        if len(all_items) >= data.get('total', float('inf')):\n            break\n\n    return all_items\n\nall_users = fetch_all_offset('https://api.example.com/users')\n\n# Cursor-based pagination\ndef fetch_all_cursor(base_url, per_page=100):\n    all_items = []\n    cursor = None\n    while True:\n        params = {'per_page': per_page}\n        if cursor:\n            params['cursor'] = cursor\n\n        response = requests.get(base_url, params=params, timeout=10)\n        response.raise_for_status()\n        data = response.json()\n\n        all_items.extend(data['results'])\n\n        cursor = data.get('next_cursor')\n        if not cursor:\n            break\n\n    return all_items\n\n# Link header pagination (GitHub-style)\ndef fetch_all_link_header(url):\n    all_items = []\n    while url:\n        response = requests.get(url, timeout=10)\n        response.raise_for_status()\n        all_items.extend(response.json())\n\n        # Parse Link header\n        url = None\n        link_header = response.headers.get('Link', '')\n        for part in link_header.split(','):\n            if 'rel=\"next\"' in part:\n                url = part.split(';')[0].strip(' <>')\n\n    return all_items\n\nrepos = fetch_all_link_header('https://api.github.com/users/octocat/repos')",
+          "code_language": "python",
+          "key_points": [
+            "params= dict auto-encodes and appends query parameters to the URL",
+            "Offset pagination: simple but slow for large datasets (DB skips rows)",
+            "Cursor pagination: scalable, uses an opaque marker for position",
+            "Link headers provide hypermedia-driven pagination (no need to construct URLs)",
+            "Always check for empty results or missing next cursor to stop pagination"
+          ],
+          "gotchas": [
+            "Offset pagination can return duplicates or skip items if data changes between pages",
+            "Some APIs use 'next' URL in the JSON body instead of Link headers",
+            "params= with None values are sent as the string 'None'; filter them out before passing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `params=dict` to add query parameters. For pagination, loop through pages (offset-based) or follow cursors/next URLs. Cursor-based pagination is preferred for large datasets.",
+          "pseudo_code": "",
+          "actual_code": "# Query params\nresp = requests.get(url, params={'page': 1, 'per_page': 25, 'sort': 'name'})\n\n# Paginate all pages\nall_items = []\npage = 1\nwhile True:\n    data = requests.get(url, params={'page': page}).json()\n    if not data['results']:\n        break\n    all_items.extend(data['results'])\n    page += 1",
+          "code_language": "python",
+          "key_points": [
+            "params= auto-encodes query string; loop until empty for pagination",
+            "Cursor pagination is more reliable than offset for large/changing datasets"
+          ],
+          "gotchas": [
+            "Offset pagination can skip/duplicate items if data changes between page fetches"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key REST API design principles?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["rest", "api-design", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "REST (Representational State Transfer) is an architectural style for APIs. Key principles:\n\n1. **Resource-based URLs**: URLs represent nouns (resources), not actions.\n   - Good: `GET /users/123` | Bad: `GET /getUser?id=123`\n\n2. **HTTP methods as verbs**: GET=read, POST=create, PUT=replace, PATCH=update, DELETE=remove.\n\n3. **Stateless**: Each request contains all the information needed. No server-side session state.\n\n4. **Consistent naming**:\n   - Plural nouns: `/users`, `/orders`\n   - Nested resources: `/users/123/orders`\n   - Lowercase, hyphen-separated: `/user-profiles`\n\n5. **Standard status codes**: Use proper HTTP status codes (201 for created, 404 for not found, etc.).\n\n6. **Filtering, sorting, pagination**: Use query parameters.\n\n7. **HATEOAS** (Hypermedia): Responses include links to related resources.\n\n8. **Versioning**: Version your API to avoid breaking changes.",
+          "pseudo_code": "Resource design:\nGET    /users          -> List users\nGET    /users/123      -> Get user 123\nPOST   /users          -> Create user\nPUT    /users/123      -> Replace user 123\nPATCH  /users/123      -> Update user 123\nDELETE /users/123      -> Delete user 123\nGET    /users/123/orders -> List orders for user 123",
+          "actual_code": "from flask import Flask, jsonify, request, url_for\n\napp = Flask(__name__)\n\n# Good REST API design in Flask\n@app.route('/api/v1/users', methods=['GET'])\ndef list_users():\n    \"\"\"List users with filtering, sorting, and pagination.\"\"\"\n    page = request.args.get('page', 1, type=int)\n    per_page = request.args.get('per_page', 20, type=int)\n    sort = request.args.get('sort', 'name')\n    role = request.args.get('role')  # Filter\n\n    # ... fetch from database ...\n    users = [{'id': 1, 'name': 'Alice', 'role': 'admin'}]\n    total = 100\n\n    return jsonify({\n        'data': users,\n        'meta': {\n            'page': page,\n            'per_page': per_page,\n            'total': total,\n            'total_pages': (total + per_page - 1) // per_page,\n        },\n        'links': {\n            'self': f'/api/v1/users?page={page}',\n            'next': f'/api/v1/users?page={page+1}' if page * per_page < total else None,\n            'prev': f'/api/v1/users?page={page-1}' if page > 1 else None,\n        }\n    })\n\n@app.route('/api/v1/users', methods=['POST'])\ndef create_user():\n    \"\"\"Create a new user.\"\"\"\n    data = request.get_json()\n    if not data or 'name' not in data:\n        return jsonify({'error': 'name is required'}), 400\n\n    user = {'id': 2, 'name': data['name']}\n    return jsonify({'data': user}), 201\n\n@app.route('/api/v1/users/<int:user_id>', methods=['GET'])\ndef get_user(user_id):\n    \"\"\"Get a specific user.\"\"\"\n    user = None  # ... fetch from DB ...\n    if not user:\n        return jsonify({'error': 'User not found'}), 404\n    return jsonify({'data': user})\n\n@app.route('/api/v1/users/<int:user_id>', methods=['PATCH'])\ndef update_user(user_id):\n    \"\"\"Partially update a user.\"\"\"\n    data = request.get_json()\n    # ... update only provided fields ...\n    return jsonify({'data': {'id': user_id, **data}})\n\n@app.route('/api/v1/users/<int:user_id>', methods=['DELETE'])\ndef delete_user(user_id):\n    \"\"\"Delete a user.\"\"\"\n    # ... delete from DB ...\n    return '', 204\n\n# Nested resources\n@app.route('/api/v1/users/<int:user_id>/orders', methods=['GET'])\ndef list_user_orders(user_id):\n    \"\"\"List orders for a specific user.\"\"\"\n    return jsonify({'data': [], 'meta': {'user_id': user_id}})\n\n# Consistent error format\n@app.errorhandler(404)\ndef not_found(error):\n    return jsonify({'error': 'Resource not found', 'status': 404}), 404\n\n@app.errorhandler(500)\ndef internal_error(error):\n    return jsonify({'error': 'Internal server error', 'status': 500}), 500",
+          "code_language": "python",
+          "key_points": [
+            "URLs are nouns (resources), HTTP methods are verbs (actions)",
+            "Use plural nouns: /users not /user; nested: /users/123/orders",
+            "Consistent response format: wrap data in 'data' key with 'meta' for pagination",
+            "Proper status codes: 201 Created, 204 No Content, 400 Bad Request, 404 Not Found",
+            "Version your API in the URL (/api/v1/) or via Accept header"
+          ],
+          "gotchas": [
+            "Avoid verbs in URLs: /users not /getUsers or /createUser",
+            "PATCH is for partial updates; PUT requires sending the complete resource",
+            "Overly nested URLs (/users/1/orders/2/items/3) become hard to maintain; limit to 2 levels"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "REST uses resource-based URLs (nouns) with HTTP methods (verbs). Use plural nouns (`/users`), proper status codes, query params for filtering/sorting/pagination, and consistent response format. Version your API (`/api/v1/`).",
+          "pseudo_code": "",
+          "actual_code": "# REST resource pattern\n# GET    /api/v1/users          -> List\n# POST   /api/v1/users          -> Create (returns 201)\n# GET    /api/v1/users/123      -> Read\n# PATCH  /api/v1/users/123      -> Update\n# DELETE /api/v1/users/123      -> Delete (returns 204)\n# GET    /api/v1/users/123/orders -> Nested resource",
+          "code_language": "python",
+          "key_points": [
+            "Nouns for URLs, HTTP methods for actions, plural resources",
+            "Proper status codes and consistent error format"
+          ],
+          "gotchas": [
+            "Avoid verbs in URLs and limit nesting to 2 levels"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is CORS and how do you handle it in Python web applications?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["cors", "security", "flask", "http"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**CORS (Cross-Origin Resource Sharing)** is a browser security mechanism that restricts web pages from making requests to a different domain than the one that served the page.\n\nWhen a frontend at `http://frontend.com` tries to call `http://api.backend.com`, the browser sends a **preflight OPTIONS request** to check if the API allows cross-origin requests. The API must respond with specific CORS headers.\n\n**Key CORS headers**:\n- `Access-Control-Allow-Origin`: Which origins can access the resource (* for all, or specific domain)\n- `Access-Control-Allow-Methods`: Allowed HTTP methods (GET, POST, etc.)\n- `Access-Control-Allow-Headers`: Allowed request headers (Authorization, Content-Type, etc.)\n- `Access-Control-Allow-Credentials`: Whether cookies/auth are allowed (true/false)\n- `Access-Control-Max-Age`: How long the preflight result can be cached\n\n**When does a preflight occur?**\n- Methods other than GET, HEAD, POST\n- Custom headers (Authorization, X-API-Key)\n- Content-Type other than form-encoded, multipart, or text/plain",
+          "pseudo_code": "1. Browser sends OPTIONS preflight to the API\n2. API responds with CORS headers\n3. Browser checks if the origin is allowed\n4. If allowed, browser sends the actual request\n5. If not allowed, browser blocks the request (CORS error)",
+          "actual_code": "# Method 1: Flask-CORS extension (recommended)\nfrom flask import Flask\nfrom flask_cors import CORS\n\napp = Flask(__name__)\n\n# Allow all origins (development only!)\nCORS(app)\n\n# Allow specific origins (production)\nCORS(app, resources={\n    r'/api/*': {\n        'origins': ['https://myapp.com', 'https://staging.myapp.com'],\n        'methods': ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],\n        'allow_headers': ['Authorization', 'Content-Type'],\n        'supports_credentials': True,\n        'max_age': 600,\n    }\n})\n\n# Method 2: Manual CORS headers\nfrom flask import Flask, request, jsonify\n\napp = Flask(__name__)\n\n@app.after_request\ndef add_cors_headers(response):\n    origin = request.headers.get('Origin')\n    allowed_origins = ['https://myapp.com', 'https://staging.myapp.com']\n\n    if origin in allowed_origins:\n        response.headers['Access-Control-Allow-Origin'] = origin\n        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'\n        response.headers['Access-Control-Allow-Headers'] = 'Authorization, Content-Type'\n        response.headers['Access-Control-Allow-Credentials'] = 'true'\n        response.headers['Access-Control-Max-Age'] = '600'\n\n    return response\n\n# Handle preflight OPTIONS request explicitly\n@app.route('/api/data', methods=['OPTIONS'])\ndef preflight():\n    return '', 204\n\n# Method 3: Per-route CORS with decorator\nfrom flask_cors import cross_origin\n\n@app.route('/api/public', methods=['GET'])\n@cross_origin(origins='*')  # Public endpoint\ndef public_data():\n    return jsonify({'data': 'public'})\n\n@app.route('/api/private', methods=['GET'])\n@cross_origin(origins=['https://myapp.com'], supports_credentials=True)\ndef private_data():\n    return jsonify({'data': 'private'})",
+          "code_language": "python",
+          "key_points": [
+            "CORS is a browser security feature; it does not affect server-to-server requests",
+            "Preflight OPTIONS requests check if cross-origin requests are allowed",
+            "Flask-CORS is the easiest way to handle CORS in Flask",
+            "Access-Control-Allow-Origin: * cannot be used with credentials (cookies/auth)",
+            "max_age caches the preflight result so the browser does not re-check every request"
+          ],
+          "gotchas": [
+            "CORS errors only appear in the browser; curl and Postman work fine without CORS",
+            "Using '*' for Allow-Origin with credentials=True is not allowed by the spec",
+            "Forgetting to handle OPTIONS requests causes preflight failures",
+            "CORS headers must be set on the response, not the request"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "CORS is a browser security mechanism blocking cross-origin requests. Fix by adding `Access-Control-Allow-Origin` headers on the server. In Flask, use `flask-cors`: `CORS(app, origins=['https://myapp.com'])`. Remember CORS only affects browsers, not server-to-server calls.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Flask\nfrom flask_cors import CORS\n\napp = Flask(__name__)\nCORS(app, resources={r'/api/*': {'origins': ['https://myapp.com']}})",
+          "code_language": "python",
+          "key_points": [
+            "CORS is browser-only; use flask-cors for easy setup",
+            "Cannot use '*' origin with credentials"
+          ],
+          "gotchas": [
+            "CORS errors only show in browsers; curl/Postman ignore CORS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are webhooks and how do you implement them in Python?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["webhooks", "callbacks", "events", "flask"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **webhook** is an HTTP callback: when an event occurs in one system, it sends an HTTP POST request to a URL configured by another system. Instead of polling an API repeatedly, you receive push notifications.\n\n**How it works**:\n1. You provide a callback URL to the service (e.g., `https://myapp.com/webhooks/stripe`).\n2. When an event happens (payment completed, PR merged, etc.), the service POSTs a JSON payload to your URL.\n3. Your server processes the payload and responds with 200 OK.\n\n**Key considerations**:\n- **Verification**: Validate the webhook signature to ensure it is from the expected sender.\n- **Idempotency**: Webhooks may be sent multiple times; handle duplicates.\n- **Quick response**: Return 200 immediately and process asynchronously if needed.\n- **Retry logic**: Services retry if they do not get a 200 response.",
+          "pseudo_code": "1. Create an endpoint to receive webhook POST requests\n2. Verify the webhook signature (HMAC or similar)\n3. Parse the JSON payload\n4. Return 200 immediately\n5. Process the event asynchronously if it takes time\n6. Handle duplicate deliveries with idempotency keys",
+          "actual_code": "import hmac\nimport hashlib\nfrom flask import Flask, request, jsonify\n\napp = Flask(__name__)\n\nWEBHOOK_SECRET = 'your-webhook-secret'\n\ndef verify_signature(payload, signature, secret):\n    \"\"\"Verify webhook signature using HMAC-SHA256.\"\"\"\n    expected = hmac.new(\n        secret.encode(),\n        payload,\n        hashlib.sha256\n    ).hexdigest()\n    return hmac.compare_digest(expected, signature)\n\n@app.route('/webhooks/payment', methods=['POST'])\ndef handle_payment_webhook():\n    # Step 1: Verify signature\n    signature = request.headers.get('X-Webhook-Signature', '')\n    if not verify_signature(request.data, signature, WEBHOOK_SECRET):\n        return jsonify({'error': 'Invalid signature'}), 401\n\n    # Step 2: Parse payload\n    event = request.get_json()\n    event_type = event.get('type')\n    event_id = event.get('id')\n\n    # Step 3: Idempotency check\n    # if already_processed(event_id):\n    #     return jsonify({'status': 'already processed'}), 200\n\n    # Step 4: Handle the event\n    if event_type == 'payment.completed':\n        amount = event['data']['amount']\n        user_id = event['data']['user_id']\n        print(f'Payment of {amount} received for user {user_id}')\n        # process_payment(event['data'])\n    elif event_type == 'payment.failed':\n        print(f'Payment failed: {event[\"data\"]}')\n    else:\n        print(f'Unhandled event type: {event_type}')\n\n    # Step 5: Return 200 quickly\n    return jsonify({'status': 'received'}), 200\n\n# Sending webhooks (from the other side)\nimport requests\nimport json\n\ndef send_webhook(url, payload, secret):\n    \"\"\"Send a webhook with HMAC signature.\"\"\"\n    body = json.dumps(payload)\n    signature = hmac.new(\n        secret.encode(),\n        body.encode(),\n        hashlib.sha256\n    ).hexdigest()\n\n    response = requests.post(\n        url,\n        json=payload,\n        headers={\n            'X-Webhook-Signature': signature,\n            'Content-Type': 'application/json',\n        },\n        timeout=10\n    )\n    return response.status_code == 200\n\nsend_webhook(\n    'https://myapp.com/webhooks/payment',\n    {'type': 'payment.completed', 'id': 'evt_123', 'data': {'amount': 99.99, 'user_id': 1}},\n    WEBHOOK_SECRET\n)",
+          "code_language": "python",
+          "key_points": [
+            "Webhooks are push-based HTTP callbacks; the server sends POST requests when events occur",
+            "Always verify webhook signatures (HMAC) to prevent spoofing",
+            "Return 200 immediately; process asynchronously for long operations",
+            "Implement idempotency to handle duplicate deliveries",
+            "Use hmac.compare_digest() for timing-safe comparison"
+          ],
+          "gotchas": [
+            "Webhook endpoints must be publicly accessible (not localhost in production)",
+            "If you do not return 200 quickly, the sender may time out and retry",
+            "request.data must be used for signature verification (raw bytes), not request.get_json()",
+            "Testing webhooks locally requires a tunnel tool like ngrok"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Webhooks are HTTP POST callbacks triggered by events. Create an endpoint, verify the HMAC signature, process the payload, and return 200 immediately. Handle duplicate deliveries with idempotency checks.",
+          "pseudo_code": "",
+          "actual_code": "import hmac, hashlib\nfrom flask import Flask, request, jsonify\n\napp = Flask(__name__)\n\n@app.route('/webhooks/event', methods=['POST'])\ndef webhook():\n    sig = request.headers.get('X-Webhook-Signature', '')\n    expected = hmac.new(b'secret', request.data, hashlib.sha256).hexdigest()\n    if not hmac.compare_digest(expected, sig):\n        return '', 401\n    event = request.get_json()\n    # Process event...\n    return '', 200",
+          "code_language": "python",
+          "key_points": [
+            "Verify HMAC signature, return 200 quickly, handle duplicates",
+            "Push-based alternative to polling"
+          ],
+          "gotchas": [
+            "Use request.data (raw bytes) for signature verification, not request.get_json()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you version a REST API and why is it important?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["api-versioning", "rest", "backward-compatibility"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "API versioning lets you evolve your API without breaking existing clients. When you make breaking changes (removing fields, changing response format, renaming endpoints), clients using the old version continue to work.\n\n**Versioning strategies**:\n\n1. **URL path versioning** (most common): `/api/v1/users`, `/api/v2/users`\n2. **Query parameter**: `/api/users?version=2`\n3. **Header versioning**: `Accept: application/vnd.myapp.v2+json`\n4. **Content negotiation**: Custom media types in Accept header\n\nURL path versioning is the most popular because it is explicit, easy to understand, and easy to route.",
+          "pseudo_code": "1. Start with /api/v1/ for all endpoints\n2. When breaking changes are needed, create /api/v2/\n3. Keep v1 running for a deprecation period\n4. Use Blueprints in Flask to organize versions\n5. Document the deprecation timeline",
+          "actual_code": "from flask import Flask, Blueprint, jsonify\n\napp = Flask(__name__)\n\n# Version 1 Blueprint\napi_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')\n\n@api_v1.route('/users', methods=['GET'])\ndef v1_list_users():\n    \"\"\"V1: Returns simple user list.\"\"\"\n    return jsonify({\n        'users': [\n            {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'}\n        ]\n    })\n\n# Version 2 Blueprint (breaking change: different response format)\napi_v2 = Blueprint('api_v2', __name__, url_prefix='/api/v2')\n\n@api_v2.route('/users', methods=['GET'])\ndef v2_list_users():\n    \"\"\"V2: Returns paginated user list with metadata.\"\"\"\n    return jsonify({\n        'data': [\n            {'id': 1, 'full_name': 'Alice Smith', 'email': 'alice@example.com',\n             'role': 'admin'}\n        ],\n        'meta': {'page': 1, 'total': 1},\n        'links': {'next': None}\n    })\n\napp.register_blueprint(api_v1)\napp.register_blueprint(api_v2)\n\n# Header-based versioning (alternative)\n@app.route('/api/users', methods=['GET'])\ndef list_users_header_versioned():\n    version = request.headers.get('API-Version', '1')\n    if version == '2':\n        return v2_list_users()\n    return v1_list_users()\n\n# Deprecation warning header\n@api_v1.after_request\ndef add_deprecation_header(response):\n    response.headers['Deprecation'] = 'true'\n    response.headers['Sunset'] = 'Sat, 01 Jan 2025 00:00:00 GMT'\n    response.headers['Link'] = '</api/v2>; rel=\"successor-version\"'\n    return response\n\n# Shared logic between versions\ndef get_users_from_db():\n    \"\"\"Shared database logic.\"\"\"\n    return [{'id': 1, 'first_name': 'Alice', 'last_name': 'Smith', 'email': 'alice@example.com'}]\n\n# V1 transforms the data one way, V2 another way\ndef format_user_v1(user):\n    return {'id': user['id'], 'name': user['first_name'], 'email': user['email']}\n\ndef format_user_v2(user):\n    return {'id': user['id'], 'full_name': f\"{user['first_name']} {user['last_name']}\",\n            'email': user['email']}",
+          "code_language": "python",
+          "key_points": [
+            "URL path versioning (/api/v1/) is the most common and explicit approach",
+            "Use Flask Blueprints to organize versions cleanly",
+            "Share business logic between versions; only the presentation layer changes",
+            "Add Deprecation and Sunset headers to old versions",
+            "Breaking changes = different version; non-breaking changes = same version"
+          ],
+          "gotchas": [
+            "Adding new fields to a response is NOT a breaking change; removing/renaming is",
+            "Running many API versions in parallel increases maintenance burden",
+            "Forgetting to deprecate old versions leads to indefinite support obligations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Version your API to avoid breaking existing clients. Most common: URL path versioning (`/api/v1/`, `/api/v2/`). Use Flask Blueprints for clean organization. Share business logic, only change presentation between versions.",
+          "pseudo_code": "",
+          "actual_code": "from flask import Flask, Blueprint\n\napi_v1 = Blueprint('api_v1', __name__, url_prefix='/api/v1')\napi_v2 = Blueprint('api_v2', __name__, url_prefix='/api/v2')\n\n@api_v1.route('/users')\ndef v1_users():\n    return jsonify({'users': [...]})\n\n@api_v2.route('/users')\ndef v2_users():\n    return jsonify({'data': [...], 'meta': {...}})\n\napp.register_blueprint(api_v1)\napp.register_blueprint(api_v2)",
+          "code_language": "python",
+          "key_points": [
+            "URL path versioning with Blueprints is cleanest",
+            "Adding fields is not breaking; removing/renaming is"
+          ],
+          "gotchas": [
+            "Maintain as few versions as possible; deprecate old ones with Sunset headers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle errors properly in REST APIs?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["error-handling", "rest", "flask", "api"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Good API error handling provides clients with enough information to understand and fix the problem. Best practices:\n\n1. **Use proper HTTP status codes** (400, 401, 403, 404, 422, 500).\n2. **Consistent error response format** with error code, message, and details.\n3. **Never expose internal details** (stack traces, SQL queries) in production.\n4. **Validate input** and return specific field-level errors.\n5. **Catch all exceptions** with a global error handler to prevent 500s.",
+          "pseudo_code": "1. Define a standard error response format\n2. Create custom exception classes\n3. Register Flask error handlers for each exception type\n4. Validate input and raise specific exceptions\n5. Log errors server-side, return safe messages client-side",
+          "actual_code": "from flask import Flask, jsonify, request\nfrom werkzeug.exceptions import HTTPException\n\napp = Flask(__name__)\n\n# Custom exception classes\nclass APIError(Exception):\n    def __init__(self, message, status_code=400, error_code=None, details=None):\n        self.message = message\n        self.status_code = status_code\n        self.error_code = error_code or 'BAD_REQUEST'\n        self.details = details\n\nclass NotFoundError(APIError):\n    def __init__(self, resource, resource_id):\n        super().__init__(\n            message=f'{resource} with id {resource_id} not found',\n            status_code=404,\n            error_code='NOT_FOUND'\n        )\n\nclass ValidationError(APIError):\n    def __init__(self, errors):\n        super().__init__(\n            message='Validation failed',\n            status_code=422,\n            error_code='VALIDATION_ERROR',\n            details=errors\n        )\n\n# Global error handlers\n@app.errorhandler(APIError)\ndef handle_api_error(error):\n    response = {\n        'error': {\n            'code': error.error_code,\n            'message': error.message,\n        }\n    }\n    if error.details:\n        response['error']['details'] = error.details\n    return jsonify(response), error.status_code\n\n@app.errorhandler(HTTPException)\ndef handle_http_error(error):\n    return jsonify({\n        'error': {\n            'code': error.name.upper().replace(' ', '_'),\n            'message': error.description,\n        }\n    }), error.code\n\n@app.errorhandler(Exception)\ndef handle_unexpected_error(error):\n    # Log the actual error server-side\n    app.logger.exception('Unexpected error')\n    # Return generic message to client\n    return jsonify({\n        'error': {\n            'code': 'INTERNAL_ERROR',\n            'message': 'An unexpected error occurred',\n        }\n    }), 500\n\n# Input validation\ndef validate_user_input(data):\n    errors = []\n    if not data:\n        raise ValidationError([{'field': 'body', 'message': 'Request body is required'}])\n    if not data.get('name'):\n        errors.append({'field': 'name', 'message': 'Name is required'})\n    if not data.get('email'):\n        errors.append({'field': 'email', 'message': 'Email is required'})\n    elif '@' not in data['email']:\n        errors.append({'field': 'email', 'message': 'Invalid email format'})\n    if errors:\n        raise ValidationError(errors)\n\n@app.route('/api/v1/users', methods=['POST'])\ndef create_user():\n    data = request.get_json()\n    validate_user_input(data)  # Raises ValidationError if invalid\n    # ... create user ...\n    return jsonify({'data': {'id': 1, 'name': data['name']}}), 201\n\n@app.route('/api/v1/users/<int:user_id>', methods=['GET'])\ndef get_user(user_id):\n    user = None  # ... fetch from DB ...\n    if not user:\n        raise NotFoundError('User', user_id)\n    return jsonify({'data': user})",
+          "code_language": "python",
+          "key_points": [
+            "Consistent error format: {error: {code, message, details}}",
+            "Custom exception classes map to specific HTTP status codes",
+            "Global error handlers catch all exceptions and return proper JSON",
+            "Field-level validation errors help clients fix input",
+            "Log real errors server-side; return safe messages client-side"
+          ],
+          "gotchas": [
+            "Never expose stack traces or SQL errors to clients in production",
+            "Catching Exception globally prevents Flask from returning HTML error pages for API routes",
+            "request.get_json() returns None if Content-Type is not application/json"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use custom exception classes with proper status codes, a consistent error JSON format, and Flask error handlers. Validate input and return field-level errors. Never expose internal details in responses.",
+          "pseudo_code": "",
+          "actual_code": "class APIError(Exception):\n    def __init__(self, message, status_code=400):\n        self.message = message\n        self.status_code = status_code\n\n@app.errorhandler(APIError)\ndef handle_api_error(error):\n    return jsonify({'error': {'message': error.message}}), error.status_code\n\n@app.errorhandler(Exception)\ndef handle_all(error):\n    app.logger.exception('Unexpected error')\n    return jsonify({'error': {'message': 'Internal error'}}), 500",
+          "code_language": "python",
+          "key_points": [
+            "Custom exceptions + error handlers for consistent JSON errors",
+            "Log real errors server-side, return safe messages to clients"
+          ],
+          "gotchas": [
+            "Never expose stack traces or database errors in API responses"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is web scraping with BeautifulSoup and what are the ethical considerations?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["beautifulsoup", "web-scraping", "html-parsing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Web scraping** is the automated extraction of data from websites by parsing HTML. **BeautifulSoup** is a Python library that makes parsing HTML/XML easy.\n\n**Key BeautifulSoup methods**:\n- `soup.find('tag')` - Find the first matching element\n- `soup.find_all('tag')` - Find all matching elements\n- `soup.select('css-selector')` - CSS selector support\n- `.text` or `.get_text()` - Extract text content\n- `.attrs` or `['attribute']` - Access HTML attributes\n\n**Ethical and legal considerations**:\n- Check `robots.txt` for scraping rules\n- Respect rate limits; add delays between requests\n- Check the site's Terms of Service\n- Use the site's API if one exists\n- Do not scrape personal data without consent (GDPR, CCPA)\n- Identify yourself with a proper User-Agent",
+          "pseudo_code": "1. Fetch the HTML page with requests.get()\n2. Parse with BeautifulSoup(html, 'html.parser')\n3. Navigate the DOM with find(), find_all(), select()\n4. Extract text with .text or attributes with ['attr']\n5. Handle pagination, errors, and rate limiting",
+          "actual_code": "import requests\nfrom bs4 import BeautifulSoup\nimport time\n\n# Basic scraping\nresponse = requests.get(\n    'https://example.com',\n    headers={'User-Agent': 'MyBot/1.0 (contact@mysite.com)'},\n    timeout=10\n)\nsoup = BeautifulSoup(response.text, 'html.parser')\n\n# Find elements\ntitle = soup.find('h1').text\nprint(title)\n\n# Find all links\nlinks = soup.find_all('a')\nfor link in links:\n    href = link.get('href')  # or link['href']\n    text = link.get_text(strip=True)\n    print(f'{text}: {href}')\n\n# CSS selectors\narticles = soup.select('div.article > h2.title')\nfor article in articles:\n    print(article.text)\n\n# Find by attributes\nemail_input = soup.find('input', {'type': 'email', 'name': 'email'})\nall_images = soup.find_all('img', class_='thumbnail')\n\n# Navigate the tree\nparent = soup.find('div', class_='content')\nchildren = parent.find_all('p')  # Only direct and nested <p> tags\nfirst_child = parent.find('p')    # First <p>\n\n# Extract structured data\ndef scrape_products(url):\n    response = requests.get(url, timeout=10)\n    soup = BeautifulSoup(response.text, 'html.parser')\n\n    products = []\n    for card in soup.select('.product-card'):\n        product = {\n            'name': card.select_one('.product-name').get_text(strip=True),\n            'price': card.select_one('.price').get_text(strip=True),\n            'url': card.select_one('a')['href'],\n        }\n        products.append(product)\n    return products\n\n# Check robots.txt\ndef check_robots_txt(base_url, path):\n    from urllib.robotparser import RobotFileParser\n    rp = RobotFileParser()\n    rp.set_url(f'{base_url}/robots.txt')\n    rp.read()\n    return rp.can_fetch('*', f'{base_url}{path}')\n\nif check_robots_txt('https://example.com', '/products'):\n    products = scrape_products('https://example.com/products')\n\n# Polite scraping with delays\ndef scrape_with_delay(urls, delay=1):\n    results = []\n    for url in urls:\n        response = requests.get(url, timeout=10)\n        soup = BeautifulSoup(response.text, 'html.parser')\n        results.append(soup.title.text if soup.title else 'No title')\n        time.sleep(delay)  # Be polite\n    return results",
+          "code_language": "python",
+          "key_points": [
+            "BeautifulSoup parses HTML; use find(), find_all(), and select() to navigate",
+            ".text or .get_text(strip=True) extracts text; ['attr'] or .get('attr') for attributes",
+            "select() supports CSS selectors (div.class > h2, #id, etc.)",
+            "Always check robots.txt and respect rate limits when scraping",
+            "Use the site's API if available instead of scraping"
+          ],
+          "gotchas": [
+            "Dynamic content loaded by JavaScript will not appear in requests.get(); use Selenium or Playwright for JS-heavy sites",
+            "Websites change their HTML structure without notice; scrapers break frequently",
+            "Scraping without rate limiting can get your IP blocked",
+            "Some content behind login walls requires session cookies; use requests.Session()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "BeautifulSoup parses HTML for data extraction. Use `soup.find()` / `soup.select()` to locate elements, `.text` for content, `['href']` for attributes. Always check `robots.txt`, add delays, and prefer APIs over scraping.",
+          "pseudo_code": "",
+          "actual_code": "from bs4 import BeautifulSoup\nimport requests\n\nsoup = BeautifulSoup(requests.get(url).text, 'html.parser')\ntitle = soup.find('h1').text\nlinks = [(a.text, a['href']) for a in soup.find_all('a')]\nprices = [p.text for p in soup.select('.product .price')]",
+          "code_language": "python",
+          "key_points": [
+            "find/find_all for tags, select for CSS selectors, .text for content",
+            "Check robots.txt, add delays, prefer APIs"
+          ],
+          "gotchas": [
+            "JavaScript-rendered content requires Selenium/Playwright, not requests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement rate limiting for a REST API?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["rate-limiting", "api", "flask", "throttling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Rate limiting** restricts how many requests a client can make in a time window, protecting your API from abuse and overload.\n\n**Common algorithms**:\n1. **Fixed window**: Count requests in fixed time intervals (e.g., 100 per minute).\n2. **Sliding window**: More accurate; considers a rolling time window.\n3. **Token bucket**: Tokens are added at a fixed rate; each request costs a token.\n4. **Leaky bucket**: Requests are processed at a steady rate; excess requests queue or are rejected.\n\n**Implementation approaches**:\n- **In-memory**: Simple dict/counter (single server only).\n- **Redis**: Distributed rate limiting across multiple servers.\n- **Flask-Limiter**: Extension that handles everything.\n\n**Response headers for rate limits**:\n- `X-RateLimit-Limit`: Max requests allowed\n- `X-RateLimit-Remaining`: Requests remaining\n- `X-RateLimit-Reset`: When the limit resets (Unix timestamp)\n- `Retry-After`: How long to wait (returned with 429)",
+          "pseudo_code": "1. Track request count per client (by IP or API key)\n2. On each request, check if limit is exceeded\n3. If exceeded, return 429 Too Many Requests\n4. Include rate limit headers in all responses\n5. Reset counters at the interval boundary",
+          "actual_code": "# Method 1: Flask-Limiter (recommended)\nfrom flask import Flask\nfrom flask_limiter import Limiter\nfrom flask_limiter.util import get_remote_address\n\napp = Flask(__name__)\nlimiter = Limiter(\n    app=app,\n    key_func=get_remote_address,  # Rate limit by IP\n    default_limits=['200 per day', '50 per hour']\n)\n\n@app.route('/api/users')\n@limiter.limit('10 per minute')  # Override default for this endpoint\ndef list_users():\n    return jsonify({'users': []})\n\n@app.route('/api/search')\n@limiter.limit('5 per minute')  # Expensive endpoint\ndef search():\n    return jsonify({'results': []})\n\n@app.route('/api/health')\n@limiter.exempt  # No rate limiting\ndef health():\n    return jsonify({'status': 'ok'})\n\n# Method 2: Manual rate limiting with in-memory store\nimport time\nfrom collections import defaultdict\nfrom flask import Flask, request, jsonify\nfrom functools import wraps\n\nrate_limit_store = defaultdict(list)\n\ndef rate_limit(max_requests, window_seconds):\n    def decorator(f):\n        @wraps(f)\n        def wrapped(*args, **kwargs):\n            client_ip = request.remote_addr\n            now = time.time()\n            key = f'{client_ip}:{f.__name__}'\n\n            # Remove old entries outside the window\n            rate_limit_store[key] = [\n                t for t in rate_limit_store[key]\n                if t > now - window_seconds\n            ]\n\n            if len(rate_limit_store[key]) >= max_requests:\n                retry_after = int(window_seconds - (now - rate_limit_store[key][0]))\n                response = jsonify({\n                    'error': 'Rate limit exceeded',\n                    'retry_after': retry_after\n                })\n                response.status_code = 429\n                response.headers['Retry-After'] = str(retry_after)\n                response.headers['X-RateLimit-Limit'] = str(max_requests)\n                response.headers['X-RateLimit-Remaining'] = '0'\n                return response\n\n            rate_limit_store[key].append(now)\n\n            response = f(*args, **kwargs)\n            remaining = max_requests - len(rate_limit_store[key])\n            response.headers['X-RateLimit-Limit'] = str(max_requests)\n            response.headers['X-RateLimit-Remaining'] = str(remaining)\n            return response\n        return wrapped\n    return decorator\n\n@app.route('/api/data')\n@rate_limit(max_requests=10, window_seconds=60)\ndef get_data():\n    return jsonify({'data': 'value'})",
+          "code_language": "python",
+          "key_points": [
+            "Flask-Limiter is the easiest approach for Flask APIs",
+            "Rate limit by IP, API key, or user ID depending on your auth model",
+            "Return 429 Too Many Requests with Retry-After header when limit is exceeded",
+            "Include X-RateLimit-* headers in all responses so clients can track usage",
+            "Use Redis as the backend for distributed rate limiting across multiple servers"
+          ],
+          "gotchas": [
+            "In-memory rate limiting does not work with multiple server processes/workers",
+            "Rate limiting by IP can block multiple users behind a shared IP (corporate networks, VPNs)",
+            "Authenticated endpoints should rate limit by user/API key, not just IP"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Rate limiting restricts requests per time window. Use `Flask-Limiter` for easy setup. Return `429 Too Many Requests` with `Retry-After` header when exceeded. Rate limit by IP or API key. Use Redis for multi-server deployments.",
+          "pseudo_code": "",
+          "actual_code": "from flask_limiter import Limiter\nfrom flask_limiter.util import get_remote_address\n\nlimiter = Limiter(app=app, key_func=get_remote_address,\n                  default_limits=['200 per day', '50 per hour'])\n\n@app.route('/api/search')\n@limiter.limit('5 per minute')\ndef search():\n    return jsonify({'results': []})",
+          "code_language": "python",
+          "key_points": [
+            "Flask-Limiter handles rate limiting with decorators",
+            "Return 429 with Retry-After; use Redis for distributed setups"
+          ],
+          "gotchas": [
+            "In-memory rate limiting fails with multiple workers; use Redis"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle file uploads and downloads in REST APIs?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": ["file-upload", "multipart", "rest", "flask"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "File uploads use `multipart/form-data` encoding, where the request body contains both file data and optional form fields. Downloads return file content with appropriate Content-Type and Content-Disposition headers.\n\n**Upload considerations**:\n- Validate file type (extension and MIME type)\n- Limit file size\n- Generate safe filenames (avoid path traversal)\n- Store files outside the web root or in cloud storage\n\n**Download approaches**:\n- Small files: Return directly from memory\n- Large files: Stream the response to avoid loading the entire file into memory",
+          "pseudo_code": "Upload:\n1. Client sends POST with multipart/form-data\n2. Server receives file via request.files\n3. Validate type, size, and filename\n4. Save to disk or cloud storage\n5. Return file metadata (URL, id, size)\n\nDownload:\n1. Client sends GET to the file endpoint\n2. Server reads file from storage\n3. Return with Content-Type and Content-Disposition headers\n4. For large files, use streaming response",
+          "actual_code": "import os\nfrom flask import Flask, request, jsonify, send_file, send_from_directory\nfrom werkzeug.utils import secure_filename\n\napp = Flask(__name__)\napp.config['UPLOAD_FOLDER'] = '/tmp/uploads'\napp.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max\n\nALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}\n\ndef allowed_file(filename):\n    return '.' in filename and \\\n           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS\n\n# File upload endpoint\n@app.route('/api/upload', methods=['POST'])\ndef upload_file():\n    if 'file' not in request.files:\n        return jsonify({'error': 'No file provided'}), 400\n\n    file = request.files['file']\n    if file.filename == '':\n        return jsonify({'error': 'No file selected'}), 400\n\n    if not allowed_file(file.filename):\n        return jsonify({'error': 'File type not allowed'}), 400\n\n    # Secure the filename to prevent path traversal\n    filename = secure_filename(file.filename)\n\n    # Save to upload folder\n    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)\n    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)\n    file.save(filepath)\n\n    return jsonify({\n        'filename': filename,\n        'size': os.path.getsize(filepath),\n        'url': f'/api/files/{filename}'\n    }), 201\n\n# Multiple file upload\n@app.route('/api/upload-multiple', methods=['POST'])\ndef upload_multiple():\n    files = request.files.getlist('files')\n    uploaded = []\n    for file in files:\n        if file and allowed_file(file.filename):\n            filename = secure_filename(file.filename)\n            file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))\n            uploaded.append(filename)\n    return jsonify({'uploaded': uploaded}), 201\n\n# File download endpoint\n@app.route('/api/files/<filename>', methods=['GET'])\ndef download_file(filename):\n    filename = secure_filename(filename)\n    return send_from_directory(\n        app.config['UPLOAD_FOLDER'],\n        filename,\n        as_attachment=True  # Forces download instead of display\n    )\n\n# Streaming large file download\n@app.route('/api/export', methods=['GET'])\ndef export_large_file():\n    def generate():\n        # Generate CSV data line by line\n        yield 'id,name,email\\n'\n        for i in range(100000):\n            yield f'{i},User {i},user{i}@example.com\\n'\n\n    return app.response_class(\n        generate(),\n        mimetype='text/csv',\n        headers={'Content-Disposition': 'attachment; filename=export.csv'}\n    )\n\n# Client-side upload with requests\nimport requests\n\n# Single file upload\nwith open('photo.jpg', 'rb') as f:\n    response = requests.post(\n        'http://localhost:5000/api/upload',\n        files={'file': ('photo.jpg', f, 'image/jpeg')}\n    )\n\n# Upload with additional form data\nwith open('document.pdf', 'rb') as f:\n    response = requests.post(\n        'http://localhost:5000/api/upload',\n        files={'file': ('document.pdf', f, 'application/pdf')},\n        data={'description': 'My document', 'category': 'reports'}\n    )",
+          "code_language": "python",
+          "key_points": [
+            "Use multipart/form-data for uploads; request.files for Flask server-side",
+            "Always validate file type, size, and use secure_filename() to prevent path traversal",
+            "MAX_CONTENT_LENGTH limits upload size; returns 413 if exceeded",
+            "send_from_directory() safely serves files; as_attachment=True forces download",
+            "Stream large downloads with generator functions to avoid memory issues"
+          ],
+          "gotchas": [
+            "secure_filename() may return empty string for filenames in non-Latin characters",
+            "Storing uploads in the web root is a security risk; use a separate directory",
+            "MAX_CONTENT_LENGTH rejection happens before your view function runs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `request.files` for uploads with `secure_filename()` for safety and `send_from_directory()` for downloads. Validate file type and size. Set `MAX_CONTENT_LENGTH` in Flask config. Stream large files with generators.",
+          "pseudo_code": "",
+          "actual_code": "from werkzeug.utils import secure_filename\n\n@app.route('/api/upload', methods=['POST'])\ndef upload():\n    file = request.files['file']\n    filename = secure_filename(file.filename)\n    file.save(f'/tmp/uploads/{filename}')\n    return jsonify({'filename': filename}), 201\n\n@app.route('/api/files/<name>')\ndef download(name):\n    return send_from_directory('/tmp/uploads', secure_filename(name))",
+          "code_language": "python",
+          "key_points": [
+            "secure_filename() prevents path traversal; validate file type and size",
+            "send_from_directory() for safe downloads; stream large files"
+          ],
+          "gotchas": [
+            "Never store uploads in the web root; use a separate directory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you make asynchronous HTTP requests in Python?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": ["async", "aiohttp", "httpx", "concurrency"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you need to make many HTTP requests, synchronous `requests` library is slow because it waits for each response before starting the next. Asynchronous HTTP clients allow concurrent requests.\n\n**Options**:\n1. **`aiohttp`** - Async HTTP client/server built on asyncio. Most mature.\n2. **`httpx`** - Modern library supporting both sync and async. Drop-in replacement for requests.\n3. **`concurrent.futures`** - Run synchronous `requests` in a thread pool.\n\n`httpx` is recommended for new projects because its API is almost identical to `requests`, making migration easy.",
+          "pseudo_code": "1. Choose an async HTTP client (httpx or aiohttp)\n2. Define async functions with async def\n3. Use asyncio.gather() to run requests concurrently\n4. Await each response\n5. Process all results when gather completes",
+          "actual_code": "import asyncio\nimport httpx\nimport aiohttp\nimport time\n\n# Method 1: httpx (recommended - closest to requests API)\nasync def fetch_with_httpx():\n    async with httpx.AsyncClient() as client:\n        # Single request\n        response = await client.get('https://httpbin.org/get', timeout=10)\n        print(response.json())\n\n        # Multiple concurrent requests\n        urls = [f'https://httpbin.org/get?id={i}' for i in range(10)]\n        tasks = [client.get(url) for url in urls]\n        responses = await asyncio.gather(*tasks)\n        results = [r.json() for r in responses]\n        return results\n\nasyncio.run(fetch_with_httpx())\n\n# Method 2: aiohttp\nasync def fetch_with_aiohttp():\n    async with aiohttp.ClientSession() as session:\n        # Single request\n        async with session.get('https://httpbin.org/get') as response:\n            data = await response.json()\n            print(data)\n\n        # Multiple concurrent requests\n        async def fetch_one(session, url):\n            async with session.get(url) as response:\n                return await response.json()\n\n        urls = [f'https://httpbin.org/get?id={i}' for i in range(10)]\n        tasks = [fetch_one(session, url) for url in urls]\n        results = await asyncio.gather(*tasks)\n        return results\n\nasyncio.run(fetch_with_aiohttp())\n\n# Method 3: concurrent.futures with synchronous requests\nimport requests\nfrom concurrent.futures import ThreadPoolExecutor, as_completed\n\ndef fetch_sync(url):\n    return requests.get(url, timeout=10).json()\n\ndef fetch_all_threaded(urls, max_workers=10):\n    results = []\n    with ThreadPoolExecutor(max_workers=max_workers) as executor:\n        future_to_url = {executor.submit(fetch_sync, url): url for url in urls}\n        for future in as_completed(future_to_url):\n            try:\n                results.append(future.result())\n            except Exception as e:\n                print(f'Error: {e}')\n    return results\n\nurls = [f'https://httpbin.org/get?id={i}' for i in range(10)]\nresults = fetch_all_threaded(urls)\n\n# Performance comparison\ndef benchmark():\n    urls = [f'https://httpbin.org/delay/1' for _ in range(5)]\n\n    # Synchronous: ~5 seconds\n    start = time.time()\n    for url in urls:\n        requests.get(url, timeout=10)\n    print(f'Sync: {time.time() - start:.1f}s')\n\n    # Async: ~1 second\n    async def async_fetch():\n        async with httpx.AsyncClient() as client:\n            tasks = [client.get(url) for url in urls]\n            await asyncio.gather(*tasks)\n\n    start = time.time()\n    asyncio.run(async_fetch())\n    print(f'Async: {time.time() - start:.1f}s')",
+          "code_language": "python",
+          "key_points": [
+            "httpx is the recommended modern async client (sync and async in one library)",
+            "asyncio.gather() runs multiple requests concurrently",
+            "Always use async context managers (async with) for client sessions",
+            "ThreadPoolExecutor is an easy way to parallelize synchronous requests",
+            "10 concurrent 1-second requests take ~1 second async vs ~10 seconds sync"
+          ],
+          "gotchas": [
+            "asyncio.run() cannot be called inside an already-running event loop (common in Jupyter)",
+            "aiohttp response.json() is a coroutine (needs await); requests response.json() is not",
+            "Too many concurrent requests can overwhelm the server; use semaphores to limit concurrency"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `httpx.AsyncClient` with `asyncio.gather()` for concurrent requests. Alternative: `concurrent.futures.ThreadPoolExecutor` for parallelizing synchronous `requests`. Async is much faster for many requests (5x with 1s latency each).",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nimport httpx\n\nasync def fetch_all(urls):\n    async with httpx.AsyncClient() as client:\n        tasks = [client.get(url) for url in urls]\n        responses = await asyncio.gather(*tasks)\n        return [r.json() for r in responses]\n\nresults = asyncio.run(fetch_all(['https://api.example.com/1', 'https://api.example.com/2']))",
+          "code_language": "python",
+          "key_points": [
+            "httpx for async requests; asyncio.gather for concurrency",
+            "ThreadPoolExecutor for parallelizing synchronous requests"
+          ],
+          "gotchas": [
+            "Limit concurrency with semaphores to avoid overwhelming the server"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you design and consume RESTful API endpoints that support filtering, sorting, and searching?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": ["rest", "filtering", "sorting", "search", "query-params"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A well-designed REST API supports flexible data retrieval through query parameters for filtering, sorting, and searching.\n\n**Filtering**: Narrow results by field values.\n- Equality: `?status=active`\n- Comparison: `?price_min=10&price_max=100` or `?price[gte]=10&price[lte]=100`\n- Multiple values: `?category=books,electronics` or `?category=books&category=electronics`\n\n**Sorting**: Order results by one or more fields.\n- `?sort=name` (ascending by default)\n- `?sort=-created_at` (prefix `-` for descending)\n- `?sort=name,-created_at` (multi-field)\n\n**Searching**: Full-text or partial match.\n- `?search=python` (global search across relevant fields)\n- `?name__contains=alice` (field-specific)",
+          "pseudo_code": "1. Parse query parameters from the request\n2. Build database query dynamically based on filters\n3. Apply sorting with order_by\n4. Apply pagination with limit/offset\n5. Return results with metadata about applied filters",
+          "actual_code": "from flask import Flask, request, jsonify\nfrom sqlalchemy import asc, desc\nfrom sqlalchemy.orm import Session\n\napp = Flask(__name__)\n\n@app.route('/api/products', methods=['GET'])\ndef list_products():\n    # Parse query parameters\n    page = request.args.get('page', 1, type=int)\n    per_page = request.args.get('per_page', 20, type=int)\n    sort = request.args.get('sort', 'name')\n    search = request.args.get('search', '')\n\n    # Filters\n    category = request.args.get('category')\n    min_price = request.args.get('min_price', type=float)\n    max_price = request.args.get('max_price', type=float)\n    is_active = request.args.get('is_active', type=lambda v: v.lower() == 'true')\n\n    with Session(engine) as session:\n        query = session.query(Product)\n\n        # Apply filters\n        if category:\n            categories = category.split(',')\n            query = query.filter(Product.category.in_(categories))\n        if min_price is not None:\n            query = query.filter(Product.price >= min_price)\n        if max_price is not None:\n            query = query.filter(Product.price <= max_price)\n        if is_active is not None:\n            query = query.filter(Product.is_active == is_active)\n\n        # Apply search\n        if search:\n            search_filter = f'%{search}%'\n            query = query.filter(\n                Product.name.ilike(search_filter) |\n                Product.description.ilike(search_filter)\n            )\n\n        # Apply sorting\n        for sort_field in sort.split(','):\n            sort_field = sort_field.strip()\n            if sort_field.startswith('-'):\n                column = getattr(Product, sort_field[1:], None)\n                if column:\n                    query = query.order_by(desc(column))\n            else:\n                column = getattr(Product, sort_field, None)\n                if column:\n                    query = query.order_by(asc(column))\n\n        # Get total count before pagination\n        total = query.count()\n\n        # Apply pagination\n        products = query.offset((page - 1) * per_page).limit(per_page).all()\n\n        return jsonify({\n            'data': [{'id': p.id, 'name': p.name, 'price': p.price} for p in products],\n            'meta': {\n                'page': page,\n                'per_page': per_page,\n                'total': total,\n                'total_pages': (total + per_page - 1) // per_page,\n            },\n            'filters_applied': {\n                'category': category,\n                'min_price': min_price,\n                'max_price': max_price,\n                'search': search,\n                'sort': sort,\n            }\n        })\n\n# Client consuming the API\nimport requests\n\nresponse = requests.get(\n    'https://api.example.com/products',\n    params={\n        'category': 'books,electronics',\n        'min_price': 10,\n        'max_price': 100,\n        'sort': '-price,name',\n        'search': 'python',\n        'page': 1,\n        'per_page': 25,\n    },\n    timeout=10\n)\ndata = response.json()\nprint(f\"Found {data['meta']['total']} products\")\nfor product in data['data']:\n    print(f\"  {product['name']}: ${product['price']}\")",
+          "code_language": "python",
+          "key_points": [
+            "Use query parameters for filtering (?field=value), sorting (?sort=-field), and searching (?search=term)",
+            "Prefix with - for descending sort; comma-separate for multi-field sorting",
+            "Validate and whitelist sortable/filterable fields to prevent SQL injection via getattr",
+            "Return metadata about applied filters so clients can verify their request",
+            "Always paginate list endpoints to avoid returning unbounded result sets"
+          ],
+          "gotchas": [
+            "Using getattr with user input for column names can expose internal model attributes; whitelist allowed fields",
+            "Counting total results (query.count()) can be slow on large tables; consider caching or approximate counts",
+            "Multiple values for the same param (?tag=a&tag=b) are handled with request.args.getlist('tag') in Flask"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use query params for filtering (`?status=active`), sorting (`?sort=-created_at`), and searching (`?search=term`). Build the database query dynamically. Always paginate and whitelist allowed filter/sort fields.",
+          "pseudo_code": "",
+          "actual_code": "# API: GET /api/products?category=books&min_price=10&sort=-price&search=python&page=1\n\nquery = session.query(Product)\nif category:\n    query = query.filter(Product.category == category)\nif search:\n    query = query.filter(Product.name.ilike(f'%{search}%'))\nif sort.startswith('-'):\n    query = query.order_by(desc(getattr(Product, sort[1:])))\nproducts = query.offset((page-1)*per_page).limit(per_page).all()",
+          "code_language": "python",
+          "key_points": [
+            "Query params for filtering/sorting/search; dynamic query building",
+            "Whitelist allowed fields; always paginate"
+          ],
+          "gotchas": [
+            "Whitelist sortable/filterable fields to prevent information leakage"
+          ]
+        }
+      ]
+    }
+  ]
+}

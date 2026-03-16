@@ -1,0 +1,509 @@
+{
+  "concept_slug": "operators-expressions",
+  "questions": [
+    {
+      "title": "What are the arithmetic operators in Python and how do they behave with different types?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["arithmetic", "operators", "division", "modulo"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides these arithmetic operators:\n\n| Operator | Operation | Example |\n|----------|-----------|----------|\n| `+` | Addition | `5 + 3` = `8` |\n| `-` | Subtraction | `5 - 3` = `2` |\n| `*` | Multiplication | `5 * 3` = `15` |\n| `/` | True division | `7 / 2` = `3.5` |\n| `//` | Floor division | `7 // 2` = `3` |\n| `%` | Modulo | `7 % 2` = `1` |\n| `**` | Exponentiation | `2 ** 3` = `8` |\n\n**True division (`/`)** always returns a float, even for integers: `6 / 3` gives `2.0`.\n\n**Floor division (`//`)** rounds toward negative infinity: `-7 // 2` gives `-4`, not `-3`.\n\n**Modulo (`%`)** follows the sign of the divisor in Python: `-7 % 2` gives `1` (not `-1` as in C).\n\n**Type promotion:** int op float gives float; int op complex gives complex.\n\nOperators also work on non-numeric types: `+` concatenates strings/lists, `*` repeats sequences.",
+          "pseudo_code": "/ always returns float: 6 / 3 = 2.0\n// floors toward negative infinity: -7 // 2 = -4\n% follows divisor's sign: -7 % 2 = 1\n** is exponentiation: 2 ** 3 = 8\n\nInvariant: a == (a // b) * b + (a % b)",
+          "actual_code": "# Basic arithmetic\nprint(5 + 3)    # 8\nprint(5 - 3)    # 2\nprint(5 * 3)    # 15\nprint(7 / 2)    # 3.5 (true division, always float)\nprint(6 / 3)    # 2.0 (still float!)\nprint(7 // 2)   # 3 (floor division)\nprint(7 % 2)    # 1 (modulo)\nprint(2 ** 10)  # 1024 (exponentiation)\n\n# Floor division rounds toward negative infinity\nprint(7 // 2)    # 3\nprint(-7 // 2)   # -4 (not -3!)\nprint(7.5 // 2)  # 3.0 (floor div with float gives float)\n\n# Modulo follows the divisor's sign\nprint(7 % 3)     # 1\nprint(-7 % 3)    # 2 (not -1!)\nprint(7 % -3)    # -2\n\n# The invariant always holds: a == (a // b) * b + (a % b)\na, b = -7, 2\nprint(a == (a // b) * b + (a % b))  # True\n\n# Type promotion\nprint(type(5 + 3.0))   # <class 'float'>\nprint(type(5 + 3j))    # <class 'complex'>\n\n# Operators on non-numeric types\nprint(\"hello\" + \" world\")  # 'hello world'\nprint(\"ha\" * 3)            # 'hahaha'\nprint([1, 2] + [3, 4])    # [1, 2, 3, 4]\nprint([0] * 5)             # [0, 0, 0, 0, 0]",
+          "code_language": "python",
+          "key_points": [
+            "/ always returns float, even for exact integer division",
+            "// floors toward negative infinity, not toward zero",
+            "% follows the divisor's sign, unlike C",
+            "The invariant a == (a // b) * b + (a % b) always holds",
+            "+ concatenates sequences, * repeats them"
+          ],
+          "gotchas": [
+            "-7 // 2 is -4 (floor), not -3 (truncation) -- different from C/Java",
+            "-7 % 2 is 1 in Python, but -1 in C/Java",
+            "6 / 3 gives 2.0, not 2 -- use // for integer result",
+            "[0] * 3 creates [0, 0, 0] with shared references -- fine for immutables, dangerous for mutables: [[]] * 3 shares the same inner list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python has `+`, `-`, `*`, `/` (true div, returns float), `//` (floor div), `%` (modulo), `**` (power). Floor division rounds toward negative infinity. Modulo follows the divisor's sign.",
+          "pseudo_code": "",
+          "actual_code": "print(7 / 2)     # 3.5 (always float)\nprint(7 // 2)    # 3 (floor)\nprint(-7 // 2)   # -4 (toward -inf, not -3)\nprint(-7 % 2)    # 1 (not -1)\nprint(2 ** 10)   # 1024",
+          "code_language": "python",
+          "key_points": [
+            "/ always returns float",
+            "// floors toward negative infinity"
+          ],
+          "gotchas": [
+            "-7 // 2 is -4 in Python, but -3 in C/Java"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do comparison operators work in Python, and what is chained comparison?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["comparison", "operators", "chaining"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides six comparison operators: `==`, `!=`, `<`, `>`, `<=`, `>=`.\n\nAll comparisons return `bool` (`True` or `False`).\n\n**Chained comparisons** are a Pythonic feature that lets you write mathematical-style ranges:\n`1 < x < 10` is equivalent to `1 < x and x < 10`, but `x` is evaluated only once.\n\nThis works with any comparison operators, even mixed: `a < b <= c > d`.\n\n**Comparison behavior by type:**\n- Numbers: mathematical comparison (int and float can be compared)\n- Strings: lexicographic (Unicode codepoint) comparison\n- Lists/tuples: element-by-element comparison\n- Sets: subset/superset relationships\n- Different incompatible types: `TypeError` for ordering (`<`, `>`), but `==` returns `False`",
+          "pseudo_code": "Chained: a < b < c  <==>  a < b and b < c\n  - b is evaluated only once\n  - works with any mix of comparison operators\n\nString: 'apple' < 'banana' (lexicographic)\nList: [1, 2] < [1, 3] (element-by-element)\nSet: {1} < {1, 2} (proper subset)",
+          "actual_code": "# Basic comparisons\nprint(5 == 5)     # True\nprint(5 != 3)     # True\nprint(5 > 3)      # True\nprint(5 >= 5)     # True\n\n# Chained comparisons -- Pythonic!\nx = 5\nprint(1 < x < 10)      # True (1 < 5 and 5 < 10)\nprint(1 < x < 3)       # False (5 < 3 is False)\nprint(1 <= x <= 10)    # True\nprint(1 < x > 3)       # True (1 < 5 and 5 > 3)\n\n# x is evaluated only once in chains\ndef get_value():\n    print(\"called!\")\n    return 5\n\nresult = 1 < get_value() < 10  # prints \"called!\" only once\nprint(result)  # True\n\n# String comparison (lexicographic)\nprint(\"apple\" < \"banana\")   # True\nprint(\"abc\" < \"abd\")        # True\nprint(\"A\" < \"a\")            # True (uppercase < lowercase in Unicode)\n\n# List/tuple comparison (element by element)\nprint([1, 2, 3] < [1, 2, 4])  # True (differs at index 2)\nprint([1, 2] < [1, 2, 0])     # True (shorter < longer when prefix matches)\nprint((1, 2) == (1, 2))       # True\n\n# Set comparison (subset/superset)\nprint({1, 2} < {1, 2, 3})     # True (proper subset)\nprint({1, 2} <= {1, 2})       # True (subset or equal)\nprint({1, 2} < {1, 2})        # False (not proper subset)\n\n# Cross-type comparison\nprint(5 == 5.0)       # True (int and float)\nprint(5 == \"5\")       # False (no error, just False)\ntry:\n    5 < \"5\"\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # '<' not supported between int and str",
+          "code_language": "python",
+          "key_points": [
+            "Chained comparisons: 1 < x < 10 evaluates x only once",
+            "Strings compare lexicographically by Unicode codepoint",
+            "Lists/tuples compare element by element, shorter is less",
+            "Sets use < for proper subset, <= for subset-or-equal",
+            "== across incompatible types returns False; < raises TypeError"
+          ],
+          "gotchas": [
+            "'A' < 'a' is True because uppercase letters have lower Unicode codepoints",
+            "5 == 5.0 is True but 5 is 5.0 is False",
+            "'10' < '9' is True (lexicographic, not numeric)",
+            "Comparing None with < or > raises TypeError in Python 3"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python supports `==`, `!=`, `<`, `>`, `<=`, `>=`. Chained comparisons like `1 < x < 10` work and evaluate `x` only once. Strings compare lexicographically, lists element-by-element, sets by subset relation.",
+          "pseudo_code": "",
+          "actual_code": "x = 5\nprint(1 < x < 10)    # True\nprint(\"apple\" < \"banana\")   # True (lexicographic)\nprint([1, 2] < [1, 3])     # True (element-by-element)",
+          "code_language": "python",
+          "key_points": [
+            "Chained comparisons evaluate middle expression once",
+            "Different types for < raise TypeError"
+          ],
+          "gotchas": [
+            "'10' < '9' is True -- string comparison is lexicographic, not numeric"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do logical operators (and, or, not) work in Python? What is short-circuit evaluation?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["logical-operators", "short-circuit", "truthiness"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's logical operators are `and`, `or`, and `not` (keywords, not symbols).\n\n**Short-circuit evaluation:**\n- `and` returns the first falsy value, or the last value if all are truthy\n- `or` returns the first truthy value, or the last value if all are falsy\n- `not` always returns a `bool`\n\n**Key insight:** `and` and `or` do NOT necessarily return `True`/`False`. They return one of their operands. This is useful for default values and guard patterns.\n\n**Truthiness rules:**\nFalsy values: `False`, `None`, `0`, `0.0`, `\"\"`, `[]`, `()`, `{}`, `set()`, `0j`\nEverything else is truthy.\n\n**Short-circuit means:**\n- `and` does not evaluate the right side if the left is falsy\n- `or` does not evaluate the right side if the left is truthy\n- This can prevent errors and improve performance",
+          "pseudo_code": "and: returns first falsy, or last value if all truthy\n  0 and 5 -> 0\n  3 and 5 -> 5\n\nor: returns first truthy, or last value if all falsy\n  0 or 5 -> 5\n  3 or 5 -> 3\n\nnot: always returns bool\n  not 0 -> True\n  not 5 -> False",
+          "actual_code": "# 'and' returns first falsy value, or last value\nprint(3 and 5)       # 5 (both truthy, return last)\nprint(0 and 5)       # 0 (first is falsy, return it)\nprint(3 and 0)       # 0 (second is falsy, return it)\nprint(\"\" and \"hi\")   # '' (first is falsy)\nprint(\"hi\" and \"bye\")  # 'bye' (both truthy, return last)\n\n# 'or' returns first truthy value, or last value\nprint(3 or 5)        # 3 (first is truthy, return it)\nprint(0 or 5)        # 5 (first falsy, check second)\nprint(0 or \"\")       # '' (both falsy, return last)\nprint(\"\" or \"default\")  # 'default'\n\n# 'not' always returns bool\nprint(not 0)         # True\nprint(not 42)        # False\nprint(not \"\")        # True\nprint(not \"hello\")   # False\n\n# Short-circuit prevents evaluation\ndef expensive():\n    print(\"evaluated!\")\n    return True\n\nresult = False and expensive()  # expensive() is never called\nprint(result)  # False\n\nresult = True or expensive()   # expensive() is never called\nprint(result)  # True\n\n# Practical: default values with 'or'\nname = \"\" or \"Anonymous\"\nprint(name)  # 'Anonymous'\n\nuser_input = input(\"Name: \") if False else \"default\"  # example pattern\n\n# Practical: guard with 'and'\nlst = []\nfirst = lst and lst[0]   # short-circuits, avoids IndexError\nprint(first)  # [] (falsy, never accesses lst[0])\n\nlst = [42]\nfirst = lst and lst[0]   # lst is truthy, so evaluates lst[0]\nprint(first)  # 42\n\n# Operator precedence: not > and > or\nprint(True or False and False)   # True (and binds tighter)\nprint((True or False) and False) # False",
+          "code_language": "python",
+          "key_points": [
+            "and/or return operands, not necessarily True/False",
+            "and returns first falsy value or last value",
+            "or returns first truthy value or last value",
+            "Short-circuit: right side may never be evaluated",
+            "Precedence: not > and > or"
+          ],
+          "gotchas": [
+            "'and'/'or' return actual values, not bools -- 0 or 5 gives 5, not True",
+            "Using 'or' for defaults fails with legitimate falsy values: 0 or 'default' gives 'default' even if 0 was intended",
+            "Precedence: 'not a == b' means 'not (a == b)', not '(not a) == b'",
+            "Short-circuit can hide bugs -- side effects in the right operand may not execute"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`and` returns the first falsy value or the last value. `or` returns the first truthy value or the last value. `not` returns a bool. Short-circuit evaluation means the right operand may not be evaluated.",
+          "pseudo_code": "",
+          "actual_code": "print(0 and 5)       # 0 (short-circuits)\nprint(0 or 5)        # 5 (first truthy)\nprint(\"\" or \"default\")  # 'default'\nprint(not 0)         # True",
+          "code_language": "python",
+          "key_points": [
+            "and/or return operands, not bools",
+            "Short-circuit: right side may not execute"
+          ],
+          "gotchas": [
+            "0 or 'default' gives 'default' even if 0 was the intended value"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are bitwise operators in Python and when would you use them?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["bitwise", "operators", "binary"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Bitwise operators work on the binary representation of integers:\n\n| Operator | Operation | Example |\n|----------|-----------|----------|\n| `&` | AND | `5 & 3` = `1` |\n| `\\|` | OR | `5 \\| 3` = `7` |\n| `^` | XOR | `5 ^ 3` = `6` |\n| `~` | NOT (complement) | `~5` = `-6` |\n| `<<` | Left shift | `5 << 1` = `10` |\n| `>>` | Right shift | `5 >> 1` = `2` |\n\n**Common use cases:**\n- Flags and permissions (Unix file permissions)\n- Efficient multiplication/division by powers of 2\n- Bit masking and extraction\n- Cryptography and hashing\n- Low-level protocol encoding\n- XOR swap, XOR parity checks\n\n**Python-specific:** Since integers are arbitrary precision, bitwise operations work on arbitrarily large numbers. The `~` operator gives `-(x+1)` due to two's complement.",
+          "pseudo_code": "5 in binary:  101\n3 in binary:  011\n\n5 & 3 = 001 = 1  (AND: both bits 1)\n5 | 3 = 111 = 7  (OR: either bit 1)\n5 ^ 3 = 110 = 6  (XOR: bits differ)\n~5 = -(5+1) = -6 (NOT: invert + two's complement)\n5 << 1 = 1010 = 10  (left shift = multiply by 2)\n5 >> 1 = 10 = 2     (right shift = integer divide by 2)",
+          "actual_code": "# Bitwise AND -- common bits\nprint(5 & 3)    # 1  (101 & 011 = 001)\n\n# Bitwise OR -- any bit\nprint(5 | 3)    # 7  (101 | 011 = 111)\n\n# Bitwise XOR -- differing bits\nprint(5 ^ 3)    # 6  (101 ^ 011 = 110)\n\n# Bitwise NOT -- inverts all bits\nprint(~5)       # -6 (two's complement: -(5+1))\n\n# Left shift -- multiply by 2^n\nprint(5 << 1)   # 10 (5 * 2)\nprint(5 << 3)   # 40 (5 * 8)\n\n# Right shift -- integer divide by 2^n\nprint(20 >> 1)  # 10 (20 // 2)\nprint(20 >> 2)  # 5  (20 // 4)\n\n# Practical: permission flags\nREAD = 0b100    # 4\nWRITE = 0b010   # 2\nEXEC = 0b001    # 1\n\npermissions = READ | WRITE  # combine: 0b110 = 6\nprint(f\"Permissions: {permissions:03b}\")  # 110\n\n# Check if permission is set\nprint(bool(permissions & READ))   # True\nprint(bool(permissions & EXEC))   # False\n\n# Add a permission\npermissions |= EXEC\nprint(f\"Permissions: {permissions:03b}\")  # 111\n\n# Remove a permission\npermissions &= ~WRITE\nprint(f\"Permissions: {permissions:03b}\")  # 101\n\n# Toggle a permission with XOR\npermissions ^= READ\nprint(f\"Permissions: {permissions:03b}\")  # 001\n\n# Check if a number is even/odd\ndef is_even(n):\n    return (n & 1) == 0\n\nprint(is_even(4))  # True\nprint(is_even(7))  # False\n\n# XOR swap (no temp variable needed)\na, b = 5, 3\na ^= b\nb ^= a\na ^= b\nprint(a, b)  # 3 5",
+          "code_language": "python",
+          "key_points": [
+            "& (AND), | (OR), ^ (XOR), ~ (NOT), << (left shift), >> (right shift)",
+            "Left shift by n multiplies by 2^n, right shift divides by 2^n",
+            "Common for flags, permissions, and bit masking",
+            "~x equals -(x+1) in Python due to two's complement",
+            "n & 1 checks if a number is odd"
+          ],
+          "gotchas": [
+            "~ on Python's arbitrary-precision int gives -(x+1), not a fixed-width inversion",
+            "Bitwise operators have lower precedence than comparison operators: x & 3 == 1 means x & (3 == 1)",
+            "Do not confuse & (bitwise AND) with 'and' (logical AND)",
+            "Do not confuse | (bitwise OR) with 'or' (logical OR)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Bitwise operators: `&` (AND), `|` (OR), `^` (XOR), `~` (NOT), `<<` (left shift), `>>` (right shift). They work on binary representations. Common for flags, permissions, and checking even/odd (`n & 1`).",
+          "pseudo_code": "",
+          "actual_code": "print(5 & 3)    # 1  (AND)\nprint(5 | 3)    # 7  (OR)\nprint(5 ^ 3)    # 6  (XOR)\nprint(5 << 1)   # 10 (multiply by 2)\nprint(5 >> 1)   # 2  (divide by 2)\n\n# Check odd/even\nprint(7 & 1)    # 1 (odd)\nprint(8 & 1)    # 0 (even)",
+          "code_language": "python",
+          "key_points": [
+            "Work on binary representations of integers",
+            "Common for flags and bitmask operations"
+          ],
+          "gotchas": [
+            "Bitwise & | have lower precedence than == -- use parentheses"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are identity operators (is, is not) and membership operators (in, not in)?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["identity", "membership", "is", "in"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Identity operators (`is`, `is not`):**\nCheck whether two variables reference the **same object** in memory (same `id()`). They do NOT compare values.\n\n**Membership operators (`in`, `not in`):**\nCheck whether a value exists **within** a container. They call the `__contains__` method, or iterate through the object.\n\n**`in` works with:**\n- Lists, tuples, sets: checks if element is present\n- Dicts: checks if **key** exists (not value)\n- Strings: checks if **substring** exists\n- Any object implementing `__contains__` or `__iter__`\n\n**Performance of `in`:**\n- `set`/`frozenset`/`dict`: O(1) average (hash lookup)\n- `list`/`tuple`: O(n) (linear scan)\n- `str`: O(n) for substring search",
+          "pseudo_code": "Identity:\n  a is b     -> id(a) == id(b)  (same object?)\n  a is not b -> id(a) != id(b)\n\nMembership:\n  x in collection   -> is x present?\n  x not in collection -> is x absent?\n\nPerformance:\n  set/dict: O(1) lookup\n  list/tuple: O(n) scan\n  str: O(n) substring search",
+          "actual_code": "# Identity operators\na = [1, 2, 3]\nb = a\nc = [1, 2, 3]\n\nprint(a is b)       # True (same object)\nprint(a is c)       # False (different objects, same value)\nprint(a is not c)   # True\n\n# Always use 'is' for None, True, False\nx = None\nprint(x is None)       # True -- correct\nprint(x is not None)   # False\n\n# Membership with lists/tuples\nprint(3 in [1, 2, 3])          # True\nprint(4 not in (1, 2, 3))     # True\n\n# Membership with sets -- O(1)\ncolors = {\"red\", \"green\", \"blue\"}\nprint(\"red\" in colors)         # True\nprint(\"yellow\" not in colors)  # True\n\n# Membership with dicts -- checks KEYS, not values\nuser = {\"name\": \"Alice\", \"age\": 30}\nprint(\"name\" in user)    # True (key exists)\nprint(\"Alice\" in user)   # False (Alice is a value, not a key)\nprint(30 in user)         # False (30 is a value)\n\n# To check values:\nprint(\"Alice\" in user.values())  # True\n\n# Membership with strings -- substring check\nprint(\"hell\" in \"hello\")    # True (substring)\nprint(\"xyz\" not in \"hello\") # True\n\n# Performance comparison\nimport timeit\n\nbig_list = list(range(100000))\nbig_set = set(range(100000))\n\nlist_time = timeit.timeit(lambda: 99999 in big_list, number=1000)\nset_time = timeit.timeit(lambda: 99999 in big_set, number=1000)\nprint(f\"List lookup: {list_time:.4f}s\")\nprint(f\"Set lookup:  {set_time:.4f}s\")  # Much faster!",
+          "code_language": "python",
+          "key_points": [
+            "'is' checks identity (same object), '==' checks equality (same value)",
+            "Use 'is' only for None, True, False",
+            "'in' checks membership in any container",
+            "'in' on a dict checks keys, not values",
+            "set/dict 'in' is O(1), list/tuple 'in' is O(n)"
+          ],
+          "gotchas": [
+            "'in' on a dict checks KEYS only -- use 'x in d.values()' for value lookup",
+            "'is' on integers may give unexpected True for small numbers (-5 to 256) due to caching",
+            "'abc' in 'xabcx' is True -- 'in' checks substrings for strings",
+            "'not in' is a single operator, not 'not (x in y)' -- though they give the same result"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`is`/`is not` check object identity (same memory). `in`/`not in` check membership. Use `is` for `None`. `in` checks keys for dicts, substrings for strings. Set/dict `in` is O(1), list is O(n).",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2]\nb = a\nprint(a is b)          # True (same object)\n\nprint(3 in [1, 2, 3])       # True\nprint(\"name\" in {\"name\": \"Alice\"})  # True (checks keys)\nprint(\"hell\" in \"hello\")     # True (substring)",
+          "code_language": "python",
+          "key_points": [
+            "'is' for identity, 'in' for membership",
+            "Dict 'in' checks keys, not values"
+          ],
+          "gotchas": [
+            "'in' on dict checks KEYS only, not values"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is operator precedence in Python and what are the common pitfalls?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["precedence", "order-of-operations", "operators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Operator precedence determines the order in which operators are evaluated. From **highest** to **lowest** priority:\n\n1. `()` -- Parentheses (grouping)\n2. `**` -- Exponentiation\n3. `~`, `+x`, `-x` -- Unary NOT, positive, negative\n4. `*`, `/`, `//`, `%` -- Multiplication, division, floor div, modulo\n5. `+`, `-` -- Addition, subtraction\n6. `<<`, `>>` -- Bitwise shifts\n7. `&` -- Bitwise AND\n8. `^` -- Bitwise XOR\n9. `|` -- Bitwise OR\n10. `==`, `!=`, `<`, `>`, `<=`, `>=`, `is`, `in` -- Comparisons\n11. `not` -- Logical NOT\n12. `and` -- Logical AND\n13. `or` -- Logical OR\n14. `if else` -- Ternary conditional\n15. `=`, `+=`, etc. -- Assignment\n\n**Exponentiation is right-associative:** `2 ** 3 ** 2` = `2 ** 9` = `512`\n**All others are left-associative:** `10 - 5 - 2` = `(10 - 5) - 2` = `3`\n\nWhen in doubt, use parentheses for clarity.",
+          "pseudo_code": "Highest to lowest:\n  () > ** > unary > * / // % > + - > shifts > & > ^ > | > comparisons > not > and > or\n\nRight-associative: **\nLeft-associative: everything else\n\nRule of thumb: when in doubt, use parentheses",
+          "actual_code": "# Exponentiation binds tighter than unary minus\nprint(-2 ** 2)     # -4, not 4! It's -(2**2)\nprint((-2) ** 2)   # 4\n\n# Exponentiation is right-associative\nprint(2 ** 3 ** 2)     # 512 = 2 ** (3 ** 2) = 2 ** 9\nprint((2 ** 3) ** 2)   # 64\n\n# Multiplication before addition\nprint(2 + 3 * 4)     # 14, not 20\nprint((2 + 3) * 4)   # 20\n\n# Comparison before logical\nprint(1 < 2 and 3 < 4)  # True (comparisons first, then 'and')\n\n# 'not' binds looser than comparisons\nprint(not 1 == 2)     # True = not (1 == 2) = not False\n# print(not 1 == 2) is NOT (not 1) == 2\n\n# Bitwise operators have LOW precedence!\nprint(5 & 3 == 1)     # False! Parsed as 5 & (3 == 1) = 5 & True = 1... wait\nprint((5 & 3) == 1)   # True  (5 & 3 = 1, then 1 == 1)\n# Always use parentheses with bitwise operators!\n\n# 'or' has lower precedence than 'and'\nprint(True or False and False)   # True = True or (False and False)\nprint((True or False) and False) # False\n\n# Ternary has very low precedence\nx = 5\nresult = \"positive\" if x > 0 else \"non-positive\"\nprint(result)  # 'positive'\n\n# Assignment is lowest (can't be used in expressions normally)\n# Use walrus operator := for assignment expressions\nimport re\nif (match := re.search(r'\\d+', 'abc123')):\n    print(match.group())  # 123",
+          "code_language": "python",
+          "key_points": [
+            "** is right-associative: 2**3**2 = 2**(3**2) = 512",
+            "-2**2 is -4, not 4 -- ** binds tighter than unary minus",
+            "Bitwise operators have lower precedence than comparison operators",
+            "'not' has lower precedence than comparisons: not 1 == 2 means not (1 == 2)",
+            "When in doubt, use parentheses"
+          ],
+          "gotchas": [
+            "-2**2 is -4 because ** binds tighter than unary -",
+            "5 & 3 == 1 is parsed as 5 & (3 == 1) -- always parenthesize bitwise operators",
+            "True or False and False is True, not False -- 'and' binds tighter than 'or'",
+            "not in and is not are single operators, not combinations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Precedence from highest: `()` > `**` > unary > `*////%` > `+-` > shifts > `&^|` > comparisons > `not` > `and` > `or`. `**` is right-associative. Bitwise operators have surprisingly low precedence. When in doubt, use parentheses.",
+          "pseudo_code": "",
+          "actual_code": "print(-2 ** 2)        # -4 (** before unary -)\nprint(2 ** 3 ** 2)    # 512 (right-associative)\nprint(5 & 3 == 1)     # False (== before &!)\nprint((5 & 3) == 1)   # True (explicit grouping)",
+          "code_language": "python",
+          "key_points": [
+            "** is right-associative and binds tighter than unary -",
+            "Bitwise ops have lower precedence than comparisons"
+          ],
+          "gotchas": [
+            "-2**2 is -4, not 4"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does short-circuit evaluation work with 'and' and 'or', and what are practical uses?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["short-circuit", "and", "or", "patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Short-circuit evaluation means Python stops evaluating a boolean expression as soon as the result is determined:\n\n- `and`: if the left operand is falsy, the right is **never evaluated** (result is already falsy)\n- `or`: if the left operand is truthy, the right is **never evaluated** (result is already truthy)\n\n**Practical patterns:**\n\n1. **Default values with `or`:** `name = user_name or \"Anonymous\"`\n2. **Guard clauses with `and`:** `lst and lst[0]` (safe access)\n3. **Conditional execution:** `debug and print(\"debug info\")`\n4. **Null-safe chaining:** `obj and obj.method()`\n\n**Important:** Since `and`/`or` return operands (not bools), these patterns return actual values, which is both powerful and occasionally confusing.",
+          "pseudo_code": "Short-circuit rules:\n  False and ANYTHING -> False (ANYTHING never evaluated)\n  True or ANYTHING -> True (ANYTHING never evaluated)\n\nPatterns:\n  x or default -> default value if x is falsy\n  guard and action -> only act if guard is truthy\n  a and b or c -> like ternary (but has edge cases)",
+          "actual_code": "# Short-circuit: right side not evaluated\ndef side_effect():\n    print(\"I was called!\")\n    return True\n\nresult = False and side_effect()  # side_effect() never called\nprint(result)  # False\n\nresult = True or side_effect()   # side_effect() never called\nprint(result)  # True\n\n# Pattern 1: Default values with 'or'\nuser_name = \"\"\ndisplay_name = user_name or \"Anonymous\"\nprint(display_name)  # 'Anonymous'\n\nconfig_port = 0  # Caution: 0 is falsy!\nport = config_port or 8080\nprint(port)  # 8080 (bug if 0 was intentional!)\n\n# Pattern 2: Guard clause with 'and'\ndata = []\nfirst = data and data[0]    # short-circuits, no IndexError\nprint(first)  # []\n\ndata = [42, 99]\nfirst = data and data[0]    # data is truthy, evaluates data[0]\nprint(first)  # 42\n\n# Pattern 3: Conditional execution\ndebug = True\ndebug and print(\"Debug: processing started\")  # prints\n\ndebug = False\ndebug and print(\"Debug: processing started\")  # does NOT print\n\n# Pattern 4: Chain of fallbacks\ndef get_name(user):\n    return user.get(\"display_name\") or user.get(\"username\") or \"Unknown\"\n\nprint(get_name({\"username\": \"alice\"}))            # 'alice'\nprint(get_name({\"display_name\": \"Alice B.\"}))     # 'Alice B.'\nprint(get_name({}))                                # 'Unknown'\n\n# Avoiding side effects with short-circuit\ndef divide(a, b):\n    return b != 0 and a / b\n\nprint(divide(10, 2))   # 5.0\nprint(divide(10, 0))   # False (no ZeroDivisionError)",
+          "code_language": "python",
+          "key_points": [
+            "and: stops at first falsy, or returns first truthy (or last value)",
+            "or: stops at first truthy, returns first truthy (or last value)",
+            "Right operand may never be evaluated",
+            "'x or default' is a common pattern for default values",
+            "'guard and expr' is a common pattern for safe access"
+          ],
+          "gotchas": [
+            "'x or default' fails for legitimate falsy values: 0 or default gives default",
+            "'a and b or c' is NOT a safe ternary -- fails if b is falsy",
+            "Side effects in short-circuited expressions silently skip",
+            "Use 'x if condition else y' instead of 'condition and x or y'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Short-circuit: `and` stops at first falsy, `or` stops at first truthy. The right side may never execute. Useful for defaults (`x or default`), guards (`lst and lst[0]`), and conditional execution.",
+          "pseudo_code": "",
+          "actual_code": "# Default value\nname = \"\" or \"Anonymous\"  # 'Anonymous'\n\n# Guard clause\nlst = []\nfirst = lst and lst[0]  # [] (no IndexError)\n\n# Fallback chain\nresult = None or 0 or \"\" or \"found\"  # 'found'",
+          "code_language": "python",
+          "key_points": [
+            "and: stops at first falsy; or: stops at first truthy",
+            "Useful for defaults and guard clauses"
+          ],
+          "gotchas": [
+            "'0 or default' gives default even if 0 was intended"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are augmented assignment operators and how do they differ for mutable vs immutable types?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["augmented-assignment", "operators", "mutability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Augmented assignment operators combine an operation with assignment: `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `**=`, `&=`, `|=`, `^=`, `<<=`, `>>=`.\n\n`x += y` is **not** always the same as `x = x + y`!\n\nFor **immutable types** (int, str, tuple):\n- `x += y` creates a new object and rebinds `x` -- equivalent to `x = x + y`\n\nFor **mutable types** (list, set, dict):\n- `x += y` calls `__iadd__` which **modifies in-place** -- NOT the same as `x = x + y`\n- `x = x + y` creates a new object\n\nThis distinction matters when other names reference the same object.",
+          "pseudo_code": "Immutable (int, str, tuple):\n  x += y  ->  x = x.__iadd__(y)  ->  x = x.__add__(y)  ->  new object\n\nMutable (list, set):\n  x += y  ->  x.__iadd__(y)  ->  modifies x in place\n  x = x + y  ->  x.__add__(y)  ->  creates new object",
+          "actual_code": "# Immutable: += creates new object\nx = 5\nprint(id(x))\nx += 3       # x = x + 3, creates new int(8)\nprint(id(x))  # different id\nprint(x)      # 8\n\n# Mutable list: += modifies in-place\na = [1, 2]\nb = a          # b references same list\nprint(id(a))\na += [3, 4]    # calls __iadd__, modifies in-place\nprint(id(a))   # SAME id\nprint(a)       # [1, 2, 3, 4]\nprint(b)       # [1, 2, 3, 4] -- b sees the change!\n\n# Mutable list: a = a + [3, 4] creates NEW list\na = [1, 2]\nb = a\na = a + [3, 4]  # creates new list, rebinds a\nprint(a)  # [1, 2, 3, 4]\nprint(b)  # [1, 2] -- b still points to old list!\n\n# Tuple: += creates new tuple\nt = (1, 2)\nprint(id(t))\nt += (3, 4)  # creates new tuple\nprint(id(t))  # different id\nprint(t)      # (1, 2, 3, 4)\n\n# Set augmented operators\ns = {1, 2, 3}\ns |= {4, 5}     # in-place union\nprint(s)         # {1, 2, 3, 4, 5}\ns &= {2, 3, 4}  # in-place intersection\nprint(s)         # {2, 3, 4}\ns -= {4}         # in-place difference\nprint(s)         # {2, 3}\n\n# The famous tuple-in-list gotcha\nt = ([1, 2],)\ntry:\n    t[0] += [3]  # raises TypeError but STILL modifies the list!\nexcept TypeError as e:\n    print(f\"Error: {e}\")\nprint(t)  # ([1, 2, 3],) -- the list was modified despite the error!",
+          "code_language": "python",
+          "key_points": [
+            "+= on mutable types modifies in-place (calls __iadd__)",
+            "+= on immutable types creates a new object",
+            "a += b is NOT always the same as a = a + b for mutable types",
+            "Other names referencing the same mutable object will see in-place changes",
+            "Set supports |=, &=, -=, ^= for in-place operations"
+          ],
+          "gotchas": [
+            "lst += [x] modifies the list in-place; lst = lst + [x] creates a new list",
+            "t[0] += [3] on a tuple of lists raises TypeError BUT still modifies the list",
+            "Augmented assignment on a tuple variable creates a new tuple",
+            "If a function receives a list and uses +=, it modifies the caller's list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`+=` on mutable types (list, set) modifies in-place. On immutable types (int, str, tuple) it creates a new object. `a += b` is NOT the same as `a = a + b` for mutable types because the former modifies in-place.",
+          "pseudo_code": "",
+          "actual_code": "a = [1, 2]\nb = a\na += [3]     # in-place: b sees the change\nprint(b)     # [1, 2, 3]\n\na = [1, 2]\nb = a\na = a + [3]  # new list: b unchanged\nprint(b)     # [1, 2]",
+          "code_language": "python",
+          "key_points": [
+            "+= on lists modifies in-place",
+            "+= on ints/strs creates new objects"
+          ],
+          "gotchas": [
+            "lst += [x] and lst = lst + [x] behave differently when other names reference lst"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the walrus operator (:=) work and when should you use it?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["walrus", "assignment-expression", "python3.8"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **walrus operator** (`:=`), introduced in Python 3.8 (PEP 572), is an **assignment expression**. It assigns a value to a variable **and** returns that value, all within an expression.\n\nRegular assignment (`=`) is a statement and cannot be used inside expressions. The walrus operator fills this gap.\n\n**Common use cases:**\n1. **While loops with initialization:** avoid duplicating the input call\n2. **Filtering with computed values:** avoid computing twice\n3. **Regex matching:** assign and check in one step\n4. **List comprehension filtering:** compute once, filter and use\n\n**When NOT to use:**\n- When a regular assignment would be clearer\n- For top-level assignments (just use `=`)\n- When it makes the code harder to read (readability counts!)",
+          "pseudo_code": "Syntax: variable := expression\n  - assigns expression to variable\n  - returns the value of expression\n  - can be used inside if, while, comprehensions\n\nPattern:\n  if (match := re.search(pattern, text)):\n      use(match)\n\n  while (line := input()) != 'quit':\n      process(line)",
+          "actual_code": "# Without walrus: duplicated call\nimport re\n\ntext = \"The answer is 42\"\nmatch = re.search(r'\\d+', text)\nif match:\n    print(f\"Found: {match.group()}\")\n\n# With walrus: assign and check in one step\nif (match := re.search(r'\\d+', text)):\n    print(f\"Found: {match.group()}\")  # Found: 42\n\n# While loop without walrus\nwhile True:\n    line = input(\"Enter text (quit to stop): \")\n    if line == \"quit\":\n        break\n    print(f\"You said: {line}\")\n\n# While loop with walrus (cleaner)\n# while (line := input(\"Enter text: \")) != \"quit\":\n#     print(f\"You said: {line}\")\n\n# List comprehension: compute once, filter and use\ndata = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]\n\n# Without walrus: calls expensive function twice\ndef process(x):\n    return x ** 2 - 10\n\nresults = [process(x) for x in data if process(x) > 0]  # process called twice!\nprint(results)  # [-9, -6, -1, 6, 15, 26, 39, 54, 71, 90] filtered\n\n# With walrus: compute once\nresults = [y for x in data if (y := process(x)) > 0]\nprint(results)  # [6, 15, 26, 39, 54, 71, 90]\n\n# Reading a file in chunks\nimport io\nfake_file = io.BytesIO(b\"Hello World! This is test data.\")\nwhile (chunk := fake_file.read(8)):\n    print(chunk)\n\n# Nested conditions simplified\nnumbers = [2, 8, 0, 5, 3, 7]\nif (n := len(numbers)) > 5:\n    print(f\"List has {n} elements\")  # List has 6 elements",
+          "code_language": "python",
+          "key_points": [
+            "Walrus operator := assigns and returns a value in one expression",
+            "Available since Python 3.8 (PEP 572)",
+            "Useful in while loops, if statements, and comprehensions",
+            "Avoids duplicate function calls in filter-and-use patterns",
+            "Use sparingly -- readability counts"
+          ],
+          "gotchas": [
+            ":= cannot be used at the top level of a statement -- use regular = instead",
+            "Walrus operator has very low precedence -- often needs parentheses",
+            "Overusing := can make code harder to read",
+            ":= in comprehensions creates the variable in the enclosing scope, not the comprehension scope"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The walrus operator `:=` (Python 3.8+) assigns a value AND returns it in one expression. Useful in `if`/`while` conditions and comprehensions to avoid duplicate computation.",
+          "pseudo_code": "",
+          "actual_code": "import re\ntext = \"Price: $42\"\nif (match := re.search(r'\\d+', text)):\n    print(match.group())  # 42\n\n# Filter with single computation\ndata = [1, 2, 3, 4, 5]\nresults = [y for x in data if (y := x ** 2) > 10]\nprint(results)  # [16, 25]",
+          "code_language": "python",
+          "key_points": [
+            ":= assigns and returns in one expression",
+            "Avoids duplicate computation in filter patterns"
+          ],
+          "gotchas": [
+            ":= in comprehensions leaks the variable into the enclosing scope"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do chained comparisons work in Python?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["chained-comparisons", "operators", "pythonic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python allows you to chain comparison operators in a way that mirrors mathematical notation:\n\n`a < b < c` is equivalent to `(a < b) and (b < c)`, but `b` is **evaluated only once**.\n\nYou can chain any comparison operators: `<`, `<=`, `>`, `>=`, `==`, `!=`, `is`, `is not`, `in`, `not in`.\n\nThe chain can be arbitrarily long: `a < b <= c > d != e`.\n\n**How it works internally:**\n- `a op1 b op2 c` becomes `a op1 b and b op2 c`\n- Each intermediate value is evaluated at most once\n- Short-circuit applies: if any comparison is False, the rest are not evaluated\n\nThis is one of Python's most elegant features and makes range checks very readable.",
+          "pseudo_code": "a < b < c    <==>  a < b and b < c (b evaluated once)\na < b <= c   <==>  a < b and b <= c\na == b == c  <==>  a == b and b == c\na < b > c    <==>  a < b and b > c\n\nShort-circuit: if a < b is False, c is never evaluated",
+          "actual_code": "# Range check -- most common use\nage = 25\nprint(18 <= age < 65)   # True (working age)\n\n# Equivalent but less readable\nprint(18 <= age and age < 65)  # True\n\n# Multiple equality check\na = b = c = 5\nprint(a == b == c)   # True (all equal)\n\n# Mixed operators\nx = 3\nprint(1 < x <= 3 < 10)  # True (1<3 and 3<=3 and 3<10)\n\n# b is evaluated only once\ncount = 0\ndef get_value():\n    global count\n    count += 1\n    return 5\n\nresult = 1 < get_value() < 10  # get_value() called once\nprint(count)   # 1\nprint(result)  # True\n\n# Short-circuit in chains\ncount = 0\ndef expensive():\n    global count\n    count += 1\n    return 5\n\nresult = 10 < 3 < expensive()  # 10 < 3 is False, expensive() never called\nprint(count)  # 0\n\n# Practical: checking sorted order\ndef is_sorted_triple(a, b, c):\n    return a <= b <= c\n\nprint(is_sorted_triple(1, 2, 3))  # True\nprint(is_sorted_triple(1, 3, 2))  # False\n\n# Checking if value is one of several\nx = 5\n# Don't do this (it doesn't work as expected):\n# x == 1 or 2 or 3  -> this is x == 1, or 2, or 3 -> always truthy!\n\n# Do this instead:\nprint(x in (1, 2, 3))  # False\nprint(x in (3, 4, 5))  # True\n\n# Gotcha: chained 'is' checks\na = 256\nprint(a is a is a)  # True (a is a and a is a)",
+          "code_language": "python",
+          "key_points": [
+            "a < b < c evaluates b only once",
+            "Works with any comparison operators: <, <=, ==, !=, is, in",
+            "Short-circuit applies: stops at first False comparison",
+            "Much more readable than explicit 'and' chains for range checks",
+            "Can chain arbitrarily many comparisons"
+          ],
+          "gotchas": [
+            "x == 1 or 2 or 3 does NOT check if x is 1, 2, or 3 -- use x in (1, 2, 3)",
+            "Chained != does not mean 'all different': a != b != c allows a == c",
+            "a < b > c is valid but rarely readable -- use with caution",
+            "Chained 'is' can be surprising: a is b is True checks a is b and b is True"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python chains comparisons: `1 < x < 10` means `1 < x and x < 10` with `x` evaluated only once. Works with any comparison operators. Short-circuits on first False.",
+          "pseudo_code": "",
+          "actual_code": "age = 25\nprint(18 <= age < 65)  # True (range check)\n\na = b = c = 5\nprint(a == b == c)     # True (all equal)",
+          "code_language": "python",
+          "key_points": [
+            "Middle values evaluated only once",
+            "Short-circuits on first False"
+          ],
+          "gotchas": [
+            "x == 1 or 2 does NOT mean x == 1 or x == 2"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the divmod() function and when is it useful?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["divmod", "division", "modulo", "built-in"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`divmod(a, b)` returns a tuple `(a // b, a % b)` -- the quotient and remainder in a single call. It is more efficient than computing `//` and `%` separately because the CPU computes both in a single division instruction.\n\n**Signature:** `divmod(a, b) -> (quotient, remainder)`\n\n**Use cases:**\n1. **Time conversion:** converting seconds to hours/minutes/seconds\n2. **Currency:** splitting into larger denominations\n3. **Pagination:** calculating pages and remaining items\n4. **Base conversion:** repeatedly dividing to extract digits\n5. **Euclidean algorithm:** for GCD computation",
+          "pseudo_code": "divmod(a, b) returns (a // b, a % b)\n\nUse cases:\n  seconds -> (minutes, remaining_seconds)\n  total_items -> (full_pages, remaining_items)\n  dividend -> (quotient, remainder)",
+          "actual_code": "# Basic usage\nprint(divmod(17, 5))   # (3, 2) -- 17 = 5*3 + 2\nprint(divmod(10, 3))   # (3, 1)\nprint(divmod(7, 2))    # (3, 1)\n\n# Negative numbers (floor division rules apply)\nprint(divmod(-17, 5))  # (-4, 3) -- -17 = 5*(-4) + 3\n\n# Works with floats too\nprint(divmod(7.5, 2.5))  # (3.0, 0.0)\n\n# Time conversion: seconds to hours, minutes, seconds\ndef format_time(total_seconds):\n    minutes, seconds = divmod(total_seconds, 60)\n    hours, minutes = divmod(minutes, 60)\n    return f\"{hours:02d}:{minutes:02d}:{seconds:02d}\"\n\nprint(format_time(3661))   # 01:01:01\nprint(format_time(7384))   # 02:03:04\nprint(format_time(90))     # 00:01:30\n\n# Pagination\ndef paginate(total_items, per_page):\n    full_pages, remaining = divmod(total_items, per_page)\n    total_pages = full_pages + (1 if remaining else 0)\n    return total_pages\n\nprint(paginate(100, 10))  # 10\nprint(paginate(101, 10))  # 11\nprint(paginate(95, 10))   # 10\n\n# Base conversion (integer to any base)\ndef to_base(number, base):\n    if number == 0:\n        return \"0\"\n    digits = []\n    while number:\n        number, remainder = divmod(number, base)\n        digits.append(str(remainder))\n    return \"\".join(reversed(digits))\n\nprint(to_base(255, 16))  # 'ff'... wait, need hex digits\nprint(to_base(42, 2))    # '101010'\nprint(to_base(100, 8))   # '144'\n\n# Change-making\ndef make_change(cents):\n    denominations = [25, 10, 5, 1]\n    result = {}\n    for coin in denominations:\n        count, cents = divmod(cents, coin)\n        if count:\n            result[coin] = count\n    return result\n\nprint(make_change(87))  # {25: 3, 10: 1, 1: 2}",
+          "code_language": "python",
+          "key_points": [
+            "divmod(a, b) returns (a // b, a % b) in one call",
+            "More efficient than separate // and % operations",
+            "Perfect for time conversions, pagination, and base conversion",
+            "Works with both integers and floats",
+            "Follows Python's floor division rules for negative numbers"
+          ],
+          "gotchas": [
+            "divmod(-17, 5) gives (-4, 3), not (-3, -2) -- follows floor division",
+            "divmod(a, 0) raises ZeroDivisionError",
+            "divmod with floats can have precision issues",
+            "divmod is slightly faster than separate // and % but the difference is negligible for single calls"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`divmod(a, b)` returns `(a // b, a % b)` as a tuple. Useful for time conversions, pagination, and base conversion. More efficient than computing quotient and remainder separately.",
+          "pseudo_code": "",
+          "actual_code": "print(divmod(17, 5))  # (3, 2)\n\n# Time conversion\nminutes, seconds = divmod(90, 60)\nprint(f\"{minutes}m {seconds}s\")  # 1m 30s\n\n# Pagination\npages, remaining = divmod(101, 10)\nprint(pages + (1 if remaining else 0))  # 11",
+          "code_language": "python",
+          "key_points": [
+            "Returns (quotient, remainder) tuple",
+            "Efficient for time/pagination calculations"
+          ],
+          "gotchas": [
+            "Follows floor division for negatives: divmod(-17, 5) = (-4, 3)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are assignment operators in Python and how does unpacking assignment work?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["assignment", "unpacking", "operators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several forms of assignment:\n\n**Simple assignment:** `x = 5`\n\n**Augmented assignment:** `x += 5`, `x -= 3`, `x *= 2`, etc.\n\n**Multiple assignment:** `a = b = c = 0` (all reference same object)\n\n**Tuple unpacking:** `a, b = 1, 2`\n\n**Extended unpacking (*):** `first, *rest = [1, 2, 3, 4]`\n\n**Walrus operator (:=):** Assignment expression (Python 3.8+)\n\n**Unpacking** is one of Python's most powerful features. It works with any iterable and supports a star `*` to capture remaining elements.\n\n**Rules for star unpacking:**\n- Only one `*variable` per assignment\n- The starred variable gets a list (possibly empty)\n- Can appear anywhere: beginning, middle, or end",
+          "pseudo_code": "Simple: x = 5\nMultiple: a = b = c = 0\nUnpacking: a, b = 1, 2\nSwap: a, b = b, a\nStar: first, *rest = [1, 2, 3, 4]\nNested: (a, b), c = (1, 2), 3",
+          "actual_code": "# Simple and multiple assignment\nx = 5\na = b = c = 0\nprint(a, b, c)  # 0 0 0\n\n# Tuple unpacking\na, b = 1, 2\nprint(a, b)  # 1 2\n\n# Swap\na, b = b, a\nprint(a, b)  # 2 1\n\n# Unpack from any iterable\na, b, c = [10, 20, 30]\nprint(a, b, c)  # 10 20 30\n\na, b, c = \"abc\"\nprint(a, b, c)  # a b c\n\na, b, c = range(3)\nprint(a, b, c)  # 0 1 2\n\n# Extended unpacking with *\nfirst, *rest = [1, 2, 3, 4, 5]\nprint(first)  # 1\nprint(rest)   # [2, 3, 4, 5]\n\n*init, last = [1, 2, 3, 4, 5]\nprint(init)   # [1, 2, 3, 4]\nprint(last)   # 5\n\nfirst, *middle, last = [1, 2, 3, 4, 5]\nprint(first)   # 1\nprint(middle)  # [2, 3, 4]\nprint(last)    # 5\n\n# Star with only one element\na, *b = [1]\nprint(a)  # 1\nprint(b)  # [] (empty list)\n\n# Nested unpacking\n(a, b), (c, d) = (1, 2), (3, 4)\nprint(a, b, c, d)  # 1 2 3 4\n\n(a, b), c = [1, 2], 3\nprint(a, b, c)  # 1 2 3\n\n# Practical: iterating with unpacking\ncoordinates = [(1, 2), (3, 4), (5, 6)]\nfor x, y in coordinates:\n    print(f\"x={x}, y={y}\")\n\n# Ignore values with _\nfirst, _, _, last = [1, 2, 3, 4]\nprint(first, last)  # 1 4\n\n_, *_, last = [1, 2, 3, 4, 5]\nprint(last)  # 5\n\n# Unpack dict items\nuser = {\"name\": \"Alice\", \"age\": 30}\nfor key, value in user.items():\n    print(f\"{key}: {value}\")",
+          "code_language": "python",
+          "key_points": [
+            "Tuple unpacking: a, b = 1, 2",
+            "Star unpacking: first, *rest = iterable",
+            "Swap without temp: a, b = b, a",
+            "Works with any iterable (list, str, range, etc.)",
+            "Use _ to ignore unwanted values"
+          ],
+          "gotchas": [
+            "a = b = [] makes both reference the SAME list",
+            "Only one starred variable per assignment allowed",
+            "ValueError if the number of values does not match the number of targets (without star)",
+            "_ is a valid variable name and can be overwritten -- it's just a convention for 'ignored'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python supports simple (`x = 5`), multiple (`a = b = 0`), unpacking (`a, b = 1, 2`), and star unpacking (`first, *rest = [1,2,3]`). Swap with `a, b = b, a`. Use `_` for ignored values.",
+          "pseudo_code": "",
+          "actual_code": "a, b = 1, 2\na, b = b, a          # swap\nfirst, *rest = [1, 2, 3, 4]\nprint(first)         # 1\nprint(rest)          # [2, 3, 4]",
+          "code_language": "python",
+          "key_points": [
+            "Unpacking works with any iterable",
+            "Star captures remaining items as a list"
+          ],
+          "gotchas": [
+            "a = b = [] makes both names reference the SAME list"
+          ]
+        }
+      ]
+    }
+  ]
+}

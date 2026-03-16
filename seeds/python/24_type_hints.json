@@ -1,0 +1,620 @@
+{
+  "concept_slug": "type-hints",
+  "questions": [
+    {
+      "title": "What are type hints in Python and why should you use them?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["type-hints", "typing", "annotations"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Type hints (PEP 484, Python 3.5+) are optional annotations that indicate the expected types of variables, function parameters, and return values. They do **not** enforce types at runtime -- Python remains dynamically typed. Instead, they serve as documentation and enable static analysis tools like **mypy** to catch type errors before running the code.\n\n**Benefits**:\n1. **Catch bugs early**: Static analyzers find type mismatches before runtime.\n2. **Better IDE support**: Autocomplete, refactoring, and inline documentation.\n3. **Living documentation**: Types communicate intent more precisely than comments.\n4. **Easier refactoring**: Changing a type signature immediately reveals all affected call sites.\n\n**Basic syntax**:\n- Parameters: `def func(name: str, age: int) -> bool:`\n- Variables: `count: int = 0`\n- No effect at runtime: `def add(x: int, y: int) -> int:` happily accepts strings.",
+          "pseudo_code": "1. Annotate function parameters with : type\n2. Annotate return type with -> type\n3. Annotate variables with : type = value\n4. Run mypy to check types statically\n5. Types are ignored at runtime (no performance cost)",
+          "actual_code": "# Basic type hints\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ndef add(x: int, y: int) -> int:\n    return x + y\n\n# Variable annotations\ncount: int = 0\nname: str = \"Alice\"\nprices: list[float] = [9.99, 19.99, 29.99]\n\n# Python 3.9+ built-in generics\ndef process_items(items: list[str]) -> dict[str, int]:\n    return {item: len(item) for item in items}\n\n# Python 3.10+ union with |\ndef parse_id(value: int | str) -> int:\n    return int(value)\n\n# Type hints are NOT enforced at runtime\nresult = add(\"hello\", \"world\")  # No runtime error!\nprint(result)  # \"helloworld\"\n# But mypy would flag: error: Argument 1 has incompatible type \"str\"; expected \"int\"\n\n# Checking annotations at runtime (metadata only)\nprint(greet.__annotations__)\n# {'name': <class 'str'>, 'return': <class 'str'>}\n\n# None return type\ndef log_message(msg: str) -> None:\n    print(msg)\n\n# Complex types\ndef find_user(users: list[dict[str, str]], name: str) -> dict[str, str] | None:\n    for user in users:\n        if user.get('name') == name:\n            return user\n    return None",
+          "code_language": "python",
+          "key_points": [
+            "Type hints are optional annotations; they do NOT enforce types at runtime",
+            "Use : for parameter/variable types and -> for return types",
+            "Python 3.9+ supports list[int], dict[str, int] directly (no import needed)",
+            "Python 3.10+ supports X | Y syntax instead of Union[X, Y]",
+            "mypy is the primary static type checker for Python"
+          ],
+          "gotchas": [
+            "Type hints have zero runtime enforcement; passing wrong types still works",
+            "list[int] syntax requires Python 3.9+; use typing.List[int] for older versions",
+            "Annotations are stored in __annotations__ and can slightly increase import time"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Type hints annotate expected types for parameters (`: type`), returns (`-> type`), and variables. They are not enforced at runtime but enable static analysis (mypy) and better IDE support. Python 3.9+ supports `list[int]` directly; 3.10+ supports `X | Y` for unions.",
+          "pseudo_code": "",
+          "actual_code": "def greet(name: str, times: int = 1) -> str:\n    return f\"Hello, {name}!\" * times\n\ncount: int = 0\nitems: list[str] = [\"a\", \"b\"]\nresult: dict[str, int] = {\"a\": 1}\n\n# Run: mypy myfile.py",
+          "code_language": "python",
+          "key_points": [
+            "Annotations only; no runtime enforcement",
+            "Python 3.9+ for list[int]; 3.10+ for int | str"
+          ],
+          "gotchas": [
+            "Type hints do not prevent passing wrong types at runtime"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Optional, Union, and the | syntax for type hints?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["typing", "optional", "union"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Union[X, Y]** means a value can be of type X or type Y. **Optional[X]** is shorthand for `Union[X, None]` -- it means the value can be X or None.\n\nPython 3.10+ introduced the `|` operator as a cleaner syntax for unions:\n- `Union[int, str]` becomes `int | str`\n- `Optional[int]` becomes `int | None`\n\n**When to use each**:\n- `Optional[X]`: When a value might be None (function return, optional parameter)\n- `Union[X, Y]`: When a value can be one of multiple types\n- `X | Y` (3.10+): The modern, preferred syntax for both cases",
+          "pseudo_code": "Union[X, Y] = value is X or Y\nOptional[X] = Union[X, None] = value is X or None\nX | Y = Union[X, Y] (Python 3.10+)\nX | None = Optional[X] (Python 3.10+)",
+          "actual_code": "from typing import Optional, Union\n\n# Optional: value or None\ndef find_user(user_id: int) -> Optional[dict]:\n    \"\"\"Returns a user dict or None if not found.\"\"\"\n    users = {1: {'name': 'Alice'}}\n    return users.get(user_id)\n\n# Union: multiple possible types\ndef format_id(value: Union[int, str]) -> str:\n    \"\"\"Accepts int or str, returns formatted string.\"\"\"\n    return f\"ID-{value}\"\n\n# Python 3.10+ syntax (preferred)\ndef find_user_modern(user_id: int) -> dict | None:\n    users = {1: {'name': 'Alice'}}\n    return users.get(user_id)\n\ndef format_id_modern(value: int | str) -> str:\n    return f\"ID-{value}\"\n\n# Optional parameter with default None\ndef connect(\n    host: str,\n    port: int = 5432,\n    password: str | None = None,   # Optional parameter\n    timeout: int | None = None,\n) -> None:\n    pass\n\n# Nested Optional\ndef get_config(key: str) -> dict[str, str | int | None] | None:\n    \"\"\"Returns config dict or None. Values can be str, int, or None.\"\"\"\n    configs = {'db': {'host': 'localhost', 'port': 5432, 'password': None}}\n    return configs.get(key)\n\n# Type narrowing with Optional\ndef process_user(user_id: int) -> str:\n    user = find_user(user_id)  # Optional[dict]\n\n    # mypy knows user might be None here\n    if user is None:\n        return \"User not found\"\n\n    # After the check, mypy knows user is dict (type narrowed)\n    return user['name']\n\n# Common mistake: Optional does NOT mean \"optional parameter\"\ndef bad_example(name: Optional[str]) -> None:  # Still required!\n    pass\n\nbad_example(None)   # Valid\nbad_example()       # TypeError! Parameter is required, not optional",
+          "code_language": "python",
+          "key_points": [
+            "Optional[X] = Union[X, None] = X | None (Python 3.10+)",
+            "Union[X, Y] = X | Y means the value can be either type",
+            "Optional describes the type, not whether the parameter has a default",
+            "After an `if x is None` check, mypy narrows the type automatically",
+            "Prefer X | None over Optional[X] in Python 3.10+ for clarity"
+          ],
+          "gotchas": [
+            "Optional[str] does NOT make a parameter optional (no default value); it means str | None",
+            "Union[int, float] is redundant because int is a subtype of float in the type system",
+            "Using Optional without checking for None before accessing attributes causes mypy errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Optional[X]` = `X | None` (value or None). `Union[X, Y]` = `X | Y` (multiple types). Python 3.10+ supports `|` syntax directly. `Optional` describes the type, not whether a parameter has a default value.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Optional, Union\n\n# Pre-3.10\ndef find(key: str) -> Optional[int]:    # int or None\n    ...\ndef parse(val: Union[int, str]) -> str:  # int or str\n    ...\n\n# Python 3.10+\ndef find(key: str) -> int | None: ...\ndef parse(val: int | str) -> str: ...",
+          "code_language": "python",
+          "key_points": [
+            "Optional[X] means X or None, not 'optional parameter'",
+            "Python 3.10+ X | Y replaces Union and Optional"
+          ],
+          "gotchas": [
+            "Optional[str] parameter without default is still required to pass"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use TypeVar and generics in Python type hints?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["typing", "typevar", "generics"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**TypeVar** creates a type variable that represents \"some type\" without specifying which one. It enables you to write generic functions and classes that work with any type while preserving type relationships.\n\nFor example, a function that returns the first element of a list should return the same type as the list's elements. Without TypeVar, you would lose this relationship.\n\n**Generics** let you parameterize classes and functions with type variables, similar to Java/C# generics.\n\n**Bound TypeVar**: `T = TypeVar('T', bound=SomeBase)` means T must be a subtype of SomeBase.\n**Constrained TypeVar**: `T = TypeVar('T', int, str)` means T must be exactly int or str.\n\nPython 3.12 introduced a new syntax: `def first[T](items: list[T]) -> T:`",
+          "pseudo_code": "1. T = TypeVar('T') creates a generic type variable\n2. Use T in function signatures to link input/output types\n3. Bound TypeVar restricts to subtypes of a base class\n4. Constrained TypeVar restricts to specific types\n5. Generic classes inherit from Generic[T]",
+          "actual_code": "from typing import TypeVar, Generic, Sequence\n\n# Basic TypeVar: preserves type relationship\nT = TypeVar('T')\n\ndef first(items: list[T]) -> T:\n    \"\"\"Return first item, preserving the type.\"\"\"\n    return items[0]\n\nresult1 = first([1, 2, 3])       # mypy infers: int\nresult2 = first(['a', 'b', 'c']) # mypy infers: str\n\n# Without TypeVar, you'd lose the type:\ndef first_bad(items: list) -> object:\n    return items[0]  # Returns 'object', not the actual type\n\n# Constrained TypeVar: must be one of the listed types\nNumber = TypeVar('Number', int, float)\n\ndef double(x: Number) -> Number:\n    return x * 2\n\ndouble(5)     # OK, returns int\ndouble(3.14)  # OK, returns float\n# double('hi')  # mypy error: \"str\" is not valid\n\n# Bound TypeVar: must be subtype of a base\nfrom typing import Comparable\n\nclass Animal:\n    def speak(self) -> str:\n        return \"...\"\n\nclass Dog(Animal):\n    def speak(self) -> str:\n        return \"Woof\"\n\nA = TypeVar('A', bound=Animal)\n\ndef make_speak(animal: A) -> A:\n    \"\"\"Accepts any Animal subtype, returns the same subtype.\"\"\"\n    print(animal.speak())\n    return animal\n\ndog: Dog = make_speak(Dog())  # Returns Dog, not Animal\n\n# Generic class\nclass Stack(Generic[T]):\n    def __init__(self) -> None:\n        self._items: list[T] = []\n\n    def push(self, item: T) -> None:\n        self._items.append(item)\n\n    def pop(self) -> T:\n        return self._items.pop()\n\n    def peek(self) -> T:\n        return self._items[-1]\n\nint_stack: Stack[int] = Stack()\nint_stack.push(42)\nint_stack.push(99)\nvalue: int = int_stack.pop()  # mypy knows it's int\n\nstr_stack: Stack[str] = Stack()\nstr_stack.push('hello')\n\n# Python 3.12 syntax (no explicit TypeVar needed)\n# def first[T](items: list[T]) -> T:\n#     return items[0]\n#\n# class Stack[T]:\n#     def __init__(self) -> None:\n#         self._items: list[T] = []",
+          "code_language": "python",
+          "key_points": [
+            "TypeVar('T') creates a placeholder type that preserves relationships between input and output",
+            "Bound TypeVar (bound=Base) restricts to subtypes; constrained TypeVar (int, str) restricts to specific types",
+            "Generic[T] makes a class parameterizable: Stack[int], Stack[str]",
+            "Python 3.12 introduces def func[T]() syntax, eliminating explicit TypeVar definitions",
+            "TypeVar name string must match the variable name: T = TypeVar('T')"
+          ],
+          "gotchas": [
+            "TypeVar name string must match the variable name: T = TypeVar('T'), not TypeVar('Type')",
+            "Constrained TypeVar (int, str) means exactly one of those types, not a union",
+            "Without TypeVar, generic functions lose type specificity and return broader types"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`TypeVar('T')` creates a generic type variable that preserves type relationships. Use it in functions to say 'input and output are the same type.' Use `Generic[T]` for generic classes. `bound=Base` restricts to subtypes. Python 3.12 adds `def func[T]()` syntax.",
+          "pseudo_code": "",
+          "actual_code": "from typing import TypeVar, Generic\n\nT = TypeVar('T')\n\ndef first(items: list[T]) -> T:\n    return items[0]  # Returns same type as list elements\n\nclass Box(Generic[T]):\n    def __init__(self, value: T) -> None:\n        self.value = value\n\nbox = Box(42)    # Box[int]\nbox = Box('hi')  # Box[str]",
+          "code_language": "python",
+          "key_points": [
+            "TypeVar preserves type relationships across parameters and returns",
+            "Generic[T] for parameterizable classes; 3.12+ uses def f[T]() syntax"
+          ],
+          "gotchas": [
+            "TypeVar('T') name string must match the variable name"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the Protocol class and how does it enable structural typing?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["typing", "protocol", "structural-typing", "duck-typing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Protocol** (PEP 544, Python 3.8+) enables **structural typing** (static duck typing) in Python. Instead of requiring classes to inherit from an interface, Protocol checks that a class has the required methods and attributes -- regardless of its inheritance hierarchy.\n\nThis aligns with Python's duck typing philosophy: 'If it walks like a duck and quacks like a duck, it is a duck.'\n\n**Protocol vs ABC**:\n- `ABC` (Abstract Base Class): Nominal typing - classes must explicitly inherit.\n- `Protocol`: Structural typing - classes just need to have the right methods.\n\nUse Protocol when you want to accept any object that has certain methods, without forcing inheritance.",
+          "pseudo_code": "1. Define a Protocol class with required methods/attributes\n2. Any class that has those methods/attributes satisfies the Protocol\n3. No inheritance required (structural, not nominal)\n4. mypy checks conformance statically\n5. Use runtime_checkable for isinstance() checks",
+          "actual_code": "from typing import Protocol, runtime_checkable\n\n# Define a Protocol\nclass Drawable(Protocol):\n    def draw(self) -> str:\n        ...  # Protocol methods use ... (Ellipsis) as body\n\nclass HasArea(Protocol):\n    def area(self) -> float:\n        ...\n\n# These classes satisfy Drawable WITHOUT inheriting from it\nclass Circle:\n    def draw(self) -> str:\n        return \"Drawing a circle\"\n\n    def area(self) -> float:\n        return 3.14 * self.radius ** 2\n\n    def __init__(self, radius: float) -> None:\n        self.radius = radius\n\nclass Square:\n    def draw(self) -> str:\n        return \"Drawing a square\"\n\n    def __init__(self, side: float) -> None:\n        self.side = side\n\n# Function accepts anything that matches Drawable Protocol\ndef render(shape: Drawable) -> None:\n    print(shape.draw())\n\nrender(Circle(5))   # OK - Circle has draw() method\nrender(Square(4))   # OK - Square has draw() method\n# render(42)         # mypy error: int doesn't have draw()\n\n# Protocol with attributes\nclass Named(Protocol):\n    name: str\n\nclass User:\n    def __init__(self, name: str) -> None:\n        self.name = name\n\ndef greet(entity: Named) -> str:\n    return f\"Hello, {entity.name}\"\n\ngreet(User(\"Alice\"))  # OK - User has name attribute\n\n# runtime_checkable enables isinstance() checks\n@runtime_checkable\nclass Closable(Protocol):\n    def close(self) -> None:\n        ...\n\nimport io\nf = io.StringIO()\nprint(isinstance(f, Closable))  # True - StringIO has close()\nprint(isinstance(42, Closable))  # False - int doesn't have close()\n\n# Combining Protocol with Generic\nfrom typing import TypeVar, Generic\n\nT = TypeVar('T')\n\nclass Repository(Protocol[T]):\n    def get(self, id: int) -> T | None:\n        ...\n    def save(self, entity: T) -> None:\n        ...\n    def delete(self, id: int) -> None:\n        ...\n\nclass UserRepo:  # Satisfies Repository[User] without inheriting\n    def get(self, id: int) -> User | None:\n        return None\n    def save(self, entity: User) -> None:\n        pass\n    def delete(self, id: int) -> None:\n        pass\n\ndef process_repo(repo: Repository[User]) -> None:\n    user = repo.get(1)\n    if user:\n        repo.save(user)",
+          "code_language": "python",
+          "key_points": [
+            "Protocol enables structural typing: any class with the right methods satisfies it",
+            "No inheritance required; classes are checked by structure, not hierarchy",
+            "Use ... (Ellipsis) for Protocol method bodies",
+            "@runtime_checkable allows isinstance() checks (but only checks method existence, not signatures)",
+            "Protocol[T] supports generic protocols for type-parameterized interfaces"
+          ],
+          "gotchas": [
+            "runtime_checkable isinstance() only checks method names, not parameter types or return types",
+            "Protocol attributes must be annotated: 'name: str', not just 'self.name = name'",
+            "A Protocol cannot be instantiated directly; it's an interface definition only"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Protocol enables structural (duck) typing for static analysis. Any class with the required methods satisfies the Protocol without inheriting from it. Use `@runtime_checkable` for `isinstance()` checks.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Drawable(Protocol):\n    def draw(self) -> str: ...\n\nclass Circle:  # No inheritance needed\n    def draw(self) -> str:\n        return \"circle\"\n\ndef render(shape: Drawable) -> None:\n    print(shape.draw())\n\nrender(Circle())  # OK - has draw() method\nprint(isinstance(Circle(), Drawable))  # True",
+          "code_language": "python",
+          "key_points": [
+            "Structural typing: matching methods, no inheritance required",
+            "@runtime_checkable for isinstance(); only checks method names"
+          ],
+          "gotchas": [
+            "runtime_checkable only checks method existence, not signatures"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Callable, Literal, and TypedDict type hints?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["typing", "callable", "literal", "typeddict"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Callable[[ArgTypes], ReturnType]** - Type hint for functions and callable objects. The first argument is a list of parameter types, and the second is the return type.\n\n**Literal[values...]** (PEP 586, Python 3.8+) - Restricts a value to specific literal values. Useful for function parameters that accept only certain strings or numbers.\n\n**TypedDict** (PEP 589, Python 3.8+) - A dictionary with specific keys and typed values. Unlike a regular dict, mypy knows exactly which keys exist and what their types are.",
+          "pseudo_code": "Callable[[param_types], return_type] - type for functions\nLiteral['a', 'b'] - only these exact values allowed\nTypedDict('Name', key1=type1, key2=type2) - typed dictionary keys",
+          "actual_code": "from typing import Callable, Literal, TypedDict\n\n# Callable: type hint for functions\ndef apply(func: Callable[[int, int], int], a: int, b: int) -> int:\n    return func(a, b)\n\ndef add(x: int, y: int) -> int:\n    return x + y\n\nresult = apply(add, 3, 4)  # 7\n\n# Callable with no args\ndef run_later(callback: Callable[[], None]) -> None:\n    callback()\n\n# Callable as variable\nhandler: Callable[[str], bool] = lambda s: len(s) > 0\n\n# Callable with *args/**kwargs (use ... for untyped)\ndef decorator(func: Callable[..., str]) -> Callable[..., str]:\n    def wrapper(*args, **kwargs) -> str:\n        return func(*args, **kwargs).upper()\n    return wrapper\n\n# Literal: restrict to specific values\ndef set_color(color: Literal['red', 'green', 'blue']) -> None:\n    print(f\"Color set to {color}\")\n\nset_color('red')    # OK\n# set_color('pink')  # mypy error: \"pink\" not in Literal\n\ndef open_file(mode: Literal['r', 'w', 'a', 'rb', 'wb']) -> None:\n    pass\n\n# Literal with overloads for different return types\nfrom typing import overload\n\n@overload\ndef fetch(raw: Literal[True]) -> bytes: ...\n@overload\ndef fetch(raw: Literal[False]) -> str: ...\n\ndef fetch(raw: bool = False) -> bytes | str:\n    if raw:\n        return b\"raw bytes\"\n    return \"decoded string\"\n\n# TypedDict: dictionary with known keys and typed values\nclass UserDict(TypedDict):\n    name: str\n    age: int\n    email: str\n\ndef create_user(data: UserDict) -> None:\n    print(data['name'])   # mypy knows this is str\n    print(data['age'])    # mypy knows this is int\n    # print(data['phone'])  # mypy error: key not in TypedDict\n\nuser: UserDict = {'name': 'Alice', 'age': 30, 'email': 'alice@example.com'}\ncreate_user(user)\n\n# TypedDict with optional keys\nclass Config(TypedDict, total=False):  # All keys optional\n    host: str\n    port: int\n    debug: bool\n\nconfig: Config = {'host': 'localhost'}  # OK, other keys are optional\n\n# Mixing required and optional (Python 3.11+)\nclass UserProfile(TypedDict):\n    name: str          # Required\n    email: str         # Required\n\nclass UserProfileFull(UserProfile, total=False):\n    bio: str           # Optional\n    age: int           # Optional\n\nprofile: UserProfileFull = {'name': 'Alice', 'email': 'a@b.com', 'bio': 'Hi'}",
+          "code_language": "python",
+          "key_points": [
+            "Callable[[ParamTypes], ReturnType] types functions; use ... for unknown params",
+            "Literal restricts values to specific constants; great for string enums",
+            "TypedDict gives dictionaries specific key names and typed values",
+            "TypedDict(total=False) makes all keys optional",
+            "Combine Literal with @overload for type-dependent return types"
+          ],
+          "gotchas": [
+            "Callable[..., RetType] loses parameter type info; use Protocol for complex signatures",
+            "TypedDict is still a regular dict at runtime; mypy checks are static only",
+            "Literal values must be literal (strings, ints, bools, None, enums), not variables"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Callable[[args], return]` types functions. `Literal['a', 'b']` restricts to specific values. `TypedDict` types dictionary keys. All are static-only; no runtime enforcement.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Callable, Literal, TypedDict\n\ndef apply(func: Callable[[int], str], x: int) -> str:\n    return func(x)\n\ndef set_mode(mode: Literal['fast', 'slow']) -> None: ...\n\nclass User(TypedDict):\n    name: str\n    age: int\n\nuser: User = {'name': 'Alice', 'age': 30}",
+          "code_language": "python",
+          "key_points": [
+            "Callable for function types; Literal for exact values; TypedDict for typed dicts",
+            "All are static analysis only, no runtime effect"
+          ],
+          "gotchas": [
+            "Literal values must be actual literals, not variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between runtime and static type checking in Python?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["type-checking", "mypy", "runtime"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Static type checking** happens before running the code, using tools like **mypy**, **pyright**, or **pytype**. These tools analyze your source code and type annotations to find type errors without executing anything.\n\n**Runtime type checking** happens during program execution. Python itself does minimal runtime type checking (e.g., `TypeError: unsupported operand type(s)`), but libraries like **typeguard**, **pydantic**, and **beartype** can enforce type hints at runtime.\n\n| Aspect | Static (mypy) | Runtime |\n|--------|---------------|--------|\n| When | Before running | During execution |\n| Performance | No runtime cost | Small overhead |\n| Coverage | All code paths | Only executed paths |\n| Enforcement | Advisory (errors) | Raises exceptions |\n| Dynamic types | Limited support | Full support |",
+          "pseudo_code": "Static: mypy checks code without running it\nRuntime: isinstance(), typeguard, pydantic enforce during execution\nBest practice: Use both - mypy for development, pydantic for API boundaries",
+          "actual_code": "# Static type checking with mypy\n# Run: mypy myfile.py\ndef add(x: int, y: int) -> int:\n    return x + y\n\nadd(\"hello\", \"world\")  # No runtime error!\n# But mypy says: error: Argument 1 has incompatible type \"str\"; expected \"int\"\n\n# Runtime type checking with isinstance()\ndef safe_add(x: int, y: int) -> int:\n    if not isinstance(x, int) or not isinstance(y, int):\n        raise TypeError(f\"Expected int, got {type(x)} and {type(y)}\")\n    return x + y\n\n# Runtime enforcement with typeguard\n# pip install typeguard\nfrom typeguard import typechecked\n\n@typechecked\ndef multiply(x: int, y: int) -> int:\n    return x * y\n\nmultiply(3, 4)       # OK\n# multiply(\"3\", 4)   # TypeError at runtime!\n\n# Runtime validation with pydantic (great for API data)\nfrom pydantic import BaseModel, ValidationError\n\nclass User(BaseModel):\n    name: str\n    age: int\n    email: str\n\n# Valid\nuser = User(name=\"Alice\", age=30, email=\"alice@example.com\")\n\n# Invalid - raises ValidationError at runtime\ntry:\n    user = User(name=\"Alice\", age=\"not a number\", email=\"alice@example.com\")\nexcept ValidationError as e:\n    print(e)  # age: value is not a valid integer\n\n# Checking types at runtime using __annotations__\ndef validate_types(func, *args):\n    hints = func.__annotations__\n    params = list(hints.keys())\n    for i, arg in enumerate(args):\n        if i < len(params) and params[i] != 'return':\n            expected = hints[params[i]]\n            if not isinstance(arg, expected):\n                raise TypeError(\n                    f\"Arg '{params[i]}' expected {expected.__name__}, got {type(arg).__name__}\"\n                )\n\n# Best practice: use both\n# 1. mypy for static checking during development\n# 2. pydantic/typeguard at API boundaries (user input)\n# 3. No runtime checking for internal functions (trust mypy)",
+          "code_language": "python",
+          "key_points": [
+            "Static checking (mypy) catches errors before running; no runtime cost",
+            "Runtime checking (typeguard, pydantic) enforces types during execution",
+            "Python itself does not enforce type hints at runtime",
+            "Use pydantic for API/user input validation; mypy for internal code",
+            "mypy checks all code paths; runtime only checks executed paths"
+          ],
+          "gotchas": [
+            "Runtime type checking has performance overhead; use it at boundaries, not everywhere",
+            "isinstance() does not work with generic types (list[int]) without runtime_checkable Protocol",
+            "Dynamic features like monkey patching and metaprogramming confuse static type checkers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Static** (mypy): Checks types before running, no runtime cost, covers all code paths. **Runtime** (typeguard, pydantic): Enforces types during execution with small overhead. Best practice: mypy for development, pydantic at API boundaries.",
+          "pseudo_code": "",
+          "actual_code": "# Static: mypy myfile.py catches this\ndef add(x: int, y: int) -> int:\n    return x + y\nadd(\"a\", \"b\")  # mypy error, but runs fine\n\n# Runtime: pydantic enforces at runtime\nfrom pydantic import BaseModel\nclass User(BaseModel):\n    name: str\n    age: int\nUser(name=\"A\", age=\"bad\")  # ValidationError at runtime",
+          "code_language": "python",
+          "key_points": [
+            "mypy for static checking; pydantic/typeguard for runtime enforcement",
+            "Use runtime checking at boundaries (API input), static everywhere else"
+          ],
+          "gotchas": [
+            "Python itself never enforces type hints at runtime"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use mypy for static type checking?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["mypy", "static-analysis", "type-checking"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**mypy** is the reference static type checker for Python. It reads your code and type annotations, then reports type errors without running the program.\n\n**Setup**: `pip install mypy`, then run `mypy your_file.py` or `mypy your_package/`.\n\n**Configuration** via `mypy.ini`, `setup.cfg`, or `pyproject.toml`:\n- `strict = true` enables all strict checks\n- `ignore_missing_imports = true` for untyped third-party libraries\n- `disallow_untyped_defs = true` requires all functions to have type hints\n\n**Common mypy flags**:\n- `--strict` - Enable all optional checks\n- `--ignore-missing-imports` - Skip errors from untyped libraries\n- `--show-error-codes` - Show error codes like [arg-type]\n- `--no-implicit-optional` - Do not treat None defaults as Optional",
+          "pseudo_code": "1. pip install mypy\n2. Add type hints to your code\n3. Run mypy your_file.py\n4. Fix reported errors\n5. Add mypy to CI/CD pipeline\n6. Configure strictness in pyproject.toml",
+          "actual_code": "# example.py\ndef greet(name: str) -> str:\n    return f\"Hello, {name}\"\n\ndef add(x: int, y: int) -> int:\n    return x + y\n\n# These will produce mypy errors:\nresult: str = add(1, 2)     # error: Incompatible types in assignment\nadd(\"hello\", \"world\")      # error: Argument 1 has incompatible type \"str\"\n\n# Run: mypy example.py\n# Output:\n# example.py:7: error: Incompatible types in assignment\n#     (expression has type \"int\", variable has type \"str\")  [assignment]\n# example.py:8: error: Argument 1 to \"add\" has incompatible type \"str\";\n#     expected \"int\"  [arg-type]\n\n# --- pyproject.toml configuration ---\n# [tool.mypy]\n# python_version = \"3.11\"\n# strict = true\n# warn_return_any = true\n# warn_unused_configs = true\n# disallow_untyped_defs = true\n# \n# [[tool.mypy.overrides]]\n# module = \"third_party_lib.*\"\n# ignore_missing_imports = true\n\n# Type: ignore comments for specific lines\nimport untyped_library  # type: ignore[import]\n\nresult = some_dynamic_thing()  # type: ignore[assignment]\n\n# reveal_type for debugging\nfrom typing import reveal_type  # Python 3.11+\n\nx = [1, 2, 3]\nreveal_type(x)  # mypy output: builtins.list[builtins.int]\n\n# cast for when you know better than mypy\nfrom typing import cast\n\nvalue: object = get_something()\nname = cast(str, value)  # Tell mypy: trust me, this is a str\nprint(name.upper())      # mypy is happy now\n\n# Gradual typing: add types incrementally\n# Start with key functions, expand over time\n# Use --disallow-untyped-defs to find unannotated functions",
+          "code_language": "python",
+          "key_points": [
+            "Run mypy file.py to check types; --strict for maximum strictness",
+            "Configure in pyproject.toml with [tool.mypy] section",
+            "# type: ignore[code] suppresses specific errors on a line",
+            "reveal_type() shows mypy's inferred type (debugging tool)",
+            "cast() tells mypy to trust your type assertion (no runtime effect)"
+          ],
+          "gotchas": [
+            "mypy only checks code that has type annotations (by default); use --disallow-untyped-defs for full coverage",
+            "Third-party libraries without type stubs need ignore_missing_imports or py.typed stubs",
+            "cast() has no runtime effect; if you are wrong, bugs still happen at runtime"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pip install mypy` then `mypy your_file.py`. Configure strictness in `pyproject.toml`. Use `# type: ignore` to suppress specific errors, `reveal_type()` for debugging, and `cast()` when you know better than mypy.",
+          "pseudo_code": "",
+          "actual_code": "# Run: mypy --strict your_file.py\n\n# pyproject.toml\n# [tool.mypy]\n# strict = true\n# ignore_missing_imports = true\n\n# Suppress a specific error\nresult = dynamic_call()  # type: ignore[assignment]\n\n# Debug mypy inference\nreveal_type(my_variable)  # Shows inferred type",
+          "code_language": "python",
+          "key_points": [
+            "mypy checks types statically; --strict for full checks",
+            "type: ignore for exceptions; reveal_type() for debugging"
+          ],
+          "gotchas": [
+            "mypy only checks annotated code by default; use --disallow-untyped-defs"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use overload to define multiple function signatures?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["typing", "overload", "function-signatures"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**@overload** (from `typing`) lets you define multiple type signatures for a single function, allowing mypy to infer different return types based on the input types.\n\nThe overloaded signatures are for the type checker only; the actual implementation is a single function that handles all cases. The `@overload` decorated functions should have `...` as their body.\n\n**Use case**: When a function's return type depends on its input types. For example, `json.loads()` returns `dict` for a JSON object string but `list` for a JSON array string.",
+          "pseudo_code": "1. Define @overload signatures (type checker only, body is ...)\n2. Define the actual implementation without @overload\n3. Implementation must handle all overload cases\n4. mypy uses overload signatures to infer return type based on input",
+          "actual_code": "from typing import overload, Literal\n\n# Example 1: Return type depends on input type\n@overload\ndef process(value: int) -> str: ...\n@overload\ndef process(value: str) -> int: ...\n\ndef process(value: int | str) -> str | int:\n    if isinstance(value, int):\n        return str(value)\n    return len(value)\n\nresult1 = process(42)      # mypy infers: str\nresult2 = process(\"hello\") # mypy infers: int\n\n# Example 2: Return type depends on Literal argument\n@overload\ndef fetch_data(raw: Literal[True]) -> bytes: ...\n@overload\ndef fetch_data(raw: Literal[False]) -> str: ...\n@overload\ndef fetch_data(raw: bool = False) -> str | bytes: ...\n\ndef fetch_data(raw: bool = False) -> str | bytes:\n    data = b\"raw bytes from server\"\n    if raw:\n        return data\n    return data.decode('utf-8')\n\nresult_bytes = fetch_data(True)    # mypy infers: bytes\nresult_str = fetch_data(False)     # mypy infers: str\nresult_default = fetch_data()       # mypy infers: str | bytes\n\n# Example 3: Different number of arguments\n@overload\ndef create_point(x: float, y: float) -> tuple[float, float]: ...\n@overload\ndef create_point(xy: tuple[float, float]) -> tuple[float, float]: ...\n\ndef create_point(x=None, y=None, xy=None):\n    if xy is not None:\n        return xy\n    return (x, y)\n\n# Example 4: Method overloading in a class\nclass Container:\n    @overload\n    def get(self, index: int) -> str: ...\n    @overload\n    def get(self, index: slice) -> list[str]: ...\n\n    def get(self, index: int | slice) -> str | list[str]:\n        data = ['a', 'b', 'c', 'd']\n        return data[index]\n\nc = Container()\nitem: str = c.get(0)            # mypy: str\nitems: list[str] = c.get(slice(0, 2))  # mypy: list[str]",
+          "code_language": "python",
+          "key_points": [
+            "@overload signatures are for the type checker only; the body must be ...",
+            "The implementation function must NOT have @overload and must handle all cases",
+            "mypy uses overloads to narrow return types based on input types",
+            "Combine with Literal for flag-based return type differences",
+            "Overload order matters: more specific signatures should come first"
+          ],
+          "gotchas": [
+            "@overload functions are never called at runtime; only the implementation runs",
+            "The implementation signature must be compatible with all @overload variants",
+            "At least two @overload variants are required before the implementation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@overload` defines multiple type signatures for a function. Each overload has `...` as body; the actual implementation handles all cases. mypy uses overloads to infer precise return types based on input types.",
+          "pseudo_code": "",
+          "actual_code": "from typing import overload\n\n@overload\ndef process(value: int) -> str: ...\n@overload\ndef process(value: str) -> int: ...\n\ndef process(value: int | str) -> str | int:\n    if isinstance(value, int):\n        return str(value)\n    return len(value)\n\nprocess(42)      # mypy infers str\nprocess(\"hello\") # mypy infers int",
+          "code_language": "python",
+          "key_points": [
+            "Overload signatures have ... body; implementation has no @overload",
+            "Enables precise return type inference based on input types"
+          ],
+          "gotchas": [
+            "Only the implementation runs at runtime; @overload bodies are never called"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are ParamSpec and Concatenate for typing decorators?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["typing", "paramspec", "decorators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**ParamSpec** (PEP 612, Python 3.10+) is a type variable that captures the entire parameter specification (all parameters and their types) of a callable. It solves the problem of typing decorators that need to preserve the wrapped function's signature.\n\nBefore ParamSpec, decorators had to use `Callable[..., R]` which lost all parameter type information.\n\n**Concatenate** is used with ParamSpec to add extra parameters at the beginning of a function's parameter list (e.g., adding a `self` or `request` parameter).",
+          "pseudo_code": "1. P = ParamSpec('P') captures all params of a function\n2. Use Callable[P, R] to represent a function with those params\n3. The wrapper should also be Callable[P, R] to preserve types\n4. Concatenate[ExtraArg, P] adds an argument before P's params",
+          "actual_code": "from typing import TypeVar, ParamSpec, Callable, Concatenate\nfrom functools import wraps\nimport time\n\nP = ParamSpec('P')\nR = TypeVar('R')\n\n# Basic decorator that preserves types\ndef timer(func: Callable[P, R]) -> Callable[P, R]:\n    @wraps(func)\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        start = time.time()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__} took {time.time() - start:.3f}s\")\n        return result\n    return wrapper\n\n@timer\ndef greet(name: str, greeting: str = \"Hello\") -> str:\n    return f\"{greeting}, {name}!\"\n\n# mypy knows: greet(name: str, greeting: str = \"Hello\") -> str\nresult: str = greet(\"Alice\")  # Fully typed!\n\n# Logging decorator preserving types\ndef log_calls(func: Callable[P, R]) -> Callable[P, R]:\n    @wraps(func)\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        print(f\"Calling {func.__name__}\")\n        result = func(*args, **kwargs)\n        print(f\"Result: {result}\")\n        return result\n    return wrapper\n\n# Concatenate: adding extra parameters\ndef with_user(func: Callable[Concatenate[str, P], R]) -> Callable[P, R]:\n    \"\"\"Decorator that injects a username as the first argument.\"\"\"\n    @wraps(func)\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        username = \"current_user\"  # Get from auth context\n        return func(username, *args, **kwargs)\n    return wrapper\n\n@with_user\ndef delete_item(username: str, item_id: int) -> bool:\n    print(f\"{username} deleting item {item_id}\")\n    return True\n\n# mypy knows: delete_item(item_id: int) -> bool\n# (username is injected by the decorator)\ndelete_item(42)  # Correct - username is auto-injected\n\n# Retry decorator with ParamSpec\ndef retry(max_retries: int = 3) -> Callable[[Callable[P, R]], Callable[P, R]]:\n    def decorator(func: Callable[P, R]) -> Callable[P, R]:\n        @wraps(func)\n        def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n            for attempt in range(max_retries):\n                try:\n                    return func(*args, **kwargs)\n                except Exception:\n                    if attempt == max_retries - 1:\n                        raise\n            raise RuntimeError(\"Unreachable\")\n        return wrapper\n    return decorator\n\n@retry(max_retries=3)\ndef fetch_data(url: str, timeout: int = 10) -> dict:\n    return {}  # ... fetch ...\n\n# mypy knows: fetch_data(url: str, timeout: int = 10) -> dict\nfetch_data(\"https://api.example.com\")",
+          "code_language": "python",
+          "key_points": [
+            "ParamSpec captures the full parameter signature of a callable",
+            "P.args and P.kwargs are used in wrapper function signatures",
+            "Concatenate[ExtraType, P] adds parameters before P's params",
+            "Solves the problem of decorators losing type info (Callable[..., R] loses params)",
+            "Python 3.12 uses def decorator[**P, R](...) syntax for cleaner declarations"
+          ],
+          "gotchas": [
+            "ParamSpec requires Python 3.10+; use typing_extensions for 3.8-3.9",
+            "P.args and P.kwargs must be used together; you cannot use just one",
+            "Concatenate only adds params at the beginning, not the end"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`ParamSpec('P')` captures a function's full parameter spec for typing decorators. Use `Callable[P, R]` for both the wrapped and wrapper function. `Concatenate[ExtraArg, P]` adds parameters before the original ones.",
+          "pseudo_code": "",
+          "actual_code": "from typing import ParamSpec, TypeVar, Callable\nfrom functools import wraps\n\nP = ParamSpec('P')\nR = TypeVar('R')\n\ndef logged(func: Callable[P, R]) -> Callable[P, R]:\n    @wraps(func)\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        print(f\"Calling {func.__name__}\")\n        return func(*args, **kwargs)\n    return wrapper",
+          "code_language": "python",
+          "key_points": [
+            "ParamSpec preserves full function signatures through decorators",
+            "Use P.args and P.kwargs in the wrapper"
+          ],
+          "gotchas": [
+            "Requires Python 3.10+ or typing_extensions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is TypeGuard and how does it help with type narrowing?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["typing", "typeguard", "narrowing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**TypeGuard** (PEP 647, Python 3.10+) is a special return type for functions that perform type checks. When a function returns `TypeGuard[X]`, mypy narrows the type of the checked variable to `X` in the true branch.\n\nThis is useful when `isinstance()` is not sufficient -- for example, when checking if a list contains only strings, or when validating complex data structures.\n\nPython 3.13 introduces **TypeIs** (PEP 742) which is a stricter version that also narrows in the false branch.",
+          "pseudo_code": "1. Define a function returning TypeGuard[TargetType]\n2. Implement the type check logic inside\n3. When the function returns True, mypy narrows the variable type\n4. Use in if statements for type narrowing",
+          "actual_code": "from typing import TypeGuard, Any\n\n# Basic TypeGuard\ndef is_string_list(value: list[Any]) -> TypeGuard[list[str]]:\n    \"\"\"Check if all elements are strings.\"\"\"\n    return all(isinstance(item, str) for item in value)\n\ndef process(data: list[Any]) -> None:\n    if is_string_list(data):\n        # mypy knows data is list[str] here\n        for item in data:\n            print(item.upper())  # No error: item is str\n    else:\n        # mypy still thinks data is list[Any]\n        print(\"Not all strings\")\n\n# TypeGuard for dict validation\ndef is_user_dict(value: dict[str, Any]) -> TypeGuard[dict[str, str | int]]:\n    required_keys = {'name', 'age', 'email'}\n    if not required_keys.issubset(value.keys()):\n        return False\n    return (\n        isinstance(value.get('name'), str) and\n        isinstance(value.get('age'), int) and\n        isinstance(value.get('email'), str)\n    )\n\ndef process_user(data: dict[str, Any]) -> None:\n    if is_user_dict(data):\n        # mypy narrows: data is dict[str, str | int]\n        print(f\"User: {data['name']}\")\n\n# TypeGuard with None filtering\ndef is_not_none(value: str | None) -> TypeGuard[str]:\n    return value is not None\n\nnames: list[str | None] = [\"Alice\", None, \"Bob\", None, \"Charlie\"]\n\n# Filter out None values with type safety\nvalid_names: list[str] = [name for name in names if is_not_none(name)]\n# mypy knows valid_names is list[str]\n\n# Without TypeGuard, you need explicit cast or type: ignore\nvalid_names_manual = [name for name in names if name is not None]\n# mypy may still infer list[str | None] depending on version\n\n# TypeGuard in a class\nclass Validator:\n    @staticmethod\n    def is_positive_int(value: Any) -> TypeGuard[int]:\n        return isinstance(value, int) and value > 0\n\ndef set_quantity(value: Any) -> None:\n    if Validator.is_positive_int(value):\n        # mypy knows value is int\n        print(f\"Quantity: {value * 2}\")\n\n# Python 3.13: TypeIs (stricter, narrows both branches)\n# from typing import TypeIs\n# def is_str(value: str | int) -> TypeIs[str]:\n#     return isinstance(value, str)\n# # In true branch: str. In false branch: int.",
+          "code_language": "python",
+          "key_points": [
+            "TypeGuard[X] narrows the type to X when the function returns True",
+            "Useful when isinstance() alone does not express the check (e.g., list[str] vs list[Any])",
+            "Only narrows in the True branch; the False branch retains the original type",
+            "Python 3.13 TypeIs narrows both branches (True -> X, False -> everything except X)",
+            "The function must accept the broader type and return bool"
+          ],
+          "gotchas": [
+            "TypeGuard only narrows the first positional argument, not other variables",
+            "If your TypeGuard function has a bug, mypy trusts it; runtime behavior may differ",
+            "TypeGuard does not narrow in the False branch (use TypeIs for that in 3.13+)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`TypeGuard[X]` is a return type for type-checking functions. When the function returns True, mypy narrows the variable to type X. Useful for complex checks like 'is this a list of strings' that isinstance cannot express.",
+          "pseudo_code": "",
+          "actual_code": "from typing import TypeGuard, Any\n\ndef is_str_list(val: list[Any]) -> TypeGuard[list[str]]:\n    return all(isinstance(v, str) for v in val)\n\ndef process(data: list[Any]) -> None:\n    if is_str_list(data):\n        print(data[0].upper())  # mypy knows: list[str]",
+          "code_language": "python",
+          "key_points": [
+            "TypeGuard narrows type to X when function returns True",
+            "Only narrows in the True branch (TypeIs does both in 3.13+)"
+          ],
+          "gotchas": [
+            "TypeGuard only narrows the first argument, not other variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Annotated for metadata-rich type hints?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["typing", "annotated", "metadata"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Annotated** (PEP 593, Python 3.9+) lets you attach metadata to type hints without affecting the type itself. The first argument is the actual type, and subsequent arguments are metadata that tools and frameworks can use.\n\n`Annotated[int, MinValue(0), MaxValue(100)]` means 'an int with these validation constraints.'\n\n**Key users**:\n- **FastAPI** uses Annotated for dependency injection and validation: `Annotated[str, Query(max_length=50)]`\n- **Pydantic** uses it for field validation: `Annotated[int, Field(gt=0)]`\n- Custom frameworks can define their own metadata types.",
+          "pseudo_code": "Annotated[Type, metadata1, metadata2, ...]\n- First arg: the actual type\n- Remaining args: metadata (ignored by mypy, used by frameworks)\n- Frameworks read metadata at runtime via typing.get_type_hints(include_extras=True)",
+          "actual_code": "from typing import Annotated, get_type_hints\n\n# Basic Annotated usage\ndef process_age(age: Annotated[int, \"must be positive\"]) -> str:\n    return f\"Age: {age}\"\n\n# mypy sees: age: int (metadata is ignored by type checkers)\n\n# Custom metadata classes\nclass MinValue:\n    def __init__(self, value: int):\n        self.value = value\n\nclass MaxValue:\n    def __init__(self, value: int):\n        self.value = value\n\nclass Description:\n    def __init__(self, text: str):\n        self.text = text\n\n# Type aliases with Annotated\nPositiveInt = Annotated[int, MinValue(0)]\nPercentage = Annotated[float, MinValue(0), MaxValue(100)]\nUserName = Annotated[str, MinValue(1), MaxValue(50), Description(\"User's display name\")]\n\ndef create_user(name: UserName, age: PositiveInt) -> dict:\n    return {'name': name, 'age': age}\n\n# Access metadata at runtime\nhints = get_type_hints(create_user, include_extras=True)\nprint(hints)  # {'name': Annotated[str, MinValue(1), MaxValue(50), ...], 'age': ...}\n\n# Extract metadata from Annotated\nfrom typing import get_args, get_origin\n\ndef get_metadata(hint):\n    if get_origin(hint) is Annotated:\n        args = get_args(hint)\n        return args[0], args[1:]  # (type, metadata_tuple)\n    return hint, ()\n\nbase_type, metadata = get_metadata(hints['name'])\nprint(base_type)   # <class 'str'>\nprint(metadata)    # (MinValue(1), MaxValue(50), Description(\"User's display name\"))\n\n# Runtime validation using Annotated metadata\ndef validate(func, **kwargs):\n    hints = get_type_hints(func, include_extras=True)\n    for param, hint in hints.items():\n        if param == 'return':\n            continue\n        base, meta = get_metadata(hint)\n        value = kwargs.get(param)\n        for m in meta:\n            if isinstance(m, MinValue) and isinstance(value, (int, float)):\n                if value < m.value:\n                    raise ValueError(f\"{param} must be >= {m.value}\")\n            if isinstance(m, MaxValue) and isinstance(value, (int, float)):\n                if value > m.value:\n                    raise ValueError(f\"{param} must be <= {m.value}\")\n\n# Pydantic v2 with Annotated\nfrom pydantic import BaseModel, Field\n\nclass User(BaseModel):\n    name: Annotated[str, Field(min_length=1, max_length=50)]\n    age: Annotated[int, Field(gt=0, lt=150)]\n    email: Annotated[str, Field(pattern=r'^[\\w.-]+@[\\w.-]+\\.\\w+$')]",
+          "code_language": "python",
+          "key_points": [
+            "Annotated[Type, metadata] adds metadata without changing the type for checkers",
+            "First argument is the type; remaining are metadata for frameworks",
+            "Type aliases (PositiveInt = Annotated[int, ...]) create reusable annotated types",
+            "get_type_hints(include_extras=True) retrieves Annotated metadata at runtime",
+            "FastAPI and Pydantic heavily use Annotated for validation and dependency injection"
+          ],
+          "gotchas": [
+            "mypy completely ignores metadata; only the first argument (the type) matters for type checking",
+            "get_type_hints() without include_extras=True strips Annotated metadata",
+            "Annotated requires Python 3.9+; use typing_extensions for 3.7-3.8"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Annotated[Type, metadata]` attaches metadata to types. Type checkers see only the type; frameworks (FastAPI, Pydantic) use the metadata for validation, docs, etc. Use `get_type_hints(include_extras=True)` to read metadata at runtime.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom pydantic import BaseModel, Field\n\nPositiveInt = Annotated[int, Field(gt=0)]\n\nclass User(BaseModel):\n    name: Annotated[str, Field(min_length=1, max_length=50)]\n    age: PositiveInt",
+          "code_language": "python",
+          "key_points": [
+            "Type checkers ignore metadata; frameworks use it for validation",
+            "Create reusable type aliases with Annotated"
+          ],
+          "gotchas": [
+            "get_type_hints() strips metadata without include_extras=True"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle forward references and circular imports in type hints?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["typing", "forward-references", "circular-imports"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Forward references** occur when a type hint refers to a class that has not been defined yet (e.g., a class method returning its own type, or two classes referencing each other).\n\n**Solutions**:\n\n1. **String literals** (\"ClassName\"): Quote the type name as a string. Python evaluates it later.\n2. **`from __future__ import annotations`** (PEP 563): Makes ALL annotations strings by default, evaluated lazily. This is the recommended approach.\n3. **`TYPE_CHECKING` constant**: Import types only for type checking (not at runtime) to break circular imports.\n\n`from __future__ import annotations` was planned to become the default in Python 3.10 but was postponed.",
+          "pseudo_code": "1. String forward reference: def method(self) -> 'MyClass':\n2. from __future__ import annotations: all annotations become strings\n3. TYPE_CHECKING: import only for type checkers, not runtime\n4. Combine TYPE_CHECKING with string refs for circular imports",
+          "actual_code": "# Problem: Class not yet defined\nclass TreeNode:\n    def __init__(self, value: int, children: list['TreeNode'] | None = None):\n        self.value = value\n        self.children = children or []\n\n    # Forward reference to own class\n    def add_child(self, child: 'TreeNode') -> None:\n        self.children.append(child)\n\n    def clone(self) -> 'TreeNode':\n        return TreeNode(self.value, [c.clone() for c in self.children])\n\n# Solution 1: from __future__ import annotations (recommended)\nfrom __future__ import annotations\n\nclass LinkedList:\n    def __init__(self, value: int, next_node: LinkedList | None = None):\n        self.value = value\n        self.next_node = next_node  # No quotes needed!\n\n    def append(self, value: int) -> LinkedList:\n        node = self\n        while node.next_node:\n            node = node.next_node\n        node.next_node = LinkedList(value)\n        return self\n\n# Solution 2: TYPE_CHECKING for circular imports\n# file: models/user.py\nfrom __future__ import annotations\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    # This import only happens during type checking, not at runtime\n    from models.order import Order\n\nclass User:\n    def __init__(self, name: str) -> None:\n        self.name = name\n        self.orders: list[Order] = []  # Works because of TYPE_CHECKING\n\n    def get_orders(self) -> list[Order]:\n        return self.orders\n\n# file: models/order.py\nfrom __future__ import annotations\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from models.user import User\n\nclass Order:\n    def __init__(self, total: float, user: User) -> None:\n        self.total = total\n        self.user = user\n\n# Solution 3: Resolve at runtime if needed\nfrom typing import get_type_hints\n\n# get_type_hints() resolves string annotations at runtime\n# But it needs the class to be importable\nhints = get_type_hints(User)\nprint(hints)  # {'name': <class 'str'>, 'return': <class 'NoneType'>}\n\n# Common pattern: Self type (Python 3.11+)\nfrom typing import Self\n\nclass Builder:\n    def set_name(self, name: str) -> Self:\n        self.name = name\n        return self\n\n    def set_age(self, age: int) -> Self:\n        self.age = age\n        return self",
+          "code_language": "python",
+          "key_points": [
+            "Use string literals ('ClassName') for forward references in type hints",
+            "from __future__ import annotations makes all annotations strings (lazy evaluation)",
+            "TYPE_CHECKING is True only during static analysis; imports inside are not executed at runtime",
+            "Combine TYPE_CHECKING with from __future__ import annotations for circular imports",
+            "Python 3.11+ Self type replaces -> 'ClassName' for methods returning self"
+          ],
+          "gotchas": [
+            "from __future__ import annotations makes all annotations strings; this breaks isinstance() on annotations",
+            "get_type_hints() may fail if forward-referenced types are not importable at call time",
+            "TYPE_CHECKING imports are not available at runtime; do not use them in function bodies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "For forward references, use string literals (`'ClassName'`) or `from __future__ import annotations` (makes all annotations strings). For circular imports, combine `TYPE_CHECKING` with string annotations so imports only happen during static analysis.",
+          "pseudo_code": "",
+          "actual_code": "from __future__ import annotations\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from models.order import Order  # Only for type checkers\n\nclass User:\n    orders: list[Order] = []  # Works at type-check time\n\nclass Node:\n    children: list[Node]  # No quotes needed with __future__",
+          "code_language": "python",
+          "key_points": [
+            "from __future__ import annotations for lazy evaluation",
+            "TYPE_CHECKING + string refs for circular imports"
+          ],
+          "gotchas": [
+            "TYPE_CHECKING imports are not available at runtime"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you type hint dictionaries with specific structures?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["typing", "typeddict", "dict-typing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python offers several ways to type dictionaries with known structures:\n\n1. **`dict[KeyType, ValueType]`**: For homogeneous dicts where all keys are the same type and all values are the same type.\n2. **`TypedDict`**: For dicts with specific key names and per-key value types.\n3. **`Mapping[K, V]`**: Read-only dict interface (use for parameters you do not modify).\n4. **Pydantic `BaseModel`**: For validated, structured data with automatic parsing.\n\nTypedDict is the most useful for APIs and configuration, where you know the exact keys and their types.",
+          "pseudo_code": "dict[str, int] - all values are int\nTypedDict - specific keys with specific value types\nMapping - read-only dict (for function parameters)\nRequired/NotRequired - mix required and optional keys",
+          "actual_code": "from typing import TypedDict, Required, NotRequired, Mapping\n\n# Basic dict typing\ndef word_count(text: str) -> dict[str, int]:\n    counts: dict[str, int] = {}\n    for word in text.split():\n        counts[word] = counts.get(word, 0) + 1\n    return counts\n\n# TypedDict: specific key-value types\nclass UserDict(TypedDict):\n    name: str\n    age: int\n    email: str\n\ndef format_user(user: UserDict) -> str:\n    return f\"{user['name']} ({user['age']}) - {user['email']}\"\n\n# mypy checks key names and value types\nuser: UserDict = {'name': 'Alice', 'age': 30, 'email': 'a@b.com'}\n# user: UserDict = {'name': 'Alice'}  # mypy error: missing keys\n\n# Optional keys (Python 3.11+)\nclass Config(TypedDict):\n    host: str                    # Required\n    port: int                    # Required\n    debug: NotRequired[bool]     # Optional\n    timeout: NotRequired[int]    # Optional\n\nconfig: Config = {'host': 'localhost', 'port': 5432}  # OK\nconfig2: Config = {'host': 'localhost', 'port': 5432, 'debug': True}  # Also OK\n\n# Pre-3.11: total=False makes all keys optional\nclass OptionalConfig(TypedDict, total=False):\n    host: str\n    port: int\n    debug: bool\n\n# Inheritance for mixing required and optional (pre-3.11)\nclass RequiredFields(TypedDict):\n    name: str\n    email: str\n\nclass UserProfile(RequiredFields, total=False):\n    bio: str\n    age: int\n    avatar_url: str\n\n# Nested TypedDict\nclass Address(TypedDict):\n    street: str\n    city: str\n    zip_code: str\n\nclass Company(TypedDict):\n    name: str\n    address: Address  # Nested TypedDict\n    employees: list[UserDict]\n\ncompany: Company = {\n    'name': 'Acme',\n    'address': {'street': '123 Main', 'city': 'NYC', 'zip_code': '10001'},\n    'employees': [{'name': 'Alice', 'age': 30, 'email': 'a@b.com'}]\n}\n\n# Mapping for read-only dict parameters\ndef process_config(config: Mapping[str, str | int]) -> None:\n    # Cannot modify: config['key'] = 'value'  # mypy error\n    value = config.get('host')\n    print(value)",
+          "code_language": "python",
+          "key_points": [
+            "dict[K, V] for homogeneous dicts; TypedDict for specific key-value structures",
+            "NotRequired[] (3.11+) for optional keys; total=False for all-optional TypedDicts",
+            "Inherit TypedDicts to mix required and optional keys (pre-3.11)",
+            "Mapping[K, V] for read-only dict parameters (immutable interface)",
+            "TypedDicts can be nested for complex structures"
+          ],
+          "gotchas": [
+            "TypedDict is still a regular dict at runtime; the type constraints are static only",
+            "You cannot use TypedDict with ** unpacking in type-safe way easily",
+            "dict[str, Any] should be used sparingly; prefer TypedDict for known structures"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `dict[str, int]` for uniform dicts. Use `TypedDict` for dicts with specific keys and typed values. `NotRequired[]` (3.11+) for optional keys. `Mapping` for read-only dict parameters.",
+          "pseudo_code": "",
+          "actual_code": "from typing import TypedDict, NotRequired\n\nclass User(TypedDict):\n    name: str             # Required\n    email: str            # Required\n    bio: NotRequired[str] # Optional\n\nuser: User = {'name': 'Alice', 'email': 'a@b.com'}  # OK\nprint(user['name'])  # mypy knows this is str",
+          "code_language": "python",
+          "key_points": [
+            "TypedDict for specific keys; NotRequired for optional keys",
+            "Static only; runtime behavior is a normal dict"
+          ],
+          "gotchas": [
+            "TypedDict constraints are static-only; runtime is a normal dict"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is type narrowing and how does Python's type system support it?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["typing", "narrowing", "isinstance", "mypy"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Type narrowing** is when the type checker reduces (narrows) a variable's type based on control flow. For example, after `if isinstance(x, str):`, mypy knows `x` is a `str` in that branch.\n\nMypy supports several narrowing patterns:\n\n1. **`isinstance()`** - Most common; narrows to the checked type\n2. **`is None` / `is not None`** - Narrows Optional types\n3. **`assert`** - Narrows based on assertions\n4. **`type()` check** - Less common than isinstance\n5. **Assignment** - Reassigning narrows the type\n6. **TypeGuard** - Custom narrowing functions\n7. **`assert_never()`** - Exhaustiveness checking in match/if-elif chains",
+          "pseudo_code": "1. isinstance(x, Type) -> narrows x to Type\n2. x is not None -> narrows Optional[X] to X\n3. assert isinstance(x, Type) -> narrows below the assert\n4. TypeGuard functions -> custom narrowing\n5. assert_never(x) -> proves all cases handled (exhaustive check)",
+          "actual_code": "from typing import assert_never\n\n# isinstance narrowing\ndef process(value: int | str | list[int]) -> str:\n    if isinstance(value, int):\n        # mypy knows: value is int\n        return str(value * 2)\n    elif isinstance(value, str):\n        # mypy knows: value is str\n        return value.upper()\n    else:\n        # mypy knows: value is list[int]\n        return str(sum(value))\n\n# None narrowing\ndef greet(name: str | None) -> str:\n    if name is None:\n        return \"Hello, stranger!\"\n    # mypy knows: name is str (narrowed from str | None)\n    return f\"Hello, {name.upper()}!\"\n\n# Early return narrowing\ndef get_length(value: str | None) -> int:\n    if value is None:\n        return 0\n    # After early return, mypy knows value is str\n    return len(value)\n\n# Assert narrowing\ndef must_be_string(value: str | int) -> str:\n    assert isinstance(value, str), \"Expected a string\"\n    # mypy knows: value is str\n    return value.upper()\n\n# Truthiness narrowing\ndef process_optional(items: list[str] | None) -> int:\n    if items:  # Truthy check narrows out None and empty list\n        # mypy knows: items is list[str] (non-empty)\n        return len(items)\n    return 0\n\n# Exhaustiveness checking with assert_never\nfrom typing import Literal\n\ndef handle_status(status: Literal['active', 'inactive', 'pending']) -> str:\n    if status == 'active':\n        return 'User is active'\n    elif status == 'inactive':\n        return 'User is inactive'\n    elif status == 'pending':\n        return 'User is pending'\n    else:\n        assert_never(status)  # mypy error if any case is missing\n\n# Pattern matching narrowing (Python 3.10+)\ndef describe(value: int | str | list[int]) -> str:\n    match value:\n        case int():\n            return f\"Integer: {value}\"  # value is int\n        case str():\n            return f\"String: {value}\"   # value is str\n        case list():\n            return f\"List of {len(value)} items\"  # value is list[int]\n\n# Narrowing in comprehensions/loops\ndef filter_strings(items: list[int | str]) -> list[str]:\n    result: list[str] = []\n    for item in items:\n        if isinstance(item, str):\n            result.append(item.upper())  # item is str\n    return result",
+          "code_language": "python",
+          "key_points": [
+            "isinstance() is the primary narrowing mechanism",
+            "is None / is not None narrows Optional types",
+            "Early returns narrow types in the remaining code",
+            "assert_never() provides exhaustiveness checking in if/elif chains",
+            "Pattern matching (match/case) also narrows types"
+          ],
+          "gotchas": [
+            "Truthiness check (if items) narrows out None AND empty collections, which may not be desired",
+            "isinstance() with tuple of types (isinstance(x, (int, str))) narrows to Union",
+            "assert statements can be disabled with python -O; do not rely on them for production checks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Type narrowing reduces a variable's type based on control flow. `isinstance()` narrows to the checked type, `is not None` narrows Optional. `assert_never()` ensures exhaustive handling. Pattern matching also narrows types.",
+          "pseudo_code": "",
+          "actual_code": "def process(value: int | str | None) -> str:\n    if value is None:\n        return \"none\"           # narrowed: None\n    if isinstance(value, int):\n        return str(value * 2)   # narrowed: int\n    return value.upper()        # narrowed: str\n\n# Exhaustiveness\nfrom typing import assert_never\ndef handle(x: Literal['a', 'b']) -> str:\n    if x == 'a': return 'A'\n    elif x == 'b': return 'B'\n    else: assert_never(x)  # mypy error if case missed",
+          "code_language": "python",
+          "key_points": [
+            "isinstance and is None are the primary narrowing mechanisms",
+            "assert_never ensures all cases are handled"
+          ],
+          "gotchas": [
+            "Truthiness narrows out both None and empty collections"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the new type hint features in Python 3.12 (PEP 695)?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["typing", "python-3.12", "pep-695", "type-parameter-syntax"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.12 (PEP 695) introduced a new, cleaner syntax for defining type parameters:\n\n1. **Type parameter syntax for functions**: `def func[T](x: T) -> T:` replaces `T = TypeVar('T')`.\n2. **Type parameter syntax for classes**: `class Stack[T]:` replaces `class Stack(Generic[T])`.\n3. **`type` statement for type aliases**: `type Vector = list[float]` replaces `Vector: TypeAlias = list[float]`.\n4. **Bound and constrained type params**: `def func[T: int](x: T)` or `def func[T: (int, str)](x: T)`.\n5. **ParamSpec syntax**: `def deco[**P, R](func: Callable[P, R])`.\n6. **TypeVarTuple syntax**: `def func[*Ts](*args: *Ts)` for variadic generics.\n\nThese changes make generics much more readable and reduce boilerplate.",
+          "pseudo_code": "Old: T = TypeVar('T'); def func(x: T) -> T:\nNew: def func[T](x: T) -> T:\n\nOld: class Stack(Generic[T]):\nNew: class Stack[T]:\n\nOld: Vector: TypeAlias = list[float]\nNew: type Vector = list[float]",
+          "actual_code": "# Old way (pre-3.12)\nfrom typing import TypeVar, Generic, TypeAlias, ParamSpec, Callable\n\nT_old = TypeVar('T_old')\ndef first_old(items: list[T_old]) -> T_old:\n    return items[0]\n\nclass Stack_old(Generic[T_old]):\n    def __init__(self) -> None:\n        self._items: list[T_old] = []\n    def push(self, item: T_old) -> None:\n        self._items.append(item)\n\nVector_old: TypeAlias = list[float]\n\n# New way (Python 3.12+)\ndef first[T](items: list[T]) -> T:\n    return items[0]\n\nclass Stack[T]:\n    def __init__(self) -> None:\n        self._items: list[T] = []\n    def push(self, item: T) -> None:\n        self._items.append(item)\n    def pop(self) -> T:\n        return self._items.pop()\n\ntype Vector = list[float]\ntype Matrix = list[Vector]\n\n# Bound type parameters\ndef max_item[T: (int, float)](items: list[T]) -> T:\n    return max(items)\n\n# Bound to a class\nclass Animal:\n    name: str\n\ndef get_name[T: Animal](animal: T) -> str:\n    return animal.name\n\n# Multiple type parameters\ndef zip_with[T, U, V](func: Callable[[T, U], V], xs: list[T], ys: list[U]) -> list[V]:\n    return [func(x, y) for x, y in zip(xs, ys)]\n\n# ParamSpec with new syntax\ndef logged[**P, R](func: Callable[P, R]) -> Callable[P, R]:\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        print(f\"Calling {func.__name__}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n# TypeVarTuple (variadic generics) with new syntax\ndef first_of[*Ts](args: tuple[*Ts]) -> tuple[*Ts]:\n    return args\n\n# Generic class with multiple params\nclass Pair[T, U]:\n    def __init__(self, first: T, second: U) -> None:\n        self.first = first\n        self.second = second\n\n    def swap(self) -> 'Pair[U, T]':\n        return Pair(self.second, self.first)\n\npair = Pair(1, \"hello\")  # Pair[int, str]\nswapped = pair.swap()     # Pair[str, int]\n\n# type statement with complex aliases\ntype JSONValue = str | int | float | bool | None | list['JSONValue'] | dict[str, 'JSONValue']\ntype Handler[T] = Callable[[T], None]",
+          "code_language": "python",
+          "key_points": [
+            "def func[T]() replaces TypeVar + def func(x: T); much cleaner",
+            "class MyClass[T] replaces Generic[T] inheritance",
+            "type X = ... replaces TypeAlias annotations",
+            "[T: Base] for bound, [T: (int, str)] for constrained type vars",
+            "[**P, R] for ParamSpec, [*Ts] for TypeVarTuple"
+          ],
+          "gotchas": [
+            "New syntax requires Python 3.12+; use TypeVar/Generic for older versions",
+            "type statement creates lazy aliases (evaluated on demand), which changes behavior for forward refs",
+            "Cannot mix old and new syntax in the same class/function definition"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python 3.12 adds `def func[T]()` syntax (replaces TypeVar), `class MyClass[T]` (replaces Generic), and `type X = ...` (replaces TypeAlias). Much cleaner and less boilerplate.",
+          "pseudo_code": "",
+          "actual_code": "# Python 3.12+\ndef first[T](items: list[T]) -> T:\n    return items[0]\n\nclass Stack[T]:\n    def push(self, item: T) -> None: ...\n    def pop(self) -> T: ...\n\ntype Vector = list[float]\ntype Handler[T] = Callable[[T], None]",
+          "code_language": "python",
+          "key_points": [
+            "[T] on functions/classes replaces TypeVar and Generic",
+            "type statement replaces TypeAlias"
+          ],
+          "gotchas": [
+            "Requires Python 3.12+; not backward compatible"
+          ]
+        }
+      ]
+    }
+  ]
+}

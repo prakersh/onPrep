@@ -1,0 +1,497 @@
+{
+  "concept_slug": "pythonic-idioms",
+  "questions": [
+    {
+      "title": "What is the Zen of Python and what are its most important principles?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["zen", "philosophy", "pep-20"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Zen of Python** (PEP 20) is a collection of 19 guiding principles for writing Python. Access it with `import this`. The most impactful principles for daily coding:\n\n1. **Beautiful is better than ugly** - Write clean, readable code.\n2. **Explicit is better than implicit** - Do not hide behavior; make intent clear.\n3. **Simple is better than complex** - Choose the simplest solution that works.\n4. **Readability counts** - Code is read far more often than written.\n5. **There should be one-- and preferably only one --obvious way to do it** - Python prefers one clear approach.\n6. **Errors should never pass silently** - Handle exceptions explicitly.\n7. **In the face of ambiguity, refuse the temptation to guess** - Be explicit.\n8. **Flat is better than nested** - Avoid deep nesting; use early returns.\n9. **If the implementation is hard to explain, it's a bad idea** - Simplicity wins.",
+          "pseudo_code": "import this  # Prints the Zen of Python\n\nKey takeaways:\n- Readability > cleverness\n- Explicit > implicit\n- Simple > complex\n- Flat > nested\n- One obvious way to do it",
+          "actual_code": "# import this  # Prints the Zen of Python\n\n# Principle: Beautiful is better than ugly\n# Ugly\nresult = dict([(k,v) for k,v in zip(keys,vals)])\n# Beautiful\nresult = dict(zip(keys, vals))\n\n# Principle: Explicit is better than implicit\n# Implicit (what does * do here?)\nfrom math import *\n# Explicit\nfrom math import sqrt, pi\n\n# Principle: Simple is better than complex\n# Complex\ndef is_even(n):\n    return True if n % 2 == 0 else False\n# Simple\ndef is_even(n):\n    return n % 2 == 0\n\n# Principle: Flat is better than nested\n# Nested\ndef process(data):\n    if data:\n        if data.get('valid'):\n            if data.get('type') == 'user':\n                return handle_user(data)\n    return None\n\n# Flat (early returns)\ndef process(data):\n    if not data:\n        return None\n    if not data.get('valid'):\n        return None\n    if data.get('type') != 'user':\n        return None\n    return handle_user(data)\n\n# Principle: Errors should never pass silently\n# Bad: silently ignoring errors\ntry:\n    value = int(user_input)\nexcept:\n    pass\n\n# Good: handle explicitly\ntry:\n    value = int(user_input)\nexcept ValueError:\n    print(f\"Invalid number: {user_input}\")\n    value = 0\n\n# Principle: Readability counts\n# Clever but unreadable\nresult = [x for x in (y.strip() for y in open('f.txt')) if x and not x.startswith('#')]\n\n# Readable\nwith open('f.txt') as f:\n    result = []\n    for line in f:\n        line = line.strip()\n        if line and not line.startswith('#'):\n            result.append(line)",
+          "code_language": "python",
+          "key_points": [
+            "Readability and simplicity are core Python values",
+            "Prefer explicit imports, explicit error handling, and clear variable names",
+            "Use early returns to flatten nested conditionals",
+            "Never use bare except:; always catch specific exceptions",
+            "If it is hard to explain, simplify it"
+          ],
+          "gotchas": [
+            "The Zen of Python has intentional contradictions (e.g., 'practicality beats purity')",
+            "'One obvious way' does not mean there is literally one way; it means prefer the conventional way",
+            "Clever one-liners are not Pythonic if they sacrifice readability"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The Zen of Python (`import this`) guides Python style: readability counts, explicit beats implicit, simple beats complex, flat beats nested, errors should not pass silently. Write code for humans to read, not just computers to execute.",
+          "pseudo_code": "",
+          "actual_code": "# import this\n\n# Explicit > implicit\nfrom math import sqrt  # not: from math import *\n\n# Simple > complex\ndef is_even(n): return n % 2 == 0  # not: True if n%2==0 else False\n\n# Flat > nested (early returns)\nif not data: return None\nif not valid: return None\nreturn process(data)",
+          "code_language": "python",
+          "key_points": [
+            "Readability, simplicity, and explicitness are core values",
+            "Early returns to flatten nested code"
+          ],
+          "gotchas": [
+            "Clever one-liners are not Pythonic if they sacrifice readability"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is duck typing and how does Python use it?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["duck-typing", "protocols", "polymorphism"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Duck typing**: 'If it walks like a duck and quacks like a duck, it is a duck.' In Python, the type of an object is less important than the methods/attributes it has. You do not check the type; you check the behavior.\n\nThis means you can pass any object to a function as long as it has the required methods, regardless of its class hierarchy. There is no need for inheritance or interfaces.\n\nPython's entire ecosystem relies on duck typing: `for` loops work with any iterable, `with` works with any context manager, `len()` works with anything that has `__len__`.",
+          "pseudo_code": "Don't check: isinstance(x, Duck)\nDo check: does x have quack() and walk()?\n\nPython built-in duck typing:\n- for loop: anything with __iter__()\n- len(): anything with __len__()\n- with: anything with __enter__/__exit__\n- + operator: anything with __add__",
+          "actual_code": "# Duck typing: no type checking needed\nclass Duck:\n    def quack(self):\n        return \"Quack!\"\n    def walk(self):\n        return \"Walking\"\n\nclass Person:\n    def quack(self):\n        return \"I'm quacking like a duck!\"\n    def walk(self):\n        return \"Walking like a duck\"\n\nclass RobotDuck:\n    def quack(self):\n        return \"ELECTRONIC QUACK\"\n    def walk(self):\n        return \"Mechanical walking\"\n\ndef duck_test(thing):\n    \"\"\"Works with anything that has quack() and walk().\"\"\"\n    print(thing.quack())\n    print(thing.walk())\n\n# All work -- no inheritance needed!\nduck_test(Duck())\nduck_test(Person())\nduck_test(RobotDuck())\n\n# Python built-in duck typing examples\n\n# 1. Any iterable works in a for loop\nclass Fibonacci:\n    def __init__(self, n):\n        self.n = n\n    def __iter__(self):\n        a, b, count = 0, 1, 0\n        while count < self.n:\n            yield a\n            a, b = b, a + b\n            count += 1\n\nfor num in Fibonacci(5):  # Works because it has __iter__\n    print(num)\n\n# 2. Any object with __len__ works with len()\nclass Playlist:\n    def __init__(self, songs):\n        self.songs = songs\n    def __len__(self):\n        return len(self.songs)\n\nprint(len(Playlist(['a', 'b', 'c'])))  # 3\n\n# 3. Any object with __enter__/__exit__ works with 'with'\nclass Timer:\n    def __enter__(self):\n        import time\n        self.start = time.time()\n        return self\n    def __exit__(self, *args):\n        import time\n        print(f\"Elapsed: {time.time() - self.start:.3f}s\")\n\nwith Timer():\n    sum(range(1000000))\n\n# EAFP: Easier to Ask Forgiveness than Permission\n# (Pythonic approach to duck typing)\ndef process(data):\n    try:\n        result = data.process()  # Just try it\n    except AttributeError:\n        raise TypeError(\"data must have a process() method\")",
+          "code_language": "python",
+          "key_points": [
+            "Duck typing: type is irrelevant; only behavior (methods) matter",
+            "No inheritance or interface implementation needed",
+            "Python's for, with, len, operators all use duck typing internally",
+            "EAFP: try the operation, catch the exception if it fails",
+            "typing.Protocol (3.8+) formalizes duck typing for static checkers"
+          ],
+          "gotchas": [
+            "Duck typing can cause confusing errors when the wrong object is passed",
+            "EAFP catches AttributeError/TypeError, which may mask real bugs",
+            "Use Protocol for static type checking of duck-typed interfaces"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Duck typing: 'if it has the right methods, it works.' Python does not check types; it checks behavior. `for` works with any iterable, `len()` with any `__len__`, `with` with any context manager. No inheritance needed.",
+          "pseudo_code": "",
+          "actual_code": "# Any object with quack() works\ndef make_it_quack(thing):\n    print(thing.quack())  # No type check!\n\nclass Duck:\n    def quack(self): return \"Quack\"\nclass Robot:\n    def quack(self): return \"BEEP\"\n\nmake_it_quack(Duck())   # Works\nmake_it_quack(Robot())  # Also works",
+          "code_language": "python",
+          "key_points": [
+            "Check behavior (methods), not type (class)",
+            "Python built-ins (for, with, len) all use duck typing"
+          ],
+          "gotchas": [
+            "Confusing errors when wrong object is passed; use Protocol for static checking"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is EAFP vs LBYL and which does Python prefer?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["eafp", "lbyl", "philosophy", "error-handling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**LBYL (Look Before You Leap)**: Check if an operation is possible before doing it. Common in C, Java.\n\n**EAFP (Easier to Ask Forgiveness than Permission)**: Just try the operation and handle the exception if it fails. **Python prefers EAFP.**\n\n**Why EAFP is Pythonic**:\n1. **Simpler code**: No pre-checks needed; just try and catch.\n2. **Race condition safe**: Between checking and acting, the state could change (TOCTOU bug).\n3. **Duck typing friendly**: Works with any object that has the right behavior.\n4. **More efficient in the common case**: If the operation usually succeeds, exceptions are rare and cheap to set up (try is nearly free; except is expensive only when triggered).",
+          "pseudo_code": "LBYL: if key in dict: value = dict[key]\nEAFP: try: value = dict[key] except KeyError: ...\n\nPython prefers EAFP because:\n- try block has near-zero cost when no exception occurs\n- Avoids TOCTOU race conditions\n- Works naturally with duck typing",
+          "actual_code": "# LBYL (Look Before You Leap) - less Pythonic\ndef lbyl_get_value(data, key):\n    if isinstance(data, dict):       # Check type\n        if key in data:               # Check key exists\n            return data[key]\n    return None\n\n# EAFP (Easier to Ask Forgiveness) - Pythonic\ndef eafp_get_value(data, key):\n    try:\n        return data[key]\n    except (KeyError, TypeError):\n        return None\n\n# File operations\n# LBYL: race condition! File could be deleted between check and open\nimport os\nif os.path.exists('data.txt'):       # File exists now...\n    with open('data.txt') as f:      # ...but might not exist here!\n        data = f.read()\n\n# EAFP: safe from race conditions\ntry:\n    with open('data.txt') as f:\n        data = f.read()\nexcept FileNotFoundError:\n    data = ''\n\n# Division\n# LBYL\ndef safe_divide_lbyl(a, b):\n    if b == 0:\n        return 0\n    return a / b\n\n# EAFP\ndef safe_divide_eafp(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError:\n        return 0\n\n# Dictionary access\n# LBYL\nif 'name' in user_dict:\n    name = user_dict['name']\nelse:\n    name = 'Unknown'\n\n# EAFP (even better: use dict.get())\nname = user_dict.get('name', 'Unknown')\n\n# Attribute access\n# LBYL\nif hasattr(obj, 'process'):\n    obj.process()\n\n# EAFP\ntry:\n    obj.process()\nexcept AttributeError:\n    pass  # Object does not have process()\n\n# Type conversion\n# LBYL\nif isinstance(value, str) and value.isdigit():\n    number = int(value)\nelse:\n    number = 0\n\n# EAFP\ntry:\n    number = int(value)\nexcept (ValueError, TypeError):\n    number = 0\n\n# When LBYL is actually better:\n# 1. When the check is cheap and failure is common\n# 2. When try/except would mask real bugs\n# 3. When the operation has side effects that are hard to undo\n\n# Example: LBYL is better here (side effect: sending email)\nif user.email_verified:  # Check first\n    send_email(user.email)  # Side effect",
+          "code_language": "python",
+          "key_points": [
+            "EAFP (try/except) is Pythonic; LBYL (check first) is less Pythonic",
+            "try block has near-zero overhead when no exception occurs",
+            "EAFP avoids TOCTOU race conditions (check then act)",
+            "Use dict.get() instead of key-in-dict check for dictionary access",
+            "LBYL is better when failure is common or operation has side effects"
+          ],
+          "gotchas": [
+            "Bare except: catches everything including KeyboardInterrupt; always catch specific exceptions",
+            "EAFP can mask real bugs if you catch too broad an exception",
+            "except blocks are expensive when triggered; LBYL is better if exceptions are frequent"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "EAFP (try/except) is Pythonic: just try the operation, handle failure. LBYL (check first) has race conditions and extra checks. `try` is nearly free; `except` is only costly when triggered. Use LBYL only when failure is common or has side effects.",
+          "pseudo_code": "",
+          "actual_code": "# LBYL (less Pythonic)\nif key in d:\n    val = d[key]\n\n# EAFP (Pythonic)\ntry:\n    val = d[key]\nexcept KeyError:\n    val = default\n\n# Best: use built-in\nval = d.get(key, default)",
+          "code_language": "python",
+          "key_points": [
+            "EAFP is Pythonic; try is nearly free when no exception",
+            "LBYL for common failures or side effects"
+          ],
+          "gotchas": [
+            "Catch specific exceptions; bare except masks real bugs"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key PEP 8 style guidelines every Python developer should know?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["pep8", "style", "formatting"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**PEP 8** is Python's official style guide. Key rules:\n\n**Indentation & Whitespace**:\n- 4 spaces per indent (no tabs)\n- 79 characters max line length (72 for docstrings)\n- 2 blank lines between top-level definitions\n- 1 blank line between methods\n\n**Naming**:\n- `snake_case` for functions, variables, methods\n- `PascalCase` for classes\n- `UPPER_SNAKE_CASE` for constants\n- `_single_leading_underscore` for private (convention)\n- `__double_leading` for name mangling\n\n**Imports**:\n- One import per line\n- Order: stdlib, third-party, local (separated by blank lines)\n- Avoid `from x import *`\n\n**Whitespace**:\n- No spaces inside brackets: `func(a, b)` not `func( a, b )`\n- Spaces around operators: `x = 1 + 2` not `x=1+2`\n- No space before colon in slices: `list[1:3]` not `list[1 : 3]`",
+          "pseudo_code": "Naming: snake_case functions, PascalCase classes, UPPER constants\nIndent: 4 spaces, 79 char line length\nImports: stdlib -> third-party -> local, one per line\nWhitespace: spaces around =, no spaces in brackets",
+          "actual_code": "# PEP 8 Compliant Code Example\n\n# Imports: stdlib -> third-party -> local\nimport os\nimport sys\nfrom datetime import datetime\n\nimport requests\nfrom flask import Flask\n\nfrom myapp.models import User\nfrom myapp.utils import validate_email\n\n# Constants: UPPER_SNAKE_CASE\nMAX_RETRY_COUNT = 3\nDEFAULT_TIMEOUT = 30\nAPI_BASE_URL = \"https://api.example.com\"\n\n\n# Classes: PascalCase, 2 blank lines before\nclass UserService:\n    \"\"\"Service for user operations.\"\"\"\n\n    def __init__(self, api_url: str = API_BASE_URL) -> None:\n        self._api_url = api_url  # Private: leading underscore\n        self._session = requests.Session()\n\n    def get_user(self, user_id: int) -> dict | None:\n        \"\"\"Fetch a user by ID.\"\"\"\n        response = self._session.get(\n            f\"{self._api_url}/users/{user_id}\",\n            timeout=DEFAULT_TIMEOUT,\n        )\n        if response.status_code == 200:\n            return response.json()\n        return None\n\n    def create_user(self, name: str, email: str) -> dict:\n        \"\"\"Create a new user.\n\n        Args:\n            name: The user's display name.\n            email: The user's email address.\n\n        Returns:\n            The created user dictionary.\n\n        Raises:\n            ValueError: If email is invalid.\n        \"\"\"\n        if not validate_email(email):\n            raise ValueError(f\"Invalid email: {email}\")\n\n        return self._session.post(\n            f\"{self._api_url}/users\",\n            json={\"name\": name, \"email\": email},\n        ).json()\n\n\n# Functions: snake_case\ndef calculate_total_price(\n    items: list[dict],\n    tax_rate: float = 0.1,\n) -> float:\n    \"\"\"Calculate total price with tax.\"\"\"\n    subtotal = sum(item[\"price\"] * item[\"quantity\"] for item in items)\n    return subtotal * (1 + tax_rate)\n\n\n# Comparisons\n# Good\nif x is None:\n    pass\nif not items:\n    pass\nif isinstance(x, int):\n    pass\n\n# Bad\nif x == None:       # Use 'is' for None\n    pass\nif len(items) == 0: # Use truthiness\n    pass\nif type(x) is int:  # Use isinstance\n    pass",
+          "code_language": "python",
+          "key_points": [
+            "snake_case for functions/variables; PascalCase for classes; UPPER for constants",
+            "4 spaces indent; 79 char line length; 2 blank lines between top-level definitions",
+            "Import order: stdlib -> third-party -> local, separated by blank lines",
+            "Use 'is None' not '== None'; use truthiness for empty checks",
+            "Trailing commas in multi-line structures (easier diffs)"
+          ],
+          "gotchas": [
+            "PEP 8 says 'consistency within a project is more important than following PEP 8'",
+            "Use a formatter (black, ruff) to auto-enforce style instead of manual checks",
+            "79 chars is the guideline; many teams use 88 (black default) or 120"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "PEP 8: `snake_case` for functions, `PascalCase` for classes, `UPPER_CASE` for constants. 4-space indent, 79-char lines. Import order: stdlib, third-party, local. Use `is None`, truthiness for empty checks, `isinstance()` for type checks.",
+          "pseudo_code": "",
+          "actual_code": "# Naming\ndef calculate_price(): ...      # snake_case\nclass UserService: ...          # PascalCase\nMAX_RETRIES = 3                 # UPPER_SNAKE_CASE\n\n# Imports (in order)\nimport os\nimport requests\nfrom myapp import utils\n\n# Comparisons\nif x is None: ...       # not == None\nif not items: ...       # not len(items) == 0",
+          "code_language": "python",
+          "key_points": [
+            "snake_case, PascalCase, UPPER_CASE naming conventions",
+            "Use is None, truthiness, isinstance()"
+          ],
+          "gotchas": [
+            "Use a formatter (black, ruff) to auto-enforce; consistency > PEP 8 compliance"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use unpacking (*, **) idiomatically in Python?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["unpacking", "star", "double-star", "idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's unpacking operators (`*` and `**`) are versatile:\n\n1. **Iterable unpacking** (`*`): Spread elements from lists/tuples.\n2. **Dict unpacking** (`**`): Spread key-value pairs from dicts.\n3. **Extended unpacking** (`*rest`): Capture remaining elements.\n4. **Function parameters**: `*args` (positional), `**kwargs` (keyword).\n5. **Keyword-only arguments**: Parameters after `*` must be passed by name.",
+          "pseudo_code": "* unpacks iterables: [*list1, *list2] merges lists\n** unpacks dicts: {**dict1, **dict2} merges dicts\n*rest captures remaining: first, *rest = [1,2,3,4]\n*args: variable positional args\n**kwargs: variable keyword args",
+          "actual_code": "# Extended unpacking\nfirst, *rest = [1, 2, 3, 4, 5]\nprint(first)  # 1\nprint(rest)   # [2, 3, 4, 5]\n\nfirst, *middle, last = [1, 2, 3, 4, 5]\nprint(first)   # 1\nprint(middle)  # [2, 3, 4]\nprint(last)    # 5\n\n# Swap values (no temp variable needed)\na, b = 1, 2\na, b = b, a\nprint(a, b)  # 2, 1\n\n# Merge lists\nlist1 = [1, 2, 3]\nlist2 = [4, 5, 6]\nmerged = [*list1, *list2]\nprint(merged)  # [1, 2, 3, 4, 5, 6]\n\n# Merge dicts (Python 3.5+)\ndefaults = {'host': 'localhost', 'port': 5432, 'debug': False}\noverrides = {'port': 8080, 'debug': True}\nconfig = {**defaults, **overrides}\nprint(config)  # {'host': 'localhost', 'port': 8080, 'debug': True}\n\n# Python 3.9+ dict merge operator\nconfig = defaults | overrides  # Same result\n\n# Function arguments\ndef greet(name, greeting='Hello'):\n    return f'{greeting}, {name}!'\n\nargs = ['Alice']\nkwargs = {'greeting': 'Hi'}\nprint(greet(*args, **kwargs))  # Hi, Alice!\n\n# *args and **kwargs\ndef flexible(*args, **kwargs):\n    print(f'args: {args}')      # Tuple of positional args\n    print(f'kwargs: {kwargs}')  # Dict of keyword args\n\nflexible(1, 2, 3, name='Alice', age=30)\n# args: (1, 2, 3)\n# kwargs: {'name': 'Alice', 'age': 30}\n\n# Keyword-only arguments (after *)\ndef create_user(name, *, email, admin=False):\n    \"\"\"email and admin MUST be passed as keyword arguments.\"\"\"\n    return {'name': name, 'email': email, 'admin': admin}\n\ncreate_user('Alice', email='a@b.com')        # OK\n# create_user('Alice', 'a@b.com')             # TypeError!\ncreate_user('Alice', email='a@b.com', admin=True)  # OK\n\n# Unpacking in loops\npairs = [('a', 1), ('b', 2), ('c', 3)]\nfor key, value in pairs:\n    print(f'{key}: {value}')\n\n# Nested unpacking\npoints = [(1, 2), (3, 4), (5, 6)]\nfor x, y in points:\n    print(f'x={x}, y={y}')\n\n# Ignore values with _\nname, _, email = ('Alice', 30, 'a@b.com')\nfirst, *_, last = [1, 2, 3, 4, 5]",
+          "code_language": "python",
+          "key_points": [
+            "*rest captures remaining elements in unpacking",
+            "[*list1, *list2] merges lists; {**dict1, **dict2} merges dicts",
+            "a, b = b, a swaps without a temp variable",
+            "Parameters after * are keyword-only (must be passed by name)",
+            "Use _ for values you want to ignore in unpacking"
+          ],
+          "gotchas": [
+            "*rest in unpacking always produces a list, even if unpacking a tuple",
+            "Dict merge with ** gives priority to the last dict (rightmost wins)",
+            "You can only have one *rest in an unpacking expression"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`*` unpacks iterables, `**` unpacks dicts. `first, *rest = list` for extended unpacking. `{**d1, **d2}` or `d1 | d2` (3.9+) for dict merge. Parameters after `*` are keyword-only.",
+          "pseudo_code": "",
+          "actual_code": "first, *rest = [1, 2, 3, 4]  # first=1, rest=[2,3,4]\na, b = b, a                    # Swap\nmerged = [*list1, *list2]      # Merge lists\nconfig = {**defaults, **overrides}  # Merge dicts\n\ndef func(*, keyword_only): ...  # Must be passed by name",
+          "code_language": "python",
+          "key_points": [
+            "* for iterables, ** for dicts; *rest captures remaining",
+            "Swap: a, b = b, a; keyword-only after *"
+          ],
+          "gotchas": [
+            "In dict merge, rightmost wins for duplicate keys"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does truthiness work in Python and what values are falsy?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["truthiness", "falsy", "boolean", "idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every Python object has a boolean value (truthiness). The following are **falsy** (evaluate to False in boolean context):\n\n- `None`\n- `False`\n- Zero: `0`, `0.0`, `0j`, `Decimal(0)`, `Fraction(0, 1)`\n- Empty sequences: `''`, `()`, `[]`, `{}`\n- Empty sets: `set()`, `frozenset()`\n- Objects with `__bool__` returning False or `__len__` returning 0\n\nEverything else is **truthy**.\n\nPython checks `__bool__()` first; if not defined, checks `__len__()`; if neither, defaults to True.",
+          "pseudo_code": "Falsy: None, False, 0, 0.0, '', [], {}, (), set()\nTruthy: everything else\n\nCheck order: __bool__() -> __len__() == 0 -> True\n\nUse truthiness: if items: (not if len(items) > 0:)",
+          "actual_code": "# Falsy values\nprint(bool(None))       # False\nprint(bool(False))      # False\nprint(bool(0))          # False\nprint(bool(0.0))        # False\nprint(bool(''))         # False\nprint(bool([]))         # False\nprint(bool({}))         # False\nprint(bool(()))         # False\nprint(bool(set()))      # False\n\n# Truthy values\nprint(bool(1))          # True\nprint(bool(-1))         # True (non-zero)\nprint(bool('hello'))    # True (non-empty)\nprint(bool([0]))        # True (non-empty, even with falsy element)\nprint(bool(' '))        # True (space is not empty!)\n\n# Pythonic truthiness checks\nitems = [1, 2, 3]\n\n# Good: use truthiness\nif items:\n    print(\"Has items\")\nif not items:\n    print(\"Empty\")\n\n# Bad: verbose\nif len(items) > 0:\n    print(\"Has items\")\nif items != []:\n    print(\"Has items\")\n\n# None check: use 'is'\nresult = None\nif result is None:       # Correct\n    print(\"No result\")\nif result is not None:   # Correct\n    print(f\"Got: {result}\")\n\n# Careful: 0 and '' are falsy but valid!\ndef process(value):\n    # Bug: treats 0 and '' as missing\n    if not value:\n        return 'default'\n    return value\n\nprint(process(0))      # 'default' -- wrong! 0 is a valid value\nprint(process(''))     # 'default' -- wrong! '' might be valid\n\n# Fix: check for None explicitly\ndef process_fixed(value):\n    if value is None:\n        return 'default'\n    return value\n\nprint(process_fixed(0))   # 0 (correct)\nprint(process_fixed(''))  # '' (correct)\n\n# Custom truthiness\nclass Playlist:\n    def __init__(self, songs):\n        self.songs = songs\n\n    def __bool__(self):\n        return len(self.songs) > 0\n\n    def __len__(self):\n        return len(self.songs)\n\nplaylist = Playlist([])\nif not playlist:\n    print(\"Empty playlist\")  # Triggered\n\n# Short-circuit evaluation\nname = user.get('name') or 'Anonymous'  # '' would give 'Anonymous' too!\nname = user.get('name', 'Anonymous')    # Better: dict.get default",
+          "code_language": "python",
+          "key_points": [
+            "Falsy: None, False, 0, 0.0, '', [], {}, (), set()",
+            "Use 'if items:' not 'if len(items) > 0:' for empty checks",
+            "Use 'is None' not 'not value' when 0 or '' are valid values",
+            "__bool__() is checked first, then __len__(), then defaults to True",
+            "Short-circuit 'or' treats falsy values as missing (dangerous with 0 and '')"
+          ],
+          "gotchas": [
+            "0, '', and empty collections are falsy; check 'is None' when they are valid",
+            "'x or default' fails for falsy x values; use 'x if x is not None else default'",
+            "' ' (space) is truthy; only '' (empty) is falsy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Falsy: `None`, `False`, `0`, `''`, `[]`, `{}`, `()`, `set()`. Everything else is truthy. Use `if items:` for empty checks. Use `is None` when 0 or '' are valid values.",
+          "pseudo_code": "",
+          "actual_code": "# Pythonic checks\nif items:        # Non-empty\nif not items:    # Empty\nif x is None:    # Specifically None (not falsy)\n\n# Danger: 0 and '' are falsy\nif not value:    # Catches None AND 0 AND ''\nif value is None:  # Only catches None",
+          "code_language": "python",
+          "key_points": [
+            "Use truthiness for empty checks; is None for None checks",
+            "0 and '' are falsy but may be valid values"
+          ],
+          "gotchas": [
+            "'x or default' fails for falsy x values like 0 and ''"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use any() and all() idiomatically?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["any", "all", "builtins", "idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`any()` and `all()` are built-in functions that test truthiness across an iterable:\n\n- **`any(iterable)`**: Returns True if ANY element is truthy. Short-circuits on first True.\n- **`all(iterable)`**: Returns True if ALL elements are truthy. Short-circuits on first False.\n\nBoth accept generator expressions, making them powerful and memory-efficient for checking conditions across collections.",
+          "pseudo_code": "any([False, False, True, False]) -> True (at least one)\nall([True, True, True, True]) -> True (every one)\nany([]) -> False (empty = no truthy elements)\nall([]) -> True (empty = no falsy elements, vacuously true)",
+          "actual_code": "# Basic usage\nprint(any([False, False, True]))  # True\nprint(all([True, True, False]))   # False\n\n# Empty iterables\nprint(any([]))  # False (no truthy elements)\nprint(all([]))  # True (vacuously true: no falsy elements)\n\n# With generator expressions (memory efficient + short-circuit)\nnumbers = [2, 4, 6, 8, 10]\n\n# Check if any number is odd\nhas_odd = any(n % 2 != 0 for n in numbers)\nprint(has_odd)  # False\n\n# Check if all numbers are positive\nall_positive = all(n > 0 for n in numbers)\nprint(all_positive)  # True\n\n# Real-world examples\nusers = [\n    {'name': 'Alice', 'active': True, 'admin': False},\n    {'name': 'Bob', 'active': True, 'admin': True},\n    {'name': 'Charlie', 'active': False, 'admin': False},\n]\n\n# Is there at least one admin?\nhas_admin = any(u['admin'] for u in users)\nprint(has_admin)  # True\n\n# Are all users active?\nall_active = all(u['active'] for u in users)\nprint(all_active)  # False (Charlie is inactive)\n\n# Validation: all required fields present\nrequired_fields = ['name', 'email', 'age']\ndata = {'name': 'Alice', 'email': 'a@b.com', 'age': 30}\n\nall_present = all(field in data for field in required_fields)\nprint(all_present)  # True\n\nmissing = [f for f in required_fields if f not in data]\nprint(missing)  # []\n\n# File checking: does any file exist?\nimport os\nfiles = ['config.json', 'config.yaml', 'config.toml']\nexists = any(os.path.exists(f) for f in files)\n\n# Short-circuit: stops at first match\ndef expensive_check(x):\n    print(f\"Checking {x}\")\n    return x > 5\n\nresult = any(expensive_check(x) for x in [1, 2, 10, 3, 4])\n# Prints: Checking 1, Checking 2, Checking 10\n# Stops! Does not check 3 and 4\n\n# Replacing loops with any/all\n# Instead of:\ndef has_negative_loop(numbers):\n    for n in numbers:\n        if n < 0:\n            return True\n    return False\n\n# Use:\ndef has_negative(numbers):\n    return any(n < 0 for n in numbers)\n\n# Negation patterns\n# \"none of\" = not any\nnone_negative = not any(n < 0 for n in [1, 2, 3])\nprint(none_negative)  # True\n\n# \"not all\" = at least one fails\nnot_all_positive = not all(n > 0 for n in [1, -2, 3])\nprint(not_all_positive)  # True",
+          "code_language": "python",
+          "key_points": [
+            "any() returns True if at least one element is truthy; all() if every element is truthy",
+            "Both short-circuit: any stops on first True, all stops on first False",
+            "Use generator expressions for memory efficiency and lazy evaluation",
+            "any([]) is False; all([]) is True (vacuous truth)",
+            "Replace 'for + if + return' patterns with any()/all() for cleaner code"
+          ],
+          "gotchas": [
+            "all([]) is True (vacuous truth); this surprises many developers",
+            "Generator expressions are consumed after use; cannot reuse them",
+            "any/all with generator expressions evaluate lazily; list comprehensions evaluate eagerly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`any()` returns True if any element is truthy; `all()` if all are. Both short-circuit and work with generator expressions. Replace `for + if + return True` patterns with `any(condition for x in items)`.",
+          "pseudo_code": "",
+          "actual_code": "# Any admin?\nhas_admin = any(u['admin'] for u in users)\n\n# All required fields present?\nall_present = all(f in data for f in required_fields)\n\n# Short-circuits (stops at first match)\nany(x > 100 for x in huge_list)  # Stops at first True",
+          "code_language": "python",
+          "key_points": [
+            "any = at least one; all = every one; both short-circuit",
+            "Use generators for lazy evaluation"
+          ],
+          "gotchas": [
+            "all([]) is True (vacuous truth)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why should you use enumerate() instead of range(len())?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["enumerate", "iteration", "idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`enumerate()` provides both the index and value during iteration, replacing the anti-pattern `for i in range(len(items))` with cleaner, more Pythonic code.\n\n`enumerate(iterable, start=0)` yields `(index, value)` tuples. The optional `start` parameter sets the starting index.",
+          "pseudo_code": "Bad:  for i in range(len(items)): item = items[i]\nGood: for i, item in enumerate(items):\n\nenumerate yields (index, value) pairs\nstart= parameter sets starting index",
+          "actual_code": "fruits = ['apple', 'banana', 'cherry']\n\n# Anti-pattern: range(len())\nfor i in range(len(fruits)):\n    print(f\"{i}: {fruits[i]}\")\n\n# Pythonic: enumerate()\nfor i, fruit in enumerate(fruits):\n    print(f\"{i}: {fruit}\")\n\n# Start from 1 (useful for display)\nfor num, fruit in enumerate(fruits, start=1):\n    print(f\"{num}. {fruit}\")\n# 1. apple\n# 2. banana\n# 3. cherry\n\n# Find index of first match\ndef find_first(items, predicate):\n    for i, item in enumerate(items):\n        if predicate(item):\n            return i\n    return -1\n\nindex = find_first(['a', 'bb', 'ccc'], lambda x: len(x) > 1)\nprint(index)  # 1\n\n# Build indexed dict\nindex_map = {item: i for i, item in enumerate(fruits)}\nprint(index_map)  # {'apple': 0, 'banana': 1, 'cherry': 2}\n\n# Enumerate with zip\nnames = ['Alice', 'Bob', 'Charlie']\nscores = [85, 92, 78]\n\nfor i, (name, score) in enumerate(zip(names, scores), start=1):\n    print(f\"#{i} {name}: {score}\")\n# #1 Alice: 85\n# #2 Bob: 92\n# #3 Charlie: 78\n\n# enumerate works with any iterable\nfor i, line in enumerate(open('file.txt'), start=1):\n    print(f\"Line {i}: {line.strip()}\")\n\n# enumerate returns an iterator (lazy)\nresult = enumerate(fruits)\nprint(next(result))  # (0, 'apple')\nprint(next(result))  # (1, 'banana')",
+          "code_language": "python",
+          "key_points": [
+            "enumerate() replaces range(len()) with cleaner (index, value) iteration",
+            "start= parameter sets the starting index (default 0)",
+            "Works with any iterable, not just lists",
+            "Returns an iterator (lazy); combine with zip for parallel iteration",
+            "Unpacks naturally: for i, item in enumerate(items)"
+          ],
+          "gotchas": [
+            "enumerate returns an iterator; convert to list() if you need to iterate multiple times",
+            "range(len()) is needed when you want to iterate indices without values (rare)",
+            "Do not use enumerate just for the index if you never use the value"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`enumerate(items)` gives `(index, value)` pairs. Replaces `for i in range(len(items))`. Use `start=1` for 1-based numbering. Works with any iterable.",
+          "pseudo_code": "",
+          "actual_code": "# Bad\nfor i in range(len(items)):\n    print(i, items[i])\n\n# Good\nfor i, item in enumerate(items):\n    print(i, item)\n\n# 1-based\nfor num, item in enumerate(items, start=1):\n    print(f\"{num}. {item}\")",
+          "code_language": "python",
+          "key_points": [
+            "enumerate gives (index, value); start= for custom start",
+            "Always prefer over range(len())"
+          ],
+          "gotchas": [
+            "enumerate returns an iterator, not a list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you merge dictionaries in Python (including the | operator)?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["dict", "merge", "union-operator", "idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python offers several ways to merge dictionaries, with newer versions providing cleaner syntax:\n\n1. **`|` operator** (Python 3.9+): `merged = d1 | d2` (creates new dict).\n2. **`|=` operator** (Python 3.9+): `d1 |= d2` (updates d1 in-place).\n3. **`{**d1, **d2}`** (Python 3.5+): Unpacking into a new dict.\n4. **`d1.update(d2)`**: Updates d1 in-place (no new dict).\n5. **`ChainMap`**: View over multiple dicts (no copying).\n\nIn all cases, later values override earlier ones for duplicate keys.",
+          "pseudo_code": "d1 | d2       -> new dict (3.9+), d2 wins on conflicts\nd1 |= d2      -> update d1 in-place (3.9+)\n{**d1, **d2}  -> new dict (3.5+), d2 wins\nd1.update(d2) -> update d1 in-place\nChainMap(d1, d2) -> view over both (no copy)",
+          "actual_code": "d1 = {'a': 1, 'b': 2}\nd2 = {'b': 3, 'c': 4}\n\n# Python 3.9+: | operator (new dict)\nmerged = d1 | d2\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4}\nprint(d1)      # {'a': 1, 'b': 2} (unchanged)\n\n# Python 3.9+: |= in-place update\nd1_copy = d1.copy()\nd1_copy |= d2\nprint(d1_copy)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Python 3.5+: ** unpacking (new dict)\nmerged = {**d1, **d2}\nprint(merged)  # {'a': 1, 'b': 3, 'c': 4}\n\n# Merge 3+ dicts\nd3 = {'d': 5}\nmerged = d1 | d2 | d3          # 3.9+\nmerged = {**d1, **d2, **d3}     # 3.5+\n\n# .update() (in-place, returns None)\nd1_copy = d1.copy()\nd1_copy.update(d2)\nprint(d1_copy)  # {'a': 1, 'b': 3, 'c': 4}\n\n# ChainMap (no copying, first dict wins)\nfrom collections import ChainMap\n\ndefaults = {'color': 'red', 'size': 'medium', 'debug': False}\nuser_prefs = {'color': 'blue', 'debug': True}\n\n# ChainMap searches dicts in order; first match wins\nconfig = ChainMap(user_prefs, defaults)\nprint(config['color'])  # 'blue' (from user_prefs)\nprint(config['size'])   # 'medium' (from defaults)\nprint(dict(config))     # {'color': 'blue', 'size': 'medium', 'debug': True}\n\n# Merge with custom conflict resolution\ndef merge_with(d1, d2, resolver):\n    \"\"\"Merge dicts using a resolver function for conflicts.\"\"\"\n    result = d1.copy()\n    for key, value in d2.items():\n        if key in result:\n            result[key] = resolver(result[key], value)\n        else:\n            result[key] = value\n    return result\n\n# Sum values for duplicate keys\nscores1 = {'alice': 10, 'bob': 20}\nscores2 = {'bob': 15, 'charlie': 25}\nmerged = merge_with(scores1, scores2, lambda a, b: a + b)\nprint(merged)  # {'alice': 10, 'bob': 35, 'charlie': 25}",
+          "code_language": "python",
+          "key_points": [
+            "| operator (3.9+) is the cleanest way to merge dicts",
+            "Later dicts override earlier ones for duplicate keys",
+            "{**d1, **d2} works in Python 3.5+",
+            "ChainMap provides a view without copying (first dict has priority)",
+            "Use .update() or |= for in-place modification"
+          ],
+          "gotchas": [
+            "| creates a new dict; update() and |= modify in-place",
+            "ChainMap priority is opposite to |: first dict wins in ChainMap, last wins in |",
+            "** unpacking requires all keys to be strings (for function calls); dicts can have non-string keys"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python 3.9+: `d1 | d2` (new dict, d2 wins). 3.5+: `{**d1, **d2}`. In-place: `d1.update(d2)` or `d1 |= d2`. ChainMap for read-only view. Later dicts override earlier for duplicate keys.",
+          "pseudo_code": "",
+          "actual_code": "# Python 3.9+\nmerged = defaults | overrides  # New dict\ndefaults |= overrides          # In-place\n\n# Python 3.5+\nmerged = {**defaults, **overrides}\n\n# No copy\nfrom collections import ChainMap\nconfig = ChainMap(overrides, defaults)  # overrides checked first",
+          "code_language": "python",
+          "key_points": [
+            "| creates new dict (3.9+); later values win",
+            "ChainMap for lazy, copy-free merging"
+          ],
+          "gotchas": [
+            "ChainMap priority is reversed: first dict wins"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the walrus operator (:=) and when should you use it?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["walrus", "assignment-expression", "python-3.8"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **walrus operator** (`:=`, PEP 572, Python 3.8+) is an **assignment expression** that assigns a value to a variable as part of an expression. It lets you assign and use a value in the same line.\n\nThe name comes from the visual similarity of `:=` to a walrus face turned sideways.\n\n**Use cases**:\n1. Avoid computing a value twice (compute + check in one expression).\n2. Simplify while loops that need a read-check pattern.\n3. Reduce nesting in comprehensions and conditionals.",
+          "pseudo_code": "Without walrus: compute, assign, check separately\nWith walrus: (result := compute()) used in the same expression\n\nBest for:\n- while (line := f.readline()): ...\n- if (match := pattern.search(text)): ...\n- [y for x in data if (y := transform(x)) > threshold]",
+          "actual_code": "# Without walrus: compute value twice or use extra line\ndata = input(\"Enter data: \")\nwhile data != 'quit':\n    print(f\"Processing: {data}\")\n    data = input(\"Enter data: \")  # Repeated!\n\n# With walrus: assign and check in one expression\nwhile (data := input(\"Enter data: \")) != 'quit':\n    print(f\"Processing: {data}\")\n\n# Pattern: avoid double computation\nimport re\n\ntext = \"The price is $42.99\"\n\n# Without walrus\nmatch = re.search(r'\\$(\\d+\\.\\d+)', text)\nif match:\n    print(f\"Found price: {match.group(1)}\")\n\n# With walrus\nif match := re.search(r'\\$(\\d+\\.\\d+)', text):\n    print(f\"Found price: {match.group(1)}\")\n\n# Reading files\nwith open('data.txt') as f:\n    while line := f.readline():\n        print(line.strip())\n\n# List comprehension with walrus (filter + transform)\nimport math\n\nnumbers = [1, 4, 9, 16, 25, 36]\n# Without walrus: compute sqrt twice\nresult = [math.sqrt(n) for n in numbers if math.sqrt(n) > 3]\n\n# With walrus: compute once\nresult = [root for n in numbers if (root := math.sqrt(n)) > 3]\nprint(result)  # [4.0, 5.0, 6.0]\n\n# Validation: check and use\ndef process_user(data: dict) -> str:\n    if (name := data.get('name')) is None:\n        return \"Name required\"\n    if (email := data.get('email')) is None:\n        return \"Email required\"\n    return f\"User: {name} <{email}>\"\n\n# API pagination\nimport requests\n\ndef fetch_all_pages(url):\n    results = []\n    page = 1\n    while (response := requests.get(url, params={'page': page})).json():\n        data = response.json()\n        if not data:\n            break\n        results.extend(data)\n        page += 1\n    return results\n\n# When NOT to use walrus (over-complication)\n# Bad: too clever\nif (n := len(items)) > 10 and (first := items[0]) == 'special':\n    print(f\"{n} items, first is {first}\")\n\n# Better: explicit\nn = len(items)\nif n > 10 and items[0] == 'special':\n    print(f\"{n} items, first is {items[0]}\")",
+          "code_language": "python",
+          "key_points": [
+            ":= assigns AND returns the value in one expression",
+            "Best for while loops with read-check pattern and if statements with compute-check",
+            "In comprehensions, avoids computing a value twice (filter + use)",
+            "Named 'walrus operator' because := looks like a walrus face sideways",
+            "Do not overuse: readability is more important than brevity"
+          ],
+          "gotchas": [
+            "Cannot be used for augmented assignment (no +=, -=, etc.)",
+            ":= has lower precedence than most operators; use parentheses when needed",
+            "Overuse makes code harder to read; use only when it clearly simplifies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`:=` (walrus operator, 3.8+) assigns and returns a value in one expression. Best for `while (line := readline()):` and `if (match := search()):` patterns. Avoids computing values twice. Do not overuse.",
+          "pseudo_code": "",
+          "actual_code": "# Assign + check in one line\nif (match := re.search(pattern, text)):\n    print(match.group())\n\n# While loop with read-check\nwhile (line := f.readline()):\n    process(line)\n\n# Comprehension: compute once\nresult = [y for x in data if (y := transform(x)) > threshold]",
+          "code_language": "python",
+          "key_points": [
+            ":= assigns and returns; best for while/if patterns",
+            "Avoids double computation; do not overuse"
+          ],
+          "gotchas": [
+            "Use parentheses around := in conditions; lower precedence"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most useful f-string tips and tricks?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["f-strings", "formatting", "strings"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "F-strings (PEP 498, Python 3.6+) are the preferred way to format strings in Python. They are faster than `.format()` and `%` formatting, and more readable.\n\nBeyond basic `f\"{variable}\"`, f-strings support:\n- Expressions and method calls inside `{}`\n- Format specifiers (`:` after the expression)\n- Self-documenting `=` (Python 3.8+)\n- Multi-line f-strings\n- Nested quotes and braces",
+          "pseudo_code": "f\"{value}\"          - basic interpolation\nf\"{value:.2f}\"      - 2 decimal places\nf\"{value:>10}\"      - right-align, width 10\nf\"{value=}\"         - self-documenting (3.8+)\nf\"{value!r}\"        - repr() of value\nf\"{value:,}\"        - thousands separator",
+          "actual_code": "name = 'Alice'\nage = 30\nprice = 42.5678\n\n# Basic\nprint(f\"Hello, {name}!\")  # Hello, Alice!\n\n# Expressions\nprint(f\"Next year: {age + 1}\")          # Next year: 31\nprint(f\"Upper: {name.upper()}\")         # Upper: ALICE\nprint(f\"Length: {len(name)}\")           # Length: 5\n\n# Format specifiers\nprint(f\"Price: {price:.2f}\")            # Price: 42.57\nprint(f\"Price: ${price:,.2f}\")          # Price: $42.57\nprint(f\"Percent: {0.456:.1%}\")          # Percent: 45.6%\nprint(f\"Binary: {42:b}\")               # Binary: 101010\nprint(f\"Hex: {255:#x}\")                # Hex: 0xff\nprint(f\"Oct: {8:o}\")                   # Oct: 10\n\n# Alignment and padding\nprint(f\"{'left':<20}\")                  # left                (left-align)\nprint(f\"{'right':>20}\")                 # right               (right-align)\nprint(f\"{'center':^20}\")                # center              (center)\nprint(f\"{'padded':*^20}\")               # *******padded*******\nprint(f\"{42:05d}\")                      # 00042 (zero-padded)\n\n# Self-documenting = (Python 3.8+)\nx = 10\ny = 20\nprint(f\"{x=}, {y=}\")                    # x=10, y=20\nprint(f\"{x + y=}\")                      # x + y=30\nprint(f\"{name=!r}\")                     # name='Alice'\nprint(f\"{price=:.2f}\")                  # price=42.57\n\n# repr vs str\nprint(f\"{name!r}\")   # 'Alice' (repr, with quotes)\nprint(f\"{name!s}\")   # Alice (str, default)\n\n# Date formatting\nfrom datetime import datetime\nnow = datetime.now()\nprint(f\"{now:%Y-%m-%d %H:%M}\")          # 2024-01-15 14:30\nprint(f\"{now:%B %d, %Y}\")               # January 15, 2024\n\n# Thousands separator\nbig_number = 1234567890\nprint(f\"{big_number:,}\")                # 1,234,567,890\nprint(f\"{big_number:_}\")                # 1_234_567_890\n\n# Dynamic format specification\nwidth = 20\nalign = '^'\nfill = '-'\nprint(f\"{'hello':{fill}{align}{width}}\")  # -------hello--------\n\n# Nested f-strings (Python 3.12+)\n# print(f\"result: {f'{x} + {y}'}\")  # 3.12+ allows nested f-strings\n\n# Multi-line\nmessage = (\n    f\"User: {name}\\n\"\n    f\"Age: {age}\\n\"\n    f\"Price: ${price:.2f}\"\n)\nprint(message)\n\n# Dictionary access (use different quotes)\nuser = {'name': 'Alice', 'age': 30}\nprint(f\"Name: {user['name']}\")  # Use single quotes inside double",
+          "code_language": "python",
+          "key_points": [
+            "f-strings are faster and more readable than .format() and % formatting",
+            "= suffix (3.8+) self-documents: f'{x=}' prints 'x=10'",
+            ":.2f for decimals, :, for thousands, :>10 for alignment, !r for repr",
+            "Support any expression: method calls, math, ternary, etc.",
+            "Use different quote styles for nested quotes: f\"{d['key']}\""
+          ],
+          "gotchas": [
+            "Backslashes are not allowed inside f-string expressions; use a variable instead",
+            "Curly braces in f-strings must be escaped: f'{{literal braces}}'",
+            "f-strings evaluate expressions at runtime; be careful with side effects"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "F-strings: `f\"{value:.2f}\"` for formatting, `f\"{x=}\"` (3.8+) for self-documenting output, `!r` for repr, `:,` for thousands, `:<20` for alignment. Faster and more readable than `.format()` and `%`.",
+          "pseudo_code": "",
+          "actual_code": "x = 42\nprint(f\"{x=}\")          # x=42 (self-documenting)\nprint(f\"{x:.2f}\")       # 42.00 (decimal places)\nprint(f\"{x:,}\")         # 42 (thousands separator for big numbers)\nprint(f\"{x:>10}\")       # \"        42\" (right-align)\nprint(f\"{'hi':*^10}\")   # \"****hi****\" (center with fill)",
+          "code_language": "python",
+          "key_points": [
+            "= for self-documenting; :.2f for decimals; :, for thousands",
+            "Faster than .format() and % formatting"
+          ],
+          "gotchas": [
+            "No backslashes inside f-string expressions; escape {{ for literal braces"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most common Python anti-patterns to avoid?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["anti-patterns", "best-practices", "code-quality"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python anti-patterns are common coding mistakes that lead to bugs, poor performance, or unreadable code. Here are the most important ones to avoid:",
+          "pseudo_code": "1. Mutable default arguments\n2. Bare except clauses\n3. Using type() instead of isinstance()\n4. range(len()) instead of enumerate()\n5. Manual string concatenation in loops\n6. Not using context managers for resources\n7. Catch-all exception handling\n8. Global mutable state",
+          "actual_code": "# Anti-pattern 1: Mutable default argument\n# BAD: default list is shared across all calls!\ndef append_to(value, items=[]):\n    items.append(value)\n    return items\n\nprint(append_to(1))  # [1]\nprint(append_to(2))  # [1, 2] -- BUG! Shared list!\n\n# GOOD: use None sentinel\ndef append_to(value, items=None):\n    if items is None:\n        items = []\n    items.append(value)\n    return items\n\n# Anti-pattern 2: Bare except\n# BAD: catches EVERYTHING including KeyboardInterrupt and SystemExit\ntry:\n    result = risky_operation()\nexcept:\n    pass  # Silently swallows ALL errors\n\n# GOOD: catch specific exceptions\ntry:\n    result = risky_operation()\nexcept ValueError as e:\n    print(f\"Invalid value: {e}\")\nexcept (IOError, OSError) as e:\n    print(f\"I/O error: {e}\")\n\n# Anti-pattern 3: type() instead of isinstance()\n# BAD: does not account for inheritance\nif type(x) == int:\n    pass\n\n# GOOD: works with subclasses\nif isinstance(x, int):\n    pass\nif isinstance(x, (int, float)):  # Multiple types\n    pass\n\n# Anti-pattern 4: range(len()) instead of enumerate()\n# BAD\nfor i in range(len(items)):\n    print(i, items[i])\n\n# GOOD\nfor i, item in enumerate(items):\n    print(i, item)\n\n# Anti-pattern 5: String concatenation in loops\n# BAD: O(n^2) due to string immutability\nresult = ''\nfor item in items:\n    result += str(item) + ', '\n\n# GOOD: O(n)\nresult = ', '.join(str(item) for item in items)\n\n# Anti-pattern 6: Not using context managers\n# BAD: file may not be closed on exception\nf = open('data.txt')\ndata = f.read()\nf.close()  # May never run if read() raises!\n\n# GOOD: guaranteed cleanup\nwith open('data.txt') as f:\n    data = f.read()\n\n# Anti-pattern 7: Using == for None/bool comparison\n# BAD\nif x == None:\n    pass\nif x == True:\n    pass\n\n# GOOD\nif x is None:\n    pass\nif x:  # or: if x is True: (if you need exact True)\n    pass\n\n# Anti-pattern 8: Wildcard imports\n# BAD: pollutes namespace, hides where names come from\nfrom os.path import *\n\n# GOOD: explicit imports\nfrom os.path import join, exists, dirname\n\n# Anti-pattern 9: Using list as a set for membership\n# BAD: O(n) lookup\nif item in large_list:\n    pass\n\n# GOOD: O(1) lookup\nlarge_set = set(large_list)\nif item in large_set:\n    pass",
+          "code_language": "python",
+          "key_points": [
+            "Use None for mutable defaults, not [] or {}",
+            "Catch specific exceptions, never bare except:",
+            "isinstance() for type checks, not type() ==",
+            "enumerate() instead of range(len())",
+            "''.join() instead of += in loops"
+          ],
+          "gotchas": [
+            "Mutable default argument bug is the most common Python gotcha",
+            "Bare except catches KeyboardInterrupt and SystemExit (use except Exception at minimum)",
+            "These anti-patterns are tested in interviews; know them well"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Top anti-patterns: mutable defaults (`def f(x=[]):`), bare `except:`, `type()` instead of `isinstance()`, `range(len())` instead of `enumerate()`, `+=` strings in loops, not using `with` for files. Know these for interviews.",
+          "pseudo_code": "",
+          "actual_code": "# Mutable default: use None\ndef f(items=None):\n    items = items or []\n\n# Specific exceptions\nexcept ValueError as e:\n\n# isinstance, not type()\nif isinstance(x, int):\n\n# enumerate, not range(len())\nfor i, item in enumerate(items):\n\n# join, not +=\nresult = ', '.join(items)",
+          "code_language": "python",
+          "key_points": [
+            "None for mutable defaults; specific exceptions; isinstance()",
+            "enumerate(); join(); with for resources"
+          ],
+          "gotchas": [
+            "Mutable default arguments are the #1 Python interview gotcha"
+          ]
+        }
+      ]
+    }
+  ]
+}

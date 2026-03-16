@@ -1,0 +1,497 @@
+{
+  "concept_slug": "testing",
+  "questions": [
+    {
+      "title": "What are the key differences between unittest and pytest?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["unittest", "pytest", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both are Python testing frameworks, but they differ significantly in philosophy and syntax:\n\n### unittest (standard library)\n- Class-based: tests must be methods in a `TestCase` subclass\n- Uses `self.assertEqual()`, `self.assertRaises()`, etc.\n- setUp/tearDown for fixtures\n- Verbose, Java-like style\n- Built into Python, no extra install\n\n### pytest (third-party)\n- Function-based: plain functions with `assert` statements\n- Automatic test discovery (files/functions starting with `test_`)\n- Rich fixture system with dependency injection\n- Powerful parametrize for data-driven tests\n- Better error messages (assertion introspection)\n- Huge plugin ecosystem\n- Can run unittest tests too\n\n### When to use which:\n- **pytest**: Almost always preferred for new projects\n- **unittest**: Legacy codebases, or when you cannot install third-party packages",
+          "pseudo_code": "unittest style:\n  class TestMath(TestCase):\n      def test_add(self):\n          self.assertEqual(add(1, 2), 3)\n\npytest style:\n  def test_add():\n      assert add(1, 2) == 3",
+          "actual_code": "# unittest style\nimport unittest\n\nclass TestCalculator(unittest.TestCase):\n    def setUp(self):\n        self.calc = Calculator()\n\n    def test_add(self):\n        self.assertEqual(self.calc.add(1, 2), 3)\n\n    def test_divide_by_zero(self):\n        with self.assertRaises(ZeroDivisionError):\n            self.calc.divide(1, 0)\n\n    def tearDown(self):\n        del self.calc\n\n# pytest style (equivalent, much simpler)\nclass Calculator:\n    def add(self, a, b):\n        return a + b\n    def divide(self, a, b):\n        return a / b\n\nimport pytest\n\ndef test_add():\n    calc = Calculator()\n    assert calc.add(1, 2) == 3\n\ndef test_divide_by_zero():\n    calc = Calculator()\n    with pytest.raises(ZeroDivisionError):\n        calc.divide(1, 0)\n\n# pytest with fixtures (dependency injection)\n@pytest.fixture\ndef calc():\n    return Calculator()\n\ndef test_add_with_fixture(calc):\n    assert calc.add(1, 2) == 3\n\n# pytest parametrize (data-driven tests)\n@pytest.mark.parametrize(\"a,b,expected\", [\n    (1, 2, 3),\n    (0, 0, 0),\n    (-1, 1, 0),\n    (100, 200, 300),\n])\ndef test_add_parametrized(calc, a, b, expected):\n    assert calc.add(a, b) == expected\n\n# pytest better error messages\ndef test_list_comparison():\n    result = [1, 2, 3, 4]\n    expected = [1, 2, 5, 4]\n    assert result == expected\n    # pytest shows: [1, 2, 3, 4] != [1, 2, 5, 4]\n    #               At index 2: 3 != 5",
+          "code_language": "python",
+          "key_points": [
+            "pytest uses plain assert statements; unittest uses self.assert* methods",
+            "pytest fixtures provide dependency injection; unittest uses setUp/tearDown",
+            "pytest has parametrize for data-driven tests out of the box",
+            "pytest can run unittest tests, providing an easy migration path"
+          ],
+          "gotchas": [
+            "pytest must be installed (pip install pytest); unittest is built-in",
+            "unittest requires test classes; pytest allows plain functions (simpler)",
+            "Mixing pytest fixtures with unittest TestCase classes has limitations",
+            "pytest's assert rewriting does not work inside helper functions by default (use pytest.register_assert_rewrite)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "unittest: class-based, `self.assertEqual()`, built-in. pytest: function-based, plain `assert`, fixtures, parametrize, better errors. Prefer pytest for new projects.",
+          "pseudo_code": "",
+          "actual_code": "# unittest\nimport unittest\nclass TestAdd(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(1 + 2, 3)\n\n# pytest (simpler)\ndef test_add():\n    assert 1 + 2 == 3",
+          "code_language": "python",
+          "key_points": [
+            "pytest: simpler syntax, fixtures, parametrize",
+            "unittest: built-in, class-based, verbose"
+          ],
+          "gotchas": [
+            "pytest needs pip install; unittest is in stdlib"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do pytest fixtures work and what are their scopes?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["pytest", "fixtures", "dependency-injection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pytest fixtures provide **dependency injection** for test functions. A fixture is a function decorated with `@pytest.fixture` that provides data, objects, or services to tests that request it by name.\n\n### Scopes (lifecycle of the fixture):\n- `function` (default): Created fresh for each test function\n- `class`: Created once per test class\n- `module`: Created once per test module (.py file)\n- `package`: Created once per test package\n- `session`: Created once for the entire test session\n\n### Key features:\n- **Dependency injection**: Tests request fixtures by parameter name\n- **Teardown**: Use `yield` to define cleanup code\n- **Composition**: Fixtures can depend on other fixtures\n- **autouse**: Automatically applied to all tests without explicit request\n- **conftest.py**: Shared fixtures available to all tests in the directory",
+          "pseudo_code": "@pytest.fixture(scope='function')  # recreated per test\ndef db_connection():\n    conn = create_connection()\n    yield conn        # test runs here\n    conn.close()      # teardown after test\n\ndef test_query(db_connection):  # fixture injected by name\n    result = db_connection.execute('SELECT 1')\n    assert result == 1",
+          "actual_code": "import pytest\n\n# Basic fixture with teardown\n@pytest.fixture\ndef temp_list():\n    data = [1, 2, 3]\n    yield data  # test uses this\n    data.clear()  # cleanup after test\n\ndef test_append(temp_list):\n    temp_list.append(4)\n    assert len(temp_list) == 4\n\n# Fixture with scope\n@pytest.fixture(scope='module')\ndef expensive_resource():\n    print(\"\\nCreating expensive resource (once per module)\")\n    resource = {\"data\": \"loaded\"}\n    yield resource\n    print(\"Cleaning up expensive resource\")\n\ndef test_use_resource_1(expensive_resource):\n    assert expensive_resource[\"data\"] == \"loaded\"\n\ndef test_use_resource_2(expensive_resource):\n    assert \"data\" in expensive_resource\n# Both tests share the same resource instance\n\n# Fixture composition (fixtures using other fixtures)\n@pytest.fixture\ndef base_config():\n    return {\"debug\": False, \"db\": \"sqlite\"}\n\n@pytest.fixture\ndef app(base_config):\n    base_config[\"initialized\"] = True\n    return base_config\n\ndef test_app_initialized(app):\n    assert app[\"initialized\"] is True\n    assert app[\"db\"] == \"sqlite\"\n\n# Parametrized fixtures\n@pytest.fixture(params=[\"sqlite\", \"postgres\", \"mysql\"])\ndef db_engine(request):\n    engine = f\"engine:{request.param}\"\n    yield engine\n\ndef test_db_connection(db_engine):\n    assert db_engine.startswith(\"engine:\")\n# This test runs 3 times, once for each param!\n\n# autouse fixture (applied automatically)\n@pytest.fixture(autouse=True)\ndef reset_environment():\n    # setup\n    import os\n    original = os.environ.get('TEST_MODE')\n    os.environ['TEST_MODE'] = '1'\n    yield\n    # teardown\n    if original is None:\n        os.environ.pop('TEST_MODE', None)\n    else:\n        os.environ['TEST_MODE'] = original\n\n# conftest.py example (shared fixtures)\n# In conftest.py:\n# @pytest.fixture\n# def auth_headers():\n#     return {\"Authorization\": \"Bearer test-token\"}\n# Available to ALL tests in the same directory and subdirectories",
+          "code_language": "python",
+          "key_points": [
+            "Fixtures provide dependency injection -- tests request by parameter name",
+            "yield separates setup from teardown; teardown runs even on test failure",
+            "Scope controls lifetime: function (default), class, module, session",
+            "conftest.py shares fixtures across multiple test files"
+          ],
+          "gotchas": [
+            "Session-scoped fixtures cannot depend on function-scoped fixtures (broader cannot depend on narrower)",
+            "autouse fixtures run for EVERY test in scope, which can cause unexpected side effects",
+            "Fixture names must be unique within scope -- name collisions can be confusing",
+            "yield fixtures with scope='session' run teardown only after ALL tests complete"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Fixtures are `@pytest.fixture` functions that inject dependencies into tests by name. Use `yield` for setup/teardown. Scopes: function (default), class, module, session. Share via conftest.py.",
+          "pseudo_code": "",
+          "actual_code": "import pytest\n\n@pytest.fixture\ndef user():\n    u = {\"name\": \"Alice\"}\n    yield u\n    u.clear()  # teardown\n\ndef test_user_name(user):  # fixture injected by name\n    assert user[\"name\"] == \"Alice\"",
+          "code_language": "python",
+          "key_points": [
+            "Dependency injection by parameter name",
+            "yield for setup/teardown, conftest.py for sharing"
+          ],
+          "gotchas": [
+            "Broader scope fixtures cannot depend on narrower scope ones"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does pytest.mark.parametrize work for data-driven testing?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["pytest", "parametrize", "data-driven"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`@pytest.mark.parametrize` runs the same test function with different input data, generating a separate test case for each set of parameters. This eliminates copy-paste of similar tests.\n\n### Syntax:\n```python\n@pytest.mark.parametrize(\"param_names\", [\n    (value1_a, value1_b),\n    (value2_a, value2_b),\n])\ndef test_something(param_names):\n```\n\n### Features:\n- Multiple parameters as comma-separated string or list\n- IDs for readable test names\n- Can stack multiple parametrize decorators (creates Cartesian product)\n- Works with fixtures\n- `pytest.param()` for per-case marks (skip, xfail)",
+          "pseudo_code": "@parametrize(\"input,expected\", [(1, 2), (2, 4), (3, 6)])\ndef test_double(input, expected):\n    assert double(input) == expected\n\n# Generates 3 tests:\n#   test_double[1-2]\n#   test_double[2-4]\n#   test_double[3-6]",
+          "actual_code": "import pytest\n\n# Basic parametrize\n@pytest.mark.parametrize(\"input_val,expected\", [\n    (1, 1),\n    (2, 4),\n    (3, 9),\n    (4, 16),\n    (-1, 1),\n    (0, 0),\n])\ndef test_square(input_val, expected):\n    assert input_val ** 2 == expected\n\n# With custom IDs for readable output\n@pytest.mark.parametrize(\"word,expected\", [\n    (\"hello\", 5),\n    (\"\", 0),\n    (\"a\", 1),\n    (\"hello world\", 11),\n], ids=[\"normal\", \"empty\", \"single_char\", \"with_space\"])\ndef test_string_length(word, expected):\n    assert len(word) == expected\n\n# Using pytest.param for marks\n@pytest.mark.parametrize(\"n,expected\", [\n    (1, 1),\n    (2, 2),\n    pytest.param(0, 0, marks=pytest.mark.skip(reason=\"edge case\")),\n    pytest.param(-1, 1, marks=pytest.mark.xfail(reason=\"negative not supported\")),\n])\ndef test_abs(n, expected):\n    assert abs(n) == expected\n\n# Stacking parametrize (Cartesian product)\n@pytest.mark.parametrize(\"x\", [1, 2, 3])\n@pytest.mark.parametrize(\"y\", [10, 20])\ndef test_multiply(x, y):\n    result = x * y\n    assert result == x * y\n# Generates 6 tests: (1,10), (1,20), (2,10), (2,20), (3,10), (3,20)\n\n# Parametrize with fixtures\n@pytest.fixture\ndef calculator():\n    class Calc:\n        def add(self, a, b): return a + b\n    return Calc()\n\n@pytest.mark.parametrize(\"a,b,expected\", [\n    (1, 2, 3),\n    (0, 0, 0),\n    (-1, 1, 0),\n])\ndef test_calc_add(calculator, a, b, expected):\n    assert calculator.add(a, b) == expected\n\n# Indirect parametrize (parametrize a fixture)\n@pytest.fixture\ndef user(request):\n    users = {\n        \"admin\": {\"name\": \"Admin\", \"role\": \"admin\"},\n        \"guest\": {\"name\": \"Guest\", \"role\": \"guest\"},\n    }\n    return users[request.param]\n\n@pytest.mark.parametrize(\"user\", [\"admin\", \"guest\"], indirect=True)\ndef test_user_has_role(user):\n    assert \"role\" in user",
+          "code_language": "python",
+          "key_points": [
+            "Generates separate test cases from a list of parameter sets",
+            "Custom IDs make test output readable",
+            "Stacking @parametrize creates Cartesian product of parameters",
+            "pytest.param() allows per-case skip/xfail marks"
+          ],
+          "gotchas": [
+            "Parameter names as a comma-separated string must match function parameter names exactly",
+            "Stacking multiple @parametrize decorators creates multiplicative test cases (can explode)",
+            "indirect=True passes the parameter to the fixture, not directly to the test",
+            "Large parametrize lists should be extracted to module-level variables for readability"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@pytest.mark.parametrize(\"params\", [...])` runs the same test with different data, generating separate test cases. Stack decorators for Cartesian product.",
+          "pseudo_code": "",
+          "actual_code": "import pytest\n\n@pytest.mark.parametrize(\"n,expected\", [\n    (1, 1), (2, 4), (3, 9),\n])\ndef test_square(n, expected):\n    assert n ** 2 == expected\n# Generates 3 separate tests",
+          "code_language": "python",
+          "key_points": [
+            "Each parameter set generates a separate test case",
+            "pytest.param() for per-case marks"
+          ],
+          "gotchas": [
+            "Stacking creates multiplicative test count"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is conftest.py and how does pytest use it?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["pytest", "conftest", "configuration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`conftest.py` is a special file recognized by pytest for sharing fixtures, hooks, and configuration across multiple test files. It is **automatically loaded** by pytest -- no import needed.\n\n### What goes in conftest.py:\n- **Fixtures**: Shared test fixtures available to all tests in the directory and subdirectories\n- **Hooks**: Custom pytest hooks (e.g., `pytest_collection_modifyitems`)\n- **Plugins**: Local plugin registration\n- **Command-line options**: Custom options via `pytest_addoption`\n\n### Scope rules:\n- conftest.py in the root test directory: available to ALL tests\n- conftest.py in a subdirectory: available only to tests in that directory and below\n- Multiple conftest.py files can exist at different levels\n- Fixtures in closer conftest.py override those in parent directories",
+          "pseudo_code": "tests/\n  conftest.py          <- fixtures available to all tests\n  test_api/\n    conftest.py        <- fixtures for API tests only\n    test_users.py\n    test_products.py\n  test_models/\n    conftest.py        <- fixtures for model tests only\n    test_user_model.py",
+          "actual_code": "# tests/conftest.py -- root level, available everywhere\nimport pytest\n\n@pytest.fixture(scope='session')\ndef app():\n    \"\"\"Create application for testing.\"\"\"\n    from myapp import create_app\n    app = create_app({'TESTING': True})\n    yield app\n\n@pytest.fixture(scope='session')\ndef db(app):\n    \"\"\"Set up test database.\"\"\"\n    from myapp.extensions import db as _db\n    with app.app_context():\n        _db.create_all()\n        yield _db\n        _db.drop_all()\n\n@pytest.fixture\ndef client(app):\n    \"\"\"Test client for HTTP requests.\"\"\"\n    return app.test_client()\n\n@pytest.fixture\ndef auth_headers():\n    \"\"\"Authentication headers for API tests.\"\"\"\n    return {'Authorization': 'Bearer test-token-123'}\n\n# Custom command-line option\ndef pytest_addoption(parser):\n    parser.addoption(\n        '--slow', action='store_true', default=False,\n        help='Run slow tests'\n    )\n\n# Custom hook: skip slow tests unless --slow flag\ndef pytest_collection_modifyitems(config, items):\n    if not config.getoption('--slow'):\n        skip_slow = pytest.mark.skip(reason='Need --slow option to run')\n        for item in items:\n            if 'slow' in item.keywords:\n                item.add_marker(skip_slow)\n\n# tests/test_api/conftest.py -- API-specific fixtures\n@pytest.fixture\ndef sample_user(db):\n    \"\"\"Create a sample user for API tests.\"\"\"\n    user = {'id': 1, 'name': 'Test User', 'email': 'test@example.com'}\n    # In real code: user = User.create(**user)\n    yield user\n    # Cleanup\n\n@pytest.fixture\ndef api_client(client, auth_headers):\n    \"\"\"Client with auth headers pre-configured.\"\"\"\n    class AuthClient:\n        def __init__(self, client, headers):\n            self._client = client\n            self._headers = headers\n        def get(self, url, **kwargs):\n            kwargs.setdefault('headers', self._headers)\n            return self._client.get(url, **kwargs)\n        def post(self, url, **kwargs):\n            kwargs.setdefault('headers', self._headers)\n            return self._client.post(url, **kwargs)\n    return AuthClient(client, auth_headers)\n\n# tests/test_api/test_users.py -- uses fixtures from both conftest.py files\ndef test_get_user(api_client, sample_user):\n    response = api_client.get(f\"/api/users/{sample_user['id']}\")\n    assert response.status_code == 200\n\n@pytest.mark.slow\ndef test_bulk_import(api_client):\n    # Only runs with pytest --slow\n    pass",
+          "code_language": "python",
+          "key_points": [
+            "conftest.py is auto-loaded by pytest -- no imports needed",
+            "Fixtures defined there are available to all tests in same directory and below",
+            "Multiple conftest.py at different levels for scoped sharing",
+            "Also used for hooks, plugins, and custom CLI options"
+          ],
+          "gotchas": [
+            "conftest.py must NOT be imported manually -- pytest handles loading",
+            "Fixtures in child conftest.py override parent fixtures of the same name",
+            "conftest.py is not a place for test functions -- only fixtures and configuration",
+            "Heavy session-scoped fixtures in conftest.py slow down initial test startup"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`conftest.py` is auto-loaded by pytest to share fixtures, hooks, and configuration. Fixtures there are available to all tests in the same directory and subdirectories. No import needed.",
+          "pseudo_code": "",
+          "actual_code": "# conftest.py\nimport pytest\n\n@pytest.fixture\ndef db():\n    conn = create_connection()\n    yield conn\n    conn.close()\n\n# test_something.py (no import needed!)\ndef test_query(db):  # fixture from conftest.py\n    assert db.execute('SELECT 1')",
+          "code_language": "python",
+          "key_points": [
+            "Auto-loaded, no imports needed",
+            "Scoped by directory hierarchy"
+          ],
+          "gotchas": [
+            "Never import conftest.py manually"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use unittest.mock.patch and MagicMock for mocking?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["mocking", "patch", "MagicMock", "unittest.mock"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `unittest.mock` module provides tools to replace parts of your system with mock objects during testing.\n\n### Key classes:\n- `Mock()`: Base mock object, returns new Mock for any attribute/call\n- `MagicMock()`: Mock with default implementations of magic methods (`__len__`, `__iter__`, etc.)\n- `patch()`: Context manager/decorator that temporarily replaces an object\n- `patch.object()`: Patches a specific attribute on an object\n\n### The `patch` rule:\n**Patch where the object is USED, not where it is DEFINED.**\nIf `module_a.py` imports `requests.get`, patch `module_a.requests.get`, not `requests.get`.\n\n### Assertions on mocks:\n- `mock.assert_called_once()`\n- `mock.assert_called_with(*args, **kwargs)`\n- `mock.assert_called_once_with(*args, **kwargs)`\n- `mock.call_count`\n- `mock.call_args` / `mock.call_args_list`",
+          "pseudo_code": "Patch rule:\n  # mymodule.py imports requests\n  import requests\n  def fetch(url): return requests.get(url)\n\n  # test: patch where it's used\n  @patch('mymodule.requests.get')  # NOT 'requests.get'\n  def test_fetch(mock_get):\n      mock_get.return_value.status_code = 200\n      result = fetch('http://example.com')\n      mock_get.assert_called_once()",
+          "actual_code": "from unittest.mock import Mock, MagicMock, patch, call\n\n# Basic Mock\nmock = Mock()\nmock.some_method.return_value = 42\nprint(mock.some_method())  # 42\nmock.some_method.assert_called_once()\n\n# MagicMock (supports magic methods)\nmm = MagicMock()\nmm.__len__.return_value = 5\nprint(len(mm))  # 5\nmm.__getitem__.return_value = 'value'\nprint(mm[0])  # 'value'\n\n# Mock with side_effect\nmock = Mock()\nmock.side_effect = [1, 2, 3]  # return values in sequence\nprint(mock(), mock(), mock())  # 1 2 3\n\nmock.side_effect = ValueError(\"boom\")  # raise exception\ntry:\n    mock()\nexcept ValueError as e:\n    print(f\"Caught: {e}\")\n\nmock.side_effect = lambda x: x * 2  # custom function\nprint(mock(5))  # 10\n\n# patch as decorator\nclass UserService:\n    def __init__(self, db):\n        self.db = db\n\n    def get_user(self, user_id):\n        return self.db.query(f\"SELECT * FROM users WHERE id={user_id}\")\n\n# Simulating the module structure\nimport types\nuser_module = types.ModuleType('user_module')\nuser_module.UserService = UserService\n\n# patch as context manager\ndef test_with_context_manager():\n    mock_db = Mock()\n    mock_db.query.return_value = {\"id\": 1, \"name\": \"Alice\"}\n\n    service = UserService(mock_db)\n    result = service.get_user(1)\n\n    assert result == {\"id\": 1, \"name\": \"Alice\"}\n    mock_db.query.assert_called_once()\n    print(f\"Called with: {mock_db.query.call_args}\")\n\ntest_with_context_manager()\n\n# patch.object for specific attributes\nclass EmailService:\n    def send(self, to, subject, body):\n        # Actually sends email\n        pass\n\n    def send_welcome(self, user):\n        self.send(user['email'], 'Welcome!', f'Hi {user[\"name\"]}')\n\ndef test_send_welcome():\n    service = EmailService()\n    with patch.object(service, 'send') as mock_send:\n        service.send_welcome({'name': 'Bob', 'email': 'bob@test.com'})\n        mock_send.assert_called_once_with(\n            'bob@test.com', 'Welcome!', 'Hi Bob'\n        )\n\ntest_send_welcome()\n\n# Verifying call arguments\nmock = Mock()\nmock(1, 2, key='value')\nmock(3, 4)\n\nassert mock.call_count == 2\nassert mock.call_args_list == [\n    call(1, 2, key='value'),\n    call(3, 4)\n]\nassert mock.call_args == call(3, 4)  # last call\n\n# spec: restrict mock to real object's interface\nclass RealAPI:\n    def get(self, url): pass\n    def post(self, url, data): pass\n\nmock_api = Mock(spec=RealAPI)\nmock_api.get('http://example.com')  # OK\ntry:\n    mock_api.delete('http://example.com')  # AttributeError!\nexcept AttributeError as e:\n    print(f\"spec enforcement: {e}\")",
+          "code_language": "python",
+          "key_points": [
+            "patch() replaces objects temporarily; patch where USED, not where defined",
+            "MagicMock supports magic methods; Mock is simpler",
+            "side_effect for sequences, exceptions, or custom functions",
+            "spec= restricts mock to the real object's interface"
+          ],
+          "gotchas": [
+            "Patching the wrong location is the #1 mistake -- always patch where the name is looked up",
+            "Mocks accept ANY attribute/call by default -- use spec to catch typos",
+            "assert_called_with checks only the LAST call -- use assert_any_call for any call",
+            "Forgetting to call assert_called_once() (no parentheses) silently passes -- it returns a Mock!"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`patch()` temporarily replaces objects for testing. `Mock()`/`MagicMock()` creates fake objects. Key rule: patch where the object is USED, not where defined. Use `spec=` for type safety.",
+          "pseudo_code": "",
+          "actual_code": "from unittest.mock import Mock, patch\n\nmock_db = Mock()\nmock_db.query.return_value = [{\"id\": 1}]\nresult = mock_db.query(\"SELECT *\")\nmock_db.query.assert_called_once()\n\n# patch as context manager\nwith patch('mymodule.requests.get') as mock_get:\n    mock_get.return_value.status_code = 200",
+          "code_language": "python",
+          "key_points": [
+            "Patch where USED, not where defined",
+            "spec= prevents using non-existent attributes"
+          ],
+          "gotchas": [
+            "mock.assert_called_once without () silently passes (returns a Mock)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are test doubles and how do they differ (mock, stub, spy, fake)?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["test-doubles", "mock", "stub", "spy", "fake"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Test doubles are objects that stand in for real dependencies during testing. There are several types:\n\n### Stub\nReturns predetermined responses. Does NOT verify interactions.\n```python\nstub.get_price.return_value = 9.99\n```\n\n### Mock\nRecords interactions and verifies expectations (was this called? with what arguments?).\n```python\nmock.send_email.assert_called_once_with('user@test.com')\n```\n\n### Spy\nWraps the real object, recording calls while still executing the real implementation.\n```python\nspy = Mock(wraps=real_object)\n```\n\n### Fake\nA working implementation simplified for testing (e.g., in-memory database instead of PostgreSQL).\n```python\nclass FakeDB:\n    def __init__(self):\n        self._data = {}\n    def insert(self, key, value):\n        self._data[key] = value\n```\n\n### Dummy\nPassed around but never used. Fills parameter requirements.\n```python\ndummy = object()  # just needs to exist\n```",
+          "pseudo_code": "Stub:  provides canned answers, no verification\nMock:  records calls, verifies interactions\nSpy:   wraps real object, records calls\nFake:  simplified working implementation\nDummy: placeholder, never actually used",
+          "actual_code": "from unittest.mock import Mock, MagicMock, patch, create_autospec\n\nclass PaymentGateway:\n    def charge(self, amount, card_number):\n        # Real: calls Stripe API\n        pass\n\n    def refund(self, transaction_id):\n        # Real: calls Stripe refund API\n        pass\n\nclass OrderService:\n    def __init__(self, payment_gateway, email_service):\n        self.payment = payment_gateway\n        self.email = email_service\n\n    def place_order(self, amount, card, user_email):\n        result = self.payment.charge(amount, card)\n        if result['status'] == 'success':\n            self.email.send(user_email, 'Order confirmed!')\n            return True\n        return False\n\n# 1. STUB: provides predetermined responses\ndef test_with_stub():\n    payment_stub = Mock()\n    payment_stub.charge.return_value = {'status': 'success', 'id': 'txn_123'}\n    email_stub = Mock()  # don't care about email calls\n\n    service = OrderService(payment_stub, email_stub)\n    result = service.place_order(99.99, '4111', 'user@test.com')\n\n    assert result is True  # we only verify the return value\n\ntest_with_stub()\n\n# 2. MOCK: verifies interactions\ndef test_with_mock():\n    payment_mock = Mock()\n    payment_mock.charge.return_value = {'status': 'success', 'id': 'txn_123'}\n    email_mock = Mock()\n\n    service = OrderService(payment_mock, email_mock)\n    service.place_order(99.99, '4111', 'user@test.com')\n\n    # Verify interactions\n    payment_mock.charge.assert_called_once_with(99.99, '4111')\n    email_mock.send.assert_called_once_with('user@test.com', 'Order confirmed!')\n\ntest_with_mock()\n\n# 3. SPY: wraps real object\nclass RealCalculator:\n    def add(self, a, b):\n        return a + b\n    def multiply(self, a, b):\n        return a * b\n\ndef test_with_spy():\n    real_calc = RealCalculator()\n    spy_calc = Mock(wraps=real_calc)  # spy\n\n    result = spy_calc.add(2, 3)  # calls real implementation\n    assert result == 5  # real result\n    spy_calc.add.assert_called_once_with(2, 3)  # also tracks the call\n\ntest_with_spy()\n\n# 4. FAKE: simplified implementation\nclass FakeDatabase:\n    def __init__(self):\n        self._store = {}\n\n    def insert(self, table, data):\n        if table not in self._store:\n            self._store[table] = []\n        self._store[table].append(data)\n\n    def query(self, table, **filters):\n        rows = self._store.get(table, [])\n        for key, value in filters.items():\n            rows = [r for r in rows if r.get(key) == value]\n        return rows\n\ndef test_with_fake():\n    fake_db = FakeDatabase()\n    fake_db.insert('users', {'id': 1, 'name': 'Alice'})\n    fake_db.insert('users', {'id': 2, 'name': 'Bob'})\n\n    results = fake_db.query('users', name='Alice')\n    assert len(results) == 1\n    assert results[0]['name'] == 'Alice'\n\ntest_with_fake()\n\n# 5. DUMMY: placeholder\ndef test_with_dummy():\n    dummy_logger = object()  # never actually used\n    payment = Mock()\n    payment.charge.return_value = {'status': 'fail'}\n    email = Mock()\n\n    service = OrderService(payment, email)\n    result = service.place_order(10, '4111', 'x@t.com')\n    assert result is False\n    email.send.assert_not_called()  # email never used (dummy-like behavior)\n\ntest_with_dummy()",
+          "code_language": "python",
+          "key_points": [
+            "Stub: canned responses, no verification of interactions",
+            "Mock: records and verifies interactions (the most common in Python)",
+            "Spy: wraps real object with Mock(wraps=obj) -- real behavior + tracking",
+            "Fake: simplified working implementation (in-memory DB, etc.)"
+          ],
+          "gotchas": [
+            "Python's Mock class can act as any test double type -- the distinction is how you USE it",
+            "Over-mocking leads to fragile tests that break on refactoring without catching real bugs",
+            "Mocking return values (stubs) tests different things than verifying calls (mocks)",
+            "Fakes need their own tests to ensure they behave like the real thing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Test doubles: **Stub** (canned responses), **Mock** (verifies interactions), **Spy** (wraps real + tracks), **Fake** (simplified implementation), **Dummy** (placeholder). In Python, `Mock` class serves most roles.",
+          "pseudo_code": "",
+          "actual_code": "from unittest.mock import Mock\n\n# Stub: set return value, don't verify\nstub = Mock()\nstub.get.return_value = 42\n\n# Mock: verify interactions\nmock = Mock()\nmock.send('hello')\nmock.send.assert_called_once_with('hello')\n\n# Spy: real behavior + tracking\nspy = Mock(wraps=real_object)",
+          "code_language": "python",
+          "key_points": [
+            "Stub: returns data. Mock: verifies calls. Spy: real + tracking. Fake: simplified.",
+            "Python Mock class serves multiple roles"
+          ],
+          "gotchas": [
+            "Over-mocking makes tests brittle"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test for exceptions in both unittest and pytest?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["exceptions", "testing", "pytest", "unittest"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Testing that code raises expected exceptions is critical for error handling verification.\n\n### pytest approach:\n```python\nwith pytest.raises(ExceptionType, match='pattern'):\n    code_that_raises()\n```\n\n### unittest approach:\n```python\nwith self.assertRaises(ExceptionType):\n    code_that_raises()\n```\n\n### Key features:\n- Both support context manager style\n- pytest.raises provides the exception info for further inspection\n- Both support checking exception message (pytest: `match=`, unittest: `assertRaisesRegex`)\n- Can verify exception attributes, chained exceptions, etc.",
+          "pseudo_code": "pytest:\n  with pytest.raises(ValueError, match='invalid'):\n      function_that_raises()\n\nunittest:\n  with self.assertRaises(ValueError):\n      function_that_raises()\n\n  # or with message check:\n  with self.assertRaisesRegex(ValueError, 'invalid'):\n      function_that_raises()",
+          "actual_code": "import pytest\nimport unittest\n\ndef divide(a, b):\n    if b == 0:\n        raise ZeroDivisionError(\"Cannot divide by zero\")\n    if not isinstance(a, (int, float)):\n        raise TypeError(f\"Expected number, got {type(a).__name__}\")\n    return a / b\n\n# pytest: basic exception testing\ndef test_divide_by_zero_pytest():\n    with pytest.raises(ZeroDivisionError):\n        divide(1, 0)\n\n# pytest: check exception message with match (regex)\ndef test_divide_by_zero_message():\n    with pytest.raises(ZeroDivisionError, match=\"Cannot divide\"):\n        divide(1, 0)\n\n# pytest: inspect exception details\ndef test_divide_type_error():\n    with pytest.raises(TypeError) as exc_info:\n        divide(\"hello\", 2)\n\n    assert \"Expected number\" in str(exc_info.value)\n    assert exc_info.type is TypeError\n    # exc_info.value is the actual exception object\n    assert \"str\" in str(exc_info.value)\n\n# pytest: test that NO exception is raised\ndef test_divide_success():\n    result = divide(10, 2)  # should not raise\n    assert result == 5.0\n\n# pytest: test exception with specific attributes\nclass CustomError(Exception):\n    def __init__(self, message, code):\n        super().__init__(message)\n        self.code = code\n\ndef risky_operation():\n    raise CustomError(\"Not found\", code=404)\n\ndef test_custom_exception_attributes():\n    with pytest.raises(CustomError) as exc_info:\n        risky_operation()\n    assert exc_info.value.code == 404\n    assert str(exc_info.value) == \"Not found\"\n\n# unittest style\nclass TestDivide(unittest.TestCase):\n    def test_divide_by_zero(self):\n        with self.assertRaises(ZeroDivisionError):\n            divide(1, 0)\n\n    def test_divide_by_zero_message(self):\n        with self.assertRaisesRegex(ZeroDivisionError, \"Cannot divide\"):\n            divide(1, 0)\n\n    def test_type_error(self):\n        with self.assertRaises(TypeError) as ctx:\n            divide(\"hello\", 2)\n        self.assertIn(\"Expected number\", str(ctx.exception))\n\n# Testing that a function does NOT raise\ndef test_no_exception():\n    # If this raises, the test fails automatically\n    result = divide(10, 5)\n    assert result == 2.0\n\n# Testing warnings\nimport warnings\n\ndef deprecated_function():\n    warnings.warn(\"This is deprecated\", DeprecationWarning)\n    return 42\n\ndef test_deprecation_warning():\n    with pytest.warns(DeprecationWarning, match=\"deprecated\"):\n        result = deprecated_function()\n    assert result == 42",
+          "code_language": "python",
+          "key_points": [
+            "pytest.raises(ExcType, match='regex') is the pytest way",
+            "self.assertRaises / self.assertRaisesRegex for unittest",
+            "Use 'as exc_info' to inspect exception attributes",
+            "pytest.warns() tests that warnings are issued"
+          ],
+          "gotchas": [
+            "pytest.raises match parameter uses regex, not plain string matching",
+            "If the code inside 'with pytest.raises()' does NOT raise, the test FAILS",
+            "assertRaises catches subclasses too -- ValueError catches ValueError but not TypeError",
+            "Do not catch too broad exceptions (Exception) -- test for the specific type"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "pytest: `with pytest.raises(ExcType, match='pattern')`. unittest: `with self.assertRaises(ExcType)`. Use `as exc_info` to inspect the exception object.",
+          "pseudo_code": "",
+          "actual_code": "import pytest\n\ndef test_raises():\n    with pytest.raises(ValueError, match=\"invalid\"):\n        raise ValueError(\"invalid input\")\n\ndef test_inspect():\n    with pytest.raises(KeyError) as exc_info:\n        {}['missing']\n    assert 'missing' in str(exc_info.value)",
+          "code_language": "python",
+          "key_points": [
+            "pytest.raises for exception testing with optional match regex",
+            "exc_info.value gives the actual exception object"
+          ],
+          "gotchas": [
+            "match uses regex, not string equality"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do setUp/tearDown work in unittest vs pytest fixtures?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["unittest", "pytest", "setUp", "tearDown", "fixtures"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### unittest: setUp / tearDown\n- `setUp()`: Runs before EACH test method\n- `tearDown()`: Runs after EACH test method (even if test fails)\n- `setUpClass()` / `tearDownClass()`: Runs once per class\n- `setUpModule()` / `tearDownModule()`: Runs once per module\n\n### pytest: fixtures with yield\n- `@pytest.fixture`: Function that provides setup/teardown via yield\n- Scope controls lifecycle: function, class, module, session\n- Fixtures are composable (can depend on each other)\n- Only invoked when actually requested by a test\n\n### Key difference:\nunittest setUp runs for ALL test methods in the class (always). pytest fixtures only run when explicitly requested by a test (on-demand).",
+          "pseudo_code": "unittest:\n  setUpModule()           # once per module\n    setUpClass()          # once per class\n      setUp()             # before EACH test\n      test_method()       # the test\n      tearDown()          # after EACH test\n    tearDownClass()       # once per class\n  tearDownModule()        # once per module\n\npytest:\n  @fixture(scope='session')   # once per session\n  @fixture(scope='module')    # once per module\n  @fixture(scope='class')     # once per class\n  @fixture(scope='function')  # before/after each test (default)",
+          "actual_code": "import unittest\nimport pytest\n\n# unittest approach\nclass TestWithUnittest(unittest.TestCase):\n    @classmethod\n    def setUpClass(cls):\n        \"\"\"Run once before all tests in this class.\"\"\"\n        cls.shared_resource = {\"db\": \"connected\"}\n        print(\"\\nsetUpClass: DB connected\")\n\n    def setUp(self):\n        \"\"\"Run before EACH test method.\"\"\"\n        self.test_data = [1, 2, 3]\n        print(\"setUp: created test data\")\n\n    def test_append(self):\n        self.test_data.append(4)\n        self.assertEqual(len(self.test_data), 4)\n\n    def test_remove(self):\n        self.test_data.remove(1)\n        self.assertEqual(len(self.test_data), 2)\n\n    def tearDown(self):\n        \"\"\"Run after EACH test method.\"\"\"\n        self.test_data.clear()\n        print(\"tearDown: cleaned test data\")\n\n    @classmethod\n    def tearDownClass(cls):\n        \"\"\"Run once after all tests in this class.\"\"\"\n        cls.shared_resource.clear()\n        print(\"tearDownClass: DB disconnected\")\n\n# pytest approach (equivalent)\n@pytest.fixture(scope='class')\ndef shared_resource():\n    resource = {\"db\": \"connected\"}\n    print(\"\\nFixture setup: DB connected\")\n    yield resource\n    resource.clear()\n    print(\"Fixture teardown: DB disconnected\")\n\n@pytest.fixture\ndef test_data():\n    data = [1, 2, 3]\n    print(\"Fixture setup: created test data\")\n    yield data\n    data.clear()\n    print(\"Fixture teardown: cleaned test data\")\n\ndef test_append(test_data):\n    test_data.append(4)\n    assert len(test_data) == 4\n\ndef test_remove(test_data):\n    test_data.remove(1)\n    assert len(test_data) == 2\n\n# pytest fixture advantage: composable\n@pytest.fixture\ndef db_connection():\n    conn = {\"connected\": True}\n    yield conn\n    conn[\"connected\"] = False\n\n@pytest.fixture\ndef user_repo(db_connection):\n    return {\"db\": db_connection, \"table\": \"users\"}\n\n@pytest.fixture\ndef sample_user(user_repo):\n    user = {\"id\": 1, \"name\": \"Alice\"}\n    user_repo[\"last_created\"] = user\n    yield user\n\ndef test_user_creation(sample_user, user_repo):\n    # db_connection -> user_repo -> sample_user (chain)\n    assert sample_user[\"name\"] == \"Alice\"\n    assert user_repo[\"db\"][\"connected\"] is True\n\n# pytest advantage: selective (only runs what's needed)\ndef test_simple():\n    # This test does NOT trigger any fixture setup\n    assert 1 + 1 == 2",
+          "code_language": "python",
+          "key_points": [
+            "unittest: setUp/tearDown run for every test; setUpClass for once per class",
+            "pytest: fixtures with yield, only run when requested by name",
+            "pytest fixtures are composable -- chain dependencies naturally",
+            "pytest fixtures are on-demand; setUp runs for ALL tests in the class"
+          ],
+          "gotchas": [
+            "unittest tearDown runs even if setUp fails (can cause confusing errors)",
+            "setUpClass/tearDownClass must be @classmethod in unittest",
+            "Mixing pytest fixtures with unittest TestCase has limitations (no yield fixtures)",
+            "pytest fixture teardown (after yield) runs even if the test fails"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "unittest: `setUp()`/`tearDown()` per test, `setUpClass()`/`tearDownClass()` per class. pytest: `@fixture` with `yield` for setup/teardown, composable, on-demand, with scope control.",
+          "pseudo_code": "",
+          "actual_code": "# unittest\nclass TestX(unittest.TestCase):\n    def setUp(self):\n        self.data = [1, 2, 3]\n    def tearDown(self):\n        self.data.clear()\n\n# pytest (equivalent)\n@pytest.fixture\ndef data():\n    d = [1, 2, 3]\n    yield d\n    d.clear()",
+          "code_language": "python",
+          "key_points": [
+            "unittest: always runs; pytest fixtures: on-demand",
+            "pytest yield separates setup from teardown"
+          ],
+          "gotchas": [
+            "setUpClass must be a @classmethod"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is code coverage and how do you measure it with pytest?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["coverage", "pytest", "quality"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Code coverage measures what percentage of your code is executed during tests. It helps identify untested code paths.\n\n### Types of coverage:\n- **Line coverage**: Which lines were executed\n- **Branch coverage**: Whether both True and False paths of conditionals were taken\n- **Function coverage**: Which functions were called\n- **Statement coverage**: Which statements were executed\n\n### Tools:\n- `coverage.py`: The standard Python coverage tool\n- `pytest-cov`: pytest plugin wrapping coverage.py\n\n### Important caveat:\n100% coverage does NOT mean bug-free code. Coverage measures which code ran, not whether it ran correctly. You can have 100% coverage with zero meaningful assertions.",
+          "pseudo_code": "# Run tests with coverage\npytest --cov=mypackage --cov-report=html\n\n# Coverage report shows:\n#   Name              Stmts   Miss  Cover\n#   mypackage/app.py     50      5    90%\n#   mypackage/db.py      30      0   100%",
+          "actual_code": "# Installation\n# pip install pytest-cov\n\n# Example module to test: calculator.py\nclass Calculator:\n    def add(self, a, b):\n        return a + b\n\n    def divide(self, a, b):\n        if b == 0:\n            raise ZeroDivisionError(\"Cannot divide by zero\")\n        return a / b\n\n    def classify_number(self, n):\n        if n > 0:\n            return \"positive\"\n        elif n < 0:\n            return \"negative\"\n        else:\n            return \"zero\"\n\n# test_calculator.py\nimport pytest\n\n@pytest.fixture\ndef calc():\n    return Calculator()\n\ndef test_add(calc):\n    assert calc.add(1, 2) == 3\n\ndef test_divide(calc):\n    assert calc.divide(10, 2) == 5.0\n\ndef test_divide_by_zero(calc):\n    with pytest.raises(ZeroDivisionError):\n        calc.divide(1, 0)\n\ndef test_positive(calc):\n    assert calc.classify_number(5) == \"positive\"\n\ndef test_negative(calc):\n    assert calc.classify_number(-3) == \"negative\"\n\n# Missing: test for classify_number(0) -- \"zero\" branch uncovered!\n\n# Running with coverage:\n# pytest --cov=calculator --cov-report=term-missing\n#\n# Output:\n# Name              Stmts   Miss  Cover   Missing\n# calculator.py        12      1    92%   15\n# (line 15 is the 'return \"zero\"' line)\n\n# pytest --cov=calculator --cov-report=html\n# Opens HTML report with line-by-line highlighting\n\n# pyproject.toml configuration\n# [tool.pytest.ini_options]\n# addopts = \"--cov=src --cov-report=term-missing --cov-branch\"\n#\n# [tool.coverage.run]\n# branch = true\n# source = [\"src\"]\n#\n# [tool.coverage.report]\n# fail_under = 80\n# exclude_lines = [\n#     \"pragma: no cover\",\n#     \"if TYPE_CHECKING:\",\n#     \"if __name__ == .__main__.\",\n# ]\n\n# Excluding lines from coverage\ndef debug_function():  # pragma: no cover\n    \"\"\"This is excluded from coverage.\"\"\"\n    pass",
+          "code_language": "python",
+          "key_points": [
+            "pytest-cov integrates coverage.py with pytest seamlessly",
+            "Branch coverage (--cov-branch) is more thorough than line coverage",
+            "--cov-report=term-missing shows which lines are uncovered",
+            "Configure minimum coverage with fail_under in pyproject.toml"
+          ],
+          "gotchas": [
+            "100% coverage does not mean correct code -- assertions matter more than coverage numbers",
+            "Branch coverage reveals untested conditional paths that line coverage misses",
+            "Coverage can be misleading for dynamically generated code or meta-programming",
+            "Excluding too many lines with 'pragma: no cover' defeats the purpose"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Code coverage measures which code lines/branches execute during tests. Use `pytest --cov=package --cov-report=term-missing` with pytest-cov. 100% coverage != bug-free code.",
+          "pseudo_code": "",
+          "actual_code": "# pip install pytest-cov\n# pytest --cov=mypackage --cov-report=term-missing --cov-branch\n\n# pyproject.toml\n# [tool.coverage.report]\n# fail_under = 80",
+          "code_language": "python",
+          "key_points": [
+            "pytest-cov wraps coverage.py for easy integration",
+            "Branch coverage is more thorough than line coverage"
+          ],
+          "gotchas": [
+            "High coverage does not guarantee correct tests -- assertions matter"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is Test-Driven Development (TDD) and how do you practice it in Python?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["TDD", "methodology", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Test-Driven Development (TDD)** is a software development methodology where you write tests BEFORE writing the implementation code.\n\n### The TDD cycle (Red-Green-Refactor):\n1. **RED**: Write a failing test for the feature you want to implement\n2. **GREEN**: Write the minimal code to make the test pass\n3. **REFACTOR**: Clean up the code while keeping all tests passing\n4. Repeat\n\n### Benefits:\n- Forces you to think about the interface before implementation\n- Produces comprehensive test coverage naturally\n- Leads to simpler, more modular designs\n- Catches bugs immediately\n- Tests serve as documentation\n\n### TDD rules (Robert C. Martin):\n1. Write no production code except to make a failing test pass\n2. Write only enough of a test to demonstrate a failure\n3. Write only enough production code to make the test pass",
+          "pseudo_code": "TDD Cycle:\n  1. RED:      Write test -> Run -> FAILS (expected)\n  2. GREEN:    Write minimal code -> Run -> PASSES\n  3. REFACTOR: Clean up -> Run -> Still PASSES\n  4. Repeat for next requirement",
+          "actual_code": "import pytest\n\n# TDD Example: Building a Stack data structure\n\n# Step 1 (RED): Write a failing test\ndef test_stack_is_empty_on_creation():\n    stack = Stack()\n    assert stack.is_empty() is True\n\n# Run: NameError: name 'Stack' is not defined (RED!)\n\n# Step 2 (GREEN): Minimal code to pass\nclass Stack:\n    def is_empty(self):\n        return True\n\n# Run: PASSES (GREEN!)\n\n# Step 3 (RED): Next test\ndef test_stack_not_empty_after_push():\n    stack = Stack()\n    stack.push(1)\n    assert stack.is_empty() is False\n\n# Run: AttributeError: 'Stack' has no attribute 'push' (RED!)\n\n# Step 4 (GREEN): Add push, fix is_empty\nclass Stack:\n    def __init__(self):\n        self._items = []\n\n    def is_empty(self):\n        return len(self._items) == 0\n\n    def push(self, item):\n        self._items.append(item)\n\n# Run: PASSES (GREEN!)\n\n# Step 5 (RED): Test pop\ndef test_pop_returns_last_pushed():\n    stack = Stack()\n    stack.push(42)\n    assert stack.pop() == 42\n\ndef test_pop_removes_element():\n    stack = Stack()\n    stack.push(1)\n    stack.push(2)\n    stack.pop()\n    assert stack.pop() == 1\n\ndef test_pop_empty_raises():\n    stack = Stack()\n    with pytest.raises(IndexError, match=\"empty\"):\n        stack.pop()\n\n# Step 6 (GREEN): Implement pop\nclass Stack:\n    def __init__(self):\n        self._items = []\n\n    def is_empty(self):\n        return len(self._items) == 0\n\n    def push(self, item):\n        self._items.append(item)\n\n    def pop(self):\n        if self.is_empty():\n            raise IndexError(\"Cannot pop from empty stack\")\n        return self._items.pop()\n\n# Step 7 (REFACTOR): Add peek, size, __len__\ndef test_peek_does_not_remove():\n    stack = Stack()\n    stack.push(10)\n    assert stack.peek() == 10\n    assert stack.is_empty() is False\n\ndef test_stack_length():\n    stack = Stack()\n    stack.push(1)\n    stack.push(2)\n    assert len(stack) == 2\n\n# Final implementation after full TDD cycle\nclass Stack:\n    def __init__(self):\n        self._items = []\n\n    def is_empty(self):\n        return len(self._items) == 0\n\n    def push(self, item):\n        self._items.append(item)\n\n    def pop(self):\n        if self.is_empty():\n            raise IndexError(\"Cannot pop from empty stack\")\n        return self._items.pop()\n\n    def peek(self):\n        if self.is_empty():\n            raise IndexError(\"Cannot peek empty stack\")\n        return self._items[-1]\n\n    def __len__(self):\n        return len(self._items)\n\n    def __repr__(self):\n        return f\"Stack({self._items})\"\n\n# All tests pass -- feature complete with full coverage!",
+          "code_language": "python",
+          "key_points": [
+            "Write the test FIRST, then the code to make it pass",
+            "Red-Green-Refactor cycle: fail, pass, clean up",
+            "Write the MINIMAL code to pass each test",
+            "Tests serve as living documentation and safety net"
+          ],
+          "gotchas": [
+            "TDD feels slow at first but pays off in fewer bugs and better design",
+            "Do not skip the RED step -- if the test passes immediately, something is wrong",
+            "Do not refactor and add features at the same time -- one step at a time",
+            "TDD works best for business logic; UI and integration tests may follow different patterns"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TDD: write a failing test (RED), write minimal code to pass (GREEN), clean up (REFACTOR), repeat. Forces good design and comprehensive tests.",
+          "pseudo_code": "",
+          "actual_code": "# RED: write failing test\ndef test_add():\n    calc = Calculator()\n    assert calc.add(1, 2) == 3  # FAILS - no Calculator yet\n\n# GREEN: minimal code\nclass Calculator:\n    def add(self, a, b): return a + b  # PASSES\n\n# REFACTOR: clean up, keep tests green",
+          "code_language": "python",
+          "key_points": [
+            "Test first, code second, refactor third",
+            "Minimal code at each step"
+          ],
+          "gotchas": [
+            "If a new test passes immediately without code changes, the test may be wrong"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does property-based testing with Hypothesis work?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["hypothesis", "property-based", "fuzzing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Property-based testing** (PBT) tests that certain properties hold true for ALL possible inputs, not just hand-picked examples. **Hypothesis** is Python's PBT library.\n\n### How it works:\n1. You describe the **properties** your code should satisfy\n2. You describe the **shape of valid inputs** using strategies\n3. Hypothesis generates hundreds of random test cases\n4. If a failure is found, Hypothesis **shrinks** it to the smallest failing example\n\n### vs example-based testing:\n- Example-based: `test_sort([3,1,2])` -- tests ONE specific input\n- Property-based: `test_sort(any_list)` -- tests HUNDREDS of random inputs\n\n### Common strategies:\n- `st.integers()`, `st.floats()`, `st.text()`, `st.booleans()`\n- `st.lists()`, `st.dictionaries()`, `st.tuples()`\n- `st.one_of()`, `st.sampled_from()`\n- `st.composite()` for custom strategies",
+          "pseudo_code": "Property: sorted output should have same length as input\nProperty: every element in sorted should be <= next element\nProperty: sorted(sorted(x)) == sorted(x) (idempotent)\n\nHypothesis generates: [], [1], [5,3], [0,0,0], [-1,99,3,3], ...\nIf any property fails, shrinks to minimal failing case",
+          "actual_code": "from hypothesis import given, settings, assume, example\nfrom hypothesis import strategies as st\nimport pytest\n\n# Basic property-based test\n@given(st.lists(st.integers()))\ndef test_sort_preserves_length(lst):\n    \"\"\"Sorting should not change the number of elements.\"\"\"\n    assert len(sorted(lst)) == len(lst)\n\n@given(st.lists(st.integers()))\ndef test_sort_is_ordered(lst):\n    \"\"\"Every element should be <= the next.\"\"\"\n    result = sorted(lst)\n    for i in range(len(result) - 1):\n        assert result[i] <= result[i + 1]\n\n@given(st.lists(st.integers()))\ndef test_sort_is_idempotent(lst):\n    \"\"\"Sorting twice gives the same result as sorting once.\"\"\"\n    assert sorted(sorted(lst)) == sorted(lst)\n\n@given(st.lists(st.integers()))\ndef test_sort_preserves_elements(lst):\n    \"\"\"Sorted list should contain the same elements.\"\"\"\n    assert sorted(sorted(lst)) == sorted(lst)\n    from collections import Counter\n    assert Counter(sorted(lst)) == Counter(lst)\n\n# Testing a custom function\ndef encode_decode(text):\n    \"\"\"Simple encode/decode that should round-trip.\"\"\"\n    encoded = text.encode('utf-8')\n    return encoded.decode('utf-8')\n\n@given(st.text())\ndef test_encode_decode_roundtrip(text):\n    \"\"\"Encoding then decoding should return the original.\"\"\"\n    assert encode_decode(text) == text\n\n# Using assume() to filter inputs\n@given(st.integers(), st.integers())\ndef test_division_roundtrip(a, b):\n    \"\"\"(a / b) * b should approximately equal a.\"\"\"\n    assume(b != 0)  # skip if b is 0\n    assume(abs(b) > 1e-10)  # skip tiny divisors\n    result = (a / b) * b\n    assert abs(result - a) < 1e-6\n\n# Custom strategies\n@st.composite\ndef user_strategy(draw):\n    name = draw(st.text(min_size=1, max_size=50,\n                         alphabet=st.characters(whitelist_categories=('L',))))\n    age = draw(st.integers(min_value=0, max_value=150))\n    email = draw(st.emails())\n    return {\"name\": name, \"age\": age, \"email\": email}\n\n@given(user_strategy())\ndef test_user_has_required_fields(user):\n    assert \"name\" in user\n    assert \"age\" in user\n    assert 0 <= user[\"age\"] <= 150\n\n# Explicit examples alongside random ones\n@given(st.integers())\n@example(0)      # always test zero\n@example(-1)     # always test negative\n@example(2**31)  # always test large int\ndef test_abs_is_non_negative(n):\n    assert abs(n) >= 0\n\n# Settings for controlling test behavior\n@settings(max_examples=500, deadline=None)\n@given(st.lists(st.integers(), min_size=1))\ndef test_max_in_list(lst):\n    m = max(lst)\n    assert m in lst\n    assert all(x <= m for x in lst)",
+          "code_language": "python",
+          "key_points": [
+            "Test PROPERTIES (invariants) instead of specific examples",
+            "Hypothesis generates hundreds of random inputs and shrinks failures to minimal cases",
+            "Strategies describe the shape of valid inputs (integers, text, lists, etc.)",
+            "Finds edge cases humans often miss (empty lists, negative numbers, unicode, etc.)"
+          ],
+          "gotchas": [
+            "Property-based tests complement example-based tests -- don't replace all examples",
+            "assume() filters inputs but too much filtering makes tests slow (use constrained strategies instead)",
+            "Hypothesis stores a database of previously found failures and replays them",
+            "Some properties are hard to express -- 'oracle testing' (comparing to a known-good implementation) is an alternative"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Hypothesis generates random inputs to test properties (invariants). Use `@given(st.integers())` to describe input types. Failures are automatically shrunk to minimal examples.",
+          "pseudo_code": "",
+          "actual_code": "from hypothesis import given\nfrom hypothesis import strategies as st\n\n@given(st.lists(st.integers()))\ndef test_sort_preserves_length(lst):\n    assert len(sorted(lst)) == len(lst)\n\n@given(st.text())\ndef test_reverse_reverse_is_identity(s):\n    assert s[::-1][::-1] == s",
+          "code_language": "python",
+          "key_points": [
+            "Test properties, not specific examples",
+            "Automatic shrinking finds minimal failing inputs"
+          ],
+          "gotchas": [
+            "Complement example-based tests, don't replace them entirely"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test asynchronous code in Python with pytest?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["async", "pytest", "asyncio", "testing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Testing async code requires running coroutines within an event loop. The `pytest-asyncio` plugin makes this seamless.\n\n### Setup:\n```\npip install pytest-asyncio\n```\n\n### Key features:\n- `@pytest.mark.asyncio`: Marks a test as async (runs in event loop)\n- Async fixtures with `@pytest_asyncio.fixture`\n- Mode configuration: `auto` (all async tests auto-detected) or `strict` (explicit marking)\n- Works with `asyncio.gather`, `asyncio.create_task`, etc.\n\n### Alternative: `anyio` for framework-agnostic async testing (asyncio + trio)",
+          "pseudo_code": "# Install: pip install pytest-asyncio\n\n# Mark test as async\n@pytest.mark.asyncio\nasync def test_fetch():\n    result = await async_function()\n    assert result == expected\n\n# Async fixture\n@pytest_asyncio.fixture\nasync def db():\n    conn = await create_connection()\n    yield conn\n    await conn.close()",
+          "actual_code": "import pytest\nimport asyncio\n\n# pyproject.toml:\n# [tool.pytest.ini_options]\n# asyncio_mode = \"auto\"  # or \"strict\"\n\n# Async function to test\nasync def fetch_data(url):\n    await asyncio.sleep(0.01)  # simulate I/O\n    return {\"url\": url, \"data\": \"response\"}\n\nasync def process_batch(urls):\n    tasks = [fetch_data(url) for url in urls]\n    return await asyncio.gather(*tasks)\n\nasync def transform(value):\n    await asyncio.sleep(0.01)\n    if not isinstance(value, (int, float)):\n        raise TypeError(f\"Expected number, got {type(value).__name__}\")\n    return value * 2\n\n# Basic async test\n@pytest.mark.asyncio\nasync def test_fetch_data():\n    result = await fetch_data(\"https://api.example.com\")\n    assert result[\"url\"] == \"https://api.example.com\"\n    assert \"data\" in result\n\n# Testing async exceptions\n@pytest.mark.asyncio\nasync def test_transform_type_error():\n    with pytest.raises(TypeError, match=\"Expected number\"):\n        await transform(\"not a number\")\n\n# Testing concurrent operations\n@pytest.mark.asyncio\nasync def test_process_batch():\n    urls = [\"url1\", \"url2\", \"url3\"]\n    results = await process_batch(urls)\n    assert len(results) == 3\n    assert all(\"data\" in r for r in results)\n\n# Async fixtures\nimport pytest_asyncio\n\n@pytest_asyncio.fixture\nasync def async_client():\n    \"\"\"Async fixture with setup/teardown.\"\"\"\n    client = {\"connected\": True}\n    yield client\n    client[\"connected\"] = False  # async teardown\n\n@pytest.mark.asyncio\nasync def test_with_async_fixture(async_client):\n    assert async_client[\"connected\"] is True\n\n# Parametrized async tests\n@pytest.mark.asyncio\n@pytest.mark.parametrize(\"input_val,expected\", [\n    (5, 10),\n    (0, 0),\n    (-3, -6),\n])\nasync def test_transform_parametrized(input_val, expected):\n    result = await transform(input_val)\n    assert result == expected\n\n# Testing timeouts\n@pytest.mark.asyncio\nasync def test_timeout():\n    async def slow_operation():\n        await asyncio.sleep(10)\n\n    with pytest.raises(asyncio.TimeoutError):\n        await asyncio.wait_for(slow_operation(), timeout=0.1)\n\n# Mocking async functions\nfrom unittest.mock import AsyncMock, patch\n\nasync def get_user(user_id):\n    # Would normally call a database\n    pass\n\n@pytest.mark.asyncio\nasync def test_with_async_mock():\n    mock_get = AsyncMock(return_value={\"id\": 1, \"name\": \"Alice\"})\n\n    with patch('__main__.get_user', mock_get):\n        result = await get_user(1)\n        assert result[\"name\"] == \"Alice\"\n        mock_get.assert_awaited_once_with(1)",
+          "code_language": "python",
+          "key_points": [
+            "pytest-asyncio lets you write async test functions with @pytest.mark.asyncio",
+            "AsyncMock (Python 3.8+) mocks coroutines; assert_awaited_once_with for verification",
+            "Async fixtures use @pytest_asyncio.fixture with async def + yield",
+            "asyncio_mode='auto' in config auto-detects async tests"
+          ],
+          "gotchas": [
+            "Forgetting @pytest.mark.asyncio makes the test silently not run the coroutine",
+            "AsyncMock is needed for mocking coroutines -- regular Mock returns a Mock, not a coroutine",
+            "Mixing sync and async fixtures requires care -- async fixtures cannot be used in sync tests",
+            "Event loop scope matters: function-scoped (default) creates a new loop per test"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `pytest-asyncio` with `@pytest.mark.asyncio` for async tests. Use `AsyncMock` for mocking coroutines. Async fixtures use `@pytest_asyncio.fixture`.",
+          "pseudo_code": "",
+          "actual_code": "import pytest\nfrom unittest.mock import AsyncMock\n\n@pytest.mark.asyncio\nasync def test_async_func():\n    result = await some_async_function()\n    assert result == expected\n\n@pytest.mark.asyncio\nasync def test_mock_async():\n    mock = AsyncMock(return_value=42)\n    assert await mock() == 42\n    mock.assert_awaited_once()",
+          "code_language": "python",
+          "key_points": [
+            "@pytest.mark.asyncio for async tests",
+            "AsyncMock for mocking coroutines"
+          ],
+          "gotchas": [
+            "Forgetting the marker means the coroutine never executes"
+          ]
+        }
+      ]
+    }
+  ]
+}

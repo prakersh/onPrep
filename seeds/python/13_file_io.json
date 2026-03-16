@@ -1,0 +1,497 @@
+{
+  "concept_slug": "file-io-context-managers",
+  "questions": [
+    {
+      "title": "What are the different file modes in Python's `open()` function?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["open", "file-modes", "read", "write"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `open()` function accepts a mode string that controls how the file is opened:\n\n**Basic modes:**\n- `'r'` -- Read (default). File must exist.\n- `'w'` -- Write. Creates file or **truncates** existing file.\n- `'a'` -- Append. Creates file or appends to existing.\n- `'x'` -- Exclusive create. Fails if file already exists.\n\n**Modifiers (added to basic mode):**\n- `'b'` -- Binary mode. Data is `bytes`, not `str`.\n- `'t'` -- Text mode (default). Data is `str`.\n- `'+'` -- Read AND write.\n\n**Common combinations:**\n- `'rb'` -- Read binary (images, audio)\n- `'wb'` -- Write binary\n- `'r+'` -- Read/write without truncating\n- `'w+'` -- Read/write, truncates first\n- `'a+'` -- Read/append\n\nAdditional `open()` parameters: `encoding` (default varies by OS, explicitly set to `'utf-8'`), `newline`, `buffering`, `errors`.",
+          "pseudo_code": "r  = read (must exist)\nw  = write (truncates!)\na  = append (creates if needed)\nx  = exclusive create (fails if exists)\nb  = binary mode (bytes)\nt  = text mode (str, default)\n+  = read+write\n\nAlways specify encoding='utf-8' for text files",
+          "actual_code": "import os\n\n# Write a new file\nwith open(\"/tmp/example.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Hello, World!\\n\")\n    f.write(\"Second line\\n\")\n\n# Read the file\nwith open(\"/tmp/example.txt\", \"r\", encoding=\"utf-8\") as f:\n    content = f.read()\n    print(content)\n\n# Append to the file\nwith open(\"/tmp/example.txt\", \"a\", encoding=\"utf-8\") as f:\n    f.write(\"Appended line\\n\")\n\n# Exclusive create -- fails if exists\ntry:\n    with open(\"/tmp/example.txt\", \"x\", encoding=\"utf-8\") as f:\n        f.write(\"New file\")\nexcept FileExistsError:\n    print(\"File already exists!\")\n\n# Read + Write (without truncating)\nwith open(\"/tmp/example.txt\", \"r+\", encoding=\"utf-8\") as f:\n    content = f.read()  # read all\n    f.seek(0)           # go back to start\n    f.write(\"MODIFIED\") # overwrite beginning\n\n# Binary mode for non-text files\nwith open(\"/tmp/data.bin\", \"wb\") as f:\n    f.write(b\"\\x00\\x01\\x02\\x03\")\n\nwith open(\"/tmp/data.bin\", \"rb\") as f:\n    data = f.read()\n    print(data)  # b'\\x00\\x01\\x02\\x03'\n    print(type(data))  # <class 'bytes'>\n\n# Always specify encoding for text files\n# Bad: open(\"file.txt\")  -- encoding depends on OS\n# Good: open(\"file.txt\", encoding=\"utf-8\")\n\n# Reading methods\nwith open(\"/tmp/example.txt\", \"r\", encoding=\"utf-8\") as f:\n    all_content = f.read()          # entire file as string\n    f.seek(0)\n    one_line = f.readline()         # one line\n    f.seek(0)\n    all_lines = f.readlines()       # list of lines\n    f.seek(0)\n    for line in f:                  # iterate line by line (memory efficient)\n        print(line.rstrip())\n\n# Cleanup\nos.remove(\"/tmp/example.txt\")\nos.remove(\"/tmp/data.bin\")",
+          "code_language": "python",
+          "key_points": [
+            "'w' truncates existing files -- use 'a' to append",
+            "'x' prevents overwriting existing files",
+            "Always specify encoding='utf-8' for text files",
+            "'rb'/'wb' for binary files (images, audio, etc.)"
+          ],
+          "gotchas": [
+            "'w' mode silently destroys existing file contents!",
+            "Default encoding varies by OS -- always specify utf-8",
+            "'r+' requires file to exist; 'w+' creates but truncates",
+            "Binary mode returns bytes, text mode returns str"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`'r'` read, `'w'` write (truncates!), `'a'` append, `'x'` exclusive create. Add `'b'` for binary, `'+'` for read+write. Always specify `encoding='utf-8'`.",
+          "pseudo_code": "",
+          "actual_code": "# Write (creates or truncates)\nwith open(\"file.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Hello\\n\")\n\n# Read\nwith open(\"file.txt\", \"r\", encoding=\"utf-8\") as f:\n    print(f.read())\n\n# Append\nwith open(\"file.txt\", \"a\", encoding=\"utf-8\") as f:\n    f.write(\"More\\n\")\n\n# Binary\nwith open(\"image.png\", \"rb\") as f:\n    data = f.read()  # bytes",
+          "code_language": "python",
+          "key_points": [
+            "'w' truncates, 'a' appends, 'x' exclusive create",
+            "Always specify encoding for text files"
+          ],
+          "gotchas": [
+            "'w' silently destroys existing content"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create custom context managers using `__enter__` and `__exit__`?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["context-manager", "__enter__", "__exit__", "with"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Custom context managers implement the context manager protocol: `__enter__` (setup) and `__exit__` (cleanup). The `with` statement calls `__enter__` on entry, binds the return value to `as`, and guarantees `__exit__` on exit.\n\n`__exit__` receives three arguments for exception info: `exc_type`, `exc_val`, `exc_tb`. All are `None` if no exception occurred. Return `True` to suppress an exception, `False`/`None` to propagate it.\n\nAlternatively, use `@contextlib.contextmanager` to create context managers with a simpler generator-based syntax: code before `yield` is `__enter__`, code after `yield` is `__exit__`.",
+          "pseudo_code": "Class-based:\n  __enter__(self) -> return resource (bound to 'as')\n  __exit__(self, exc_type, exc_val, exc_tb) -> cleanup\n    return True to suppress exception\n    return False/None to propagate\n\nGenerator-based (@contextmanager):\n  setup code\n  yield value  (the 'as' value)\n  cleanup code",
+          "actual_code": "import time\nfrom contextlib import contextmanager\n\n# Class-based context manager\nclass DatabaseConnection:\n    def __init__(self, connection_string):\n        self.connection_string = connection_string\n        self.connection = None\n\n    def __enter__(self):\n        print(f\"Connecting to {self.connection_string}\")\n        self.connection = {\"status\": \"connected\"}  # simulate\n        return self.connection\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        print(\"Closing connection\")\n        self.connection = None\n        if exc_type is not None:\n            print(f\"Error during operation: {exc_val}\")\n        return False  # don't suppress exceptions\n\nwith DatabaseConnection(\"sqlite:///app.db\") as conn:\n    print(f\"Status: {conn['status']}\")\n# Connecting to sqlite:///app.db\n# Status: connected\n# Closing connection\n\n# Generator-based context manager (simpler)\n@contextmanager\ndef timer(label=\"Operation\"):\n    start = time.perf_counter()\n    try:\n        yield  # code inside 'with' runs here\n    finally:\n        elapsed = time.perf_counter() - start\n        print(f\"{label}: {elapsed:.4f}s\")\n\nwith timer(\"Sorting\"):\n    sorted(range(100_000, 0, -1))\n# Sorting: 0.0087s\n\n# Generator-based with value\n@contextmanager\ndef temp_file(path, mode=\"w\", encoding=\"utf-8\"):\n    import os\n    f = open(path, mode, encoding=encoding)\n    try:\n        yield f\n    finally:\n        f.close()\n        os.remove(path)  # cleanup: delete temp file\n\nwith temp_file(\"/tmp/scratch.txt\") as f:\n    f.write(\"temporary data\")\n# File is closed and deleted after the block\n\n# Reentrant context manager\nclass IndentPrinter:\n    def __init__(self):\n        self.level = 0\n\n    def __enter__(self):\n        self.level += 1\n        return self\n\n    def __exit__(self, *args):\n        self.level -= 1\n        return False\n\n    def print(self, msg):\n        print(\"  \" * self.level + msg)\n\nprinter = IndentPrinter()\nwith printer:\n    printer.print(\"Level 1\")\n    with printer:\n        printer.print(\"Level 2\")\n        with printer:\n            printer.print(\"Level 3\")\n    printer.print(\"Back to 1\")\n#   Level 1\n#     Level 2\n#       Level 3\n#   Back to 1",
+          "code_language": "python",
+          "key_points": [
+            "__enter__ returns the resource, __exit__ cleans up",
+            "@contextmanager simplifies creation with yield-based syntax",
+            "finally in @contextmanager ensures cleanup even on exceptions",
+            "__exit__ return True to suppress exceptions, False to propagate"
+          ],
+          "gotchas": [
+            "@contextmanager must have exactly one yield",
+            "Without try/finally in @contextmanager, cleanup code won't run on exceptions",
+            "If __enter__ raises, __exit__ is NOT called",
+            "__exit__ exception suppression (return True) is powerful but dangerous"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Class: `__enter__` returns resource, `__exit__` cleans up. Generator: `@contextmanager` with `yield` separating setup/cleanup. Use `try/finally` to ensure cleanup in generators.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import contextmanager\n\n@contextmanager\ndef managed(name):\n    print(f\"Setup {name}\")\n    try:\n        yield name\n    finally:\n        print(f\"Cleanup {name}\")\n\nwith managed(\"resource\") as r:\n    print(f\"Using {r}\")\n# Setup resource -> Using resource -> Cleanup resource",
+          "code_language": "python",
+          "key_points": [
+            "@contextmanager with yield for simple context managers",
+            "try/finally ensures cleanup on exceptions"
+          ],
+          "gotchas": [
+            "Without try/finally, cleanup skipped on exceptions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `contextlib` utilities for context management?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["contextlib", "suppress", "ExitStack", "redirect"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `contextlib` module provides several utilities for working with context managers:\n\n1. **`@contextmanager`**: Create context managers from generators\n2. **`suppress(*exceptions)`**: Suppress specific exceptions cleanly\n3. **`ExitStack`**: Manage a dynamic number of context managers\n4. **`redirect_stdout/redirect_stderr`**: Redirect output streams\n5. **`closing(obj)`**: Wraps objects with `.close()` method\n6. **`nullcontext(value)`**: No-op context manager (placeholder)\n7. **`AbstractContextManager`**: ABC for context managers\n8. **`AsyncExitStack`**: Async version of ExitStack",
+          "pseudo_code": "suppress(Error) -- replaces try/except/pass\nExitStack -- dynamic number of context managers\nclosing(obj) -- auto-close objects with .close()\nnullcontext() -- placeholder when context manager is optional\nredirect_stdout(f) -- capture print output",
+          "actual_code": "from contextlib import (\n    suppress, ExitStack, closing, nullcontext,\n    redirect_stdout, contextmanager\n)\nimport io\nimport os\n\n# suppress -- clean exception suppression\nwith suppress(FileNotFoundError, PermissionError):\n    os.remove(\"/tmp/nonexistent_file\")\n# No exception, no try/except needed\n\n# ExitStack -- dynamic context managers\ndef process_files(paths):\n    with ExitStack() as stack:\n        files = []\n        for path in paths:\n            f = stack.enter_context(open(path, encoding=\"utf-8\"))\n            files.append(f)\n        # All files are open here\n        return [f.read() for f in files]\n    # All files automatically closed, even if one fails\n\n# ExitStack with callbacks\nwith ExitStack() as stack:\n    stack.callback(print, \"Third\")   # LIFO order\n    stack.callback(print, \"Second\")\n    stack.callback(print, \"First\")\n# Prints: First, Second, Third\n\n# closing -- for objects with .close() but no __enter__/__exit__\nclass Connection:\n    def close(self):\n        print(\"Connection closed\")\n\nwith closing(Connection()) as conn:\n    print(\"Using connection\")\n# Using connection\n# Connection closed\n\n# redirect_stdout -- capture print output\nf = io.StringIO()\nwith redirect_stdout(f):\n    print(\"This goes to the buffer\")\n    print(\"So does this\")\n\ncaptured = f.getvalue()\nprint(f\"Captured: {captured!r}\")\n# Captured: 'This goes to the buffer\\nSo does this\\n'\n\n# nullcontext -- placeholder context manager\ndef process(data, lock=None):\n    # Use lock if provided, otherwise no-op\n    cm = lock if lock is not None else nullcontext()\n    with cm:\n        return sum(data)\n\nimport threading\nresult1 = process([1, 2, 3])  # no lock\nresult2 = process([1, 2, 3], lock=threading.Lock())  # with lock\n\n# Combining: ExitStack with conditionals\ndef open_maybe(path):\n    \"\"\"Open file or return stdin.\"\"\"\n    stack = ExitStack()\n    if path:\n        f = stack.enter_context(open(path, encoding=\"utf-8\"))\n    else:\n        import sys\n        f = sys.stdin\n    return stack, f",
+          "code_language": "python",
+          "key_points": [
+            "suppress() replaces try/except/pass cleanly",
+            "ExitStack manages dynamic numbers of context managers",
+            "closing() wraps objects with .close() method",
+            "nullcontext() is a no-op placeholder for optional context managers"
+          ],
+          "gotchas": [
+            "ExitStack callbacks run in LIFO (reverse) order",
+            "suppress() swallows the entire exception -- use carefully",
+            "redirect_stdout only captures print(), not direct sys.stdout.write() in subprocesses",
+            "ExitStack.enter_context() returns the context manager's __enter__ result"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`suppress()` for clean exception suppression, `ExitStack` for dynamic context managers, `closing()` for objects with `.close()`, `nullcontext()` as a no-op placeholder.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import suppress, ExitStack, closing\n\n# Clean suppression\nwith suppress(FileNotFoundError):\n    import os\n    os.remove(\"/nonexistent\")\n\n# Dynamic context managers\nwith ExitStack() as stack:\n    files = [stack.enter_context(open(p)) for p in paths]",
+          "code_language": "python",
+          "key_points": [
+            "suppress for try/except/pass replacement",
+            "ExitStack for dynamic context managers"
+          ],
+          "gotchas": [
+            "ExitStack callbacks run in LIFO order"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `pathlib.Path` for file operations?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["pathlib", "Path", "file-operations"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`pathlib.Path` (Python 3.4+) provides an object-oriented interface for file system paths, replacing many `os.path` functions. It's the modern, Pythonic way to work with paths.\n\nAdvantages over `os.path`:\n- Object-oriented: `path / 'subdir' / 'file.txt'` instead of `os.path.join()`\n- Methods for common operations: `.read_text()`, `.write_text()`, `.exists()`, `.mkdir()`\n- Platform-independent: handles Windows and Unix paths correctly\n- Rich API: glob patterns, suffix manipulation, parent directories",
+          "pseudo_code": "Path operations:\n  Path('dir') / 'file.txt'  -- join paths\n  path.read_text()          -- read file\n  path.write_text('data')   -- write file\n  path.exists()             -- check existence\n  path.mkdir(parents=True)  -- create directories\n  path.glob('*.py')         -- find files\n  path.stem, path.suffix    -- name parts",
+          "actual_code": "from pathlib import Path\n\n# Creating paths\np = Path(\"/tmp/myproject\")\nconfig = p / \"config\" / \"settings.json\"  # operator / joins paths\nprint(config)  # /tmp/myproject/config/settings.json\n\n# Path components\nprint(config.name)     # settings.json\nprint(config.stem)     # settings\nprint(config.suffix)   # .json\nprint(config.parent)   # /tmp/myproject/config\nprint(config.parents[1])  # /tmp/myproject\nprint(config.parts)    # ('/', 'tmp', 'myproject', 'config', 'settings.json')\n\n# Create directories\np.mkdir(parents=True, exist_ok=True)\n\n# Write and read text files\nfile_path = p / \"hello.txt\"\nfile_path.write_text(\"Hello, World!\\n\", encoding=\"utf-8\")\ncontent = file_path.read_text(encoding=\"utf-8\")\nprint(content)  # Hello, World!\n\n# Write and read binary files\nbin_path = p / \"data.bin\"\nbin_path.write_bytes(b\"\\x00\\x01\\x02\")\ndata = bin_path.read_bytes()\nprint(data)  # b'\\x00\\x01\\x02'\n\n# File checks\nprint(file_path.exists())      # True\nprint(file_path.is_file())     # True\nprint(p.is_dir())              # True\nprint(file_path.stat().st_size)  # file size in bytes\n\n# Glob patterns\n(p / \"src\").mkdir(exist_ok=True)\n(p / \"src\" / \"main.py\").write_text(\"# main\", encoding=\"utf-8\")\n(p / \"src\" / \"utils.py\").write_text(\"# utils\", encoding=\"utf-8\")\n\nfor py_file in p.glob(\"**/*.py\"):  # recursive\n    print(py_file)\n\n# Path manipulation\noriginal = Path(\"report.txt\")\nbackup = original.with_suffix(\".bak\")      # report.bak\nversioned = original.with_stem(\"report_v2\")  # report_v2.txt (Python 3.9+)\n\n# Convert to/from strings\nstr_path = str(file_path)  # \"/tmp/myproject/hello.txt\"\npath_obj = Path(str_path)  # back to Path\n\n# Home directory and current directory\nhome = Path.home()     # /Users/username\ncwd = Path.cwd()       # current working directory\n\n# Iterate directory contents\nfor item in p.iterdir():\n    kind = \"dir\" if item.is_dir() else \"file\"\n    print(f\"{kind}: {item.name}\")\n\n# Cleanup\nimport shutil\nshutil.rmtree(p)",
+          "code_language": "python",
+          "key_points": [
+            "Use / operator to join paths: Path('dir') / 'file.txt'",
+            ".read_text() and .write_text() for simple file I/O",
+            ".glob('**/*.py') for recursive pattern matching",
+            ".stem, .suffix, .parent for path component access"
+          ],
+          "gotchas": [
+            "Some libraries don't accept Path objects (use str(path) to convert)",
+            ".read_text() reads entire file into memory -- not for large files",
+            ".mkdir() without parents=True fails if parent directories don't exist",
+            ".write_text() overwrites without warning (like 'w' mode)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pathlib.Path` provides OOP file operations. Use `/` to join paths, `.read_text()`/`.write_text()` for I/O, `.glob()` for finding files, and `.exists()`/`.is_file()` for checks.",
+          "pseudo_code": "",
+          "actual_code": "from pathlib import Path\n\np = Path(\"/tmp\") / \"data\" / \"file.txt\"\np.parent.mkdir(parents=True, exist_ok=True)\np.write_text(\"Hello!\", encoding=\"utf-8\")\nprint(p.read_text(encoding=\"utf-8\"))  # Hello!\nprint(p.stem)    # file\nprint(p.suffix)  # .txt",
+          "code_language": "python",
+          "key_points": [
+            "/ operator joins paths",
+            ".read_text()/.write_text() for simple I/O"
+          ],
+          "gotchas": [
+            "Some libraries need str(path) conversion"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you read and write CSV files in Python?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["csv", "file-io", "data"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `csv` module handles CSV reading and writing, properly handling edge cases like commas in fields, quoting, and different dialects.\n\nKey classes:\n- `csv.reader`: Returns rows as lists of strings\n- `csv.writer`: Writes lists as CSV rows\n- `csv.DictReader`: Returns rows as dictionaries (using header as keys)\n- `csv.DictWriter`: Writes dictionaries as CSV rows\n\n`DictReader`/`DictWriter` are preferred for most use cases because they use column names instead of indices, making code more readable and robust against column reordering.\n\nImportant: Open CSV files with `newline=''` to prevent double newlines on Windows.",
+          "pseudo_code": "Reading:\n  csv.reader(file) -> lists of strings\n  csv.DictReader(file) -> dicts with header keys\n\nWriting:\n  csv.writer(file).writerow([values])\n  csv.DictWriter(file, fieldnames).writerow({dict})\n\nAlways: open(path, newline='', encoding='utf-8')",
+          "actual_code": "import csv\nimport os\n\npath = \"/tmp/people.csv\"\n\n# Write CSV with csv.writer\nwith open(path, \"w\", newline=\"\", encoding=\"utf-8\") as f:\n    writer = csv.writer(f)\n    writer.writerow([\"name\", \"age\", \"city\"])  # header\n    writer.writerow([\"Alice\", 30, \"New York\"])\n    writer.writerow([\"Bob\", 25, \"San Francisco\"])\n    writer.writerow([\"Charlie, Jr.\", 35, \"Chicago\"])  # comma in name handled\n\n# Read CSV with csv.reader\nwith open(path, \"r\", newline=\"\", encoding=\"utf-8\") as f:\n    reader = csv.reader(f)\n    header = next(reader)  # skip header\n    for row in reader:\n        print(f\"{row[0]} is {row[1]} from {row[2]}\")\n# Alice is 30 from New York\n# Bob is 25 from San Francisco\n# Charlie, Jr. is 35 from Chicago\n\n# Write with DictWriter (preferred)\npeople = [\n    {\"name\": \"Diana\", \"age\": 28, \"city\": \"Boston\"},\n    {\"name\": \"Eve\", \"age\": 32, \"city\": \"Denver\"},\n]\n\nwith open(path, \"w\", newline=\"\", encoding=\"utf-8\") as f:\n    fieldnames = [\"name\", \"age\", \"city\"]\n    writer = csv.DictWriter(f, fieldnames=fieldnames)\n    writer.writeheader()\n    writer.writerows(people)\n\n# Read with DictReader (preferred)\nwith open(path, \"r\", newline=\"\", encoding=\"utf-8\") as f:\n    reader = csv.DictReader(f)\n    for row in reader:\n        print(f\"{row['name']} ({row['age']}) - {row['city']}\")\n# Diana (28) - Boston\n# Eve (32) - Denver\n\n# Custom delimiter (TSV)\nwith open(\"/tmp/data.tsv\", \"w\", newline=\"\", encoding=\"utf-8\") as f:\n    writer = csv.writer(f, delimiter=\"\\t\")\n    writer.writerow([\"name\", \"score\"])\n    writer.writerow([\"Alice\", 95])\n\n# Reading with different dialects\nwith open(\"/tmp/data.tsv\", \"r\", newline=\"\", encoding=\"utf-8\") as f:\n    reader = csv.reader(f, delimiter=\"\\t\")\n    for row in reader:\n        print(row)\n\n# Cleanup\nos.remove(path)\nos.remove(\"/tmp/data.tsv\")",
+          "code_language": "python",
+          "key_points": [
+            "DictReader/DictWriter for named column access (preferred)",
+            "Always open with newline='' and encoding='utf-8'",
+            "csv module handles quoting, escaping, and commas in fields",
+            "Use delimiter parameter for TSV or other separators"
+          ],
+          "gotchas": [
+            "Without newline='', Windows adds extra blank lines between rows",
+            "csv.reader returns strings -- numbers are not auto-converted",
+            "DictWriter requires fieldnames even if writing from dicts",
+            "Large CSV files should be processed row by row (iterator), not loaded entirely"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `csv.DictReader`/`DictWriter` for named column access. Always open with `newline=''` and `encoding='utf-8'`. The csv module handles quoting and escaping automatically.",
+          "pseudo_code": "",
+          "actual_code": "import csv\n\n# Write\nwith open(\"data.csv\", \"w\", newline=\"\", encoding=\"utf-8\") as f:\n    writer = csv.DictWriter(f, fieldnames=[\"name\", \"age\"])\n    writer.writeheader()\n    writer.writerow({\"name\": \"Alice\", \"age\": 30})\n\n# Read\nwith open(\"data.csv\", \"r\", newline=\"\", encoding=\"utf-8\") as f:\n    for row in csv.DictReader(f):\n        print(row[\"name\"], row[\"age\"])",
+          "code_language": "python",
+          "key_points": [
+            "DictReader/DictWriter for named columns",
+            "newline='' prevents extra blank lines on Windows"
+          ],
+          "gotchas": [
+            "Values are always strings -- convert manually"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you read and write JSON files in Python?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["json", "file-io", "serialization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `json` module handles JSON serialization (Python objects to JSON) and deserialization (JSON to Python objects).\n\nKey functions:\n- `json.dump(obj, file)`: Write Python object to file as JSON\n- `json.dumps(obj)`: Convert Python object to JSON string\n- `json.load(file)`: Read JSON from file to Python object\n- `json.loads(string)`: Parse JSON string to Python object\n\nType mapping: dict <-> object, list <-> array, str <-> string, int/float <-> number, True/False <-> true/false, None <-> null.\n\nFor custom objects, use the `default` parameter in `dump`/`dumps` or a custom `JSONEncoder`. For deserialization, use `object_hook` in `load`/`loads`.",
+          "pseudo_code": "Write: json.dump(obj, file) or json.dumps(obj) -> string\nRead:  json.load(file) or json.loads(string) -> Python object\n\nFormatting: indent=2 for pretty-print\nCustom types: default=str or custom encoder\nSorting keys: sort_keys=True",
+          "actual_code": "import json\nfrom datetime import datetime\nfrom pathlib import Path\n\n# Write JSON to file\ndata = {\n    \"name\": \"Alice\",\n    \"age\": 30,\n    \"scores\": [95, 87, 92],\n    \"address\": {\"city\": \"New York\", \"state\": \"NY\"},\n    \"active\": True,\n    \"nickname\": None\n}\n\npath = Path(\"/tmp/data.json\")\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    json.dump(data, f, indent=2, ensure_ascii=False)\n\n# Read JSON from file\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    loaded = json.load(f)\nprint(loaded[\"name\"])     # Alice\nprint(loaded[\"scores\"])   # [95, 87, 92]\nprint(type(loaded))       # <class 'dict'>\n\n# JSON string conversion\njson_str = json.dumps(data, indent=2, sort_keys=True)\nprint(json_str)\n\nparsed = json.loads(json_str)\nprint(parsed == data)  # True\n\n# Handling custom types with default\nclass User:\n    def __init__(self, name, joined):\n        self.name = name\n        self.joined = joined\n\ndef custom_serializer(obj):\n    if isinstance(obj, datetime):\n        return obj.isoformat()\n    if isinstance(obj, User):\n        return {\"name\": obj.name, \"joined\": obj.joined.isoformat()}\n    raise TypeError(f\"Object of type {type(obj)} is not JSON serializable\")\n\nuser = User(\"Bob\", datetime(2024, 1, 15))\nprint(json.dumps(user, default=custom_serializer, indent=2))\n# {\"name\": \"Bob\", \"joined\": \"2024-01-15T00:00:00\"}\n\n# Custom deserialization with object_hook\ndef custom_deserializer(dct):\n    if \"joined\" in dct:\n        dct[\"joined\"] = datetime.fromisoformat(dct[\"joined\"])\n    return dct\n\njson_str = '{\"name\": \"Bob\", \"joined\": \"2024-01-15T00:00:00\"}'\nresult = json.loads(json_str, object_hook=custom_deserializer)\nprint(result[\"joined\"])  # 2024-01-15 00:00:00\nprint(type(result[\"joined\"]))  # <class 'datetime.datetime'>\n\n# Pathlib shortcut\npath.write_text(json.dumps(data, indent=2), encoding=\"utf-8\")\nloaded = json.loads(path.read_text(encoding=\"utf-8\"))\n\n# Cleanup\npath.unlink()",
+          "code_language": "python",
+          "key_points": [
+            "json.dump/load for files, json.dumps/loads for strings",
+            "indent=2 for pretty-printed output",
+            "default parameter handles custom types in serialization",
+            "object_hook handles custom deserialization"
+          ],
+          "gotchas": [
+            "JSON keys must be strings -- int keys are converted to strings",
+            "Tuples become arrays (lists) in JSON -- no round-trip preservation",
+            "datetime, set, bytes are not JSON-serializable by default",
+            "json.load reads entire file into memory -- not suitable for huge files"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`json.dump(obj, file)` writes to file, `json.load(file)` reads. `json.dumps/loads` for strings. Use `indent=2` for formatting, `default` for custom types.",
+          "pseudo_code": "",
+          "actual_code": "import json\n\n# Write\nwith open(\"data.json\", \"w\", encoding=\"utf-8\") as f:\n    json.dump({\"name\": \"Alice\", \"age\": 30}, f, indent=2)\n\n# Read\nwith open(\"data.json\", \"r\", encoding=\"utf-8\") as f:\n    data = json.load(f)\nprint(data[\"name\"])  # Alice",
+          "code_language": "python",
+          "key_points": [
+            "dump/load for files, dumps/loads for strings",
+            "default parameter for custom types"
+          ],
+          "gotchas": [
+            "Tuples become lists, int keys become strings"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does file encoding work in Python, and how do you handle encoding errors?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["encoding", "utf-8", "unicode", "errors"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "File encoding specifies how characters are mapped to bytes. UTF-8 is the most common encoding and should be your default choice.\n\nPython 3 distinguishes between `str` (Unicode text) and `bytes` (raw binary). When reading text files, Python decodes bytes to str using the specified encoding. When writing, it encodes str to bytes.\n\nThe `errors` parameter in `open()` controls how encoding/decoding errors are handled:\n- `'strict'` (default): Raise `UnicodeDecodeError`/`UnicodeEncodeError`\n- `'ignore'`: Skip problematic characters\n- `'replace'`: Replace with `?` (encoding) or `\\ufffd` (decoding)\n- `'backslashreplace'`: Replace with `\\xNN` escape sequences\n- `'xmlcharrefreplace'`: Replace with XML character references (encoding only)\n\nAlways specify encoding explicitly to avoid platform-dependent behavior.",
+          "pseudo_code": "1. Always specify encoding='utf-8' in open()\n2. str = text (Unicode), bytes = raw binary\n3. encode: str -> bytes, decode: bytes -> str\n4. errors='strict' raises on problems (default)\n5. errors='replace' substitutes problem characters",
+          "actual_code": "# Always specify encoding\nwith open(\"/tmp/utf8.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Hello!\")\n\n# Reading with wrong encoding\nwith open(\"/tmp/utf8.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Caf\\u00e9\")  # e with accent\n\nwith open(\"/tmp/utf8.txt\", \"r\", encoding=\"utf-8\") as f:\n    print(f.read())  # Cafe (correct)\n\n# Handling encoding errors\nimport os\n\n# Create a file with mixed encoding (simulate real-world mess)\nwith open(\"/tmp/mixed.txt\", \"wb\") as f:\n    f.write(b\"Hello \\xff\\xfe World\")  # invalid UTF-8 bytes\n\n# strict (default) -- raises error\ntry:\n    with open(\"/tmp/mixed.txt\", \"r\", encoding=\"utf-8\") as f:\n        content = f.read()\nexcept UnicodeDecodeError as e:\n    print(f\"Decode error: {e}\")\n\n# replace -- substitutes problem characters\nwith open(\"/tmp/mixed.txt\", \"r\", encoding=\"utf-8\", errors=\"replace\") as f:\n    content = f.read()\n    print(content)  # Hello \\ufffd\\ufffd World\n\n# ignore -- skips problem characters\nwith open(\"/tmp/mixed.txt\", \"r\", encoding=\"utf-8\", errors=\"ignore\") as f:\n    content = f.read()\n    print(content)  # Hello  World\n\n# Detecting encoding with chardet (third-party)\n# pip install chardet\n# import chardet\n# with open(\"unknown.txt\", \"rb\") as f:\n#     result = chardet.detect(f.read())\n#     print(result)  # {'encoding': 'utf-8', 'confidence': 0.99}\n\n# Manual encode/decode\ntext = \"Caf\\u00e9\"\nencoded = text.encode(\"utf-8\")\nprint(encoded)  # b'Caf\\xc3\\xa9'\nprint(len(text), len(encoded))  # 4, 5 (e-accent is 2 bytes in UTF-8)\n\ndecoded = encoded.decode(\"utf-8\")\nprint(decoded)  # Cafe\n\n# BOM handling (Windows files often have BOM)\nwith open(\"/tmp/bom.txt\", \"w\", encoding=\"utf-8-sig\") as f:\n    f.write(\"Data with BOM\")\n\n# utf-8-sig strips BOM on read\nwith open(\"/tmp/bom.txt\", \"r\", encoding=\"utf-8-sig\") as f:\n    print(f.read())  # Data with BOM (no BOM character)\n\n# Cleanup\nfor p in [\"/tmp/utf8.txt\", \"/tmp/mixed.txt\", \"/tmp/bom.txt\"]:\n    os.remove(p)",
+          "code_language": "python",
+          "key_points": [
+            "Always specify encoding='utf-8' explicitly",
+            "errors='replace' for tolerant reading, 'strict' for validation",
+            "str is Unicode text, bytes is raw binary",
+            "utf-8-sig handles BOM (Byte Order Mark) from Windows files"
+          ],
+          "gotchas": [
+            "Default encoding varies by platform -- always specify explicitly",
+            "UTF-8 characters can be 1-4 bytes -- len(str) != len(bytes)",
+            "Reading binary files in text mode causes encoding errors",
+            "'ignore' silently loses data -- use 'replace' to at least see something"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Always use `encoding='utf-8'` with `open()`. Use `errors='replace'` for tolerant reading, `'strict'` for validation. `utf-8-sig` handles Windows BOM files.",
+          "pseudo_code": "",
+          "actual_code": "# Always specify encoding\nwith open(\"file.txt\", \"r\", encoding=\"utf-8\") as f:\n    text = f.read()\n\n# Handle encoding errors gracefully\nwith open(\"messy.txt\", \"r\", encoding=\"utf-8\", errors=\"replace\") as f:\n    text = f.read()  # bad chars become \\ufffd",
+          "code_language": "python",
+          "key_points": [
+            "Always specify encoding='utf-8'",
+            "errors='replace' for tolerant reading"
+          ],
+          "gotchas": [
+            "Default encoding varies by OS -- always specify"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do file seeking and buffered I/O work in Python?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["seek", "tell", "buffering", "io"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "File seeking lets you move the read/write position within a file. `seek(offset, whence)` moves the position, and `tell()` returns the current position.\n\n`whence` values:\n- `0` (SEEK_SET): From file start (default)\n- `1` (SEEK_CUR): From current position\n- `2` (SEEK_END): From file end\n\nNote: In text mode, only `seek(0)` and `seek(tell())` are guaranteed to work. For arbitrary seeking, use binary mode.\n\n**Buffering** controls how data is written to disk:\n- `buffering=0`: Unbuffered (binary only)\n- `buffering=1`: Line-buffered (text only)\n- `buffering=-1`: System default (usually 4KB or 8KB)\n- `buffering=N`: Buffer of N bytes\n\nBuffers are flushed with `.flush()` or when the file is closed.",
+          "pseudo_code": "seek(offset, whence):\n  whence=0: from start\n  whence=1: from current (binary only)\n  whence=2: from end (binary only)\n\ntell() -> current position in bytes\nflush() -> write buffer to disk\ntruncate() -> resize file at current position",
+          "actual_code": "import os\n\n# Basic seek and tell\npath = \"/tmp/seektest.txt\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(\"Hello, World!\")\n\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    print(f.tell())    # 0 (start of file)\n    print(f.read(5))   # Hello\n    print(f.tell())    # 5\n    f.seek(0)          # go back to start\n    print(f.read())    # Hello, World!\n\n# Binary mode allows all seek operations\nwith open(path, \"rb\") as f:\n    f.seek(0, 2)       # seek to end\n    size = f.tell()    # file size\n    print(f\"File size: {size}\")  # 13\n\n    f.seek(-6, 2)      # 6 bytes before end\n    print(f.read())    # b'World!'\n\n    f.seek(7, 0)       # 7 bytes from start\n    print(f.read(5))   # b'World'\n\n# Read + Write with seek\nwith open(path, \"r+\", encoding=\"utf-8\") as f:\n    content = f.read()\n    f.seek(0)                    # go back to start\n    f.write(content.upper())     # overwrite with uppercase\n\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    print(f.read())  # HELLO, WORLD!\n\n# Truncate -- resize file\nwith open(path, \"r+\", encoding=\"utf-8\") as f:\n    f.truncate(5)  # keep only first 5 bytes\n\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    print(f.read())  # HELLO\n\n# Buffering demonstration\nimport io\n\n# Line-buffered: flushes on newline\nwith open(path, \"w\", encoding=\"utf-8\", buffering=1) as f:\n    f.write(\"line 1\\n\")  # flushed immediately (newline)\n    f.write(\"partial\")    # NOT flushed until close or explicit flush\n    f.flush()              # force flush\n\n# Reading large files efficiently\ndef read_in_chunks(path, chunk_size=8192):\n    with open(path, \"rb\") as f:\n        while True:\n            chunk = f.read(chunk_size)\n            if not chunk:\n                break\n            yield chunk\n\n# Tail-like: read last N bytes\ndef tail_bytes(path, n=100):\n    with open(path, \"rb\") as f:\n        f.seek(0, 2)      # seek to end\n        size = f.tell()\n        f.seek(max(0, size - n))  # seek to N bytes before end\n        return f.read()\n\nprint(tail_bytes(path, 3))  # b'LLO'\n\nos.remove(path)",
+          "code_language": "python",
+          "key_points": [
+            "seek(offset, whence) moves file position; tell() returns it",
+            "Text mode only supports seek(0) reliably; use binary for arbitrary seeking",
+            "buffering=1 is line-buffered; flush() forces writes to disk",
+            "Read large files in chunks to avoid memory issues"
+          ],
+          "gotchas": [
+            "Text mode seek with non-zero whence or arbitrary offsets may fail",
+            "tell() returns bytes in binary, characters in text (but implementation varies)",
+            "Unflushed data is lost if the process crashes before close()",
+            "seek() past end of file followed by write creates sparse files"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`seek(offset, whence)` moves the file pointer. `tell()` returns current position. Use binary mode for arbitrary seeking. `flush()` forces buffered data to disk.",
+          "pseudo_code": "",
+          "actual_code": "with open(\"file.txt\", \"rb\") as f:\n    f.seek(0, 2)       # go to end\n    size = f.tell()    # file size\n    f.seek(-10, 2)     # 10 bytes from end\n    tail = f.read()    # last 10 bytes",
+          "code_language": "python",
+          "key_points": [
+            "seek(0, 2) goes to end; tell() gives position",
+            "Binary mode for arbitrary seeking"
+          ],
+          "gotchas": [
+            "Text mode only supports seek(0) reliably"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use the `tempfile` module for temporary files and directories?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["tempfile", "temporary", "cleanup"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `tempfile` module creates temporary files and directories that are automatically cleaned up. Key functions:\n\n- **`TemporaryFile()`**: Creates a temp file that's deleted when closed. Not accessible by name on some OS.\n- **`NamedTemporaryFile()`**: Like TemporaryFile but has a `.name` attribute. Use `delete=False` to keep after closing.\n- **`TemporaryDirectory()`**: Creates a temp directory, deleted when the context exits.\n- **`mkstemp()`**: Creates a temp file, returns (fd, path). Caller must clean up.\n- **`mkdtemp()`**: Creates a temp directory. Caller must clean up.\n- **`gettempdir()`**: Returns the system temp directory.\n\nAlways prefer the context manager forms (`NamedTemporaryFile`, `TemporaryDirectory`) for automatic cleanup.",
+          "pseudo_code": "TemporaryFile() -- deleted on close, no name\nNamedTemporaryFile() -- deleted on close, has .name\nTemporaryDirectory() -- deleted on __exit__\nmkstemp() -> (fd, path) -- manual cleanup\nmkdtemp() -> path -- manual cleanup",
+          "actual_code": "import tempfile\nimport os\n\n# TemporaryFile -- auto-deleted, no visible name\nwith tempfile.TemporaryFile(mode=\"w+\", encoding=\"utf-8\") as f:\n    f.write(\"temporary data\")\n    f.seek(0)\n    print(f.read())  # temporary data\n# File is deleted here\n\n# NamedTemporaryFile -- has a name, auto-deleted\nwith tempfile.NamedTemporaryFile(\n    mode=\"w\", suffix=\".txt\", prefix=\"myapp_\",\n    encoding=\"utf-8\", delete=True\n) as f:\n    print(f.name)  # /tmp/myapp_abc123.txt\n    f.write(\"named temp data\")\n    f.flush()\n    # File exists and can be accessed by name here\nprint(os.path.exists(f.name))  # False -- deleted\n\n# NamedTemporaryFile with delete=False -- keep the file\nwith tempfile.NamedTemporaryFile(\n    mode=\"w\", suffix=\".csv\", delete=False, encoding=\"utf-8\"\n) as f:\n    f.write(\"col1,col2\\n1,2\\n\")\n    temp_path = f.name\n\nprint(os.path.exists(temp_path))  # True -- not deleted\nos.remove(temp_path)  # manual cleanup\n\n# TemporaryDirectory -- auto-deleted directory\nwith tempfile.TemporaryDirectory(prefix=\"work_\") as tmpdir:\n    print(tmpdir)  # /tmp/work_abc123\n    # Create files in the temp directory\n    file_path = os.path.join(tmpdir, \"data.txt\")\n    with open(file_path, \"w\", encoding=\"utf-8\") as f:\n        f.write(\"temp data\")\n    print(os.path.exists(file_path))  # True\nprint(os.path.exists(tmpdir))  # False -- entire directory deleted\n\n# mkstemp and mkdtemp -- low-level, manual cleanup\nfd, path = tempfile.mkstemp(suffix=\".dat\")\ntry:\n    with os.fdopen(fd, \"w\", encoding=\"utf-8\") as f:\n        f.write(\"low-level temp\")\n    # Process the file\nfinally:\n    os.remove(path)  # must clean up manually\n\ntmp_dir = tempfile.mkdtemp()\ntry:\n    # Use the directory\n    pass\nfinally:\n    import shutil\n    shutil.rmtree(tmp_dir)  # must clean up manually\n\n# Get the system temp directory\nprint(tempfile.gettempdir())  # /tmp or C:\\Users\\...\\Temp\n\n# SpooledTemporaryFile -- in-memory until size threshold\nwith tempfile.SpooledTemporaryFile(\n    max_size=1024, mode=\"w+\", encoding=\"utf-8\"\n) as f:\n    f.write(\"small data\")  # stays in memory\n    f.seek(0)\n    print(f.read())",
+          "code_language": "python",
+          "key_points": [
+            "NamedTemporaryFile for temp files with names, auto-deleted on close",
+            "TemporaryDirectory for temp dirs, auto-deleted on context exit",
+            "Use delete=False to keep the file after closing",
+            "mkstemp/mkdtemp for low-level control (manual cleanup required)"
+          ],
+          "gotchas": [
+            "NamedTemporaryFile on Windows can't be opened by another process while open",
+            "mkstemp returns a file descriptor (int), not a file object -- use os.fdopen()",
+            "mkstemp/mkdtemp require manual cleanup (os.remove/shutil.rmtree)",
+            "SpooledTemporaryFile writes to disk when exceeding max_size"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`NamedTemporaryFile` creates auto-deleting temp files with names. `TemporaryDirectory` creates auto-deleting temp dirs. Use `delete=False` to keep files after closing.",
+          "pseudo_code": "",
+          "actual_code": "import tempfile\n\n# Auto-deleted temp file\nwith tempfile.NamedTemporaryFile(mode=\"w\", suffix=\".txt\", encoding=\"utf-8\") as f:\n    f.write(\"temp data\")\n    print(f.name)  # /tmp/tmp_abc123.txt\n\n# Auto-deleted temp directory\nwith tempfile.TemporaryDirectory() as tmpdir:\n    print(tmpdir)  # /tmp/tmp_xyz789",
+          "code_language": "python",
+          "key_points": [
+            "NamedTemporaryFile and TemporaryDirectory auto-cleanup",
+            "delete=False to keep temp files"
+          ],
+          "gotchas": [
+            "NamedTemporaryFile on Windows can't be opened by other processes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the `with` statement and why should you always use it for files?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["with", "context-manager", "resource-management"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `with` statement guarantees that resources are properly cleaned up after use, even if exceptions occur. For files, it ensures the file is closed regardless of what happens inside the block.\n\nWithout `with`, you need explicit `try/finally` to ensure cleanup. `with` makes this automatic and less error-prone.\n\nThe `with` statement works with any object implementing the context manager protocol (`__enter__` and `__exit__`). Files, database connections, locks, and network sockets all support it.\n\nPython 3.1+ supports multiple context managers in a single `with` statement, and Python 3.10+ supports parenthesized syntax for cleaner multi-line `with`.",
+          "pseudo_code": "Without with (error-prone):\n  f = open('file')\n  try:\n      data = f.read()\n  finally:\n      f.close()  # must remember!\n\nWith with (safe):\n  with open('file') as f:\n      data = f.read()\n  # f.close() called automatically",
+          "actual_code": "# BAD: without with -- file might not be closed on exception\nf = open(\"/tmp/test.txt\", \"w\", encoding=\"utf-8\")\nf.write(\"data\")\n# If exception occurs here, f is never closed!\nf.close()\n\n# GOOD: with statement guarantees close\nwith open(\"/tmp/test.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"data\")\n    # Even if exception here, file is closed\n\n# File is closed after the block\nprint(f.closed)  # True\n\n# Multiple context managers\nwith open(\"/tmp/input.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"hello\")\n\nwith (open(\"/tmp/input.txt\", \"r\", encoding=\"utf-8\") as fin,\n      open(\"/tmp/output.txt\", \"w\", encoding=\"utf-8\") as fout):\n    fout.write(fin.read().upper())\n\nwith open(\"/tmp/output.txt\", \"r\", encoding=\"utf-8\") as f:\n    print(f.read())  # HELLO\n\n# Equivalent try/finally (what with does internally)\nf = open(\"/tmp/test.txt\", \"r\", encoding=\"utf-8\")\ntry:\n    data = f.read()\nfinally:\n    f.close()  # always runs\n\n# Why it matters: resource leaks\nimport os\n\n# This leaks file descriptors in a loop\n# for i in range(100000):\n#     f = open(\"file.txt\")  # never closed!\n#     data = f.read()\n# Eventually: OSError: Too many open files\n\n# Safe version\nfor i in range(100):\n    with open(\"/tmp/test.txt\", \"r\", encoding=\"utf-8\") as f:\n        data = f.read()  # closed each iteration\n\n# Nested with statements\nwith open(\"/tmp/test.txt\", \"r\", encoding=\"utf-8\") as f:\n    with open(\"/tmp/copy.txt\", \"w\", encoding=\"utf-8\") as out:\n        out.write(f.read())\n\n# Cleanup\nfor p in [\"/tmp/test.txt\", \"/tmp/input.txt\", \"/tmp/output.txt\", \"/tmp/copy.txt\"]:\n    os.remove(p)",
+          "code_language": "python",
+          "key_points": [
+            "with guarantees file.close() even on exceptions",
+            "Prevents resource leaks (file descriptors, connections)",
+            "Multiple context managers in one with statement",
+            "Always use with for files -- never manually open/close"
+          ],
+          "gotchas": [
+            "The file object is still accessible after the with block, but it's closed",
+            "Writing to a closed file raises ValueError",
+            "with doesn't create a new scope -- variables defined inside are accessible outside",
+            "Forgetting with in loops causes 'Too many open files' errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`with` guarantees file cleanup (`.close()`) even on exceptions. Always use it for files. Prevents resource leaks and \"Too many open files\" errors.",
+          "pseudo_code": "",
+          "actual_code": "# Always use with for files\nwith open(\"file.txt\", \"r\", encoding=\"utf-8\") as f:\n    data = f.read()\n# f is automatically closed here, even if exception occurred\n\n# Multiple files\nwith open(\"in.txt\") as fin, open(\"out.txt\", \"w\") as fout:\n    fout.write(fin.read())",
+          "code_language": "python",
+          "key_points": [
+            "Guarantees cleanup on exceptions",
+            "Prevents resource leaks"
+          ],
+          "gotchas": [
+            "File is closed after with, but variable still exists"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you read large files efficiently without loading them entirely into memory?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["large-files", "memory", "streaming", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reading entire large files into memory with `.read()` or `.readlines()` can cause `MemoryError`. Instead, process files line by line or in chunks.\n\nStrategies for large files:\n1. **Line iteration**: `for line in file` -- reads one line at a time (text files)\n2. **Chunk reading**: `file.read(chunk_size)` -- reads fixed-size blocks (binary files)\n3. **`mmap`**: Memory-mapped files for random access without loading entirely\n4. **Generator/iterator**: Process lazily, yielding results\n5. **Specific libraries**: pandas `read_csv(chunksize=N)` for large CSVs",
+          "pseudo_code": "Line by line (text):\n  for line in file: process(line)\n\nChunks (binary):\n  while chunk := file.read(8192): process(chunk)\n\nmmap (random access):\n  with mmap.mmap(f.fileno(), 0) as mm: mm[start:end]\n\nKey: never use .read() or .readlines() on large files",
+          "actual_code": "import os\nimport mmap\n\n# Create a test file\npath = \"/tmp/large_test.txt\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    for i in range(100_000):\n        f.write(f\"Line {i}: some data here\\n\")\n\nprint(f\"File size: {os.path.getsize(path) / 1024 / 1024:.1f} MB\")\n\n# BAD: reads entire file into memory\n# with open(path) as f:\n#     content = f.read()  # all in memory!\n#     lines = content.split('\\n')  # doubles memory!\n\n# GOOD: iterate line by line (memory efficient)\nline_count = 0\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    for line in f:  # reads one line at a time\n        line_count += 1\nprint(f\"Lines: {line_count}\")\n\n# GOOD: process in chunks (for binary or when lines don't matter)\ndef count_bytes(path, chunk_size=8192):\n    total = 0\n    with open(path, \"rb\") as f:\n        while True:\n            chunk = f.read(chunk_size)\n            if not chunk:\n                break\n            total += len(chunk)\n    return total\n\n# Python 3.8+ walrus operator version\ndef count_bytes_walrus(path, chunk_size=8192):\n    total = 0\n    with open(path, \"rb\") as f:\n        while chunk := f.read(chunk_size):\n            total += len(chunk)\n    return total\n\nprint(f\"Bytes: {count_bytes(path)}\")\n\n# GOOD: generator for lazy processing\ndef search_lines(path, pattern):\n    with open(path, \"r\", encoding=\"utf-8\") as f:\n        for line_num, line in enumerate(f, 1):\n            if pattern in line:\n                yield line_num, line.rstrip()\n\n# Only processes lines as needed\nfor num, line in search_lines(path, \"Line 99999\"):\n    print(f\"{num}: {line}\")\n    break  # stop after first match -- file not fully read\n\n# Memory-mapped file for random access\nwith open(path, \"r\", encoding=\"utf-8\") as f:\n    with mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:\n        # Find pattern without loading entire file\n        pos = mm.find(b\"Line 50000\")\n        if pos != -1:\n            mm.seek(pos)\n            print(mm.readline().decode())  # Line 50000: some data here\n\n# Counting specific lines efficiently\ndef count_matching(path, predicate):\n    count = 0\n    with open(path, \"r\", encoding=\"utf-8\") as f:\n        count = sum(1 for line in f if predicate(line))\n    return count\n\nmatches = count_matching(path, lambda l: \"999\" in l)\nprint(f\"Lines containing '999': {matches}\")\n\nos.remove(path)",
+          "code_language": "python",
+          "key_points": [
+            "for line in file iterates one line at a time (memory efficient)",
+            "file.read(chunk_size) for binary chunk processing",
+            "mmap for random access without loading entire file",
+            "Never use .read() or .readlines() on large files"
+          ],
+          "gotchas": [
+            ".readlines() loads ALL lines into memory as a list",
+            "Line iteration buffers internally but only exposes one line at a time",
+            "mmap may not work on files larger than available address space (32-bit systems)",
+            "Generator-based processing can't easily go backward -- it's forward-only"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `for line in file` for line-by-line reading. Use `file.read(chunk_size)` for binary chunks. Never use `.read()` or `.readlines()` on large files.",
+          "pseudo_code": "",
+          "actual_code": "# Line by line (memory efficient)\nwith open(\"huge.txt\", \"r\", encoding=\"utf-8\") as f:\n    for line in f:\n        process(line)  # one line in memory at a time\n\n# Binary chunks\nwith open(\"huge.bin\", \"rb\") as f:\n    while chunk := f.read(8192):\n        process(chunk)",
+          "code_language": "python",
+          "key_points": [
+            "for line in file = one line at a time",
+            "read(chunk_size) for binary processing"
+          ],
+          "gotchas": [
+            ".readlines() loads everything into memory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `os.path` compare to `pathlib`, and when would you use each?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["os.path", "pathlib", "comparison", "migration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`os.path` is the traditional string-based path manipulation module. `pathlib.Path` (Python 3.4+) is the modern object-oriented replacement.\n\n**Prefer `pathlib` for:**\n- New code (it's the modern standard)\n- Path manipulation (joining, splitting, suffix handling)\n- File operations (read, write, exists, mkdir)\n- Cleaner, more readable code\n\n**Use `os.path` when:**\n- Working with legacy code\n- Libraries that don't accept Path objects (use `str(path)` to convert)\n- You need functions not yet in pathlib (rare)\n\nMost `os.path` functions have `pathlib` equivalents. The `/` operator in pathlib replaces `os.path.join()`, making path construction much more readable.",
+          "pseudo_code": "os.path equivalents in pathlib:\n  os.path.join(a, b)     -> Path(a) / b\n  os.path.exists(p)      -> Path(p).exists()\n  os.path.isfile(p)      -> Path(p).is_file()\n  os.path.basename(p)    -> Path(p).name\n  os.path.dirname(p)     -> Path(p).parent\n  os.path.splitext(p)    -> Path(p).stem, Path(p).suffix\n  os.path.expanduser('~') -> Path.home()\n  os.path.abspath(p)     -> Path(p).resolve()",
+          "actual_code": "import os\nfrom pathlib import Path\n\n# Path joining\n# os.path\nold = os.path.join(\"/tmp\", \"project\", \"data\", \"file.txt\")\n# pathlib\nnew = Path(\"/tmp\") / \"project\" / \"data\" / \"file.txt\"\nprint(old == str(new))  # True\n\n# File existence\n# os.path\nprint(os.path.exists(\"/tmp\"))  # True\n# pathlib\nprint(Path(\"/tmp\").exists())   # True\n\n# Path components\np = Path(\"/tmp/project/data/report.csv\")\n\n# os.path way\nprint(os.path.basename(\"/tmp/project/data/report.csv\"))  # report.csv\nprint(os.path.dirname(\"/tmp/project/data/report.csv\"))   # /tmp/project/data\nname, ext = os.path.splitext(\"/tmp/project/data/report.csv\")\nprint(name, ext)  # /tmp/project/data/report .csv\n\n# pathlib way (cleaner)\nprint(p.name)    # report.csv\nprint(p.parent)  # /tmp/project/data\nprint(p.stem)    # report\nprint(p.suffix)  # .csv\nprint(p.parts)   # ('/', 'tmp', 'project', 'data', 'report.csv')\n\n# File operations\n# os way\nos.makedirs(\"/tmp/test_dir/sub\", exist_ok=True)\nwith open(\"/tmp/test_dir/sub/file.txt\", \"w\") as f:\n    f.write(\"hello\")\n\n# pathlib way (much cleaner)\nbase = Path(\"/tmp/test_dir2/sub\")\nbase.mkdir(parents=True, exist_ok=True)\n(base / \"file.txt\").write_text(\"hello\", encoding=\"utf-8\")\n\n# Glob\n# os + glob\nimport glob\nfor f in glob.glob(\"/tmp/test_dir/**/*.txt\", recursive=True):\n    print(f)\n\n# pathlib\nfor f in Path(\"/tmp/test_dir\").glob(\"**/*.txt\"):\n    print(f)\n\n# Converting between them\npath_obj = Path(\"/tmp/file.txt\")\nstr_path = str(path_obj)         # Path -> str\npath_back = Path(str_path)       # str -> Path\nos_path = os.fspath(path_obj)    # Path -> os-compatible string\n\n# Resolve (absolute path)\nrelative = Path(\"../file.txt\")\nabsolute = relative.resolve()\nprint(absolute)\n\n# Cleanup\nimport shutil\nshutil.rmtree(\"/tmp/test_dir\", ignore_errors=True)\nshutil.rmtree(\"/tmp/test_dir2\", ignore_errors=True)",
+          "code_language": "python",
+          "key_points": [
+            "pathlib is modern and Pythonic; os.path is legacy",
+            "/ operator replaces os.path.join()",
+            ".read_text()/.write_text() replace open()/read()/write()/close()",
+            "str(Path) converts for libraries that need string paths"
+          ],
+          "gotchas": [
+            "Some older libraries don't accept Path objects -- use str() to convert",
+            "os.path returns strings, pathlib returns Path objects",
+            "Path.resolve() may behave differently than os.path.abspath() for symlinks",
+            "pathlib.Path is slightly slower than os.path for high-volume path operations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pathlib.Path` is modern and OOP. `os.path` is legacy string-based. Prefer pathlib for new code. Use `str(path)` when libraries need strings.",
+          "pseudo_code": "",
+          "actual_code": "from pathlib import Path\n\n# pathlib (modern)\np = Path(\"/tmp\") / \"dir\" / \"file.txt\"\nprint(p.stem)    # file\nprint(p.suffix)  # .txt\nprint(p.parent)  # /tmp/dir\n\n# os.path (legacy)\nimport os\nprint(os.path.join(\"/tmp\", \"dir\", \"file.txt\"))",
+          "code_language": "python",
+          "key_points": [
+            "pathlib: OOP, / operator, .stem/.suffix",
+            "os.path: legacy, string-based"
+          ],
+          "gotchas": [
+            "Use str(Path) for libraries that need strings"
+          ]
+        }
+      ]
+    }
+  ]
+}

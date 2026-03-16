@@ -1,0 +1,497 @@
+{
+  "concept_slug": "error-handling",
+  "questions": [
+    {
+      "title": "How does `try/except/else/finally` work in Python, and what is the execution order?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["try", "except", "else", "finally"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's exception handling has four clauses:\n\n1. **`try`**: The code that might raise an exception\n2. **`except`**: Handles specific exceptions if they occur\n3. **`else`**: Runs ONLY if no exception was raised in `try` -- useful for code that should run only on success\n4. **`finally`**: ALWAYS runs, whether an exception occurred or not -- used for cleanup\n\n**Execution order:**\n- No exception: `try` -> `else` -> `finally`\n- Exception caught: `try` (partial) -> `except` -> `finally`\n- Exception not caught: `try` (partial) -> `finally` -> exception propagates\n\nThe `else` clause is often overlooked but is important for separating the \"protected\" code (in `try`) from the \"success path\" code (in `else`). This prevents accidentally catching exceptions from the success code.\n\nThe `finally` clause runs even if there's a `return`, `break`, or `continue` in `try` or `except`.",
+          "pseudo_code": "try:\n    # Code that might raise\nexcept SpecificError as e:\n    # Handle the error\nelse:\n    # Only runs if NO exception in try\nfinally:\n    # ALWAYS runs (cleanup)\n\nExecution paths:\n  Success: try -> else -> finally\n  Caught: try -> except -> finally\n  Uncaught: try -> finally -> propagate",
+          "actual_code": "# Basic try/except/else/finally\ndef divide(a, b):\n    try:\n        result = a / b\n    except ZeroDivisionError:\n        print(\"Cannot divide by zero\")\n        return None\n    except TypeError as e:\n        print(f\"Type error: {e}\")\n        return None\n    else:\n        # Only runs if no exception in try\n        print(f\"{a} / {b} = {result}\")\n        return result\n    finally:\n        # Always runs\n        print(\"Division operation complete\")\n\nprint(divide(10, 3))\n# 10 / 3 = 3.3333...\n# Division operation complete\n# 3.333...\n\nprint(divide(10, 0))\n# Cannot divide by zero\n# Division operation complete\n# None\n\n# Why else matters -- separating protected code from success code\ndef read_config(path):\n    try:\n        f = open(path)\n    except FileNotFoundError:\n        print(f\"Config not found: {path}\")\n        return {}\n    else:\n        # This code is NOT protected by except\n        # If json.loads raises, it propagates (which is correct!)\n        import json\n        data = json.loads(f.read())\n        f.close()\n        return data\n\n# finally runs even with return\ndef example():\n    try:\n        return \"from try\"\n    finally:\n        print(\"finally runs!\")\n\nresult = example()\n# finally runs!\nprint(result)  # \"from try\"\n\n# CAUTION: return in finally overrides return in try\ndef dangerous():\n    try:\n        return \"try value\"\n    finally:\n        return \"finally value\"  # overrides try's return!\n\nprint(dangerous())  # \"finally value\" -- surprising!\n\n# Multiple except clauses\ndef process(data):\n    try:\n        value = int(data)\n        result = 100 / value\n    except ValueError:\n        return \"Not a number\"\n    except ZeroDivisionError:\n        return \"Cannot be zero\"\n    except (TypeError, AttributeError) as e:\n        return f\"Bad input: {e}\"\n    else:\n        return result",
+          "code_language": "python",
+          "key_points": [
+            "else runs only if no exception; finally always runs",
+            "Use else to separate protected code from success-path code",
+            "finally runs even with return, break, or continue",
+            "Multiple except clauses handle different exception types"
+          ],
+          "gotchas": [
+            "return in finally overrides return in try or except",
+            "Bare except (except:) catches BaseException including SystemExit and KeyboardInterrupt",
+            "else prevents accidentally catching exceptions from success code",
+            "finally runs even if except re-raises the exception"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`try` runs code, `except` handles errors, `else` runs on success only, `finally` always runs. Use `else` to keep success code out of the try block.",
+          "pseudo_code": "",
+          "actual_code": "try:\n    result = int(\"42\")\nexcept ValueError:\n    print(\"Not a number\")\nelse:\n    print(f\"Got {result}\")  # Got 42 (no exception)\nfinally:\n    print(\"Done\")           # always runs",
+          "code_language": "python",
+          "key_points": [
+            "Success: try -> else -> finally",
+            "Error: try -> except -> finally"
+          ],
+          "gotchas": [
+            "return in finally overrides return in try"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Python's exception hierarchy work, and why does it matter?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["exception-hierarchy", "BaseException", "Exception"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's exception hierarchy is a class tree rooted at `BaseException`:\n\n```\nBaseException\n  +-- SystemExit\n  +-- KeyboardInterrupt\n  +-- GeneratorExit\n  +-- Exception\n       +-- StopIteration\n       +-- ArithmeticError\n       |    +-- ZeroDivisionError\n       |    +-- OverflowError\n       +-- LookupError\n       |    +-- IndexError\n       |    +-- KeyError\n       +-- OSError\n       |    +-- FileNotFoundError\n       |    +-- PermissionError\n       +-- ValueError\n       +-- TypeError\n       +-- AttributeError\n       +-- RuntimeError\n       +-- ...\n```\n\n**Key distinctions:**\n- `BaseException` is the root of ALL exceptions\n- `Exception` is the root of all \"regular\" exceptions\n- `SystemExit`, `KeyboardInterrupt`, `GeneratorExit` inherit from `BaseException` but NOT `Exception`\n\nThis matters because `except Exception` catches all regular errors but lets `SystemExit` (sys.exit), `KeyboardInterrupt` (Ctrl+C), and `GeneratorExit` propagate. Never use bare `except:` or `except BaseException` as they prevent clean shutdown.\n\nCatching a parent exception also catches all its children. `except LookupError` catches both `IndexError` and `KeyError`.",
+          "pseudo_code": "BaseException (root)\n  |- SystemExit (sys.exit) -- DON'T catch\n  |- KeyboardInterrupt (Ctrl+C) -- DON'T catch\n  |- GeneratorExit -- DON'T catch\n  |- Exception (catch this for general errors)\n       |- ValueError, TypeError, KeyError, etc.\n\nRules:\n1. Catch specific exceptions, not Exception\n2. except Exception is OK as a last resort\n3. Never catch BaseException or use bare except:",
+          "actual_code": "# Exception hierarchy in action\ntry:\n    d = {\"a\": 1}\n    print(d[\"b\"])  # KeyError\nexcept LookupError as e:\n    # Catches both KeyError and IndexError\n    print(f\"Lookup failed: {e}\")  # Lookup failed: 'b'\n\n# Catching parent catches children\ntry:\n    1 / 0\nexcept ArithmeticError:  # catches ZeroDivisionError\n    print(\"Math error\")\n\n# Why bare except is dangerous\ndef bad_handler():\n    while True:\n        try:\n            data = input(\"Enter number: \")\n            return int(data)\n        except:  # catches KeyboardInterrupt!\n            print(\"Try again\")  # Ctrl+C can't exit!\n\n# Correct way\ndef good_handler():\n    while True:\n        try:\n            data = input(\"Enter number: \")\n            return int(data)\n        except ValueError:  # only catch what you expect\n            print(\"Try again\")\n\n# Inspecting the hierarchy\nprint(issubclass(KeyError, LookupError))      # True\nprint(issubclass(FileNotFoundError, OSError))  # True\nprint(issubclass(KeyboardInterrupt, Exception))  # False!\nprint(issubclass(SystemExit, Exception))          # False!\n\n# except Exception is a reasonable catch-all\ndef safe_process(func, *args):\n    try:\n        return func(*args)\n    except Exception as e:\n        # Catches all regular exceptions\n        # KeyboardInterrupt and SystemExit still propagate\n        print(f\"Error: {type(e).__name__}: {e}\")\n        return None\n\n# Order matters: more specific exceptions first\ntry:\n    raise FileNotFoundError(\"config.json\")\nexcept FileNotFoundError:\n    print(\"File not found\")    # This runs\nexcept OSError:\n    print(\"OS error\")          # Skipped (more general)\nexcept Exception:\n    print(\"General error\")     # Skipped (even more general)",
+          "code_language": "python",
+          "key_points": [
+            "BaseException is root; Exception is root of 'regular' exceptions",
+            "SystemExit, KeyboardInterrupt are NOT subclasses of Exception",
+            "Catching a parent catches all its children",
+            "Order except clauses from most specific to most general"
+          ],
+          "gotchas": [
+            "Bare except: catches BaseException including KeyboardInterrupt and SystemExit",
+            "except Exception catches almost everything but lets Ctrl+C and sys.exit work",
+            "More specific exceptions must come before general ones or they're unreachable",
+            "Some exceptions have surprising parents: bool is subclass of int, FileNotFoundError of OSError"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Exception` is the base for regular errors. `SystemExit` and `KeyboardInterrupt` are under `BaseException` but NOT `Exception`. Catch specific exceptions; `except Exception` as last resort.",
+          "pseudo_code": "",
+          "actual_code": "# Catching parent catches children\ntry:\n    raise FileNotFoundError(\"missing.txt\")\nexcept OSError as e:  # FileNotFoundError is subclass of OSError\n    print(f\"OS error: {e}\")\n\n# Never use bare except\ntry:\n    pass\nexcept Exception as e:  # OK: lets Ctrl+C and sys.exit propagate\n    print(f\"Error: {e}\")",
+          "code_language": "python",
+          "key_points": [
+            "except Exception catches regular errors, not SystemExit/KeyboardInterrupt",
+            "Catch specific exceptions first, general ones last"
+          ],
+          "gotchas": [
+            "Bare except catches BaseException -- prevents Ctrl+C"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create custom exceptions in Python?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["custom-exceptions", "Exception", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Custom exceptions should inherit from `Exception` (or a more specific built-in exception). They allow you to:\n1. Create domain-specific error types\n2. Carry additional context about what went wrong\n3. Enable specific error handling at different layers\n4. Provide clear error hierarchies for your application\n\nBest practices:\n- Create a base exception for your package/module\n- Inherit specific exceptions from that base\n- Add useful attributes (error codes, context data)\n- Override `__str__` for human-readable messages\n- Keep the hierarchy flat and focused",
+          "pseudo_code": "1. class AppError(Exception): -- base for your app\n2. class ValidationError(AppError): -- specific error\n3. Add __init__ with extra attributes (code, field, etc.)\n4. Override __str__ for readable messages\n5. Catch with: except ValidationError as e",
+          "actual_code": "# Base exception for the application\nclass AppError(Exception):\n    \"\"\"Base exception for the application.\"\"\"\n    def __init__(self, message, code=None):\n        self.message = message\n        self.code = code\n        super().__init__(message)\n\n    def __str__(self):\n        if self.code:\n            return f\"[{self.code}] {self.message}\"\n        return self.message\n\n# Specific exceptions\nclass ValidationError(AppError):\n    \"\"\"Raised when input validation fails.\"\"\"\n    def __init__(self, field, message, value=None):\n        self.field = field\n        self.value = value\n        super().__init__(f\"{field}: {message}\", code=\"VALIDATION_ERROR\")\n\nclass NotFoundError(AppError):\n    \"\"\"Raised when a resource is not found.\"\"\"\n    def __init__(self, resource_type, resource_id):\n        self.resource_type = resource_type\n        self.resource_id = resource_id\n        super().__init__(\n            f\"{resource_type} with id {resource_id} not found\",\n            code=\"NOT_FOUND\"\n        )\n\nclass AuthenticationError(AppError):\n    \"\"\"Raised when authentication fails.\"\"\"\n    def __init__(self, reason=\"Invalid credentials\"):\n        super().__init__(reason, code=\"AUTH_ERROR\")\n\n# Usage\ndef create_user(name, age):\n    if not name or not name.strip():\n        raise ValidationError(\"name\", \"cannot be empty\", value=name)\n    if not isinstance(age, int) or age < 0 or age > 150:\n        raise ValidationError(\"age\", \"must be between 0 and 150\", value=age)\n    return {\"name\": name, \"age\": age}\n\ndef get_user(user_id):\n    users = {1: \"Alice\", 2: \"Bob\"}\n    if user_id not in users:\n        raise NotFoundError(\"User\", user_id)\n    return users[user_id]\n\n# Catching specific exceptions\ntry:\n    create_user(\"\", 25)\nexcept ValidationError as e:\n    print(e)        # [VALIDATION_ERROR] name: cannot be empty\n    print(e.field)  # name\n    print(e.value)  # (empty string)\n\n# Catching the base exception catches all app errors\ntry:\n    get_user(999)\nexcept AppError as e:\n    print(e)       # [NOT_FOUND] User with id 999 not found\n    print(e.code)  # NOT_FOUND\n\n# Exception hierarchy check\nprint(issubclass(ValidationError, AppError))   # True\nprint(issubclass(ValidationError, Exception))  # True\nprint(issubclass(NotFoundError, AppError))     # True",
+          "code_language": "python",
+          "key_points": [
+            "Inherit from Exception (or specific built-in exception)",
+            "Create a base exception for your application/package",
+            "Add useful attributes (code, field, context)",
+            "Always call super().__init__(message)"
+          ],
+          "gotchas": [
+            "Always inherit from Exception, never from BaseException",
+            "Call super().__init__() to ensure the exception message is set correctly",
+            "Keep exception hierarchies flat -- deep hierarchies are hard to maintain",
+            "Don't use exceptions for flow control -- they're for exceptional conditions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Inherit from `Exception`, add useful attributes, call `super().__init__()`. Create a base exception for your app and specific ones inheriting from it.",
+          "pseudo_code": "",
+          "actual_code": "class AppError(Exception):\n    pass\n\nclass NotFoundError(AppError):\n    def __init__(self, resource, id):\n        self.resource = resource\n        self.id = id\n        super().__init__(f\"{resource} {id} not found\")\n\ntry:\n    raise NotFoundError(\"User\", 42)\nexcept NotFoundError as e:\n    print(e)            # User 42 not found\n    print(e.resource)   # User",
+          "code_language": "python",
+          "key_points": [
+            "Inherit from Exception, add context attributes",
+            "Base exception for the app, specific ones below"
+          ],
+          "gotchas": [
+            "Always call super().__init__() with the message"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does exception chaining work with `raise ... from ...`?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["exception-chaining", "raise-from", "__cause__", "__context__"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python supports exception chaining through two mechanisms:\n\n1. **Explicit chaining** (`raise X from Y`): Sets `X.__cause__` to `Y`. Used when you want to show that one exception was directly caused by another. The traceback shows \"The above exception was the direct cause...\"\n\n2. **Implicit chaining**: When an exception is raised inside an `except` block, Python automatically sets `X.__context__` to the original exception. The traceback shows \"During handling of the above exception...\"\n\n3. **Suppressing context** (`raise X from None`): Hides the implicit chaining. The original exception is not shown in the traceback.\n\nException chaining is important for:\n- Providing clear error causality in logs\n- Converting low-level exceptions to domain-specific ones without losing context\n- Debugging complex exception chains",
+          "pseudo_code": "Explicit chaining:\n  raise NewError('msg') from original_error\n  -> NewError.__cause__ = original_error\n  -> Traceback: 'direct cause of'\n\nImplicit chaining:\n  except SomeError:\n      raise NewError('msg')  # auto-sets __context__\n  -> Traceback: 'During handling of'\n\nSuppress context:\n  raise NewError('msg') from None\n  -> Hides the original exception",
+          "actual_code": "# Explicit chaining: raise ... from ...\nclass DatabaseError(Exception):\n    pass\n\ndef get_user(user_id):\n    try:\n        # Simulate database error\n        raise ConnectionError(\"Connection refused on port 5432\")\n    except ConnectionError as e:\n        raise DatabaseError(f\"Failed to fetch user {user_id}\") from e\n\ntry:\n    get_user(42)\nexcept DatabaseError as e:\n    print(f\"Error: {e}\")              # Failed to fetch user 42\n    print(f\"Caused by: {e.__cause__}\")  # Connection refused on port 5432\n    print(f\"Type: {type(e.__cause__).__name__}\")  # ConnectionError\n\n# Implicit chaining (automatic __context__)\ndef process():\n    try:\n        int(\"not_a_number\")\n    except ValueError:\n        # Raising a new exception inside except auto-sets __context__\n        raise RuntimeError(\"Processing failed\")\n\ntry:\n    process()\nexcept RuntimeError as e:\n    print(f\"Error: {e}\")\n    print(f\"Context: {e.__context__}\")  # invalid literal for int()...\n\n# Suppressing context: raise ... from None\nclass APIError(Exception):\n    pass\n\ndef fetch_data():\n    try:\n        raise ConnectionError(\"Internal network details\")\n    except ConnectionError:\n        # Hide internal details from API consumers\n        raise APIError(\"Service unavailable\") from None\n\ntry:\n    fetch_data()\nexcept APIError as e:\n    print(f\"Error: {e}\")              # Service unavailable\n    print(f\"Cause: {e.__cause__}\")     # None\n    print(f\"Context: {e.__context__}\")  # None (suppressed)\n\n# Full chain inspection\ndef full_chain(exc):\n    \"\"\"Walk the exception chain.\"\"\"\n    chain = []\n    while exc is not None:\n        chain.append(f\"{type(exc).__name__}: {exc}\")\n        exc = exc.__cause__ or exc.__context__\n    return chain\n\ntry:\n    get_user(42)\nexcept DatabaseError as e:\n    for item in full_chain(e):\n        print(item)\n    # DatabaseError: Failed to fetch user 42\n    # ConnectionError: Connection refused on port 5432",
+          "code_language": "python",
+          "key_points": [
+            "raise X from Y sets __cause__ (explicit, 'direct cause of')",
+            "Raising in except auto-sets __context__ (implicit, 'during handling of')",
+            "raise X from None suppresses the chain",
+            "__cause__ takes precedence over __context__ in traceback display"
+          ],
+          "gotchas": [
+            "Without 'from', the original exception still shows via implicit chaining (__context__)",
+            "'from None' hides potentially useful debugging information",
+            "__cause__ (explicit) takes display precedence over __context__ (implicit)",
+            "Both __cause__ and __context__ may be set; __cause__ is checked first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`raise X from Y` chains exceptions explicitly (`__cause__`). Raising in `except` auto-chains via `__context__`. `raise X from None` suppresses the chain.",
+          "pseudo_code": "",
+          "actual_code": "class AppError(Exception):\n    pass\n\ntry:\n    int(\"bad\")\nexcept ValueError as e:\n    raise AppError(\"Bad input\") from e  # explicit chain\n\n# In traceback:\n# ValueError: invalid literal...\n# The above exception was the direct cause of:\n# AppError: Bad input",
+          "code_language": "python",
+          "key_points": [
+            "'raise from' for explicit chaining, 'from None' to suppress",
+            "__cause__ for explicit, __context__ for implicit"
+          ],
+          "gotchas": [
+            "'from None' hides useful debugging info"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is EAFP vs LBYL, and which approach does Python prefer?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["EAFP", "LBYL", "pythonic", "philosophy"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**EAFP** (Easier to Ask Forgiveness than Permission): Try the operation and handle exceptions if they occur. This is the Pythonic approach.\n\n**LBYL** (Look Before You Leap): Check preconditions before performing an operation. Common in languages like C and Java.\n\nPython favors EAFP because:\n1. **Avoids race conditions**: Between checking and acting, the state can change (TOCTOU bugs)\n2. **Faster for the common case**: If exceptions are rare, try/except is faster than checking every time\n3. **Duck typing friendly**: Check behavior, not type\n4. **Cleaner code**: Often results in shorter, more readable code\n\nHowever, LBYL is appropriate when:\n- The check is significantly cheaper than the exception\n- The operation has side effects that can't be undone\n- Readability is improved by explicit checks",
+          "pseudo_code": "LBYL (Look Before You Leap):\n  if key in dictionary:\n      value = dictionary[key]\n  else:\n      value = default\n\nEAFP (Ask Forgiveness):\n  try:\n      value = dictionary[key]\n  except KeyError:\n      value = default\n\nPython prefers EAFP for most cases",
+          "actual_code": "import os\n\n# Example 1: Dictionary access\ndata = {\"name\": \"Alice\", \"age\": 30}\n\n# LBYL\nif \"email\" in data:\n    email = data[\"email\"]\nelse:\n    email = \"unknown\"\n\n# EAFP (Pythonic)\ntry:\n    email = data[\"email\"]\nexcept KeyError:\n    email = \"unknown\"\n\n# Even better: use dict.get()\nemail = data.get(\"email\", \"unknown\")\n\n# Example 2: File operations\npath = \"/tmp/config.json\"\n\n# LBYL -- race condition: file could be deleted between check and open\nif os.path.exists(path):\n    with open(path) as f:  # might still fail!\n        content = f.read()\n\n# EAFP -- no race condition\ntry:\n    with open(path) as f:\n        content = f.read()\nexcept FileNotFoundError:\n    content = \"{}\"\n\n# Example 3: Type conversion\nuser_input = \"42\"\n\n# LBYL\nif user_input.isdigit():\n    number = int(user_input)\nelse:\n    number = 0  # but isdigit() doesn't handle negative numbers!\n\n# EAFP (handles all cases)\ntry:\n    number = int(user_input)\nexcept ValueError:\n    number = 0\n\n# Example 4: Attribute access (duck typing)\ndef get_length(obj):\n    # LBYL -- checks type, not behavior\n    if isinstance(obj, (list, str, tuple)):\n        return len(obj)\n    return None\n\n    # EAFP -- checks behavior (duck typing)\ndef get_length_eafp(obj):\n    try:\n        return len(obj)\n    except TypeError:\n        return None\n\n# Works with any object that has __len__\nprint(get_length_eafp([1, 2, 3]))  # 3\nprint(get_length_eafp(\"hello\"))    # 5\nprint(get_length_eafp(42))         # None\n\n# When LBYL IS appropriate: expensive operations\ndef process_file(path):\n    # LBYL is OK here: checking is cheap, opening/reading is expensive\n    if not os.path.isfile(path):\n        raise FileNotFoundError(f\"Not a file: {path}\")\n    if os.path.getsize(path) > 100_000_000:  # 100MB\n        raise ValueError(f\"File too large: {path}\")\n    # Now proceed with expensive processing\n    with open(path) as f:\n        return f.read()",
+          "code_language": "python",
+          "key_points": [
+            "EAFP: try/except -- Pythonic, avoids race conditions, duck-typing friendly",
+            "LBYL: check-then-act -- risk of TOCTOU bugs, slower for common case",
+            "Python favors EAFP for most situations",
+            "Use LBYL when checks are cheap and operations have irreversible side effects"
+          ],
+          "gotchas": [
+            "LBYL file checks have TOCTOU (Time of Check to Time of Use) race conditions",
+            "EAFP is slower when exceptions are frequent (exception handling is expensive)",
+            "LBYL with isinstance checks often fights duck typing",
+            "dict.get() and getattr() with defaults are EAFP patterns without explicit try/except"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "EAFP: try it, handle exceptions. LBYL: check first. Python prefers EAFP because it avoids race conditions, supports duck typing, and is faster for the common case.",
+          "pseudo_code": "",
+          "actual_code": "# LBYL (not Pythonic)\nif \"key\" in d:\n    val = d[\"key\"]\n\n# EAFP (Pythonic)\ntry:\n    val = d[\"key\"]\nexcept KeyError:\n    val = default\n\n# Best: built-in EAFP pattern\nval = d.get(\"key\", default)",
+          "code_language": "python",
+          "key_points": [
+            "EAFP is Pythonic -- try first, handle errors",
+            "LBYL has TOCTOU race conditions"
+          ],
+          "gotchas": [
+            "EAFP is slow when exceptions are frequent"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you re-raise an exception in Python?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["re-raise", "raise", "exception-handling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are three ways to re-raise exceptions in Python:\n\n1. **`raise` (no arguments)**: Re-raises the current exception with the original traceback intact. This is the most common and preferred way.\n\n2. **`raise e`** (with the caught exception): Re-raises but may alter the traceback. The traceback starts from this `raise` statement, losing the original location.\n\n3. **`raise NewException from e`**: Raises a new exception chained to the original. Used when converting between exception types.\n\nAlways prefer bare `raise` when you just want to log/inspect an exception and let it propagate. Use `raise from` when wrapping exceptions in a domain-specific type.",
+          "pseudo_code": "1. except as e: raise       -- re-raise with original traceback\n2. except as e: raise e     -- re-raise with new traceback point\n3. except as e: raise New() from e  -- chain to new exception\n4. Always prefer bare 'raise' for pass-through re-raising",
+          "actual_code": "import traceback\n\n# 1. Bare raise -- preserves original traceback (preferred)\ndef process_data(data):\n    try:\n        result = int(data)\n    except ValueError:\n        print(f\"Warning: invalid data '{data}', re-raising\")\n        raise  # re-raises ValueError with original traceback\n\ntry:\n    process_data(\"not_a_number\")\nexcept ValueError as e:\n    print(f\"Caught: {e}\")  # original ValueError\n\n# 2. raise e -- alters traceback (usually not what you want)\ndef process_data_bad(data):\n    try:\n        result = int(data)\n    except ValueError as e:\n        print(f\"Warning: {e}\")\n        raise e  # re-raises but traceback points HERE, not original location\n\n# 3. Conditional re-raising\ndef safe_divide(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError:\n        if b == 0:\n            raise  # re-raise for actual zero\n        return float('inf')  # handle edge case differently\n\n# 4. Wrap and re-raise with chaining\nclass ServiceError(Exception):\n    pass\n\ndef call_api(url):\n    try:\n        # Simulate various low-level errors\n        raise ConnectionError(\"Connection refused\")\n    except (ConnectionError, TimeoutError) as e:\n        raise ServiceError(f\"API call to {url} failed\") from e\n\ntry:\n    call_api(\"https://api.example.com\")\nexcept ServiceError as e:\n    print(f\"Service error: {e}\")\n    print(f\"Root cause: {e.__cause__}\")\n\n# 5. Re-raise after logging\nimport logging\n\nlogger = logging.getLogger(__name__)\n\ndef risky_operation():\n    try:\n        return 1 / 0\n    except ZeroDivisionError:\n        logger.exception(\"Division by zero occurred\")  # logs with traceback\n        raise  # then re-raise\n\n# 6. Pattern: try/except/raise with cleanup\ndef write_file(path, data):\n    f = None\n    try:\n        f = open(path, 'w')\n        f.write(data)\n    except IOError:\n        print(\"Write failed, cleaning up\")\n        raise  # re-raise after cleanup\n    finally:\n        if f:\n            f.close()",
+          "code_language": "python",
+          "key_points": [
+            "Bare 'raise' re-raises with original traceback (preferred)",
+            "'raise e' re-raises but changes the traceback point",
+            "'raise New() from e' wraps in a new exception with chaining",
+            "Use bare raise for logging/inspection then propagation"
+          ],
+          "gotchas": [
+            "'raise e' vs 'raise': the former resets traceback to current line",
+            "bare 'raise' only works inside an except block",
+            "Re-raising after modifying the exception object is OK -- the exception is the same object",
+            "logger.exception() logs the traceback; pair with bare raise"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use bare `raise` to re-raise with original traceback. Use `raise X from e` to wrap in a new exception. Bare `raise` is preferred for logging-then-propagating patterns.",
+          "pseudo_code": "",
+          "actual_code": "def process(data):\n    try:\n        return int(data)\n    except ValueError:\n        print(f\"Bad data: {data}\")  # log it\n        raise  # re-raise with original traceback\n\ntry:\n    process(\"bad\")\nexcept ValueError as e:\n    print(f\"Caught: {e}\")  # invalid literal for int()...",
+          "code_language": "python",
+          "key_points": [
+            "Bare 'raise' preserves original traceback",
+            "'raise from' for wrapping exceptions"
+          ],
+          "gotchas": [
+            "'raise e' changes the traceback point -- prefer bare 'raise'"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do context managers help with error handling?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["context-manager", "with", "error-handling", "cleanup"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Context managers guarantee cleanup through the `with` statement, even when exceptions occur. The `__exit__` method runs regardless of whether the `with` block completed successfully or raised an exception.\n\nContext managers solve the problem of resource leaks that occur when exceptions prevent cleanup code from running. Without context managers, you'd need `try/finally` blocks everywhere.\n\nKey patterns:\n1. **Resource management**: Files, database connections, network sockets\n2. **Exception suppression**: `contextlib.suppress()` as clean alternative to try/except/pass\n3. **Temporary state changes**: Directory changes, monkey patching, logging levels\n4. **Transaction management**: Database commits/rollbacks\n\n`contextlib` provides utilities for creating context managers without writing classes.",
+          "pseudo_code": "Context manager guarantees cleanup:\n  with resource as r:\n      # use r\n      # if exception occurs here...\n  # __exit__ STILL runs (cleanup guaranteed)\n\nVs manual approach:\n  r = acquire()\n  try:\n      # use r\n  finally:\n      release(r)  # must remember this!",
+          "actual_code": "from contextlib import contextmanager, suppress\nimport os\n\n# Context manager for database transactions\nclass Transaction:\n    def __init__(self, conn):\n        self.conn = conn\n\n    def __enter__(self):\n        self.conn.begin()\n        return self.conn\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        if exc_type is None:\n            self.conn.commit()\n        else:\n            self.conn.rollback()\n        return False  # propagate exceptions\n\n# contextlib.suppress -- clean exception suppression\n# Instead of:\ntry:\n    os.remove(\"/tmp/tempfile\")\nexcept FileNotFoundError:\n    pass\n\n# Use:\nwith suppress(FileNotFoundError):\n    os.remove(\"/tmp/tempfile\")\n\n# @contextmanager decorator -- simpler than class\n@contextmanager\ndef temporary_directory(path):\n    \"\"\"Context manager that creates and cleans up a temp directory.\"\"\"\n    os.makedirs(path, exist_ok=True)\n    try:\n        yield path  # value after 'as'\n    finally:\n        import shutil\n        shutil.rmtree(path, ignore_errors=True)\n\n# Usage\nwith temporary_directory(\"/tmp/my_work\") as d:\n    print(f\"Working in {d}\")\n    # Even if this raises, cleanup happens\n\n# Nested context managers\nwith open(\"input.txt\") as fin, open(\"output.txt\", \"w\") as fout:\n    fout.write(fin.read())  # both files properly closed\n\n# Error handling inside context manager\n@contextmanager\ndef error_handler(operation_name):\n    try:\n        yield\n    except Exception as e:\n        print(f\"Error in {operation_name}: {e}\")\n        raise  # re-raise after logging\n\nwith error_handler(\"data processing\"):\n    result = int(\"not_a_number\")  # logged, then re-raised\n\n# ExitStack for dynamic context managers\nfrom contextlib import ExitStack\n\ndef process_files(paths):\n    with ExitStack() as stack:\n        files = [stack.enter_context(open(p)) for p in paths]\n        # All files guaranteed to be closed, even if one fails\n        return [f.read() for f in files]",
+          "code_language": "python",
+          "key_points": [
+            "Context managers guarantee cleanup even when exceptions occur",
+            "__exit__ receives exception info and runs regardless",
+            "contextlib.suppress replaces try/except/pass pattern",
+            "@contextmanager simplifies creation with yield-based syntax"
+          ],
+          "gotchas": [
+            "@contextmanager requires exactly one yield; code after yield runs on exit",
+            "ExitStack is needed when the number of context managers is dynamic",
+            "Returning True from __exit__ suppresses the exception -- do this very carefully",
+            "If __enter__ raises, __exit__ is NOT called"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Context managers guarantee cleanup via `__exit__`, even during exceptions. Use `contextlib.suppress()` for clean exception suppression, `@contextmanager` for simple creation.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import contextmanager, suppress\n\n# Suppress specific exceptions cleanly\nwith suppress(FileNotFoundError):\n    import os\n    os.remove(\"/tmp/nonexistent\")\n\n# Simple context manager with decorator\n@contextmanager\ndef timer():\n    import time\n    start = time.perf_counter()\n    yield\n    print(f\"{time.perf_counter() - start:.4f}s\")\n\nwith timer():\n    sum(range(1_000_000))",
+          "code_language": "python",
+          "key_points": [
+            "Guaranteed cleanup even on exceptions",
+            "suppress() replaces try/except/pass"
+          ],
+          "gotchas": [
+            "@contextmanager needs exactly one yield"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you properly log exceptions in Python?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["logging", "exceptions", "traceback", "debugging"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Proper exception logging preserves the traceback, uses appropriate log levels, and includes relevant context. Python's `logging` module provides `logger.exception()` which automatically includes the traceback.\n\nKey approaches:\n1. **`logger.exception(msg)`**: Logs at ERROR level with full traceback (only in except block)\n2. **`logger.error(msg, exc_info=True)`**: Same as above but works anywhere\n3. **`traceback.format_exc()`**: Returns traceback as a string for custom handling\n4. **`traceback.print_exc()`**: Prints traceback to stderr\n\nBest practices:\n- Always include the traceback (not just the message)\n- Log at the right level: ERROR for failures, WARNING for recoverable issues\n- Add context: what was the operation, what were the inputs\n- Don't log AND raise (the caller may log too, creating duplicates)",
+          "pseudo_code": "1. logger.exception(msg) -- ERROR + traceback (in except block)\n2. logger.error(msg, exc_info=True) -- same, works anywhere\n3. traceback.format_exc() -- get traceback as string\n4. Log at appropriate level, include context\n5. Either log OR re-raise, not both (unless top-level handler)",
+          "actual_code": "import logging\nimport traceback\n\n# Setup logging\nlogging.basicConfig(\n    level=logging.DEBUG,\n    format=\"%(asctime)s %(levelname)s %(name)s: %(message)s\"\n)\nlogger = logging.getLogger(__name__)\n\n# 1. logger.exception() -- best for most cases\ndef process_order(order_id):\n    try:\n        # Simulate error\n        raise ValueError(f\"Invalid order amount\")\n    except ValueError:\n        logger.exception(f\"Failed to process order {order_id}\")\n        # Logs: ERROR ... Failed to process order 42\n        # Traceback (most recent call last):\n        #   File ..., line ...\n        # ValueError: Invalid order amount\n\n# 2. logger.error with exc_info for conditional logging\ndef fetch_data(url):\n    try:\n        raise ConnectionError(\"Timeout\")\n    except ConnectionError as e:\n        if \"timeout\" in str(e).lower():\n            logger.warning(\"Timeout fetching %s, will retry\", url)\n        else:\n            logger.error(\"Failed to fetch %s\", url, exc_info=True)\n        raise\n\n# 3. traceback.format_exc() for custom handling\ndef risky_operation():\n    try:\n        1 / 0\n    except ZeroDivisionError:\n        tb = traceback.format_exc()\n        # Send to monitoring service, save to file, etc.\n        print(f\"Captured traceback:\\n{tb}\")\n\n# 4. Structured exception logging\ndef api_handler(request_data):\n    try:\n        result = int(request_data[\"value\"])\n        return {\"result\": result}\n    except (KeyError, ValueError, TypeError) as e:\n        logger.error(\n            \"API error: type=%s, message=%s, input=%r\",\n            type(e).__name__,\n            str(e),\n            request_data,\n            exc_info=True\n        )\n        return {\"error\": str(e)}\n\n# 5. Anti-pattern: logging AND raising (causes duplicate logs)\ndef bad_pattern():\n    try:\n        raise RuntimeError(\"oops\")\n    except RuntimeError:\n        logger.exception(\"Error occurred\")  # logged here\n        raise  # caller will likely log again!\n\n# Better: log at the boundary, raise in intermediate layers\ndef intermediate_function():\n    try:\n        raise RuntimeError(\"oops\")\n    except RuntimeError:\n        raise  # just re-raise, let boundary handle logging\n\ndef boundary_handler():\n    try:\n        intermediate_function()\n    except RuntimeError:\n        logger.exception(\"Unhandled error at boundary\")  # log once here",
+          "code_language": "python",
+          "key_points": [
+            "logger.exception() logs ERROR + traceback (only in except blocks)",
+            "logger.error(msg, exc_info=True) works anywhere",
+            "Include context: operation name, input data, relevant IDs",
+            "Log at boundaries, raise in intermediate layers"
+          ],
+          "gotchas": [
+            "logger.exception() only works inside except blocks (needs an active exception)",
+            "Logging AND re-raising causes duplicate log entries up the call chain",
+            "Don't log sensitive data (passwords, tokens) in exception messages",
+            "traceback.format_exc() returns empty string if there's no active exception"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `logger.exception()` in except blocks for automatic traceback logging. Use `exc_info=True` parameter for other log levels. Include context, log at boundaries not everywhere.",
+          "pseudo_code": "",
+          "actual_code": "import logging\nlogger = logging.getLogger(__name__)\n\ntry:\n    result = 1 / 0\nexcept ZeroDivisionError:\n    logger.exception(\"Division failed\")  # ERROR + full traceback\n    # Or with different level:\n    # logger.warning(\"Recoverable\", exc_info=True)",
+          "code_language": "python",
+          "key_points": [
+            "logger.exception() for ERROR + traceback",
+            "exc_info=True for other levels"
+          ],
+          "gotchas": [
+            "Don't log AND re-raise -- causes duplicate entries"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `warnings` module work, and when should you use it instead of exceptions?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["warnings", "deprecation", "UserWarning"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `warnings` module issues warning messages without stopping execution. Warnings are for situations that deserve attention but aren't errors:\n\n- **`DeprecationWarning`**: Feature will be removed in a future version\n- **`PendingDeprecationWarning`**: Feature will be deprecated in the future\n- **`RuntimeWarning`**: Dubious runtime behavior\n- **`UserWarning`**: Default category for user-defined warnings\n- **`FutureWarning`**: Behavior change in a future version\n\nWarnings can be filtered:\n- `'error'`: Turn warnings into exceptions\n- `'ignore'`: Suppress warnings\n- `'always'`: Always show\n- `'default'`: Show once per location\n- `'module'`: Show once per module\n\nUse warnings instead of exceptions when the code can still proceed correctly but the developer should be informed of a potential issue.",
+          "pseudo_code": "1. warnings.warn(msg, category) -- issue a warning\n2. warnings.filterwarnings('error') -- treat as exception\n3. warnings.filterwarnings('ignore') -- suppress\n4. Use DeprecationWarning for deprecated features\n5. stacklevel=2 to show caller's location, not the warning site",
+          "actual_code": "import warnings\n\n# Basic warning\ndef old_function():\n    warnings.warn(\n        \"old_function() is deprecated, use new_function() instead\",\n        DeprecationWarning,\n        stacklevel=2  # shows caller's location, not this line\n    )\n    return \"old result\"\n\n# Custom warning category\nclass PerformanceWarning(UserWarning):\n    pass\n\ndef process_large_dataset(data):\n    if len(data) > 1_000_000:\n        warnings.warn(\n            f\"Processing {len(data)} items may be slow\",\n            PerformanceWarning,\n            stacklevel=2\n        )\n    return sum(data)\n\n# Calling deprecated function\nresult = old_function()  # shows warning but continues\nprint(result)  # \"old result\"\n\n# Filtering warnings\nwarnings.filterwarnings(\"ignore\", category=DeprecationWarning)\nold_function()  # no warning shown\n\nwarnings.filterwarnings(\"error\", category=DeprecationWarning)\ntry:\n    old_function()  # raises DeprecationWarning as exception\nexcept DeprecationWarning as e:\n    print(f\"Caught: {e}\")\n\n# Reset to default\nwarnings.resetwarnings()\n\n# Context manager for temporary filter\nwith warnings.catch_warnings():\n    warnings.simplefilter(\"ignore\")\n    old_function()  # suppressed within this block\n\n# pytest captures warnings\n# import pytest\n# def test_deprecation():\n#     with pytest.warns(DeprecationWarning):\n#         old_function()\n\n# When to use warnings vs exceptions:\n# Warnings: deprecated code, performance hints, non-critical issues\n# Exceptions: errors that prevent correct operation\n\n# Real-world pattern: gradual deprecation\ndef api_function(param, old_param=None):\n    if old_param is not None:\n        warnings.warn(\n            \"old_param is deprecated, use param instead. \"\n            \"old_param will be removed in v3.0\",\n            DeprecationWarning,\n            stacklevel=2\n        )\n        if param is None:\n            param = old_param\n    return param",
+          "code_language": "python",
+          "key_points": [
+            "Warnings inform without stopping execution",
+            "Use DeprecationWarning for deprecated features",
+            "stacklevel=2 shows the caller's location in the warning",
+            "filterwarnings controls visibility: 'error', 'ignore', 'always'"
+          ],
+          "gotchas": [
+            "By default, warnings are shown only once per location",
+            "DeprecationWarning is ignored by default in production; visible in test frameworks",
+            "stacklevel must be correct or the warning points to the wrong line",
+            "warnings.warn() in a loop may show only the first occurrence (use 'always' filter)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `warnings.warn()` for non-fatal issues (deprecation, performance hints). Warnings don't stop execution. Use `stacklevel=2` to show caller's location.",
+          "pseudo_code": "",
+          "actual_code": "import warnings\n\ndef old_api():\n    warnings.warn(\n        \"old_api() is deprecated, use new_api()\",\n        DeprecationWarning,\n        stacklevel=2\n    )\n    return \"result\"\n\nresult = old_api()  # shows warning, continues running\n\n# Turn warnings into errors for testing\nwarnings.filterwarnings(\"error\", category=DeprecationWarning)",
+          "code_language": "python",
+          "key_points": [
+            "Warnings inform without stopping execution",
+            "stacklevel=2 shows caller's line number"
+          ],
+          "gotchas": [
+            "DeprecationWarning is hidden by default in production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the `assert` statement, and when should (and shouldn't) you use it?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["assert", "debugging", "invariants"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`assert expression, message` raises `AssertionError` if the expression is falsy. It's a debugging tool for catching programmer errors (bugs), not for handling user input or runtime errors.\n\n**Important**: Assertions are **removed** when Python runs with optimization (`python -O` or `PYTHONOPTIMIZE=1`). This means:\n- NEVER use assert for input validation\n- NEVER use assert for security checks\n- NEVER use assert for anything that must run in production\n\n**Use assert for:**\n- Checking invariants during development\n- Documenting assumptions in code\n- Defensive programming against impossible states\n- Test assertions (pytest uses assert extensively)\n\n`assert x, msg` is equivalent to `if __debug__: if not x: raise AssertionError(msg)`.",
+          "pseudo_code": "assert expression, message\n\nEquivalent to:\nif __debug__:\n    if not expression:\n        raise AssertionError(message)\n\n__debug__ is True normally, False with python -O\n\nDO use for: invariants, assumptions, tests\nDON'T use for: input validation, security, production checks",
+          "actual_code": "# Good uses of assert\ndef calculate_average(numbers):\n    assert len(numbers) > 0, \"numbers list must not be empty\"\n    return sum(numbers) / len(numbers)\n\n# Checking invariants\ndef process_sorted_data(data):\n    assert data == sorted(data), \"data must be sorted\"\n    # Binary search or other algorithm that requires sorted input\n    return data[len(data) // 2]\n\n# Documenting impossible states\ndef get_direction(angle):\n    angle = angle % 360\n    if 0 <= angle < 90:\n        return \"NE\"\n    elif 90 <= angle < 180:\n        return \"SE\"\n    elif 180 <= angle < 270:\n        return \"SW\"\n    elif 270 <= angle < 360:\n        return \"NW\"\n    else:\n        assert False, f\"Unreachable: angle={angle}\"  # should never happen\n\n# BAD: assert for input validation (removed with -O!)\ndef bad_withdraw(account, amount):\n    assert amount > 0, \"Amount must be positive\"  # WRONG!\n    # With python -O, this check is removed!\n    account.balance -= amount\n\n# GOOD: raise ValueError for input validation\ndef good_withdraw(account, amount):\n    if amount <= 0:\n        raise ValueError(\"Amount must be positive\")  # always checked\n    account.balance -= amount\n\n# BAD: assert for security\ndef bad_check_access(user):\n    assert user.is_admin, \"Admin access required\"  # WRONG!\n    # Bypassed with python -O!\n\n# GOOD: raise for security\ndef good_check_access(user):\n    if not user.is_admin:\n        raise PermissionError(\"Admin access required\")  # always checked\n\n# Assert with tuples -- common gotcha\nassert (1 == 2, \"This should fail\")  # WARNING: always True!\n# A non-empty tuple is truthy! The assert passes!\n# Correct:\nassert 1 == 2, \"This should fail\"  # AssertionError: This should fail\n\n# In pytest, assert is the primary testing mechanism\ndef test_addition():\n    assert 1 + 1 == 2\n    assert isinstance(\"hello\", str)\n    assert [1, 2, 3] == [1, 2, 3]",
+          "code_language": "python",
+          "key_points": [
+            "assert is for debugging/development, not production validation",
+            "Removed by python -O optimization flag",
+            "Use for invariants, assumptions, and test assertions",
+            "Use raise ValueError/TypeError for input validation"
+          ],
+          "gotchas": [
+            "assert (expr, msg) is always True because non-empty tuples are truthy -- don't use parentheses",
+            "Assertions are stripped with -O flag -- never use for security or validation",
+            "assert is not a function -- assert(False) works but assert(False, 'msg') is always True",
+            "pytest rewrites assert statements to provide detailed failure messages"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`assert` checks invariants during development. Removed with `python -O`. Never use for input validation or security. Use `raise ValueError/TypeError` instead for production checks.",
+          "pseudo_code": "",
+          "actual_code": "# Good: checking developer assumptions\ndef binary_search(sorted_list, target):\n    assert sorted_list == sorted(sorted_list), \"Must be sorted\"\n    # ... search logic\n\n# Bad: input validation (removed with -O)\n# assert amount > 0  # WRONG\nif amount <= 0:\n    raise ValueError(\"Amount must be positive\")  # CORRECT",
+          "code_language": "python",
+          "key_points": [
+            "For development invariants, not production validation",
+            "Removed with python -O"
+          ],
+          "gotchas": [
+            "assert(expr, msg) is always True -- non-empty tuple"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle multiple exceptions and use exception groups (Python 3.11+)?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["multiple-exceptions", "exception-groups", "except-star"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several ways to handle multiple exceptions:\n\n1. **Multiple except clauses**: Handle different exceptions differently\n2. **Tuple in except**: `except (TypeError, ValueError)` handles both the same way\n3. **Exception groups** (Python 3.11+): `ExceptionGroup` bundles multiple exceptions that occurred concurrently\n4. **`except*`** (Python 3.11+): Pattern-matching syntax for exception groups\n\nException groups are designed for concurrent/async code where multiple independent operations can fail simultaneously. Before 3.11, you could only raise one exception at a time.\n\n`except*` handles subgroups of an ExceptionGroup, allowing different handlers for different exception types within the same group.",
+          "pseudo_code": "Multiple except:\n  except TypeError: handle type error\n  except ValueError: handle value error\n\nTuple except:\n  except (TypeError, ValueError) as e: handle both\n\nException groups (3.11+):\n  raise ExceptionGroup('msg', [Error1(), Error2()])\n  except* TypeError as eg: handle TypeError subgroup\n  except* ValueError as eg: handle ValueError subgroup",
+          "actual_code": "# 1. Multiple except clauses\ndef convert(value, target_type):\n    try:\n        if target_type == \"int\":\n            return int(value)\n        elif target_type == \"float\":\n            return float(value)\n        else:\n            raise ValueError(f\"Unknown type: {target_type}\")\n    except ValueError as e:\n        print(f\"Value error: {e}\")\n        return None\n    except TypeError as e:\n        print(f\"Type error: {e}\")\n        return None\n\n# 2. Tuple for same handling\ndef safe_convert(value):\n    try:\n        return int(value)\n    except (ValueError, TypeError) as e:\n        print(f\"Conversion failed: {type(e).__name__}: {e}\")\n        return None\n\nprint(safe_convert(\"42\"))     # 42\nprint(safe_convert(\"hello\"))  # Conversion failed: ValueError: ...\nprint(safe_convert(None))     # Conversion failed: TypeError: ...\n\n# 3. Exception groups (Python 3.11+)\n# Simulating concurrent failures\ndef validate_fields(data):\n    errors = []\n    if not data.get(\"name\"):\n        errors.append(ValueError(\"name is required\"))\n    if not isinstance(data.get(\"age\"), int):\n        errors.append(TypeError(\"age must be an integer\"))\n    if data.get(\"age\", 0) < 0:\n        errors.append(ValueError(\"age must be non-negative\"))\n    if errors:\n        raise ExceptionGroup(\"Validation failed\", errors)\n    return data\n\n# Handling exception groups with except*\ntry:\n    validate_fields({\"name\": \"\", \"age\": \"not_int\"})\nexcept* ValueError as eg:\n    print(f\"Value errors ({len(eg.exceptions)}):\")\n    for e in eg.exceptions:\n        print(f\"  - {e}\")\nexcept* TypeError as eg:\n    print(f\"Type errors ({len(eg.exceptions)}):\")\n    for e in eg.exceptions:\n        print(f\"  - {e}\")\n\n# Output:\n# Value errors (1):\n#   - name is required\n# Type errors (1):\n#   - age must be an integer\n\n# Both except* handlers can run (unlike regular except)\n# because ExceptionGroup can contain multiple types\n\n# For Python < 3.11, collect errors manually\ndef validate_all(data):\n    errors = []\n    try:\n        int(data[\"age\"])\n    except (ValueError, KeyError) as e:\n        errors.append(str(e))\n    try:\n        assert data.get(\"name\"), \"name required\"\n    except AssertionError as e:\n        errors.append(str(e))\n    if errors:\n        raise ValueError(f\"Validation errors: {'; '.join(errors)}\")",
+          "code_language": "python",
+          "key_points": [
+            "Tuple syntax handles multiple exceptions the same way",
+            "ExceptionGroup (3.11+) bundles concurrent exceptions",
+            "except* handles subgroups of an ExceptionGroup",
+            "Multiple except* handlers can run for the same ExceptionGroup"
+          ],
+          "gotchas": [
+            "except* is only for ExceptionGroup, not regular exceptions",
+            "ExceptionGroup and except* require Python 3.11+",
+            "Cannot mix except and except* in the same try block",
+            "except* may run multiple handlers (unlike regular except which runs only one)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Handle multiple exceptions with tuples `except (A, B)` or separate clauses. Python 3.11+ adds `ExceptionGroup` for concurrent errors and `except*` for pattern matching.",
+          "pseudo_code": "",
+          "actual_code": "# Same handling for multiple types\ntry:\n    result = int(\"bad\")\nexcept (ValueError, TypeError) as e:\n    print(f\"Error: {e}\")\n\n# Python 3.11+ exception groups\ntry:\n    raise ExceptionGroup(\"errors\", [ValueError(\"bad\"), TypeError(\"wrong\")])\nexcept* ValueError as eg:\n    print(f\"Value errors: {eg.exceptions}\")\nexcept* TypeError as eg:\n    print(f\"Type errors: {eg.exceptions}\")",
+          "code_language": "python",
+          "key_points": [
+            "Tuple: except (A, B) for same handling",
+            "ExceptionGroup + except* for concurrent errors (3.11+)"
+          ],
+          "gotchas": [
+            "Cannot mix except and except* in same try"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the best practices for exception handling in Python?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["best-practices", "exceptions", "patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Exception handling best practices ensure robust, maintainable code:\n\n1. **Catch specific exceptions**: Never use bare `except:`. Be as specific as possible.\n2. **Don't suppress silently**: `except: pass` hides bugs. At minimum, log the error.\n3. **Use else clause**: Separate protected code (try) from success path (else).\n4. **Use context managers**: For resource cleanup instead of try/finally.\n5. **Create exception hierarchies**: Base exception per package with specific subclasses.\n6. **Include context**: Error messages should explain what happened and what to do.\n7. **Re-raise correctly**: Use bare `raise` to preserve traceback.\n8. **EAFP over LBYL**: Try the operation, catch the exception.\n9. **Don't use exceptions for flow control**: Exceptions are for exceptional conditions.\n10. **Log at boundaries**: Log once at the outermost handler, not at every layer.",
+          "pseudo_code": "DO:\n  - Catch specific exceptions\n  - Use else and finally\n  - Create domain-specific exceptions\n  - Include helpful error messages\n  - Log at boundaries\n\nDON'T:\n  - Use bare except or except Exception blindly\n  - Silently suppress (except: pass)\n  - Use exceptions for normal flow control\n  - Log at every level (duplicates)\n  - Catch and re-raise without adding value",
+          "actual_code": "import logging\n\nlogger = logging.getLogger(__name__)\n\n# BAD practices\ndef bad_example():\n    try:\n        data = get_data()\n    except:  # BAD: bare except\n        pass  # BAD: silent suppression\n\n    try:\n        result = process(data)  # BAD: data might not be defined!\n    except Exception as e:  # BAD: too broad\n        print(\"Error\")  # BAD: no context\n        raise e  # BAD: lose traceback (should be bare raise)\n\n# GOOD practices\ndef good_example(user_id: int) -> dict:\n    \"\"\"Fetch and process user data.\"\"\"\n    try:\n        raw_data = fetch_user(user_id)\n    except ConnectionError:\n        logger.warning(\"Connection failed for user %s, using cache\", user_id)\n        raw_data = get_cached_user(user_id)\n    except TimeoutError:\n        raise ServiceUnavailableError(\"User service timeout\") from None\n    else:\n        # Only runs if fetch succeeded -- not covered by except\n        cache_user(user_id, raw_data)\n\n    return transform_user(raw_data)\n\n# Good: specific exceptions with context\nclass UserNotFoundError(Exception):\n    def __init__(self, user_id):\n        self.user_id = user_id\n        super().__init__(f\"User {user_id} not found\")\n\ndef get_user(user_id: int) -> dict:\n    user = db.query(\"SELECT * FROM users WHERE id = %s\", user_id)\n    if user is None:\n        raise UserNotFoundError(user_id)\n    return user\n\n# Good: cleanup with context manager\ndef process_file(path: str) -> str:\n    with open(path) as f:  # auto-cleanup\n        return f.read().upper()\n\n# Good: exception boundary pattern\ndef api_endpoint(request):\n    \"\"\"Top-level handler logs and converts to API response.\"\"\"\n    try:\n        result = handle_request(request)\n        return {\"data\": result, \"status\": 200}\n    except ValidationError as e:\n        return {\"error\": str(e), \"status\": 400}\n    except NotFoundError as e:\n        return {\"error\": str(e), \"status\": 404}\n    except Exception:\n        logger.exception(\"Unhandled error in API\")  # log once here\n        return {\"error\": \"Internal server error\", \"status\": 500}\n\n# Good: multiple operations with proper error handling\ndef transfer_funds(from_id, to_id, amount):\n    if amount <= 0:\n        raise ValueError(\"Transfer amount must be positive\")\n\n    try:\n        sender = get_account(from_id)\n        receiver = get_account(to_id)\n    except AccountNotFoundError:\n        raise  # let it propagate with original traceback\n\n    if sender.balance < amount:\n        raise InsufficientFundsError(from_id, amount, sender.balance)\n\n    with Transaction() as txn:  # context manager for atomicity\n        sender.balance -= amount\n        receiver.balance += amount",
+          "code_language": "python",
+          "key_points": [
+            "Catch specific exceptions, never bare except",
+            "Use else for success path, context managers for cleanup",
+            "Include helpful context in error messages",
+            "Log at boundaries, not at every layer"
+          ],
+          "gotchas": [
+            "except: pass hides bugs silently -- at minimum log the error",
+            "Catching too broadly (except Exception) can mask programming errors",
+            "Logging at every level creates duplicate log entries",
+            "Don't use exceptions as return values or for normal control flow"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Catch specific exceptions, use `else` for success code, context managers for cleanup. Never bare `except:` or silent `pass`. Log at boundaries, include context in messages.",
+          "pseudo_code": "",
+          "actual_code": "# Good pattern: specific exceptions, else, context\ndef read_config(path):\n    try:\n        f = open(path)\n    except FileNotFoundError:\n        return {}  # specific exception, meaningful default\n    else:\n        import json\n        data = json.load(f)  # NOT in try block\n        f.close()\n        return data",
+          "code_language": "python",
+          "key_points": [
+            "Specific exceptions, else clause, context managers",
+            "Log at boundaries, include context"
+          ],
+          "gotchas": [
+            "except: pass hides bugs -- always log or handle"
+          ]
+        }
+      ]
+    }
+  ]
+}

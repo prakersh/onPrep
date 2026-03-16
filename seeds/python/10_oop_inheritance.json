@@ -1,0 +1,619 @@
+{
+  "concept_slug": "oop-inheritance-polymorphism",
+  "questions": [
+    {
+      "title": "How does single inheritance work in Python, and how do you use `super()`?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["inheritance", "super", "single-inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Single inheritance means a class inherits from one parent class. The child class gets all attributes and methods of the parent and can override or extend them.\n\n`super()` returns a proxy object that delegates method calls to the parent class in the MRO. In Python 3, `super()` with no arguments automatically detects the class and instance. It's preferred over directly calling `Parent.method(self)` because it works correctly with multiple inheritance and cooperative method chains.\n\nKey behaviors:\n- The child inherits all methods and attributes from the parent\n- The child can override methods by defining them with the same name\n- `super().__init__()` calls the parent's initializer\n- `super()` follows the MRO, not necessarily the direct parent",
+          "pseudo_code": "1. class Child(Parent): -- Child inherits from Parent\n2. super().__init__() -- call parent's __init__\n3. super().method() -- call parent's method\n4. Override by redefining a method with the same name\n5. Extend by calling super().method() then adding behavior",
+          "actual_code": "class Animal:\n    def __init__(self, name, species):\n        self.name = name\n        self.species = species\n\n    def speak(self):\n        return f\"{self.name} makes a sound\"\n\n    def __repr__(self):\n        return f\"{self.__class__.__name__}({self.name!r})\"\n\nclass Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name, species=\"Canine\")\n        self.breed = breed\n\n    def speak(self):  # override\n        return f\"{self.name} says Woof!\"\n\n    def fetch(self):  # new method\n        return f\"{self.name} fetches the ball\"\n\nclass GuideDog(Dog):\n    def __init__(self, name, breed, handler):\n        super().__init__(name, breed)  # calls Dog.__init__\n        self.handler = handler\n\n    def speak(self):  # extend parent method\n        base = super().speak()  # calls Dog.speak()\n        return f\"{base} (quietly)\"\n\n# Usage\ndog = Dog(\"Rex\", \"Shepherd\")\nprint(dog.speak())     # Rex says Woof!\nprint(dog.species)     # Canine (inherited from Animal)\nprint(dog.fetch())     # Rex fetches the ball\n\nguide = GuideDog(\"Buddy\", \"Labrador\", \"Alice\")\nprint(guide.speak())   # Buddy says Woof! (quietly)\nprint(guide.handler)   # Alice\nprint(guide.species)   # Canine (inherited through chain)\n\n# isinstance checks\nprint(isinstance(guide, GuideDog))  # True\nprint(isinstance(guide, Dog))       # True\nprint(isinstance(guide, Animal))    # True\n\n# super() is equivalent to:\n# super(GuideDog, self) in Python 3\n# It follows MRO, not just direct parent\nprint(GuideDog.__mro__)\n# (GuideDog, Dog, Animal, object)",
+          "code_language": "python",
+          "key_points": [
+            "Child inherits all attributes and methods from parent",
+            "super() delegates to the next class in the MRO",
+            "Override by redefining; extend by calling super() first",
+            "super() with no args auto-detects class and instance in Python 3"
+          ],
+          "gotchas": [
+            "Forgetting super().__init__() means parent attributes are never set",
+            "super() follows MRO, which may not be the direct parent in multiple inheritance",
+            "Parent.__init__(self) works but breaks cooperative multiple inheritance"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Child class inherits from parent. Override methods by redefining them. Use `super()` to call parent methods. `super()` follows MRO, not just the direct parent.",
+          "pseudo_code": "",
+          "actual_code": "class Animal:\n    def __init__(self, name):\n        self.name = name\n    def speak(self):\n        return \"...\"\n\nclass Dog(Animal):\n    def __init__(self, name, breed):\n        super().__init__(name)\n        self.breed = breed\n    def speak(self):\n        return f\"{self.name} says Woof!\"\n\ndog = Dog(\"Rex\", \"Lab\")\nprint(dog.speak())  # Rex says Woof!",
+          "code_language": "python",
+          "key_points": [
+            "super().__init__() calls parent initializer",
+            "Override by redefining, extend by calling super() first"
+          ],
+          "gotchas": [
+            "Forgetting super().__init__() leaves parent attributes unset"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does multiple inheritance work in Python, and what is the diamond problem?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["multiple-inheritance", "diamond-problem", "MRO"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python supports multiple inheritance, where a class can inherit from multiple parent classes. The **diamond problem** occurs when a class inherits from two classes that share a common ancestor, potentially causing ambiguity about which parent's method to use.\n\nPython solves this using the **C3 linearization algorithm** to compute the MRO (Method Resolution Order). The MRO ensures:\n1. A class comes before its parents\n2. Parents are searched in the order they appear in the class definition\n3. Common ancestors appear only once, at the end\n\n`super()` follows the MRO, not just the direct parent. This enables **cooperative multiple inheritance** where each class calls `super()` to pass control to the next class in the MRO chain.",
+          "pseudo_code": "Diamond: D inherits from B and C, both inherit from A\n  A\n / \\\nB   C\n \\ /\n  D\n\nMRO for D: D -> B -> C -> A -> object\nsuper() in D calls B, super() in B calls C, super() in C calls A\nA.__init__ is called exactly once if all classes use super()",
+          "actual_code": "class A:\n    def __init__(self):\n        print(\"A.__init__\")\n        super().__init__()\n\n    def method(self):\n        return \"A\"\n\nclass B(A):\n    def __init__(self):\n        print(\"B.__init__\")\n        super().__init__()\n\n    def method(self):\n        return \"B\"\n\nclass C(A):\n    def __init__(self):\n        print(\"C.__init__\")\n        super().__init__()\n\n    def method(self):\n        return \"C\"\n\nclass D(B, C):  # diamond inheritance\n    def __init__(self):\n        print(\"D.__init__\")\n        super().__init__()\n\n# MRO resolves the diamond\nprint(D.__mro__)\n# (D, B, C, A, object)\n\nd = D()\n# D.__init__\n# B.__init__\n# C.__init__\n# A.__init__\n# Each __init__ called exactly once!\n\nprint(d.method())  # \"B\" -- first in MRO after D\n\n# Without super(), A gets called twice (broken)\nclass BadB(A):\n    def __init__(self):\n        print(\"BadB.__init__\")\n        A.__init__(self)  # explicitly calls A, not following MRO\n\nclass BadC(A):\n    def __init__(self):\n        print(\"BadC.__init__\")\n        A.__init__(self)  # explicitly calls A\n\nclass BadD(BadB, BadC):\n    def __init__(self):\n        print(\"BadD.__init__\")\n        BadB.__init__(self)\n        BadC.__init__(self)\n\nbad = BadD()\n# BadD.__init__\n# BadB.__init__\n# A.__init__        <- first time\n# BadC.__init__\n# A.__init__        <- second time! BAD!\n\n# Practical example\nclass JSONMixin:\n    def to_json(self):\n        import json\n        return json.dumps(self.__dict__)\n\nclass HTMLMixin:\n    def to_html(self):\n        items = \"\".join(f\"<li>{k}: {v}</li>\" for k, v in self.__dict__.items())\n        return f\"<ul>{items}</ul>\"\n\nclass User(JSONMixin, HTMLMixin):\n    def __init__(self, name, email):\n        self.name = name\n        self.email = email\n\nu = User(\"Alice\", \"alice@example.com\")\nprint(u.to_json())   # {\"name\": \"Alice\", \"email\": \"alice@example.com\"}\nprint(u.to_html())   # <ul><li>name: Alice</li><li>email: alice@example.com</li></ul>",
+          "code_language": "python",
+          "key_points": [
+            "Python uses C3 linearization to compute MRO for diamond inheritance",
+            "super() follows MRO ensuring each class is called once",
+            "Direct parent calls (Parent.__init__(self)) bypass MRO and cause duplicate calls",
+            "Order of base classes matters: class D(B, C) searches B before C"
+          ],
+          "gotchas": [
+            "All classes in the chain must use super() for cooperative inheritance to work",
+            "Mixing super() calls with explicit Parent.method() calls breaks the chain",
+            "If base classes have incompatible __init__ signatures, super() chains become tricky",
+            "C3 linearization can raise TypeError if a consistent MRO cannot be computed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Multiple inheritance lets a class inherit from several parents. The diamond problem is solved by C3 linearization (MRO). Use `super()` everywhere to ensure each class is called exactly once.",
+          "pseudo_code": "",
+          "actual_code": "class A:\n    def greet(self): return \"A\"\n\nclass B(A):\n    def greet(self): return \"B\"\n\nclass C(A):\n    def greet(self): return \"C\"\n\nclass D(B, C):\n    pass\n\nprint(D.__mro__)    # D -> B -> C -> A -> object\nprint(D().greet())  # \"B\" (first in MRO)",
+          "code_language": "python",
+          "key_points": [
+            "C3 linearization resolves diamond problem",
+            "super() follows MRO, calling each class once"
+          ],
+          "gotchas": [
+            "All classes must use super() for cooperative inheritance"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the MRO (Method Resolution Order) and how does C3 linearization work?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["MRO", "C3-linearization", "inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The MRO (Method Resolution Order) is the order in which Python searches base classes when looking up a method or attribute. Python uses the **C3 linearization** algorithm (also called C3 superclass linearization) to compute it.\n\nC3 linearization guarantees:\n1. **Monotonicity**: If class C1 comes before C2 in the MRO of a class, then C1 comes before C2 in the MRO of any subclass\n2. **Local precedence order**: The order of base classes in the class definition is preserved\n3. **No duplicates**: Each class appears exactly once\n\nThe algorithm merges the linearizations of parent classes while respecting both the local ordering (order in class definition) and the ordering in parent linearizations. If no consistent ordering exists, Python raises `TypeError`.\n\nYou can inspect the MRO using `ClassName.__mro__` (tuple) or `ClassName.mro()` (list).",
+          "pseudo_code": "C3 linearization for class C(B1, B2, ..., BN):\nL[C] = C + merge(L[B1], L[B2], ..., L[BN], [B1, B2, ..., BN])\n\nMerge algorithm:\n1. Take the head of the first list\n2. If it doesn't appear in the tail of any other list, add it to result\n3. Otherwise, skip to the next list and try its head\n4. Repeat until all lists are empty\n5. If stuck (head appears in tail of another list), raise TypeError",
+          "actual_code": "# Simple hierarchy\nclass A: pass\nclass B(A): pass\nclass C(A): pass\nclass D(B, C): pass\n\nprint(D.__mro__)\n# (<class 'D'>, <class 'B'>, <class 'C'>, <class 'A'>, <class 'object'>)\n\n# More complex hierarchy\nclass O: pass\nclass A(O): pass\nclass B(O): pass\nclass C(O): pass\nclass D(A, B): pass\nclass E(B, C): pass\nclass F(D, E): pass\n\nprint(F.mro())\n# [F, D, A, E, B, C, O, object]\n\n# Inconsistent MRO -- TypeError\ntry:\n    class X: pass\n    class Y(X): pass\n    class Z(X, Y):  # X before Y, but Y is subclass of X\n        pass\nexcept TypeError as e:\n    print(e)\n    # Cannot create a consistent method resolution order (MRO)\n    # for bases X, Y\n\n# Practical impact: which method gets called\nclass Base:\n    def method(self):\n        return \"Base\"\n\nclass Left(Base):\n    def method(self):\n        return \"Left\"\n\nclass Right(Base):\n    def method(self):\n        return \"Right\"\n\nclass Child(Left, Right):\n    pass\n\nprint(Child().method())  # \"Left\" -- Left comes first in MRO\nprint(Child.__mro__)\n# (Child, Left, Right, Base, object)\n\n# super() follows MRO\nclass A:\n    def method(self):\n        print(\"A.method\")\n\nclass B(A):\n    def method(self):\n        print(\"B.method\")\n        super().method()  # next in MRO, not necessarily A\n\nclass C(A):\n    def method(self):\n        print(\"C.method\")\n        super().method()\n\nclass D(B, C):\n    def method(self):\n        print(\"D.method\")\n        super().method()\n\nD().method()\n# D.method\n# B.method  <- super() in B goes to C (next in MRO), not A!\n# C.method\n# A.method",
+          "code_language": "python",
+          "key_points": [
+            "MRO is computed using C3 linearization at class creation time",
+            "Guarantees monotonicity, preserves local ordering, no duplicates",
+            "Inspect with __mro__ (tuple) or .mro() (list)",
+            "super() follows MRO, not the direct parent"
+          ],
+          "gotchas": [
+            "Inconsistent hierarchies raise TypeError at class creation time",
+            "super() in class B may call class C (not A) depending on MRO of the leaf class",
+            "Adding a base class can change the MRO of all subclasses",
+            "class C(X, Y) where Y inherits from X is invalid -- TypeError"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "MRO is the order Python searches base classes for methods. C3 linearization computes it, preserving local order and preventing duplicates. Check with `Class.__mro__`.",
+          "pseudo_code": "",
+          "actual_code": "class A: pass\nclass B(A): pass\nclass C(A): pass\nclass D(B, C): pass\n\nprint(D.__mro__)\n# D -> B -> C -> A -> object\n\n# super() follows this exact order\nprint(D.mro())  # same as list",
+          "code_language": "python",
+          "key_points": [
+            "C3 ensures consistent, monotonic ordering",
+            "__mro__ shows the computed order"
+          ],
+          "gotchas": [
+            "Inconsistent hierarchies raise TypeError at class creation"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are abstract base classes (ABCs) and how do you use the `abc` module?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["abc", "abstract", "interface", "abstract-method"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Abstract Base Classes (ABCs) define interfaces that subclasses must implement. They cannot be instantiated directly. Python's `abc` module provides `ABC` (a helper class) and `@abstractmethod` decorator.\n\nWhen a class inherits from `ABC` and has abstract methods, any subclass that doesn't implement ALL abstract methods cannot be instantiated -- Python raises `TypeError` at instantiation time.\n\nABCs are useful for:\n- Defining contracts/interfaces that subclasses must follow\n- Documentation of expected interface\n- Runtime enforcement of the interface\n- Registering virtual subclasses with `.register()`\n\nPython's standard library uses ABCs extensively in `collections.abc` (Iterable, Mapping, Sequence, etc.).",
+          "pseudo_code": "1. from abc import ABC, abstractmethod\n2. class MyABC(ABC):\n3.     @abstractmethod\n4.     def required_method(self): ...\n5. class Concrete(MyABC):\n6.     def required_method(self): return 'implemented'\n7. MyABC() -> TypeError (can't instantiate)\n8. Concrete() -> works (all abstract methods implemented)",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def area(self) -> float:\n        \"\"\"Calculate area. Must be implemented by subclasses.\"\"\"\n        ...\n\n    @abstractmethod\n    def perimeter(self) -> float:\n        \"\"\"Calculate perimeter. Must be implemented by subclasses.\"\"\"\n        ...\n\n    def describe(self) -> str:\n        \"\"\"Concrete method -- inherited by all subclasses.\"\"\"\n        return f\"{self.__class__.__name__}: area={self.area():.2f}, perimeter={self.perimeter():.2f}\"\n\n# Cannot instantiate ABC\ntry:\n    s = Shape()\nexcept TypeError as e:\n    print(e)  # Can't instantiate abstract class Shape with abstract methods area, perimeter\n\n# Must implement ALL abstract methods\nclass Circle(Shape):\n    def __init__(self, radius: float):\n        self.radius = radius\n\n    def area(self) -> float:\n        import math\n        return math.pi * self.radius ** 2\n\n    def perimeter(self) -> float:\n        import math\n        return 2 * math.pi * self.radius\n\nclass Rectangle(Shape):\n    def __init__(self, width: float, height: float):\n        self.width = width\n        self.height = height\n\n    def area(self) -> float:\n        return self.width * self.height\n\n    def perimeter(self) -> float:\n        return 2 * (self.width + self.height)\n\nc = Circle(5)\nprint(c.describe())  # Circle: area=78.54, perimeter=31.42\n\nr = Rectangle(3, 4)\nprint(r.describe())  # Rectangle: area=12.00, perimeter=14.00\n\n# Incomplete implementation raises TypeError\ntry:\n    class Incomplete(Shape):\n        def area(self):\n            return 0\n        # missing perimeter!\n\n    Incomplete()  # TypeError\nexcept TypeError as e:\n    print(e)\n\n# Abstract properties\nclass Vehicle(ABC):\n    @property\n    @abstractmethod\n    def fuel_type(self) -> str:\n        ...\n\nclass ElectricCar(Vehicle):\n    @property\n    def fuel_type(self) -> str:\n        return \"electric\"\n\n# Virtual subclass registration\nclass MyMapping(ABC):\n    @abstractmethod\n    def __getitem__(self, key): ...\n\nMyMapping.register(dict)  # dict is now a \"virtual subclass\"\nprint(isinstance({}, MyMapping))  # True",
+          "code_language": "python",
+          "key_points": [
+            "ABCs define required interfaces with @abstractmethod",
+            "Cannot instantiate a class with unimplemented abstract methods",
+            "Concrete methods in ABCs are inherited normally",
+            "collections.abc provides standard ABCs (Iterable, Mapping, etc.)"
+          ],
+          "gotchas": [
+            "TypeError is raised at instantiation, not at class definition -- the incomplete class CAN be defined",
+            "@abstractmethod must be the innermost decorator (closest to the function)",
+            ".register() creates virtual subclasses that pass isinstance but don't actually inherit",
+            "ABCs add overhead -- use Protocol for structural typing when you don't need enforcement"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ABCs from the `abc` module define interfaces with `@abstractmethod`. Subclasses must implement all abstract methods or they can't be instantiated. ABCs can also have concrete methods.",
+          "pseudo_code": "",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Animal(ABC):\n    @abstractmethod\n    def speak(self) -> str: ...\n\nclass Dog(Animal):\n    def speak(self) -> str:\n        return \"Woof!\"\n\n# Animal()  # TypeError: can't instantiate\nprint(Dog().speak())  # Woof!",
+          "code_language": "python",
+          "key_points": [
+            "@abstractmethod enforces implementation in subclasses",
+            "TypeError at instantiation if abstract methods are missing"
+          ],
+          "gotchas": [
+            "Error at instantiation time, not class definition time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are mixins in Python, and how do they differ from regular inheritance?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["mixins", "multiple-inheritance", "composition"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A mixin is a class that provides methods to other classes through multiple inheritance but is not meant to stand alone. Mixins add specific functionality (like serialization, logging, or comparison) without being a full parent class.\n\nKey characteristics of mixins:\n1. **Not instantiated directly** -- they're meant to be mixed into other classes\n2. **Single responsibility** -- each mixin adds one specific capability\n3. **No `__init__`** (usually) -- they don't manage their own state\n4. **Name ends in 'Mixin'** (convention) -- makes intent clear\n5. **Use `super()`** -- for cooperative inheritance chains\n\nMixins are Python's answer to interfaces with default methods (Java) or traits (Scala/Rust). They're preferred over deep inheritance hierarchies because they compose horizontally.",
+          "pseudo_code": "1. Define mixin class with specific functionality\n2. No __init__ (usually), no standalone use\n3. class MyClass(Mixin1, Mixin2, BaseClass): ...\n4. Mixins typically listed before the base class\n5. Each mixin adds one concern (serialization, logging, etc.)",
+          "actual_code": "import json\n\nclass JSONMixin:\n    \"\"\"Adds JSON serialization/deserialization.\"\"\"\n    def to_json(self) -> str:\n        return json.dumps(self.__dict__, default=str)\n\n    @classmethod\n    def from_json(cls, json_str: str):\n        data = json.loads(json_str)\n        return cls(**data)\n\nclass ReprMixin:\n    \"\"\"Adds automatic __repr__ based on __dict__.\"\"\"\n    def __repr__(self) -> str:\n        attrs = \", \".join(f\"{k}={v!r}\" for k, v in self.__dict__.items())\n        return f\"{self.__class__.__name__}({attrs})\"\n\nclass ComparableMixin:\n    \"\"\"Adds comparison based on a 'sort_key' property.\"\"\"\n    def __lt__(self, other):\n        if not isinstance(other, self.__class__):\n            return NotImplemented\n        return self.sort_key < other.sort_key\n\n    def __eq__(self, other):\n        if not isinstance(other, self.__class__):\n            return NotImplemented\n        return self.sort_key == other.sort_key\n\n# Compose mixins into a concrete class\nclass User(JSONMixin, ReprMixin, ComparableMixin):\n    def __init__(self, name: str, age: int):\n        self.name = name\n        self.age = age\n\n    @property\n    def sort_key(self):\n        return self.age\n\n# All mixin functionality is available\nu1 = User(\"Alice\", 30)\nu2 = User(\"Bob\", 25)\n\nprint(u1)           # User(name='Alice', age=30)  -- ReprMixin\nprint(u1.to_json())  # {\"name\": \"Alice\", \"age\": 30}  -- JSONMixin\nprint(u1 > u2)       # True  -- ComparableMixin\n\nu3 = User.from_json('{\"name\": \"Charlie\", \"age\": 35}')\nprint(u3)  # User(name='Charlie', age=35)\n\n# Cooperative mixin with super()\nclass LoggingMixin:\n    def save(self):\n        print(f\"Logging: saving {self!r}\")\n        super().save()  # cooperative call\n\nclass PersistenceMixin:\n    def save(self):\n        print(f\"Persisting: {self!r}\")\n        # End of chain -- no super().save()\n\nclass Document(LoggingMixin, PersistenceMixin, ReprMixin):\n    def __init__(self, title):\n        self.title = title\n\ndoc = Document(\"Report\")\ndoc.save()\n# Logging: saving Document(title='Report')\n# Persisting: Document(title='Report')",
+          "code_language": "python",
+          "key_points": [
+            "Mixins add specific functionality without being standalone classes",
+            "Single responsibility per mixin, no __init__ usually",
+            "List mixins before base class: class MyClass(Mixin, Base)",
+            "Use super() in mixins for cooperative method chains"
+          ],
+          "gotchas": [
+            "Method name conflicts between mixins can cause unexpected behavior -- check MRO",
+            "Mixins that assume specific attributes exist may break with unexpected classes",
+            "Too many mixins make the MRO complex and hard to debug",
+            "super() chain order depends on the final class's MRO, not the mixin definition"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Mixins are small classes that add specific functionality (serialization, logging) via multiple inheritance. They're not standalone, have no `__init__`, and add a single concern each.",
+          "pseudo_code": "",
+          "actual_code": "import json\n\nclass JSONMixin:\n    def to_json(self):\n        return json.dumps(self.__dict__)\n\nclass User(JSONMixin):\n    def __init__(self, name, age):\n        self.name = name\n        self.age = age\n\nprint(User(\"Alice\", 30).to_json())\n# {\"name\": \"Alice\", \"age\": 30}",
+          "code_language": "python",
+          "key_points": [
+            "Single responsibility, not standalone",
+            "List mixins before base class in inheritance"
+          ],
+          "gotchas": [
+            "Method name conflicts resolved by MRO"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you override methods in Python, and what is method overriding vs overloading?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["overriding", "overloading", "polymorphism"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Method overriding** is when a subclass provides its own implementation of a method that exists in the parent class. The child's version is called for child instances. This is a core polymorphism mechanism.\n\n**Method overloading** (multiple methods with the same name but different signatures) does NOT exist in Python like it does in Java/C++. Python only keeps the last definition of a function with a given name. Instead, Python achieves similar behavior through:\n- Default arguments\n- `*args` and `**kwargs`\n- `@functools.singledispatch` for type-based dispatch\n- `@typing.overload` for type checker hints (no runtime effect)\n\nWhen overriding, you can:\n1. Completely replace the parent's implementation\n2. Extend it by calling `super().method()` and adding behavior\n3. Conditionally call the parent based on some logic",
+          "pseudo_code": "Overriding:\n1. Define method in child with same name as parent\n2. Child instances use child's version\n3. Use super().method() to extend parent behavior\n\nNo true overloading in Python:\n1. Use default args: def method(self, x, y=None)\n2. Use *args/**kwargs for variable signatures\n3. Use @singledispatch for type-based dispatch",
+          "actual_code": "# Method overriding\nclass Logger:\n    def log(self, message):\n        print(f\"[LOG] {message}\")\n\nclass FileLogger(Logger):\n    def __init__(self, filename):\n        self.filename = filename\n\n    def log(self, message):  # override\n        # Extend: call parent then add behavior\n        super().log(message)\n        with open(self.filename, \"a\") as f:\n            f.write(f\"{message}\\n\")\n\nclass SilentLogger(Logger):\n    def log(self, message):  # complete replacement\n        pass  # do nothing\n\n# Polymorphism in action\nloggers = [Logger(), SilentLogger()]\nfor logger in loggers:\n    logger.log(\"test\")  # each uses its own log()\n\n# Python does NOT have method overloading\n# This just redefines the method:\nclass Calculator:\n    def add(self, a, b):  # this gets overwritten\n        return a + b\n\n    def add(self, a, b, c):  # only this version exists\n        return a + b + c\n\n# calc.add(1, 2)  # TypeError: missing argument 'c'\n\n# Python alternatives to overloading:\n\n# 1. Default arguments\nclass Calc:\n    def add(self, a, b, c=0):\n        return a + b + c\n\n# 2. @singledispatch for type-based dispatch\nfrom functools import singledispatch\n\n@singledispatch\ndef process(data):\n    raise TypeError(f\"Unsupported type: {type(data)}\")\n\n@process.register(str)\ndef _(data):\n    return data.upper()\n\n@process.register(list)\ndef _(data):\n    return [x * 2 for x in data]\n\n@process.register(int)\ndef _(data):\n    return data ** 2\n\nprint(process(\"hello\"))   # HELLO\nprint(process([1, 2, 3])) # [2, 4, 6]\nprint(process(5))         # 25\n\n# 3. @typing.overload for type checker hints (no runtime effect)\nfrom typing import overload\n\nclass Parser:\n    @overload\n    def parse(self, data: str) -> dict: ...\n    @overload\n    def parse(self, data: bytes) -> dict: ...\n\n    def parse(self, data):\n        if isinstance(data, bytes):\n            data = data.decode(\"utf-8\")\n        import json\n        return json.loads(data)",
+          "code_language": "python",
+          "key_points": [
+            "Overriding: child redefines parent method, child version used for child instances",
+            "No true overloading in Python -- last definition wins",
+            "Use default args, *args/**kwargs, or @singledispatch instead of overloading",
+            "@typing.overload is for type checkers only, no runtime effect"
+          ],
+          "gotchas": [
+            "Defining two methods with the same name in a class: the second overwrites the first",
+            "@singledispatch dispatches on the first argument's type only",
+            "@typing.overload must have a concrete implementation after the overloaded signatures",
+            "super().method() in an override may call a sibling class (not parent) in diamond inheritance"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Overriding: child redefines parent method. No overloading in Python (last definition wins). Use default args, `*args/**kwargs`, or `@singledispatch` for different signatures.",
+          "pseudo_code": "",
+          "actual_code": "class Animal:\n    def speak(self):\n        return \"...\"\n\nclass Dog(Animal):\n    def speak(self):  # overrides Animal.speak\n        return \"Woof!\"\n\nclass Cat(Animal):\n    def speak(self):  # overrides Animal.speak\n        return \"Meow!\"\n\nfor a in [Dog(), Cat()]:\n    print(a.speak())  # Woof! then Meow! (polymorphism)",
+          "code_language": "python",
+          "key_points": [
+            "Override by redefining method in subclass",
+            "No overloading -- use default args or singledispatch"
+          ],
+          "gotchas": [
+            "Two methods with same name: second overwrites first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is polymorphism in Python, and how does duck typing relate to it?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["polymorphism", "duck-typing", "interfaces"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Polymorphism** means \"many forms\" -- the ability to use objects of different types through a uniform interface. In Python, polymorphism works through:\n\n1. **Duck typing**: \"If it walks like a duck and quacks like a duck, it's a duck.\" Python doesn't check the type -- it checks whether the object supports the required operations. This is the most Pythonic form.\n\n2. **Method overriding**: Subclasses provide different implementations of the same method.\n\n3. **Operator overloading**: The `+` operator calls `__add__`, which behaves differently for ints, strings, and lists.\n\nPython's duck typing means you don't need inheritance for polymorphism. Any object that implements the required methods works. This is formalized by `typing.Protocol` (Python 3.8+) for structural subtyping.",
+          "pseudo_code": "Duck typing:\n1. Don't check type, check behavior\n2. If obj has .read() method, it's file-like\n3. No inheritance needed\n4. Try to use the object; handle failure\n\nProtocol (formalized duck typing):\n1. Define Protocol with required methods\n2. Any class implementing those methods satisfies it\n3. No explicit inheritance needed",
+          "actual_code": "# Duck typing -- no inheritance needed\nclass Duck:\n    def quack(self):\n        return \"Quack!\"\n\nclass Person:\n    def quack(self):\n        return \"I'm quacking like a duck!\"\n\nclass Dog:\n    def bark(self):\n        return \"Woof!\"\n\ndef make_it_quack(thing):\n    \"\"\"Works with anything that has a quack() method.\"\"\"\n    return thing.quack()\n\nprint(make_it_quack(Duck()))    # Quack!\nprint(make_it_quack(Person()))  # I'm quacking like a duck!\n# make_it_quack(Dog())  # AttributeError: no quack()\n\n# File-like duck typing (standard library pattern)\nclass StringBuffer:\n    def __init__(self):\n        self.data = []\n\n    def write(self, text):\n        self.data.append(text)\n\n    def read(self):\n        return \"\".join(self.data)\n\nimport csv\nimport io\n\n# csv.writer works with anything that has .write()\nbuffer = StringBuffer()\nwriter = csv.writer(buffer)  # StringBuffer is \"file-like\" via duck typing\nwriter.writerow([\"name\", \"age\"])\nwriter.writerow([\"Alice\", 30])\nprint(buffer.read())  # name,age\\nAlice,30\\n\n\n# Protocol -- formalized duck typing (Python 3.8+)\nfrom typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Drawable(Protocol):\n    def draw(self) -> str: ...\n\nclass Circle:\n    def draw(self) -> str:\n        return \"Drawing circle\"\n\nclass Square:\n    def draw(self) -> str:\n        return \"Drawing square\"\n\ndef render(shape: Drawable) -> str:\n    return shape.draw()\n\nprint(render(Circle()))  # Drawing circle\nprint(render(Square()))  # Drawing square\n\n# runtime_checkable allows isinstance checks\nprint(isinstance(Circle(), Drawable))  # True\nprint(isinstance(\"string\", Drawable))  # False\n\n# Operator polymorphism\nprint(1 + 2)        # 3 (int.__add__)\nprint(\"a\" + \"b\")    # \"ab\" (str.__add__)\nprint([1] + [2])    # [1, 2] (list.__add__)",
+          "code_language": "python",
+          "key_points": [
+            "Duck typing: check behavior, not type -- no inheritance required",
+            "Protocol provides formalized duck typing with type checker support",
+            "Operator overloading is built-in polymorphism (+ works on ints, strings, lists)",
+            "EAFP (try/except) is preferred over LBYL (isinstance) in Python"
+          ],
+          "gotchas": [
+            "Duck typing errors appear at runtime, not compile time",
+            "@runtime_checkable Protocol only checks method existence, not signatures",
+            "isinstance checks are often a code smell -- prefer duck typing",
+            "Protocol checks are structural (has the method), not behavioral (does it work correctly)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Polymorphism in Python works through duck typing (check behavior, not type), method overriding, and operator overloading. No inheritance needed -- if it has the right methods, it works.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Protocol\n\nclass Speakable(Protocol):\n    def speak(self) -> str: ...\n\nclass Dog:\n    def speak(self) -> str: return \"Woof\"\n\nclass Robot:\n    def speak(self) -> str: return \"Beep\"\n\ndef greet(s: Speakable) -> str:\n    return s.speak()  # works with any object that has speak()\n\nprint(greet(Dog()))    # Woof\nprint(greet(Robot()))  # Beep",
+          "code_language": "python",
+          "key_points": [
+            "Duck typing: behavior over type",
+            "Protocol formalizes duck typing for type checkers"
+          ],
+          "gotchas": [
+            "Duck typing errors are runtime only"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do `isinstance` and `issubclass` work, and when should you use them?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["isinstance", "issubclass", "type-checking"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`isinstance(obj, classinfo)` checks if an object is an instance of a class or a tuple of classes. It respects inheritance -- an instance of a subclass is also an instance of the parent.\n\n`issubclass(cls, classinfo)` checks if a class is a subclass of another class. A class is considered a subclass of itself.\n\nBoth accept tuples for checking against multiple types: `isinstance(x, (int, float))`.\n\nWhen to use:\n- **Use `isinstance`** for type guards, especially when different types need fundamentally different handling (e.g., in `__eq__` methods, serialization)\n- **Avoid `isinstance`** when duck typing suffices -- checking for methods is more Pythonic\n- **Use `issubclass`** in metaclasses, class decorators, or framework code that inspects class hierarchies",
+          "pseudo_code": "isinstance(obj, Class) -> True if obj is instance of Class or subclass\nisinstance(obj, (A, B)) -> True if instance of A OR B\nissubclass(Child, Parent) -> True if Child inherits from Parent\nissubclass(X, X) -> True (a class is its own subclass)\n\nPrefer duck typing over isinstance in most cases",
+          "actual_code": "class Animal:\n    pass\n\nclass Dog(Animal):\n    pass\n\nclass Cat(Animal):\n    pass\n\ndog = Dog()\n\n# isinstance checks inheritance chain\nprint(isinstance(dog, Dog))     # True\nprint(isinstance(dog, Animal))  # True (Dog is subclass of Animal)\nprint(isinstance(dog, Cat))     # False\nprint(isinstance(dog, object))  # True (everything inherits from object)\n\n# Tuple for multiple types\nprint(isinstance(dog, (Dog, Cat)))  # True (is Dog OR Cat)\nprint(isinstance(42, (int, float)))  # True\n\n# issubclass works on classes, not instances\nprint(issubclass(Dog, Animal))    # True\nprint(issubclass(Dog, Dog))       # True (class is subclass of itself)\nprint(issubclass(Dog, Cat))       # False\nprint(issubclass(bool, int))      # True (bool is subclass of int!)\n\n# When isinstance IS appropriate: __eq__ method\nclass Money:\n    def __init__(self, amount, currency):\n        self.amount = amount\n        self.currency = currency\n\n    def __eq__(self, other):\n        if not isinstance(other, Money):  # type guard is appropriate here\n            return NotImplemented\n        return self.amount == other.amount and self.currency == other.currency\n\n# When isinstance is a code smell: prefer duck typing\ndef process_bad(data):\n    if isinstance(data, list):\n        return sum(data)\n    elif isinstance(data, dict):\n        return sum(data.values())\n\ndef process_good(data):\n    # Works with any iterable -- more Pythonic\n    return sum(data) if not isinstance(data, dict) else sum(data.values())\n\n# Even better: just use the protocol\ndef total(items):\n    \"\"\"Works with any iterable of numbers.\"\"\"\n    return sum(items)\n\nprint(total([1, 2, 3]))   # 6\nprint(total((4, 5, 6)))   # 15\nprint(total({7, 8, 9}))   # 24\n\n# ABCs and isinstance\nfrom collections.abc import Mapping, Iterable\n\nprint(isinstance({}, Mapping))     # True\nprint(isinstance([], Iterable))    # True\nprint(isinstance(\"hi\", Iterable))  # True",
+          "code_language": "python",
+          "key_points": [
+            "isinstance checks object's type including inheritance chain",
+            "issubclass checks class hierarchy",
+            "Both accept tuples: isinstance(x, (int, float))",
+            "Prefer duck typing over isinstance when possible"
+          ],
+          "gotchas": [
+            "isinstance(True, int) is True -- bool is a subclass of int",
+            "type(x) == int fails for subclasses; isinstance(x, int) is preferred",
+            "Excessive isinstance checks indicate you should use polymorphism instead",
+            "issubclass raises TypeError if first arg is not a class"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`isinstance(obj, Class)` checks if obj is an instance of Class or its subclasses. `issubclass(A, B)` checks class hierarchy. Both accept tuples. Prefer duck typing over isinstance.",
+          "pseudo_code": "",
+          "actual_code": "class Animal: pass\nclass Dog(Animal): pass\n\ndog = Dog()\nprint(isinstance(dog, Dog))     # True\nprint(isinstance(dog, Animal))  # True (inheritance)\nprint(isinstance(42, (int, float)))  # True (tuple = OR)\nprint(issubclass(Dog, Animal))  # True",
+          "code_language": "python",
+          "key_points": [
+            "isinstance respects inheritance",
+            "Use tuples for OR checks"
+          ],
+          "gotchas": [
+            "isinstance(True, int) is True because bool subclasses int"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use composition over inheritance?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["composition", "inheritance", "design", "has-a"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Inheritance** (is-a relationship): A Dog IS an Animal. The child inherits the parent's interface and implementation. Changes to the parent affect all children.\n\n**Composition** (has-a relationship): A Car HAS an Engine. Objects contain other objects as attributes. Each component can be changed independently.\n\n**Prefer composition when:**\n- You want to reuse code without inheriting an interface\n- The relationship is \"has-a\" not \"is-a\"\n- You need to combine behaviors from multiple sources\n- You want loose coupling and easy testing (inject mock components)\n- The parent class might change in ways that break children\n\n**Prefer inheritance when:**\n- There's a genuine \"is-a\" relationship\n- You need polymorphism (substitutability)\n- You're implementing an interface/ABC\n- The relationship is stable and unlikely to change",
+          "pseudo_code": "Inheritance (is-a):\n  class Dog(Animal) -- Dog IS an Animal\n  Tight coupling, shared interface\n\nComposition (has-a):\n  class Car:\n      self.engine = Engine() -- Car HAS an Engine\n  Loose coupling, independent components\n\nFavor composition for:\n  - Code reuse without interface inheritance\n  - Flexible, swappable components\n  - Easy testing with dependency injection",
+          "actual_code": "# BAD: Inheritance for code reuse (not is-a)\nclass DatabaseConnection:\n    def connect(self):\n        return \"connected\"\n\n    def execute(self, query):\n        return f\"executing: {query}\"\n\nclass UserRepository(DatabaseConnection):  # is UserRepo a DB connection? NO!\n    def get_user(self, user_id):\n        return self.execute(f\"SELECT * FROM users WHERE id={user_id}\")\n\n# GOOD: Composition -- UserRepository HAS a connection\nclass UserRepository:\n    def __init__(self, db):\n        self.db = db  # injected dependency\n\n    def get_user(self, user_id):\n        return self.db.execute(f\"SELECT * FROM users WHERE id={user_id}\")\n\n# Easy to test with mock\nclass MockDB:\n    def execute(self, query):\n        return {\"id\": 1, \"name\": \"Alice\"}\n\nrepo = UserRepository(MockDB())  # inject mock for testing\nprint(repo.get_user(1))  # {'id': 1, 'name': 'Alice'}\n\n# GOOD: Composition for flexible behavior\nclass Engine:\n    def __init__(self, horsepower):\n        self.hp = horsepower\n\n    def start(self):\n        return f\"Engine ({self.hp}hp) started\"\n\nclass Transmission:\n    def __init__(self, type_=\"automatic\"):\n        self.type = type_\n\n    def shift(self, gear):\n        return f\"{self.type}: shifting to {gear}\"\n\nclass Car:\n    def __init__(self, engine: Engine, transmission: Transmission):\n        self.engine = engine\n        self.transmission = transmission\n\n    def drive(self):\n        return f\"{self.engine.start()} | {self.transmission.shift('D')}\"\n\n# Components are swappable\nsedan = Car(Engine(200), Transmission(\"automatic\"))\nsports = Car(Engine(450), Transmission(\"manual\"))\n\nprint(sedan.drive())   # Engine (200hp) started | automatic: shifting to D\nprint(sports.drive())  # Engine (450hp) started | manual: shifting to D\n\n# GOOD: Inheritance for genuine is-a with polymorphism\nfrom abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def area(self) -> float: ...\n\nclass Circle(Shape):  # Circle IS a Shape -- correct use of inheritance\n    def __init__(self, radius):\n        self.radius = radius\n\n    def area(self) -> float:\n        import math\n        return math.pi * self.radius ** 2\n\ndef total_area(shapes: list) -> float:\n    return sum(s.area() for s in shapes)  # polymorphism",
+          "code_language": "python",
+          "key_points": [
+            "Composition for has-a, inheritance for is-a",
+            "Composition enables dependency injection and easy testing",
+            "Components can be swapped independently",
+            "Inheritance is correct for genuine type hierarchies and polymorphism"
+          ],
+          "gotchas": [
+            "Inheriting for code reuse without an is-a relationship creates fragile base class problem",
+            "Changes to parent class can unexpectedly break all children",
+            "Deep inheritance hierarchies are hard to understand and maintain",
+            "Composition requires more boilerplate (delegation) but is more flexible"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use **composition** (has-a) for code reuse, loose coupling, and testability. Use **inheritance** (is-a) for genuine type hierarchies and polymorphism. Composition is more flexible; inheritance is more concise.",
+          "pseudo_code": "",
+          "actual_code": "# Composition: Car HAS an Engine\nclass Engine:\n    def start(self): return \"Vroom\"\n\nclass Car:\n    def __init__(self, engine):\n        self.engine = engine  # composition\n    def drive(self):\n        return self.engine.start()\n\ncar = Car(Engine())\nprint(car.drive())  # Vroom\n\n# Easy to test: inject mock\nclass MockEngine:\n    def start(self): return \"Mock Vroom\"\n\ntest_car = Car(MockEngine())",
+          "code_language": "python",
+          "key_points": [
+            "Composition for has-a, inheritance for is-a",
+            "Composition enables dependency injection"
+          ],
+          "gotchas": [
+            "Inheriting for code reuse without is-a creates fragile hierarchies"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the Liskov Substitution Principle (LSP) and how does it apply to Python?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["LSP", "SOLID", "design-principles", "inheritance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The Liskov Substitution Principle (LSP) states: \"Objects of a superclass should be replaceable with objects of a subclass without altering the correctness of the program.\"\n\nIn practice, this means:\n1. A subclass must accept all inputs the parent accepts (same or wider preconditions)\n2. A subclass must return the same type or a subtype (covariant returns)\n3. A subclass must not throw new exceptions the parent doesn't throw\n4. A subclass must preserve the parent's invariants\n5. A subclass should not change the expected behavior of inherited methods\n\nViolating LSP leads to brittle code where `isinstance` checks proliferate and polymorphism breaks. The classic example is Square inheriting from Rectangle -- setting width on a Square should also set height, violating Rectangle's expected behavior.",
+          "pseudo_code": "LSP Rules:\n1. Subclass can accept same or more inputs\n2. Subclass returns same or narrower output type\n3. Subclass preserves parent invariants\n4. Code using parent should work with any subclass\n\nViolation test: If replacing parent with child breaks code, LSP is violated",
+          "actual_code": "# LSP VIOLATION: Square extends Rectangle\nclass Rectangle:\n    def __init__(self, width, height):\n        self._width = width\n        self._height = height\n\n    @property\n    def width(self):\n        return self._width\n\n    @width.setter\n    def width(self, value):\n        self._width = value\n\n    @property\n    def height(self):\n        return self._height\n\n    @height.setter\n    def height(self, value):\n        self._height = value\n\n    def area(self):\n        return self._width * self._height\n\nclass Square(Rectangle):  # LSP VIOLATION!\n    def __init__(self, side):\n        super().__init__(side, side)\n\n    @Rectangle.width.setter\n    def width(self, value):\n        self._width = value\n        self._height = value  # forces equal sides\n\n    @Rectangle.height.setter\n    def height(self, value):\n        self._width = value\n        self._height = value\n\n# This function works with Rectangle but breaks with Square\ndef test_rectangle(rect):\n    rect.width = 5\n    rect.height = 10\n    assert rect.area() == 50, f\"Expected 50, got {rect.area()}\"\n\ntest_rectangle(Rectangle(1, 1))  # passes\ntry:\n    test_rectangle(Square(1))  # FAILS! area is 100, not 50\nexcept AssertionError as e:\n    print(e)  # Expected 50, got 100\n\n# LSP-COMPLIANT: Use composition or separate hierarchy\nfrom abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def area(self) -> float: ...\n\nclass Rectangle(Shape):\n    def __init__(self, width, height):\n        self.width = width\n        self.height = height\n\n    def area(self) -> float:\n        return self.width * self.height\n\nclass Square(Shape):  # NOT a subclass of Rectangle\n    def __init__(self, side):\n        self.side = side\n\n    def area(self) -> float:\n        return self.side ** 2\n\n# Both satisfy Shape contract independently\ndef print_area(shape: Shape):\n    print(f\"{shape.__class__.__name__}: {shape.area()}\")\n\nprint_area(Rectangle(5, 10))  # Rectangle: 50\nprint_area(Square(5))         # Square: 25\n\n# Another LSP-compliant example\nclass Bird(ABC):\n    @abstractmethod\n    def move(self) -> str: ...  # NOT fly() -- penguins can't fly\n\nclass Sparrow(Bird):\n    def move(self) -> str:\n        return \"flying\"\n\nclass Penguin(Bird):\n    def move(self) -> str:\n        return \"swimming\"  # still moves, just differently",
+          "code_language": "python",
+          "key_points": [
+            "Subclass instances must be usable wherever parent instances are expected",
+            "Don't override methods in ways that break parent's contract",
+            "Classic violation: Square extends Rectangle (side coupling breaks width/height independence)",
+            "Fix: use a common ABC or composition instead of forcing an is-a relationship"
+          ],
+          "gotchas": [
+            "Python doesn't enforce LSP -- it's a design principle you must follow voluntarily",
+            "Raising exceptions a parent doesn't raise violates LSP",
+            "Strengthening preconditions (accepting fewer inputs) violates LSP",
+            "Weakening postconditions (returning unexpected types) violates LSP"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "LSP: subclass objects must work wherever parent objects are used. If replacing a parent with a child breaks code, LSP is violated. Classic example: Square should not extend Rectangle.",
+          "pseudo_code": "",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Shape(ABC):\n    @abstractmethod\n    def area(self) -> float: ...\n\nclass Rectangle(Shape):\n    def __init__(self, w, h):\n        self.w, self.h = w, h\n    def area(self): return self.w * self.h\n\nclass Square(Shape):  # separate, not subclass of Rectangle\n    def __init__(self, side):\n        self.side = side\n    def area(self): return self.side ** 2\n\n# Both satisfy Shape contract independently",
+          "code_language": "python",
+          "key_points": [
+            "Subclass must be substitutable for parent",
+            "Don't force is-a when behavior differs"
+          ],
+          "gotchas": [
+            "Square(Rectangle) violates LSP -- use separate hierarchy"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the `Protocol` class in Python, and how does it enable structural subtyping?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["Protocol", "structural-typing", "duck-typing", "typing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`typing.Protocol` (Python 3.8+) formalizes duck typing by defining structural subtyping. A class satisfies a Protocol if it has the required methods/attributes, even without explicit inheritance.\n\nThis contrasts with **nominal subtyping** (ABCs) where you must explicitly inherit from the base class.\n\nProtocol advantages:\n- Works with third-party classes you can't modify\n- No inheritance required (structural/duck typing)\n- Type checkers (mypy) validate at static analysis time\n- `@runtime_checkable` enables isinstance checks (method existence only)\n\nProtocol is the Pythonic way to define interfaces -- it aligns with duck typing while adding type safety.",
+          "pseudo_code": "1. class MyProtocol(Protocol):\n2.     def method(self) -> Type: ...\n3. Any class with matching method satisfies MyProtocol\n4. No inheritance needed\n5. @runtime_checkable adds isinstance support",
+          "actual_code": "from typing import Protocol, runtime_checkable, Iterable\n\n# Define a protocol\nclass Closable(Protocol):\n    def close(self) -> None: ...\n\n# These satisfy Closable WITHOUT inheriting from it\nclass FileWrapper:\n    def __init__(self, path):\n        self.path = path\n\n    def close(self) -> None:\n        print(f\"Closing {self.path}\")\n\nclass DatabaseConn:\n    def close(self) -> None:\n        print(\"Closing DB connection\")\n\ndef cleanup(resource: Closable) -> None:\n    \"\"\"Works with anything that has close().\"\"\"\n    resource.close()\n\ncleanup(FileWrapper(\"/tmp/data\"))  # Closing /tmp/data\ncleanup(DatabaseConn())            # Closing DB connection\n\n# runtime_checkable for isinstance checks\n@runtime_checkable\nclass Drawable(Protocol):\n    def draw(self) -> str: ...\n\nclass Circle:\n    def draw(self) -> str:\n        return \"O\"\n\nclass Point:\n    pass\n\nprint(isinstance(Circle(), Drawable))  # True\nprint(isinstance(Point(), Drawable))   # False\n\n# Protocol with attributes and properties\nclass Named(Protocol):\n    name: str  # attribute protocol\n\nclass User:\n    def __init__(self, name: str):\n        self.name = name\n\ndef greet(entity: Named) -> str:\n    return f\"Hello, {entity.name}!\"\n\nprint(greet(User(\"Alice\")))  # Hello, Alice!\n\n# Protocol with multiple methods\nclass Repository(Protocol):\n    def get(self, id: int) -> dict: ...\n    def save(self, item: dict) -> None: ...\n    def delete(self, id: int) -> None: ...\n\nclass InMemoryRepo:\n    def __init__(self):\n        self.data = {}\n\n    def get(self, id: int) -> dict:\n        return self.data.get(id, {})\n\n    def save(self, item: dict) -> None:\n        self.data[item[\"id\"]] = item\n\n    def delete(self, id: int) -> None:\n        self.data.pop(id, None)\n\ndef process_items(repo: Repository) -> None:\n    repo.save({\"id\": 1, \"name\": \"Item 1\"})\n    print(repo.get(1))\n\nprocess_items(InMemoryRepo())  # {'id': 1, 'name': 'Item 1'}",
+          "code_language": "python",
+          "key_points": [
+            "Protocol defines interfaces via structural subtyping (no inheritance needed)",
+            "Any class with matching methods satisfies the Protocol",
+            "@runtime_checkable enables isinstance checks",
+            "Works with third-party classes you can't modify"
+          ],
+          "gotchas": [
+            "@runtime_checkable only checks method existence, not signatures or return types",
+            "Protocol is checked statically by mypy but not enforced at runtime (without @runtime_checkable)",
+            "Cannot use Protocol in except clauses or with issubclass for non-Protocol classes",
+            "Attribute protocols with @runtime_checkable may not work correctly (checks class, not instance)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Protocol` defines interfaces through structural subtyping -- no inheritance needed. Any class with matching methods satisfies the Protocol. Use `@runtime_checkable` for isinstance support.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Protocol, runtime_checkable\n\n@runtime_checkable\nclass Sortable(Protocol):\n    def __lt__(self, other) -> bool: ...\n\nclass Score:\n    def __init__(self, value):\n        self.value = value\n    def __lt__(self, other):\n        return self.value < other.value\n\nprint(isinstance(Score(10), Sortable))  # True\nprint(isinstance(\"hello\", Sortable))    # True (str has __lt__)",
+          "code_language": "python",
+          "key_points": [
+            "Structural subtyping -- no inheritance required",
+            "@runtime_checkable for isinstance support"
+          ],
+          "gotchas": [
+            "@runtime_checkable only checks method existence, not signatures"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `super()` function work with multiple inheritance?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["super", "multiple-inheritance", "MRO", "cooperative"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In multiple inheritance, `super()` doesn't simply call the \"parent\" -- it calls the **next class in the MRO** of the actual instance's class. This enables cooperative multiple inheritance where each class in the chain calls `super()` to pass control to the next class.\n\nThe key insight: `super()` in class B might call class C (not A), depending on the MRO of the class that initiated the chain. This means the behavior of `super()` depends on the final class in the hierarchy, not just the local class.\n\nFor cooperative multiple inheritance to work:\n1. All classes in the chain must call `super()`\n2. The base class (usually `object`) terminates the chain\n3. `**kwargs` should be used to pass through unexpected keyword arguments\n4. Each class takes only the parameters it needs and passes the rest along",
+          "pseudo_code": "class D(B, C):\n  MRO: D -> B -> C -> A -> object\n\nsuper() in D -> calls B\nsuper() in B -> calls C (next in MRO of D, NOT A!)\nsuper() in C -> calls A\nsuper() in A -> calls object\n\nFor cooperative __init__:\n  Each class takes its params and passes **kwargs to super()",
+          "actual_code": "# super() follows MRO, not direct parent\nclass A:\n    def __init__(self, **kwargs):\n        print(f\"A.__init__({kwargs})\")\n        super().__init__(**kwargs)\n\nclass B(A):\n    def __init__(self, b_param=None, **kwargs):\n        print(f\"B.__init__(b_param={b_param})\")\n        super().__init__(**kwargs)\n\nclass C(A):\n    def __init__(self, c_param=None, **kwargs):\n        print(f\"C.__init__(c_param={c_param})\")\n        super().__init__(**kwargs)\n\nclass D(B, C):\n    def __init__(self, d_param=None, **kwargs):\n        print(f\"D.__init__(d_param={d_param})\")\n        super().__init__(**kwargs)\n\nprint(D.__mro__)  # D -> B -> C -> A -> object\n\nD(d_param=\"d\", b_param=\"b\", c_param=\"c\")\n# D.__init__(d_param=d)\n# B.__init__(b_param=b)     <- super() in D calls B\n# C.__init__(c_param=c)     <- super() in B calls C (not A!)\n# A.__init__({})             <- super() in C calls A\n\n# Demonstrating that super() depends on the instance's class\nclass X:\n    def method(self):\n        print(\"X.method\")\n\nclass Y(X):\n    def method(self):\n        print(\"Y.method\")\n        super().method()  # calls next in MRO\n\nclass Z(X):\n    def method(self):\n        print(\"Z.method\")\n        super().method()\n\nclass W(Y, Z):  # MRO: W -> Y -> Z -> X -> object\n    pass\n\nW().method()\n# Y.method\n# Z.method  <- super() in Y calls Z, not X!\n# X.method\n\n# Without W, Y's super() goes directly to X:\nY().method()\n# Y.method\n# X.method  <- now super() in Y calls X\n\n# super() with explicit arguments\nclass Parent:\n    def greet(self):\n        return \"Hello from Parent\"\n\nclass Child(Parent):\n    def greet(self):\n        # super(Child, self).greet() is equivalent to super().greet()\n        return super(Child, self).greet() + \" and Child\"",
+          "code_language": "python",
+          "key_points": [
+            "super() calls the next class in MRO, not necessarily the direct parent",
+            "The MRO depends on the actual instance's class, not the local class",
+            "Use **kwargs to pass parameters through the cooperative chain",
+            "All classes must call super() for the chain to work"
+          ],
+          "gotchas": [
+            "super() in B may call C instead of A depending on the final class's MRO",
+            "If one class in the chain doesn't call super(), the chain breaks",
+            "Incompatible __init__ signatures make cooperative inheritance difficult",
+            "Always use keyword arguments in cooperative __init__ to handle parameter routing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`super()` calls the next class in the MRO, not the direct parent. In `class D(B, C)`, `super()` in B calls C. Use `**kwargs` to route parameters through the chain.",
+          "pseudo_code": "",
+          "actual_code": "class A:\n    def who(self): print(\"A\")\nclass B(A):\n    def who(self): print(\"B\"); super().who()\nclass C(A):\n    def who(self): print(\"C\"); super().who()\nclass D(B, C):  # MRO: D->B->C->A\n    def who(self): print(\"D\"); super().who()\n\nD().who()  # D, B, C, A (super in B calls C, not A!)",
+          "code_language": "python",
+          "key_points": [
+            "super() follows MRO, not direct parent",
+            "Behavior depends on the final class in the hierarchy"
+          ],
+          "gotchas": [
+            "super() in B may call C instead of A depending on context"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the Interface Segregation Principle and how does Python approach interfaces?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["ISP", "SOLID", "interfaces", "Protocol"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The Interface Segregation Principle (ISP) states: \"No client should be forced to depend on methods it doesn't use.\" Instead of one large interface, split it into smaller, specific ones.\n\nPython approaches interfaces through:\n1. **ABCs (abc module)**: Nominal subtyping -- must explicitly inherit\n2. **Protocol (typing)**: Structural subtyping -- no inheritance needed\n3. **Duck typing**: Implicit -- just use the methods you need\n\nISP is naturally supported by Python's duck typing and Protocol. You don't need to implement unused methods because Python doesn't require explicit interface declarations. Functions only call the methods they need, and any object with those methods works.\n\nHowever, when designing ABCs, ISP is important: keep abstract base classes small and focused. Split large interfaces into multiple mixins or protocols.",
+          "pseudo_code": "BAD: One fat interface\n  class Worker(ABC):\n      work(), eat(), sleep(), code(), manage()\n  # Managers don't code, developers don't manage\n\nGOOD: Segregated interfaces\n  class Workable(Protocol): work()\n  class Feedable(Protocol): eat()\n  class Codeable(Protocol): code()\n  class Manageable(Protocol): manage()",
+          "actual_code": "from typing import Protocol\nfrom abc import ABC, abstractmethod\n\n# BAD: Fat interface forces unused implementations\nclass BadWorker(ABC):\n    @abstractmethod\n    def work(self): ...\n    @abstractmethod\n    def eat(self): ...\n    @abstractmethod\n    def code(self): ...\n    @abstractmethod\n    def manage(self): ...\n\n# Managers forced to implement code(), developers forced to implement manage()\n\n# GOOD: Segregated protocols\nclass Workable(Protocol):\n    def work(self) -> str: ...\n\nclass Feedable(Protocol):\n    def eat(self) -> str: ...\n\nclass Codeable(Protocol):\n    def code(self) -> str: ...\n\nclass Manageable(Protocol):\n    def manage(self) -> str: ...\n\n# Each class implements only what it needs\nclass Developer:\n    def work(self) -> str:\n        return \"Developing features\"\n\n    def eat(self) -> str:\n        return \"Eating lunch\"\n\n    def code(self) -> str:\n        return \"Writing Python\"\n\nclass Manager:\n    def work(self) -> str:\n        return \"Leading team\"\n\n    def eat(self) -> str:\n        return \"Business lunch\"\n\n    def manage(self) -> str:\n        return \"Managing projects\"\n\n# Functions depend only on what they need\ndef assign_task(worker: Workable) -> str:\n    return worker.work()\n\ndef lunch_break(entity: Feedable) -> str:\n    return entity.eat()\n\ndef code_review(coder: Codeable) -> str:\n    return coder.code()\n\n# Both work where needed\ndev = Developer()\nmgr = Manager()\n\nprint(assign_task(dev))    # Developing features\nprint(assign_task(mgr))    # Leading team\nprint(code_review(dev))    # Writing Python\n# code_review(mgr)  # mypy error: Manager doesn't satisfy Codeable\n\n# Real-world example: file-like objects\nclass Readable(Protocol):\n    def read(self, n: int = -1) -> str: ...\n\nclass Writable(Protocol):\n    def write(self, data: str) -> int: ...\n\nclass ReadWritable(Readable, Writable, Protocol):\n    pass  # compose protocols when needed\n\ndef process_input(source: Readable) -> str:\n    return source.read()\n\ndef write_output(dest: Writable, data: str) -> None:\n    dest.write(data)",
+          "code_language": "python",
+          "key_points": [
+            "ISP: don't force classes to implement methods they don't use",
+            "Split large interfaces into small, focused Protocols",
+            "Python's duck typing naturally supports ISP",
+            "Functions should depend on the minimal interface they need"
+          ],
+          "gotchas": [
+            "Over-segregation creates too many tiny protocols -- find the right granularity",
+            "ABCs enforce implementation at instantiation time; Protocols at type-check time (or not at all)",
+            "Combining many protocols via multiple inheritance works but adds complexity",
+            "Duck typing means ISP violations are less painful in Python than in Java"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ISP: split large interfaces into small, focused ones. In Python, use multiple small Protocols instead of one large ABC. Functions should depend only on the methods they actually call.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Protocol\n\nclass Readable(Protocol):\n    def read(self) -> str: ...\n\nclass Writable(Protocol):\n    def write(self, data: str) -> None: ...\n\ndef process(source: Readable):\n    return source.read()  # only needs read()\n\ndef save(dest: Writable, data: str):\n    dest.write(data)  # only needs write()",
+          "code_language": "python",
+          "key_points": [
+            "Small, focused protocols over large ABCs",
+            "Depend only on methods you actually use"
+          ],
+          "gotchas": [
+            "Over-segregation creates too many tiny interfaces"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do abstract properties and abstract class methods work?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["abc", "abstract-property", "abstract-classmethod"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Abstract base classes can have abstract properties and abstract class/static methods. Subclasses must implement these or they cannot be instantiated.\n\nFor abstract properties, stack `@property` with `@abstractmethod` (with `@abstractmethod` as the innermost decorator). For abstract class methods, stack `@classmethod` with `@abstractmethod`.\n\nIn Python 3.3+, `@abstractproperty`, `@abstractclassmethod`, and `@abstractstaticmethod` are deprecated in favor of stacking decorators.",
+          "pseudo_code": "Abstract property:\n  @property\n  @abstractmethod\n  def prop(self): ...\n\nAbstract classmethod:\n  @classmethod\n  @abstractmethod\n  def method(cls): ...\n\nAbstract staticmethod:\n  @staticmethod\n  @abstractmethod\n  def method(): ...\n\nRule: @abstractmethod must be innermost decorator",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Vehicle(ABC):\n    @property\n    @abstractmethod\n    def fuel_type(self) -> str:\n        \"\"\"Must return the vehicle's fuel type.\"\"\"\n        ...\n\n    @property\n    @abstractmethod\n    def max_speed(self) -> int:\n        \"\"\"Must return max speed in km/h.\"\"\"\n        ...\n\n    @classmethod\n    @abstractmethod\n    def from_config(cls, config: dict) -> 'Vehicle':\n        \"\"\"Factory method that subclasses must implement.\"\"\"\n        ...\n\n    @staticmethod\n    @abstractmethod\n    def vehicle_type() -> str:\n        \"\"\"Return the type of vehicle.\"\"\"\n        ...\n\n    def describe(self) -> str:\n        return f\"{self.vehicle_type()}: {self.fuel_type}, max {self.max_speed} km/h\"\n\n# Must implement ALL abstract properties and methods\nclass ElectricCar(Vehicle):\n    def __init__(self, model: str, speed: int):\n        self.model = model\n        self._max_speed = speed\n\n    @property\n    def fuel_type(self) -> str:\n        return \"electric\"\n\n    @property\n    def max_speed(self) -> int:\n        return self._max_speed\n\n    @classmethod\n    def from_config(cls, config: dict) -> 'ElectricCar':\n        return cls(config[\"model\"], config[\"speed\"])\n\n    @staticmethod\n    def vehicle_type() -> str:\n        return \"Car\"\n\ncar = ElectricCar(\"Tesla\", 250)\nprint(car.describe())  # Car: electric, max 250 km/h\n\ncar2 = ElectricCar.from_config({\"model\": \"Rivian\", \"speed\": 200})\nprint(car2.describe())  # Car: electric, max 200 km/h\n\n# Incomplete implementation fails\ntry:\n    class IncompleteCar(Vehicle):\n        @property\n        def fuel_type(self) -> str:\n            return \"gas\"\n        # Missing: max_speed, from_config, vehicle_type\n\n    IncompleteCar()  # TypeError!\nexcept TypeError as e:\n    print(e)\n\n# Abstract property with setter\nclass Configurable(ABC):\n    @property\n    @abstractmethod\n    def setting(self) -> str: ...\n\n    @setting.setter\n    @abstractmethod\n    def setting(self, value: str) -> None: ...\n\nclass AppConfig(Configurable):\n    def __init__(self):\n        self._setting = \"default\"\n\n    @property\n    def setting(self) -> str:\n        return self._setting\n\n    @setting.setter\n    def setting(self, value: str) -> None:\n        self._setting = value\n\nc = AppConfig()\nc.setting = \"custom\"\nprint(c.setting)  # custom",
+          "code_language": "python",
+          "key_points": [
+            "Stack @property/@classmethod/@staticmethod with @abstractmethod",
+            "@abstractmethod must be the innermost (closest to function) decorator",
+            "Subclasses must implement all abstract properties, classmethods, and staticmethods",
+            "Incomplete implementation raises TypeError at instantiation"
+          ],
+          "gotchas": [
+            "@abstractmethod must be innermost -- wrong order causes it to be ignored",
+            "The deprecated @abstractproperty still works but should not be used",
+            "Abstract properties with setters require both getter and setter to be abstract",
+            "Abstract classmethod must use cls() not ClassName() to support subclass chaining"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stack `@property` or `@classmethod` with `@abstractmethod` (innermost). Subclasses must implement all abstract members. Incomplete implementation raises TypeError.",
+          "pseudo_code": "",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Animal(ABC):\n    @property\n    @abstractmethod\n    def sound(self) -> str: ...\n\n    @classmethod\n    @abstractmethod\n    def create(cls, name: str) -> 'Animal': ...\n\nclass Dog(Animal):\n    def __init__(self, name):\n        self.name = name\n\n    @property\n    def sound(self): return \"Woof\"\n\n    @classmethod\n    def create(cls, name): return cls(name)",
+          "code_language": "python",
+          "key_points": [
+            "@abstractmethod must be innermost decorator",
+            "Subclasses must implement all abstract members"
+          ],
+          "gotchas": [
+            "Wrong decorator order silently fails to enforce abstraction"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use `__subclasshook__` for custom isinstance/issubclass behavior?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["__subclasshook__", "abc", "isinstance", "advanced"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__subclasshook__` is a class method on ABCs that customizes `isinstance` and `issubclass` checks. It allows you to define when a class should be considered a subclass without explicit inheritance or registration.\n\nWhen `isinstance(obj, MyABC)` or `issubclass(cls, MyABC)` is called, Python checks `MyABC.__subclasshook__(cls)`. If it returns:\n- `True`: the class IS considered a subclass\n- `False`: the class is NOT a subclass\n- `NotImplemented`: fall back to normal checking\n\nThis is how `collections.abc` works -- for example, any class with `__iter__` and `__next__` is considered an `Iterator` without explicit inheritance.",
+          "pseudo_code": "1. Define __subclasshook__(cls, C) as @classmethod on ABC\n2. Check if C has the required methods/attributes\n3. Return True if it qualifies, NotImplemented otherwise\n4. isinstance/issubclass will use this hook\n5. Used by collections.abc internally",
+          "actual_code": "from abc import ABC, abstractmethod\n\nclass Closable(ABC):\n    @abstractmethod\n    def close(self) -> None:\n        ...\n\n    @classmethod\n    def __subclasshook__(cls, C):\n        if cls is Closable:\n            # Check if C has a 'close' method\n            if any(\"close\" in B.__dict__ for B in C.__mro__):\n                return True\n        return NotImplemented\n\n# No inheritance from Closable!\nclass FileWrapper:\n    def close(self):\n        pass\n\nclass Connection:\n    def close(self):\n        pass\n\nclass NoClose:\n    pass\n\n# isinstance works through __subclasshook__\nprint(isinstance(FileWrapper(), Closable))  # True\nprint(isinstance(Connection(), Closable))   # True\nprint(isinstance(NoClose(), Closable))      # False\n\nprint(issubclass(FileWrapper, Closable))    # True\nprint(issubclass(NoClose, Closable))        # False\n\n# How collections.abc uses this internally\nfrom collections.abc import Iterable, Iterator, Sized\n\nclass MyRange:\n    def __init__(self, n):\n        self.n = n\n\n    def __iter__(self):\n        return iter(range(self.n))\n\n    def __len__(self):\n        return self.n\n\n# MyRange satisfies Iterable and Sized through __subclasshook__\nprint(isinstance(MyRange(10), Iterable))  # True (has __iter__)\nprint(isinstance(MyRange(10), Sized))     # True (has __len__)\nprint(isinstance(MyRange(10), Iterator))  # False (no __next__)\n\n# Practical: defining a duck-typed interface\nclass Serializable(ABC):\n    @classmethod\n    def __subclasshook__(cls, C):\n        if cls is Serializable:\n            if (any(\"to_dict\" in B.__dict__ for B in C.__mro__) and\n                any(\"from_dict\" in B.__dict__ for B in C.__mro__)):\n                return True\n        return NotImplemented\n\nclass User:\n    def __init__(self, name):\n        self.name = name\n\n    def to_dict(self):\n        return {\"name\": self.name}\n\n    @classmethod\n    def from_dict(cls, data):\n        return cls(data[\"name\"])\n\nprint(isinstance(User(\"Alice\"), Serializable))  # True",
+          "code_language": "python",
+          "key_points": [
+            "__subclasshook__ customizes isinstance/issubclass for ABCs",
+            "Return True (is subclass), False (not), or NotImplemented (use normal check)",
+            "Enables structural typing with isinstance checks",
+            "collections.abc uses this for Iterable, Sized, etc."
+          ],
+          "gotchas": [
+            "Must check cls is YourABC to avoid false positives in subclasses of the ABC",
+            "Only checks method existence, not signature or behavior",
+            "Returning NotImplemented (not False) lets normal isinstance logic proceed",
+            "__subclasshook__ is checked before __instancecheck__ and .register()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__subclasshook__` on an ABC customizes isinstance/issubclass to check for methods structurally. Return True, False, or NotImplemented. Used by collections.abc internally.",
+          "pseudo_code": "",
+          "actual_code": "from abc import ABC\n\nclass Printable(ABC):\n    @classmethod\n    def __subclasshook__(cls, C):\n        if cls is Printable:\n            if any(\"__str__\" in B.__dict__ for B in C.__mro__):\n                return True\n        return NotImplemented\n\nclass Foo:\n    def __str__(self): return \"Foo\"\n\nprint(isinstance(Foo(), Printable))  # True (has __str__)",
+          "code_language": "python",
+          "key_points": [
+            "Customizes isinstance for structural checking",
+            "Return True/False/NotImplemented"
+          ],
+          "gotchas": [
+            "Always check 'cls is MyABC' to prevent false positives in subclasses"
+          ]
+        }
+      ]
+    }
+  ]
+}

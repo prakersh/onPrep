@@ -1,0 +1,620 @@
+{
+  "concept_slug": "modern-python",
+  "questions": [
+    {
+      "title": "How does structural pattern matching (match/case) work in Python?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["match-case", "pattern-matching", "python-3.10"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Structural pattern matching** (PEP 634, Python 3.10+) provides a powerful way to match values against patterns, similar to switch/case in other languages but much more powerful.\n\nPatterns can match:\n- **Literal values**: Numbers, strings, booleans, None\n- **Capture patterns**: Bind matched values to variables\n- **Sequence patterns**: Match lists/tuples by structure\n- **Mapping patterns**: Match dicts by keys\n- **Class patterns**: Match objects by type and attributes\n- **OR patterns**: Combine patterns with `|`\n- **Guard clauses**: Add conditions with `if`\n- **Wildcard**: `_` matches anything",
+          "pseudo_code": "match subject:\n    case pattern1:\n        action1\n    case pattern2 if guard:\n        action2\n    case _:\n        default action\n\nPatterns: literals, captures, sequences, mappings, classes, |, guards",
+          "actual_code": "# Literal matching (like switch/case)\ndef http_status(status):\n    match status:\n        case 200:\n            return \"OK\"\n        case 301 | 302:\n            return \"Redirect\"\n        case 404:\n            return \"Not Found\"\n        case 500 | 502 | 503:\n            return \"Server Error\"\n        case _:\n            return f\"Unknown: {status}\"\n\nprint(http_status(200))  # OK\nprint(http_status(302))  # Redirect\n\n# Sequence pattern matching\ndef process_command(command):\n    match command.split():\n        case [\"quit\"]:\n            return \"Goodbye!\"\n        case [\"go\", direction]:\n            return f\"Moving {direction}\"\n        case [\"pick\", \"up\", item]:\n            return f\"Picked up {item}\"\n        case [\"attack\", target, \"with\", weapon]:\n            return f\"Attacking {target} with {weapon}\"\n        case [action, *args]:\n            return f\"Unknown action: {action}, args: {args}\"\n\nprint(process_command(\"go north\"))           # Moving north\nprint(process_command(\"pick up sword\"))      # Picked up sword\nprint(process_command(\"attack dragon with fire\"))  # Attacking dragon with fire\n\n# Mapping pattern (dict matching)\ndef process_event(event):\n    match event:\n        case {\"type\": \"click\", \"x\": x, \"y\": y}:\n            return f\"Click at ({x}, {y})\"\n        case {\"type\": \"keypress\", \"key\": key}:\n            return f\"Key pressed: {key}\"\n        case {\"type\": \"scroll\", \"direction\": \"up\" | \"down\" as direction}:\n            return f\"Scrolling {direction}\"\n        case {\"type\": unknown_type}:\n            return f\"Unknown event: {unknown_type}\"\n\nprint(process_event({\"type\": \"click\", \"x\": 100, \"y\": 200}))\n# Click at (100, 200)\n\n# Class pattern matching\nfrom dataclasses import dataclass\n\n@dataclass\nclass Point:\n    x: float\n    y: float\n\n@dataclass\nclass Circle:\n    center: Point\n    radius: float\n\n@dataclass\nclass Rectangle:\n    top_left: Point\n    bottom_right: Point\n\ndef describe_shape(shape):\n    match shape:\n        case Circle(center=Point(x=0, y=0), radius=r):\n            return f\"Circle at origin with radius {r}\"\n        case Circle(center=center, radius=r) if r > 100:\n            return f\"Large circle at {center} with radius {r}\"\n        case Circle(center=center, radius=r):\n            return f\"Circle at {center} with radius {r}\"\n        case Rectangle(top_left=Point(x=x1, y=y1), bottom_right=Point(x=x2, y=y2)):\n            return f\"Rectangle from ({x1},{y1}) to ({x2},{y2})\"\n        case _:\n            return \"Unknown shape\"\n\nprint(describe_shape(Circle(Point(0, 0), 5)))  # Circle at origin with radius 5\nprint(describe_shape(Circle(Point(1, 2), 200)))  # Large circle...\n\n# Guard clauses\ndef classify_number(n):\n    match n:\n        case n if n < 0:\n            return \"negative\"\n        case 0:\n            return \"zero\"\n        case n if n % 2 == 0:\n            return \"positive even\"\n        case _:\n            return \"positive odd\"\n\nprint(classify_number(-5))  # negative\nprint(classify_number(0))   # zero\nprint(classify_number(4))   # positive even",
+          "code_language": "python",
+          "key_points": [
+            "match/case supports literals, sequences, mappings, classes, and guards",
+            "| combines patterns (OR); _ is the wildcard (default case)",
+            "Capture variables bind matched values: case [x, y] binds x and y",
+            "Class patterns match by type and attributes: case Circle(radius=r)",
+            "Guards (if condition) add extra checks to patterns"
+          ],
+          "gotchas": [
+            "match/case is NOT the same as switch/case; patterns are structural, not just equality",
+            "Variable names in patterns are captures, not comparisons; use literals or dotted names for comparison",
+            "case x: captures any value into x; to compare to a variable, use a guard: case _ if value == x"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "match/case (3.10+) matches values against structural patterns: literals, sequences, mappings, classes. Use `|` for OR, `_` for wildcard, `if` for guards. Variables in patterns capture values, not compare.",
+          "pseudo_code": "",
+          "actual_code": "match command.split():\n    case [\"go\", direction]:\n        move(direction)\n    case {\"type\": \"click\", \"x\": x, \"y\": y}:\n        click(x, y)\n    case Circle(radius=r) if r > 10:\n        print(f\"Large circle: {r}\")\n    case _:\n        print(\"Unknown\")",
+          "code_language": "python",
+          "key_points": [
+            "Structural patterns: sequences, mappings, classes, guards",
+            "Variables capture values; _ is wildcard"
+          ],
+          "gotchas": [
+            "Pattern variables capture, not compare; use guards for comparisons"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dataclasses work and what are the advanced features?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "python-3.7", "data-model"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Dataclasses** (PEP 557, Python 3.7+) reduce boilerplate for classes that primarily store data. The `@dataclass` decorator auto-generates `__init__`, `__repr__`, `__eq__`, and optionally `__hash__`, `__lt__`, etc.\n\n**Key features**:\n- Auto-generated `__init__`, `__repr__`, `__eq__`\n- `field()` for customization (default_factory, repr, compare)\n- `__post_init__` for validation and computed fields\n- `frozen=True` for immutable instances\n- `slots=True` (3.10+) for memory optimization\n- `kw_only=True` (3.10+) for keyword-only fields\n- `order=True` generates comparison methods",
+          "pseudo_code": "@dataclass auto-generates __init__, __repr__, __eq__\nfield() customizes individual fields\n__post_init__ runs after __init__ for validation\nfrozen=True makes instances immutable\nslots=True optimizes memory (3.10+)",
+          "actual_code": "from dataclasses import dataclass, field, asdict, astuple\nfrom typing import ClassVar\n\n# Basic dataclass\n@dataclass\nclass User:\n    name: str\n    email: str\n    age: int = 0\n\nuser = User('Alice', 'alice@example.com', 30)\nprint(user)  # User(name='Alice', email='alice@example.com', age=30)\nprint(user == User('Alice', 'alice@example.com', 30))  # True\n\n# field() for customization\n@dataclass\nclass Product:\n    name: str\n    price: float\n    tags: list[str] = field(default_factory=list)  # Mutable default\n    _id: int = field(default=0, repr=False)         # Hidden from repr\n    category: str = field(default='general', compare=False)  # Excluded from ==\n    metadata: dict = field(default_factory=dict, init=False)  # Not in __init__\n\n    # Class variable (not an instance field)\n    MAX_PRICE: ClassVar[float] = 99999.99\n\np = Product('Widget', 9.99, ['sale'])\nprint(p)  # Product(name='Widget', price=9.99, tags=['sale'], category='general')\n\n# __post_init__ for validation\n@dataclass\nclass Temperature:\n    celsius: float\n    fahrenheit: float = field(init=False)  # Computed field\n\n    def __post_init__(self):\n        if self.celsius < -273.15:\n            raise ValueError(\"Temperature below absolute zero\")\n        self.fahrenheit = self.celsius * 9/5 + 32\n\ntemp = Temperature(100)\nprint(temp)  # Temperature(celsius=100, fahrenheit=212.0)\n# Temperature(-300)  # ValueError!\n\n# Frozen (immutable) dataclass\n@dataclass(frozen=True)\nclass Point:\n    x: float\n    y: float\n\np = Point(1.0, 2.0)\n# p.x = 3.0  # FrozenInstanceError!\nprint(hash(p))  # Works! Frozen dataclasses are hashable\n\n# Use as dict key or in sets\npoints = {Point(0, 0): 'origin', Point(1, 1): 'diagonal'}\n\n# slots=True (Python 3.10+) - memory optimization\n@dataclass(slots=True)\nclass Coordinate:\n    x: float\n    y: float\n    z: float\n\n# kw_only=True (Python 3.10+)\n@dataclass(kw_only=True)\nclass Config:\n    host: str\n    port: int\n    debug: bool = False\n\n# Must use keyword arguments\nconfig = Config(host='localhost', port=8080)\n# Config('localhost', 8080)  # TypeError!\n\n# Ordering\n@dataclass(order=True)\nclass Student:\n    gpa: float\n    name: str = field(compare=False)  # Not used in ordering\n\nstudents = [Student(3.5, 'Alice'), Student(3.8, 'Bob'), Student(3.2, 'Charlie')]\nprint(sorted(students))  # Sorted by GPA\n\n# Conversion utilities\nuser = User('Alice', 'alice@example.com', 30)\nprint(asdict(user))   # {'name': 'Alice', 'email': 'alice@example.com', 'age': 30}\nprint(astuple(user))  # ('Alice', 'alice@example.com', 30)\n\n# Inheritance\n@dataclass\nclass Employee(User):\n    department: str = 'Engineering'\n    salary: float = 0.0\n\nemp = Employee('Alice', 'alice@example.com', 30, 'Sales', 75000)\nprint(emp)",
+          "code_language": "python",
+          "key_points": [
+            "@dataclass auto-generates __init__, __repr__, __eq__",
+            "field(default_factory=list) for mutable defaults (no shared-list bug)",
+            "__post_init__ for validation and computed fields",
+            "frozen=True for immutable, hashable instances",
+            "slots=True (3.10+) for memory optimization; kw_only=True for keyword-only fields"
+          ],
+          "gotchas": [
+            "Fields with defaults must come after fields without defaults (like function args)",
+            "Mutable defaults MUST use field(default_factory=list), not field(default=[])",
+            "frozen=True prevents modification but does not deep-freeze mutable attributes (lists inside can still change)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@dataclass` auto-generates `__init__`, `__repr__`, `__eq__`. Use `field(default_factory=list)` for mutable defaults, `__post_init__` for validation, `frozen=True` for immutability, `slots=True` (3.10+) for memory savings.",
+          "pseudo_code": "",
+          "actual_code": "@dataclass(frozen=True, slots=True)\nclass Point:\n    x: float\n    y: float\n\n@dataclass\nclass User:\n    name: str\n    email: str\n    tags: list = field(default_factory=list)\n\n    def __post_init__(self):\n        if '@' not in self.email:\n            raise ValueError('Invalid email')",
+          "code_language": "python",
+          "key_points": [
+            "Auto __init__, __repr__, __eq__; field() for defaults",
+            "frozen=True for immutable; slots=True for memory"
+          ],
+          "gotchas": [
+            "frozen does not deep-freeze mutable attributes inside"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use the walrus operator (:=) effectively in modern Python?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["walrus-operator", "assignment-expression", "python-3.8"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **walrus operator** (`:=`, PEP 572, Python 3.8+) is an assignment expression that assigns and returns a value in one expression. It reduces code duplication where you need to compute a value, check it, and then use it.\n\nBest use cases: while loops with read-check patterns, if statements that compute and test, and list comprehensions that filter on a computed value.",
+          "pseudo_code": "Pattern 1: while (value := read()) is not None: use(value)\nPattern 2: if (result := compute()) > threshold: use(result)\nPattern 3: [y for x in data if (y := f(x)) > 0]",
+          "actual_code": "import re\n\n# Pattern 1: while loop with read-check\nwith open('data.txt') as f:\n    while (line := f.readline().strip()):\n        print(f\"Processing: {line}\")\n\n# Pattern 2: if with compute-and-check\ntext = \"Order total: $142.50 with tax\"\nif (match := re.search(r'\\$(\\d+\\.\\d+)', text)):\n    price = float(match.group(1))\n    print(f\"Found price: ${price}\")\n\n# Pattern 3: comprehension avoiding double computation\nimport math\n\ndata = [1, 4, 9, 16, 25, 36, 49]\n# Without walrus: sqrt computed twice\nresult = [math.sqrt(n) for n in data if math.sqrt(n) > 4]\n\n# With walrus: sqrt computed once\nresult = [root for n in data if (root := math.sqrt(n)) > 4]\nprint(result)  # [5.0, 6.0, 7.0]\n\n# Pattern 4: chained validation\ndef validate_user(data: dict) -> str | None:\n    if (name := data.get('name')) is None:\n        return \"name is required\"\n    if len(name) < 2:\n        return \"name too short\"\n    if (email := data.get('email')) is None:\n        return \"email is required\"\n    if '@' not in email:\n        return \"invalid email\"\n    return None  # All valid\n\n# Pattern 5: reducing nesting\n# Without walrus\nresults = []\nfor item in items:\n    processed = expensive_transform(item)\n    if processed is not None:\n        filtered = filter_step(processed)\n        if filtered:\n            results.append(filtered)\n\n# With walrus (flatter)\nresults = [\n    filtered\n    for item in items\n    if (processed := expensive_transform(item)) is not None\n    if (filtered := filter_step(processed))\n]\n\n# f-string debugging with walrus\nx, y = 10, 20\nprint(f\"sum={x+y}, product={(p := x*y)}, double_product={p*2}\")",
+          "code_language": "python",
+          "key_points": [
+            ":= assigns and returns a value in one expression",
+            "Best for while read-check loops and if compute-check patterns",
+            "In comprehensions, avoids computing a value twice",
+            "Reduces code duplication where compute -> check -> use is common",
+            "Do not overuse; readability is more important than brevity"
+          ],
+          "gotchas": [
+            "Cannot use := at the top level of an expression statement (use = instead)",
+            ":= has lower precedence than most operators; parentheses are often needed",
+            "Overuse makes code harder to read; only use when it clearly simplifies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`:=` assigns and returns a value in one expression. Best for `while (line := read()):`, `if (m := search()):`, and comprehensions avoiding double computation. Do not overuse.",
+          "pseudo_code": "",
+          "actual_code": "# While read-check\nwhile (line := f.readline()):\n    process(line)\n\n# If compute-check\nif (match := re.search(pattern, text)):\n    print(match.group())\n\n# Comprehension: compute once\n[y for x in data if (y := transform(x)) > 0]",
+          "code_language": "python",
+          "key_points": [
+            "Assign + return in one expression; best for while/if patterns",
+            "Avoids double computation in comprehensions"
+          ],
+          "gotchas": [
+            "Parentheses often needed due to low precedence"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the f-string debugging feature (= specifier)?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["f-strings", "debugging", "python-3.8"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.8 added the **self-documenting `=` specifier** for f-strings. Adding `=` after an expression in an f-string prints both the expression text and its value. This is incredibly useful for debugging.\n\n`f\"{expr=}\"` outputs `expr=value`.\n\nYou can combine `=` with format specs and conversion flags.",
+          "pseudo_code": "f\"{variable=}\"       -> 'variable=value'\nf\"{expression=}\"    -> 'expression=result'\nf\"{x=:.2f}\"         -> 'x=3.14'\nf\"{name=!r}\"        -> \"name='Alice'\"",
+          "actual_code": "# Basic self-documenting f-strings\nx = 42\ny = 3.14159\nname = 'Alice'\n\nprint(f\"{x=}\")        # x=42\nprint(f\"{y=}\")        # y=3.14159\nprint(f\"{name=}\")     # name='Alice'\n\n# Expressions\nprint(f\"{x + y=}\")          # x + y=45.14159\nprint(f\"{x * 2=}\")          # x * 2=84\nprint(f\"{len(name)=}\")      # len(name)=5\nprint(f\"{name.upper()=}\")   # name.upper()='ALICE'\n\n# With format specifiers\nprint(f\"{y=:.2f}\")           # y=3.14\nprint(f\"{x=:05d}\")           # x=00042\nprint(f\"{x=:#x}\")            # x=0x2a\n\n# With conversion flags\nprint(f\"{name=!r}\")          # name='Alice' (repr)\nprint(f\"{name=!s}\")          # name=Alice (str)\n\n# Debugging complex expressions\ndata = {'users': [{'name': 'Alice', 'age': 30}]}\nprint(f\"{data['users'][0]['name']=}\")  # data['users'][0]['name']='Alice'\n\n# Preserves whitespace in expression\nprint(f\"{x = }\")    # x = 42 (spaces preserved!)\nprint(f\"{ x = }\")   # Note: spaces are preserved as-is\n\n# Practical debugging\ndef calculate(a, b, operation='add'):\n    print(f\"{a=}, {b=}, {operation=}\")\n    match operation:\n        case 'add':\n            result = a + b\n        case 'multiply':\n            result = a * b\n        case _:\n            result = None\n    print(f\"{result=}\")\n    return result\n\ncalculate(10, 20, 'multiply')\n# a=10, b=20, operation='multiply'\n# result=200\n\n# Boolean expressions\nitems = [1, 2, 3]\nprint(f\"{bool(items)=}\")         # bool(items)=True\nprint(f\"{len(items) > 5=}\")      # len(items) > 5=False\n\n# In list comprehensions\nnumbers = [1, 2, 3, 4, 5]\nprint(f\"{[n**2 for n in numbers]=}\")\n# [n**2 for n in numbers]=[1, 4, 9, 16, 25]",
+          "code_language": "python",
+          "key_points": [
+            "f'{x=}' prints both the expression and its value: 'x=42'",
+            "Works with any expression: method calls, math, indexing",
+            "Combine with format specs: f'{x=:.2f}' and conversion: f'{x=!r}'",
+            "Whitespace around = is preserved in the output",
+            "Incredibly useful for quick debugging without print formatting"
+          ],
+          "gotchas": [
+            "The = feature requires Python 3.8+; earlier versions raise SyntaxError",
+            "Strings are shown with repr by default: f'{s=}' shows s='hello' with quotes",
+            "Complex expressions in = can make the output hard to read"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`f\"{x=}\"` prints `x=42` (expression + value). Works with any expression. Combine with format specs (`f\"{x=:.2f}\"`) and repr (`f\"{x=!r}\"`). Great for quick debugging.",
+          "pseudo_code": "",
+          "actual_code": "x = 42\nname = 'Alice'\nprint(f\"{x=}\")               # x=42\nprint(f\"{x + 1=}\")           # x + 1=43\nprint(f\"{name.upper()=}\")    # name.upper()='ALICE'\nprint(f\"{x=:#x}\")            # x=0x2a",
+          "code_language": "python",
+          "key_points": [
+            "= prints expression text + value; great for debugging",
+            "Combine with :.2f, !r for formatting"
+          ],
+          "gotchas": [
+            "Python 3.8+ only; strings show with repr quotes by default"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is __post_init__ in dataclasses and how do you use field()?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "post-init", "field", "validation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__post_init__` is called after the auto-generated `__init__` completes. It is the ideal place for:\n- **Validation**: Check that values meet constraints.\n- **Computed fields**: Calculate derived values from other fields.\n- **Type coercion**: Convert strings to proper types.\n\n`field()` customizes individual fields with options like `default_factory`, `repr`, `compare`, `hash`, `init`, and `metadata`.",
+          "pseudo_code": "__post_init__ runs after __init__ for validation/computation\nfield(default_factory=list) for mutable defaults\nfield(init=False) for computed fields not in constructor\nfield(repr=False) to hide from repr\nfield(compare=False) to exclude from == and ordering",
+          "actual_code": "from dataclasses import dataclass, field, InitVar\nfrom datetime import datetime\nimport re\n\n@dataclass\nclass User:\n    name: str\n    email: str\n    age: int\n    created_at: datetime = field(default_factory=datetime.utcnow, repr=False)\n    is_admin: bool = field(default=False, compare=False)\n    tags: list[str] = field(default_factory=list)\n\n    def __post_init__(self):\n        # Validation\n        if not self.name.strip():\n            raise ValueError(\"Name cannot be empty\")\n        if not re.match(r'^[\\w.-]+@[\\w.-]+\\.\\w+$', self.email):\n            raise ValueError(f\"Invalid email: {self.email}\")\n        if self.age < 0 or self.age > 150:\n            raise ValueError(f\"Invalid age: {self.age}\")\n\n        # Normalization\n        self.name = self.name.strip().title()\n        self.email = self.email.lower()\n\nuser = User('  alice  ', 'Alice@Example.COM', 30)\nprint(user.name)   # 'Alice' (normalized)\nprint(user.email)  # 'alice@example.com' (lowercased)\n\n# Computed fields with init=False\n@dataclass\nclass Rectangle:\n    width: float\n    height: float\n    area: float = field(init=False)       # Computed, not in __init__\n    perimeter: float = field(init=False)  # Computed, not in __init__\n\n    def __post_init__(self):\n        self.area = self.width * self.height\n        self.perimeter = 2 * (self.width + self.height)\n\nrect = Rectangle(3, 4)  # Only width and height\nprint(rect.area)       # 12\nprint(rect.perimeter)  # 14\n\n# InitVar: parameters only for __post_init__, not stored as fields\n@dataclass\nclass PasswordUser:\n    username: str\n    password: InitVar[str]  # Passed to __post_init__, not stored\n    password_hash: str = field(init=False)\n\n    def __post_init__(self, password: str):\n        import hashlib\n        self.password_hash = hashlib.sha256(password.encode()).hexdigest()\n\nuser = PasswordUser('alice', 'secret123')\nprint(user)  # PasswordUser(username='alice', password_hash='...')\n# user.password  # AttributeError! Not stored\n\n# field() with metadata\n@dataclass\nclass Product:\n    name: str = field(metadata={'description': 'Product name', 'max_length': 100})\n    price: float = field(metadata={'description': 'Price in USD', 'min': 0})\n\n# Access metadata\nfrom dataclasses import fields\nfor f in fields(Product):\n    print(f\"{f.name}: {f.metadata}\")\n# name: {'description': 'Product name', 'max_length': 100}\n# price: {'description': 'Price in USD', 'min': 0}\n\n# Practical: auto-validation from metadata\n@dataclass\nclass ValidatedProduct:\n    name: str = field(metadata={'max_length': 100})\n    price: float = field(metadata={'min_value': 0})\n\n    def __post_init__(self):\n        for f in fields(self):\n            value = getattr(self, f.name)\n            if 'max_length' in f.metadata and isinstance(value, str):\n                if len(value) > f.metadata['max_length']:\n                    raise ValueError(f\"{f.name} exceeds max length {f.metadata['max_length']}\")\n            if 'min_value' in f.metadata and isinstance(value, (int, float)):\n                if value < f.metadata['min_value']:\n                    raise ValueError(f\"{f.name} must be >= {f.metadata['min_value']}\")",
+          "code_language": "python",
+          "key_points": [
+            "__post_init__ runs after auto-generated __init__; use for validation and computed fields",
+            "field(init=False) creates fields that are set in __post_init__, not the constructor",
+            "InitVar[type] creates parameters passed to __post_init__ but not stored as fields",
+            "field(default_factory=func) for mutable defaults; field(repr=False) to hide from repr",
+            "field(metadata={}) stores arbitrary metadata accessible via fields(Class)"
+          ],
+          "gotchas": [
+            "InitVar fields are NOT stored on the instance; they are only available in __post_init__",
+            "__post_init__ receives InitVar parameters as positional arguments in declaration order",
+            "field(compare=False) excludes from both == and ordering (order=True)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__post_init__` runs after `__init__` for validation and computed fields. `field(init=False)` for computed fields, `InitVar` for constructor-only params, `field(default_factory=list)` for mutable defaults.",
+          "pseudo_code": "",
+          "actual_code": "@dataclass\nclass User:\n    name: str\n    email: str\n    display_name: str = field(init=False)  # Computed\n\n    def __post_init__(self):\n        if '@' not in self.email:\n            raise ValueError('Invalid email')\n        self.display_name = self.name.title()",
+          "code_language": "python",
+          "key_points": [
+            "__post_init__ for validation/computation; field(init=False) for computed fields",
+            "InitVar for params not stored as fields"
+          ],
+          "gotchas": [
+            "InitVar values are not stored; only available in __post_init__"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does slots=True work in dataclasses (Python 3.10+)?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "slots", "memory", "python-3.10"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.10 added `slots=True` to `@dataclass`, which automatically generates `__slots__` from the dataclass fields. This provides:\n\n1. **Memory savings**: No per-instance `__dict__` (~40-60 bytes saved per instance).\n2. **Faster attribute access**: Fixed offsets instead of dict lookups.\n3. **Prevents typos**: Cannot add undeclared attributes.\n\nBefore 3.10, you had to manually define `__slots__` alongside field annotations, which was error-prone and verbose.",
+          "pseudo_code": "@dataclass(slots=True) auto-generates __slots__\nSaves ~40-60 bytes per instance\nFaster attribute access\nPrevents adding undeclared attributes\nCombine with frozen=True for immutable, memory-efficient objects",
+          "actual_code": "import sys\nfrom dataclasses import dataclass, field\n\n# Without slots\n@dataclass\nclass PointDict:\n    x: float\n    y: float\n\n# With slots (Python 3.10+)\n@dataclass(slots=True)\nclass PointSlots:\n    x: float\n    y: float\n\n# Memory comparison\np_dict = PointDict(1.0, 2.0)\np_slots = PointSlots(1.0, 2.0)\n\nprint(sys.getsizeof(p_dict))           # ~48 (object)\nprint(sys.getsizeof(p_dict.__dict__))  # ~104 (dict)\n# Total: ~152 bytes\n\nprint(sys.getsizeof(p_slots))  # ~56 (no dict!)\n\n# Cannot add dynamic attributes\n# p_slots.z = 3.0  # AttributeError!\n\n# No __dict__\nprint(hasattr(p_dict, '__dict__'))   # True\nprint(hasattr(p_slots, '__dict__'))  # False\n\n# Combine with frozen for maximum optimization\n@dataclass(frozen=True, slots=True)\nclass ImmutablePoint:\n    x: float\n    y: float\n\np = ImmutablePoint(1.0, 2.0)\n# p.x = 3.0  # FrozenInstanceError\nprint(hash(p))  # Hashable! Can use in sets and dict keys\n\n# With default values\n@dataclass(slots=True)\nclass Config:\n    host: str = 'localhost'\n    port: int = 8080\n    debug: bool = False\n    tags: list[str] = field(default_factory=list)\n\nconfig = Config()\nprint(config)  # Config(host='localhost', port=8080, debug=False, tags=[])\n\n# Inheritance with slots\n@dataclass(slots=True)\nclass Animal:\n    name: str\n    sound: str\n\n@dataclass(slots=True)\nclass Dog(Animal):\n    breed: str  # Only new fields in child's slots\n\ndog = Dog('Rex', 'Woof', 'Labrador')\nprint(dog)  # Dog(name='Rex', sound='Woof', breed='Labrador')\n\n# Performance at scale\n@dataclass(slots=True)\nclass Particle:\n    x: float\n    y: float\n    z: float\n    mass: float\n    velocity: float\n\n# 1 million particles\nparticles = [Particle(i, i, i, 1.0, 0.0) for i in range(1_000_000)]\n# Saves ~60MB compared to dict-based dataclasses!",
+          "code_language": "python",
+          "key_points": [
+            "slots=True auto-generates __slots__ from dataclass fields",
+            "Saves ~40-60 bytes per instance (significant at scale)",
+            "Faster attribute access via fixed offsets",
+            "Combine with frozen=True for immutable, hashable, memory-efficient objects",
+            "Prevents adding dynamic attributes (catches typos)"
+          ],
+          "gotchas": [
+            "Cannot add dynamic attributes; no __dict__ unless you explicitly add '__dict__' to slots",
+            "Inheritance: child dataclass must also use slots=True; parent fields are handled automatically",
+            "slots=True is incompatible with __dict__-based features like vars(obj)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@dataclass(slots=True)` (3.10+) auto-generates `__slots__`, saving ~40-60 bytes per instance and preventing dynamic attributes. Combine with `frozen=True` for immutable, hashable, memory-efficient data objects.",
+          "pseudo_code": "",
+          "actual_code": "@dataclass(slots=True, frozen=True)\nclass Point:\n    x: float\n    y: float\n\np = Point(1.0, 2.0)\n# p.z = 3.0  # AttributeError (no dynamic attrs)\n# p.x = 5.0  # FrozenInstanceError (immutable)\nprint(hash(p))  # Hashable!",
+          "code_language": "python",
+          "key_points": [
+            "slots=True saves memory and prevents dynamic attributes",
+            "Combine with frozen=True for immutable + hashable + memory-efficient"
+          ],
+          "gotchas": [
+            "Cannot use vars(obj) or __dict__ with slots=True"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are exception groups and how does ExceptionGroup work (Python 3.11)?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["exception-groups", "python-3.11", "error-handling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Exception Groups** (PEP 654, Python 3.11+) allow raising and handling multiple exceptions simultaneously. This is essential for concurrent code (asyncio, parallel processing) where multiple operations can fail independently.\n\n- **`ExceptionGroup`**: Contains multiple exceptions as a group.\n- **`except*`**: New syntax to catch specific exception types from a group.\n- **`BaseExceptionGroup`**: For groups containing BaseException subclasses.\n\nUnlike regular try/except which catches one exception, `except*` can match multiple exceptions from a group and handle them independently.",
+          "pseudo_code": "ExceptionGroup('msg', [exc1, exc2, exc3]) wraps multiple exceptions\nexcept* TypeError catches TypeErrors from the group\nexcept* (ValueError, KeyError) catches both from the group\nMultiple except* clauses can each handle different types from the same group",
+          "actual_code": "# Creating and raising an ExceptionGroup\ndef process_batch(items):\n    errors = []\n    results = []\n    for item in items:\n        try:\n            results.append(int(item))\n        except ValueError as e:\n            errors.append(e)\n        except TypeError as e:\n            errors.append(e)\n\n    if errors:\n        raise ExceptionGroup(\"batch processing failed\", errors)\n    return results\n\n# Handling with except*\ntry:\n    process_batch(['1', 'abc', None, '4', 'xyz'])\nexcept* ValueError as eg:\n    print(f\"Value errors ({len(eg.exceptions)}):\")\n    for e in eg.exceptions:\n        print(f\"  - {e}\")\nexcept* TypeError as eg:\n    print(f\"Type errors ({len(eg.exceptions)}):\")\n    for e in eg.exceptions:\n        print(f\"  - {e}\")\n\n# Output:\n# Value errors (2):\n#   - invalid literal for int() with base 10: 'abc'\n#   - invalid literal for int() with base 10: 'xyz'\n# Type errors (1):\n#   - int() argument must be a string, a bytes-like object or a real number, not 'NoneType'\n\n# ExceptionGroup basics\neg = ExceptionGroup(\"multiple failures\", [\n    ValueError(\"bad value\"),\n    TypeError(\"wrong type\"),\n    KeyError(\"missing key\"),\n])\n\nprint(eg.exceptions)  # (ValueError('bad value'), TypeError('wrong type'), KeyError('missing key'))\n\n# Subgroup: filter exceptions by type\nvalue_errors, rest = eg.split(ValueError)\nprint(value_errors)  # ExceptionGroup('multiple failures', [ValueError('bad value')])\nprint(rest)          # ExceptionGroup('multiple failures', [TypeError, KeyError])\n\n# Practical: concurrent task results\nimport asyncio\n\nasync def fetch_url(url):\n    if 'bad' in url:\n        raise ConnectionError(f\"Failed to connect to {url}\")\n    return f\"Data from {url}\"\n\nasync def fetch_all(urls):\n    async with asyncio.TaskGroup() as tg:\n        tasks = [tg.create_task(fetch_url(url)) for url in urls]\n    return [t.result() for t in tasks]\n\n# asyncio.TaskGroup raises ExceptionGroup on failure\nasync def main():\n    urls = ['https://good.com', 'https://bad.com', 'https://also-bad.com']\n    try:\n        results = await fetch_all(urls)\n    except* ConnectionError as eg:\n        print(f\"{len(eg.exceptions)} connection failures:\")\n        for e in eg.exceptions:\n            print(f\"  - {e}\")\n\n# asyncio.run(main())\n\n# Nesting: ExceptionGroups can contain other ExceptionGroups\nnested = ExceptionGroup(\"outer\", [\n    ValueError(\"v1\"),\n    ExceptionGroup(\"inner\", [\n        TypeError(\"t1\"),\n        TypeError(\"t2\"),\n    ]),\n])\n\n# except* flattens nested groups when matching\ntry:\n    raise nested\nexcept* TypeError as eg:\n    print(f\"All TypeErrors: {eg.exceptions}\")  # Both t1 and t2",
+          "code_language": "python",
+          "key_points": [
+            "ExceptionGroup wraps multiple exceptions; except* handles them by type",
+            "Multiple except* clauses each handle different types from the same group",
+            "except* automatically flattens nested exception groups",
+            "asyncio.TaskGroup (3.11+) raises ExceptionGroup on task failures",
+            ".split(Type) divides a group into matching and non-matching subgroups"
+          ],
+          "gotchas": [
+            "except* cannot be mixed with regular except in the same try block",
+            "except* always receives an ExceptionGroup, even if only one exception matched",
+            "ExceptionGroup with a single exception is different from the exception itself"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`ExceptionGroup` (3.11+) wraps multiple exceptions. `except*` catches specific types from the group. Essential for concurrent code where multiple operations fail independently. `asyncio.TaskGroup` raises ExceptionGroup on failures.",
+          "pseudo_code": "",
+          "actual_code": "try:\n    raise ExceptionGroup(\"errors\", [\n        ValueError(\"bad\"),\n        TypeError(\"wrong\"),\n    ])\nexcept* ValueError as eg:\n    print(f\"{len(eg.exceptions)} value errors\")\nexcept* TypeError as eg:\n    print(f\"{len(eg.exceptions)} type errors\")",
+          "code_language": "python",
+          "key_points": [
+            "ExceptionGroup wraps multiple exceptions; except* handles by type",
+            "Essential for asyncio.TaskGroup and concurrent code"
+          ],
+          "gotchas": [
+            "except* cannot be mixed with regular except in the same try block"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is tomllib and how do you work with TOML files in Python?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["tomllib", "toml", "configuration", "python-3.11"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**tomllib** (PEP 680, Python 3.11+) is a built-in module for parsing TOML (Tom's Obvious Minimal Language) files. TOML is the configuration format used by `pyproject.toml`, Cargo (Rust), and many modern tools.\n\ntomllib is read-only; for writing TOML, use the third-party `tomli-w` or `toml` package.\n\nTOML is preferred over JSON for configuration because it supports comments, dates, and is more human-friendly.",
+          "pseudo_code": "import tomllib\nwith open('config.toml', 'rb') as f:\n    config = tomllib.load(f)  # Returns a dict\n\nOr from string: tomllib.loads(toml_string)",
+          "actual_code": "import tomllib\n\n# Reading a TOML file\nwith open('pyproject.toml', 'rb') as f:  # Must open in binary mode!\n    config = tomllib.load(f)\n\nprint(config['project']['name'])\nprint(config['project']['version'])\n\n# Parsing a TOML string\ntoml_string = \"\"\"\n[database]\nhost = \"localhost\"\nport = 5432\nname = \"myapp\"\n\n[database.pool]\nmin_size = 5\nmax_size = 20\n\n[server]\nhost = \"0.0.0.0\"\nport = 8080\ndebug = true\nworkers = 4\n\n[server.cors]\nallowed_origins = [\"https://myapp.com\", \"https://staging.myapp.com\"]\n\n[[users]]\nname = \"Alice\"\nrole = \"admin\"\n\n[[users]]\nname = \"Bob\"\nrole = \"user\"\n\"\"\"\n\nconfig = tomllib.loads(toml_string)\n\n# Access nested values\nprint(config['database']['host'])         # 'localhost'\nprint(config['database']['pool']['max_size'])  # 20\nprint(config['server']['debug'])          # True\nprint(config['server']['cors']['allowed_origins'])  # ['https://...']\n\n# Array of tables -> list of dicts\nfor user in config['users']:\n    print(f\"{user['name']}: {user['role']}\")\n# Alice: admin\n# Bob: user\n\n# TOML types map to Python types:\n# String -> str\n# Integer -> int\n# Float -> float\n# Boolean -> bool\n# DateTime -> datetime.datetime\n# Date -> datetime.date\n# Time -> datetime.time\n# Array -> list\n# Table -> dict\n\n# Date/time support\ntoml_dates = \"\"\"\ncreated = 2024-01-15T10:30:00Z\nbirth_date = 2024-01-15\nmeeting_time = 10:30:00\n\"\"\"\nparsed = tomllib.loads(toml_dates)\nprint(type(parsed['created']))     # <class 'datetime.datetime'>\nprint(type(parsed['birth_date']))  # <class 'datetime.date'>\nprint(type(parsed['meeting_time']))  # <class 'datetime.time'>\n\n# Practical: reading pyproject.toml\ndef get_project_version():\n    try:\n        with open('pyproject.toml', 'rb') as f:\n            data = tomllib.load(f)\n        return data.get('project', {}).get('version', 'unknown')\n    except FileNotFoundError:\n        return 'unknown'\n\n# For Python < 3.11, use: pip install tomli\n# import tomli as tomllib  # API compatible",
+          "code_language": "python",
+          "key_points": [
+            "tomllib is built-in for reading TOML files (Python 3.11+)",
+            "Open files in binary mode ('rb') for tomllib.load()",
+            "tomllib.loads() parses TOML strings; tomllib.load() parses file objects",
+            "TOML dates/times are automatically converted to datetime objects",
+            "For writing TOML, use third-party tomli-w; tomllib is read-only"
+          ],
+          "gotchas": [
+            "Files MUST be opened in binary mode ('rb'); text mode raises TypeError",
+            "tomllib is read-only; use tomli-w for writing TOML files",
+            "For Python < 3.11, install tomli (pip install tomli) as a drop-in replacement"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`tomllib` (3.11+) reads TOML files. Open in binary mode (`'rb'`), call `tomllib.load(f)`. Returns a dict. TOML dates become datetime objects. Read-only; use `tomli-w` for writing.",
+          "pseudo_code": "",
+          "actual_code": "import tomllib\n\nwith open('pyproject.toml', 'rb') as f:  # Binary mode!\n    config = tomllib.load(f)\n\nprint(config['project']['name'])\n\n# From string\ndata = tomllib.loads('[db]\\nhost = \"localhost\"')\nprint(data['db']['host'])  # localhost",
+          "code_language": "python",
+          "key_points": [
+            "Built-in TOML reader; open in 'rb' mode",
+            "Read-only; use tomli-w for writing"
+          ],
+          "gotchas": [
+            "Must open files in binary mode ('rb')"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the Self type and @override decorator (Python 3.11+)?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["self-type", "override", "typing", "python-3.11"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Self type** (PEP 673, Python 3.11+): A special type hint that refers to the current class. Replaces the pattern of using forward references (`'ClassName'`) or TypeVar for methods that return `self`.\n\n**@override** (PEP 698, Python 3.12+): A decorator that marks a method as intentionally overriding a parent method. If the parent method does not exist, mypy reports an error. Prevents typos in method names and catches removed parent methods.",
+          "pseudo_code": "Self: replaces -> 'MyClass' with -> Self for fluent interfaces\n@override: marks intentional method override; errors if parent method missing\n\nBefore Self: TypeVar('T', bound='MyClass') or forward reference\nAfter Self: just use -> Self",
+          "actual_code": "from typing import Self\n\n# Self type for fluent interfaces / builder pattern\nclass QueryBuilder:\n    def __init__(self):\n        self._table = ''\n        self._conditions = []\n        self._limit = None\n\n    def table(self, name: str) -> Self:\n        self._table = name\n        return self\n\n    def where(self, condition: str) -> Self:\n        self._conditions.append(condition)\n        return self\n\n    def limit(self, n: int) -> Self:\n        self._limit = n\n        return self\n\n    def build(self) -> str:\n        sql = f\"SELECT * FROM {self._table}\"\n        if self._conditions:\n            sql += \" WHERE \" + \" AND \".join(self._conditions)\n        if self._limit:\n            sql += f\" LIMIT {self._limit}\"\n        return sql\n\n# Method chaining with correct types\nquery = (\n    QueryBuilder()\n    .table('users')\n    .where('age > 18')\n    .where('active = true')\n    .limit(10)\n    .build()\n)\nprint(query)  # SELECT * FROM users WHERE age > 18 AND active = true LIMIT 10\n\n# Self works correctly with inheritance\nclass AdvancedQueryBuilder(QueryBuilder):\n    def join(self, table: str, on: str) -> Self:\n        # Returns AdvancedQueryBuilder, not QueryBuilder!\n        return self\n\n# Before Self: needed TypeVar\n# T = TypeVar('T', bound='QueryBuilder')\n# def table(self: T, name: str) -> T: ...\n\n# Self in classmethod (factory pattern)\nclass Config:\n    def __init__(self, data: dict):\n        self.data = data\n\n    @classmethod\n    def from_file(cls, path: str) -> Self:\n        import json\n        with open(path) as f:\n            return cls(json.load(f))\n\n# @override decorator (Python 3.12+)\nfrom typing import override\n\nclass Base:\n    def process(self) -> str:\n        return \"base\"\n\n    def validate(self) -> bool:\n        return True\n\nclass Child(Base):\n    @override\n    def process(self) -> str:  # OK: overrides Base.process\n        return \"child\"\n\n    @override\n    def validate(self) -> bool:  # OK: overrides Base.validate\n        return False\n\n    # @override\n    # def prcess(self) -> str:  # mypy ERROR: no parent method 'prcess'\n    #     return \"typo!\"        # Catches the typo!\n\n# @override catches removed parent methods\n# If Base.validate is later removed, mypy flags the @override in Child",
+          "code_language": "python",
+          "key_points": [
+            "Self replaces forward references and TypeVar for methods returning self",
+            "Self works correctly with inheritance (returns the subclass type, not parent)",
+            "@override marks intentional method overrides; errors if parent method is missing",
+            "Self is ideal for fluent interfaces, builder pattern, and classmethods",
+            "@override catches typos in method names and removed parent methods"
+          ],
+          "gotchas": [
+            "Self requires Python 3.11+; use typing_extensions for older versions",
+            "@override requires Python 3.12+; use typing_extensions for 3.11",
+            "@override has no runtime effect; it is only for static type checkers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Self` (3.11+) is a type hint for methods returning `self` (works with inheritance). `@override` (3.12+) marks intentional method overrides; mypy errors if the parent method does not exist (catches typos).",
+          "pseudo_code": "",
+          "actual_code": "from typing import Self, override\n\nclass Builder:\n    def set_name(self, name: str) -> Self:  # Returns correct subclass type\n        self.name = name\n        return self\n\nclass Child(Base):\n    @override  # mypy error if Base.process doesn't exist\n    def process(self) -> str:\n        return \"child\"",
+          "code_language": "python",
+          "key_points": [
+            "Self for methods returning self; works with inheritance",
+            "@override catches typos and removed parent methods"
+          ],
+          "gotchas": [
+            "Self 3.11+; @override 3.12+; use typing_extensions for older"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the new type parameter syntax in Python 3.12 (PEP 695)?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["type-parameters", "generics", "python-3.12", "pep-695"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.12 (PEP 695) introduces a new, cleaner syntax for defining generic functions, classes, and type aliases. It eliminates the need for explicit `TypeVar`, `ParamSpec`, and `TypeVarTuple` declarations.\n\n**New syntax**:\n- `def func[T](x: T) -> T:` replaces `T = TypeVar('T'); def func(x: T) -> T:`\n- `class Stack[T]:` replaces `class Stack(Generic[T]):`\n- `type Vector = list[float]` replaces `Vector: TypeAlias = list[float]`\n- `[T: int]` for bounded, `[T: (int, str)]` for constrained\n- `[**P]` for ParamSpec, `[*Ts]` for TypeVarTuple",
+          "pseudo_code": "Old: T = TypeVar('T')\n     def first(items: list[T]) -> T:\nNew: def first[T](items: list[T]) -> T:\n\nOld: class Stack(Generic[T]):\nNew: class Stack[T]:\n\nOld: Vector: TypeAlias = list[float]\nNew: type Vector = list[float]",
+          "actual_code": "# --- Old way (pre-3.12) ---\nfrom typing import TypeVar, Generic, TypeAlias, ParamSpec, Callable\nfrom functools import wraps\n\nT_old = TypeVar('T_old')\ndef first_old(items: list[T_old]) -> T_old:\n    return items[0]\n\nclass Stack_old(Generic[T_old]):\n    def __init__(self) -> None:\n        self._items: list[T_old] = []\n    def push(self, item: T_old) -> None:\n        self._items.append(item)\n    def pop(self) -> T_old:\n        return self._items.pop()\n\nVector_old: TypeAlias = list[float]\n\n# --- New way (Python 3.12+) ---\n\n# Generic function\ndef first[T](items: list[T]) -> T:\n    \"\"\"Return the first element, preserving type.\"\"\"\n    return items[0]\n\nresult = first([1, 2, 3])      # mypy infers: int\nresult = first(['a', 'b'])     # mypy infers: str\n\n# Generic class\nclass Stack[T]:\n    def __init__(self) -> None:\n        self._items: list[T] = []\n\n    def push(self, item: T) -> None:\n        self._items.append(item)\n\n    def pop(self) -> T:\n        return self._items.pop()\n\n    def peek(self) -> T:\n        return self._items[-1]\n\n    def __len__(self) -> int:\n        return len(self._items)\n\nint_stack = Stack[int]()\nint_stack.push(42)\nvalue: int = int_stack.pop()\n\n# Type aliases\ntype Vector = list[float]\ntype Matrix = list[Vector]\ntype Callback[T] = Callable[[T], None]\ntype Result[T] = T | None\n\n# Bounded type parameters\ndef max_item[T: (int, float)](items: list[T]) -> T:\n    return max(items)\n\n# Bound to a class\nclass Comparable:\n    def __lt__(self, other): ...\n\ndef sort_items[T: Comparable](items: list[T]) -> list[T]:\n    return sorted(items)\n\n# Multiple type parameters\nclass Pair[T, U]:\n    def __init__(self, first: T, second: U) -> None:\n        self.first = first\n        self.second = second\n\n    def swap(self) -> 'Pair[U, T]':\n        return Pair(self.second, self.first)\n\npair = Pair(1, 'hello')  # Pair[int, str]\n\n# ParamSpec with new syntax\ndef logged[**P, R](func: Callable[P, R]) -> Callable[P, R]:\n    @wraps(func)\n    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:\n        print(f\"Calling {func.__name__}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n@logged\ndef add(x: int, y: int) -> int:\n    return x + y\n\n# Recursive type alias\ntype JSON = str | int | float | bool | None | list[JSON] | dict[str, JSON]\n\n# type statement creates lazy aliases (forward references work!)\ntype Tree[T] = T | list[Tree[T]]  # Recursive!",
+          "code_language": "python",
+          "key_points": [
+            "def func[T]() replaces TypeVar + explicit generic signature",
+            "class MyClass[T] replaces Generic[T] inheritance",
+            "type X = ... replaces TypeAlias (creates lazy aliases)",
+            "[T: Base] for bounded, [T: (int, str)] for constrained",
+            "[**P] for ParamSpec, [*Ts] for TypeVarTuple"
+          ],
+          "gotchas": [
+            "Requires Python 3.12+; use TypeVar/Generic for older versions",
+            "type statement creates lazy aliases (evaluated on demand), changing forward reference behavior",
+            "Cannot mix old TypeVar and new [T] syntax in the same definition"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python 3.12 adds `def func[T]()` (replaces TypeVar), `class Cls[T]` (replaces Generic), `type X = ...` (replaces TypeAlias). Much cleaner with less boilerplate.",
+          "pseudo_code": "",
+          "actual_code": "# Functions\ndef first[T](items: list[T]) -> T:\n    return items[0]\n\n# Classes\nclass Stack[T]:\n    def push(self, item: T) -> None: ...\n\n# Type aliases\ntype Vector = list[float]\ntype Result[T] = T | None",
+          "code_language": "python",
+          "key_points": [
+            "[T] on functions/classes; type X = for aliases",
+            "Cleaner than TypeVar/Generic"
+          ],
+          "gotchas": [
+            "3.12+ only; not backward compatible"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What TypeAlias improvements were made in modern Python?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["typealias", "typing", "python-3.10", "python-3.12"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Type aliases have evolved across Python versions:\n\n1. **Pre-3.10**: `Vector = list[float]` (ambiguous: is it an alias or a variable?)\n2. **Python 3.10**: `Vector: TypeAlias = list[float]` (explicit marking with TypeAlias)\n3. **Python 3.12**: `type Vector = list[float]` (new statement, lazy evaluation, supports forward references)\n\nThe `type` statement in 3.12 is the preferred approach because:\n- It is a proper statement, not an annotation hack\n- It supports forward references automatically (lazy evaluation)\n- It works with recursive type aliases\n- Clearer intent: this is definitively a type alias",
+          "pseudo_code": "Pre-3.10:  Vector = list[float]              # Ambiguous\n3.10:      Vector: TypeAlias = list[float]   # Explicit\n3.12:      type Vector = list[float]          # Statement (best)",
+          "actual_code": "# Pre-3.10: implicit alias (ambiguous)\nVector = list[float]\nUserDict = dict[str, str]\n\n# Python 3.10: TypeAlias annotation\nfrom typing import TypeAlias\n\nVector: TypeAlias = list[float]\nMatrix: TypeAlias = list[Vector]\nUserID: TypeAlias = int\nCallback: TypeAlias = 'Callable[[int], str]'  # String for forward ref\n\n# Python 3.12: type statement\ntype Vector = list[float]\ntype Matrix = list[Vector]\ntype UserID = int\n\n# 3.12 type statement supports forward references natively\ntype Tree = int | list[Tree]  # Recursive! No string needed\ntype JSON = str | int | float | bool | None | list[JSON] | dict[str, JSON]\n\n# 3.12 generic type aliases\ntype Result[T] = T | None\ntype Pair[T, U] = tuple[T, U]\ntype Handler[T] = Callable[[T], None]\ntype Mapper[T, U] = Callable[[T], U]\n\n# Usage\ndef fetch(url: str) -> Result[dict]:\n    \"\"\"Returns dict or None.\"\"\"\n    try:\n        import requests\n        resp = requests.get(url, timeout=10)\n        return resp.json()\n    except Exception:\n        return None\n\ndef apply[T, U](func: Mapper[T, U], items: list[T]) -> list[U]:\n    return [func(item) for item in items]\n\n# Complex real-world aliases\ntype Config = dict[str, str | int | bool | list[str]]\ntype Middleware = Callable[['Request', 'Response'], 'Response']\ntype EventHandler = Callable[[str, dict], None]\n\n# Lazy evaluation (3.12): type aliases are not evaluated until accessed\ntype FutureClass = SomeClassNotYetDefined  # No error at definition time!\n# Only errors when FutureClass is actually used if SomeClassNotYetDefined does not exist\n\n# Backward compatibility\nimport sys\nif sys.version_info >= (3, 12):\n    # type Vector = list[float]  # 3.12+ syntax\n    pass\nelse:\n    from typing import TypeAlias\n    Vector: TypeAlias = list[float]",
+          "code_language": "python",
+          "key_points": [
+            "Python 3.12 type statement is the cleanest: type X = ... (lazy, supports forward refs)",
+            "Python 3.10 TypeAlias annotation is explicit: X: TypeAlias = ...",
+            "Pre-3.10 aliases are ambiguous (type alias vs regular variable)",
+            "3.12 type supports recursive aliases: type Tree = int | list[Tree]",
+            "Generic aliases: type Result[T] = T | None"
+          ],
+          "gotchas": [
+            "Pre-3.10 aliases are evaluated eagerly; forward references require string literals",
+            "3.12 type statement is lazy; the RHS is not evaluated until accessed",
+            "Cannot use type statement in older Python; fall back to TypeAlias annotation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Type aliases evolved: pre-3.10 `X = type`, 3.10 `X: TypeAlias = type`, 3.12 `type X = type`. The 3.12 `type` statement supports forward references, recursion, and generic parameters. Use it when available.",
+          "pseudo_code": "",
+          "actual_code": "# Python 3.12 (best)\ntype Vector = list[float]\ntype Result[T] = T | None\ntype JSON = str | int | float | bool | None | list[JSON] | dict[str, JSON]\n\n# Python 3.10\nfrom typing import TypeAlias\nVector: TypeAlias = list[float]",
+          "code_language": "python",
+          "key_points": [
+            "3.12 type statement: lazy, recursive, generic",
+            "3.10 TypeAlias: explicit but eagerly evaluated"
+          ],
+          "gotchas": [
+            "type statement is 3.12+ only"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key PEP improvements and features across Python 3.8-3.12?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["pep", "python-versions", "new-features"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A summary of the most impactful features from Python 3.8 through 3.12:\n\n**Python 3.8** (2019): Walrus operator `:=`, positional-only params `/`, f-string `=` debugging, `TypedDict`, `Protocol`, `Final`, `Literal`.\n\n**Python 3.9** (2020): Dict merge `|`, built-in generics (`list[int]` instead of `List[int]`), `str.removeprefix/removesuffix`, `zoneinfo` for timezone support.\n\n**Python 3.10** (2021): `match/case`, `int | str` union syntax, `TypeAlias`, `ParamSpec`, `TypeGuard`, better error messages, `zip(strict=True)`.\n\n**Python 3.11** (2022): 10-25% faster, `ExceptionGroup`/`except*`, `tomllib`, `Self` type, fine-grained error tracebacks, `TaskGroup` for asyncio.\n\n**Python 3.12** (2023): Type parameter syntax `[T]`, `type` statement, `@override`, f-string improvements (nested f-strings), per-interpreter GIL.\n\n**Python 3.13** (2024): Experimental free-threaded (no-GIL) build, JIT compiler experiment, `TypeIs`.",
+          "pseudo_code": "3.8: walrus :=, positional-only /, f'{x=}'\n3.9: dict |, list[int], removeprefix\n3.10: match/case, X | Y, TypeAlias\n3.11: faster, ExceptionGroup, tomllib, Self\n3.12: def f[T](), type X=, @override\n3.13: no-GIL experiment, JIT",
+          "actual_code": "# Python 3.8: walrus operator\nif (n := len(items)) > 10:\n    print(f\"Too many: {n}\")\n\n# Python 3.8: positional-only parameters\ndef greet(name, /, greeting='Hello'):\n    return f\"{greeting}, {name}\"\n\n# Python 3.9: dict merge\nconfig = defaults | overrides\n\n# Python 3.9: built-in generics (no import needed)\ndef process(items: list[int]) -> dict[str, int]:\n    return {str(i): i for i in items}\n\n# Python 3.9: removeprefix/removesuffix\nfilename = 'test_data.py'\nprint(filename.removeprefix('test_'))  # 'data.py'\nprint(filename.removesuffix('.py'))    # 'test_data'\n\n# Python 3.10: match/case\nmatch command:\n    case [\"go\", direction]:\n        move(direction)\n    case _:\n        print(\"Unknown\")\n\n# Python 3.10: union syntax\ndef parse(value: int | str) -> int:\n    return int(value)\n\n# Python 3.10: zip strict mode\nnames = ['Alice', 'Bob']\nscores = [85, 92, 78]\n# zip(names, scores, strict=True)  # ValueError: unequal lengths!\n\n# Python 3.11: ExceptionGroup\ntry:\n    raise ExceptionGroup(\"errors\", [ValueError(\"v\"), TypeError(\"t\")])\nexcept* ValueError:\n    print(\"Handled value errors\")\n\n# Python 3.11: Self type\nfrom typing import Self\n\nclass Builder:\n    def set_name(self, name: str) -> Self:\n        self.name = name\n        return self\n\n# Python 3.11: tomllib\nimport tomllib\nwith open('config.toml', 'rb') as f:\n    config = tomllib.load(f)\n\n# Python 3.12: type parameter syntax\ndef first[T](items: list[T]) -> T:\n    return items[0]\n\nclass Stack[T]:\n    def push(self, item: T) -> None: ...\n\ntype Vector = list[float]\n\n# Python 3.12: @override\nfrom typing import override\n\nclass Child(Parent):\n    @override\n    def method(self) -> str:\n        return \"child\"\n\n# Summary: minimum version for each feature\n# 3.8:  :=, f'{x=}', Protocol, TypedDict\n# 3.9:  list[int], dict |, removeprefix\n# 3.10: match/case, X | Y, zip(strict=True)\n# 3.11: ExceptionGroup, Self, tomllib, 10-25% faster\n# 3.12: def f[T](), type X=, @override\n# 3.13: no-GIL (experimental), TypeIs",
+          "code_language": "python",
+          "key_points": [
+            "3.8: walrus :=, f-string =, Protocol, positional-only params",
+            "3.9: dict |, list[int] generics, removeprefix/removesuffix",
+            "3.10: match/case, X | Y union, ParamSpec, zip(strict=True)",
+            "3.11: ExceptionGroup, Self type, tomllib, 10-25% faster",
+            "3.12: type parameter syntax [T], type statement, @override"
+          ],
+          "gotchas": [
+            "Always check your target Python version before using new features",
+            "typing_extensions backports many typing features to older versions",
+            "Python 3.13 no-GIL is experimental; not ready for production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key features per version: 3.8 (walrus, f-string =), 3.9 (dict |, list[int]), 3.10 (match/case, X|Y), 3.11 (ExceptionGroup, Self, faster), 3.12 (def f[T](), type X=, @override). Check target version before using.",
+          "pseudo_code": "",
+          "actual_code": "# 3.8:  if (n := len(x)) > 10: ...\n# 3.9:  config = d1 | d2; items: list[int]\n# 3.10: match cmd: case ['go', dir]: ...\n# 3.11: except* ValueError; from typing import Self\n# 3.12: def f[T](x: T) -> T; type Vec = list[float]",
+          "code_language": "python",
+          "key_points": [
+            "Each version adds major features; check minimum version requirements",
+            "typing_extensions backports many features"
+          ],
+          "gotchas": [
+            "Always check target Python version before using new syntax"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use dataclass inheritance and field customization patterns?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["dataclasses", "inheritance", "patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dataclass inheritance follows Python's normal class inheritance, with some nuances around field ordering and default values.\n\n**Key rules**:\n1. Child fields are added after parent fields in `__init__`.\n2. If a parent field has a default, ALL child fields must also have defaults.\n3. Use `field(kw_only=True)` (3.10+) to allow defaults in parents with required fields in children.\n4. `__post_init__` chains: child's `__post_init__` should call `super().__post_init__()`.",
+          "pseudo_code": "Parent fields come first in __init__\nParent default -> child must have defaults too\nkw_only=True (3.10+) solves the ordering problem\nChild __post_init__ should call super().__post_init__()",
+          "actual_code": "from dataclasses import dataclass, field\nfrom datetime import datetime\n\n# Basic inheritance\n@dataclass\nclass Animal:\n    name: str\n    species: str\n\n@dataclass\nclass Dog(Animal):\n    breed: str\n    trained: bool = False\n\ndog = Dog(name='Rex', species='Canine', breed='Labrador')\nprint(dog)  # Dog(name='Rex', species='Canine', breed='Labrador', trained=False)\n\n# Problem: parent with defaults + child without defaults\n# @dataclass\n# class Base:\n#     x: int\n#     y: int = 0  # Has default\n#\n# @dataclass\n# class Child(Base):\n#     z: int  # No default -> TypeError! (non-default after default)\n\n# Solution 1: kw_only=True (Python 3.10+)\n@dataclass(kw_only=True)\nclass Base:\n    x: int\n    y: int = 0\n\n@dataclass(kw_only=True)\nclass Child(Base):\n    z: int  # OK: keyword-only, no ordering issue\n\nc = Child(x=1, z=3)  # y defaults to 0\n\n# Solution 2: All child fields have defaults\n@dataclass\nclass Base2:\n    x: int\n    y: int = 0\n\n@dataclass\nclass Child2(Base2):\n    z: int = 0  # Must have default since parent y has default\n\n# __post_init__ chaining\n@dataclass\nclass Timestamped:\n    created_at: datetime = field(default_factory=datetime.utcnow, repr=False)\n    updated_at: datetime = field(default_factory=datetime.utcnow, repr=False)\n\n    def __post_init__(self):\n        pass  # Base validation\n\n@dataclass\nclass User(Timestamped):\n    name: str = ''\n    email: str = ''\n\n    def __post_init__(self):\n        super().__post_init__()  # Call parent's __post_init__\n        if self.email and '@' not in self.email:\n            raise ValueError(f\"Invalid email: {self.email}\")\n\nuser = User(name='Alice', email='alice@example.com')\nprint(user)  # User(name='Alice', email='alice@example.com')\n\n# Mixin pattern with dataclasses\n@dataclass\nclass Serializable:\n    def to_dict(self) -> dict:\n        from dataclasses import asdict\n        return asdict(self)\n\n    def to_json(self) -> str:\n        import json\n        return json.dumps(self.to_dict(), default=str)\n\n@dataclass\nclass Validatable:\n    def validate(self) -> list[str]:\n        errors = []\n        for f in fields(self):\n            value = getattr(self, f.name)\n            if value is None and f.default is not None:\n                errors.append(f\"{f.name} cannot be None\")\n        return errors\n\n@dataclass\nclass Product(Serializable):\n    name: str = ''\n    price: float = 0.0\n    tags: list[str] = field(default_factory=list)\n\np = Product('Widget', 9.99, ['sale'])\nprint(p.to_json())  # {\"name\": \"Widget\", \"price\": 9.99, \"tags\": [\"sale\"]}\n\n# Abstract dataclass\nfrom abc import ABC, abstractmethod\n\n@dataclass\nclass Shape(ABC):\n    color: str = 'black'\n\n    @abstractmethod\n    def area(self) -> float:\n        ...\n\n@dataclass\nclass Circle(Shape):\n    radius: float = 0.0\n\n    def area(self) -> float:\n        return 3.14159 * self.radius ** 2\n\nc = Circle(color='red', radius=5)\nprint(f\"Area: {c.area():.2f}\")  # Area: 78.54",
+          "code_language": "python",
+          "key_points": [
+            "Child fields follow parent fields in __init__; defaults must follow non-defaults",
+            "kw_only=True (3.10+) solves the parent-default/child-required ordering issue",
+            "Call super().__post_init__() in child to chain validation",
+            "Mixin classes add behavior (to_dict, validate) without fields",
+            "Abstract dataclasses combine ABC with @dataclass"
+          ],
+          "gotchas": [
+            "Non-default fields cannot follow default fields across the inheritance chain (without kw_only)",
+            "Each @dataclass in the chain generates its own __init__; child overwrites parent's",
+            "frozen=True parent + non-frozen child is not allowed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dataclass inheritance: child fields follow parent in `__init__`. If parent has defaults, child fields must too (or use `kw_only=True` in 3.10+). Chain `__post_init__` with `super().__post_init__()`.",
+          "pseudo_code": "",
+          "actual_code": "# kw_only solves ordering (3.10+)\n@dataclass(kw_only=True)\nclass Base:\n    x: int\n    y: int = 0\n\n@dataclass(kw_only=True)\nclass Child(Base):\n    z: int  # OK despite no default\n\nc = Child(x=1, z=3)  # y=0 by default",
+          "code_language": "python",
+          "key_points": [
+            "kw_only=True fixes default ordering; chain __post_init__ with super()",
+            "Mixin classes add methods without fields"
+          ],
+          "gotchas": [
+            "Non-default fields cannot follow default fields without kw_only"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use asyncio.TaskGroup for structured concurrency (Python 3.11+)?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["asyncio", "taskgroup", "structured-concurrency", "python-3.11"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**asyncio.TaskGroup** (PEP 654, Python 3.11+) provides **structured concurrency**: a pattern where concurrent tasks have a well-defined lifetime and error propagation.\n\nBefore TaskGroup, you used `asyncio.gather()` which had weak error handling: if one task failed, others might not be canceled or their errors might be lost.\n\nTaskGroup guarantees:\n1. All tasks complete (or are canceled) before the `async with` block exits.\n2. If any task raises, all remaining tasks are canceled.\n3. All exceptions are collected into an `ExceptionGroup`.",
+          "pseudo_code": "async with asyncio.TaskGroup() as tg:\n    task1 = tg.create_task(coroutine1())\n    task2 = tg.create_task(coroutine2())\n# All tasks guaranteed complete here\n# Errors raised as ExceptionGroup",
+          "actual_code": "import asyncio\n\n# Basic TaskGroup usage\nasync def fetch_data(name: str, delay: float) -> dict:\n    await asyncio.sleep(delay)  # Simulate network request\n    return {'name': name, 'data': f'Result from {name}'}\n\nasync def main():\n    async with asyncio.TaskGroup() as tg:\n        task1 = tg.create_task(fetch_data('api1', 1.0))\n        task2 = tg.create_task(fetch_data('api2', 0.5))\n        task3 = tg.create_task(fetch_data('api3', 1.5))\n\n    # All tasks are complete here\n    print(task1.result())  # {'name': 'api1', 'data': 'Result from api1'}\n    print(task2.result())  # {'name': 'api2', 'data': 'Result from api2'}\n    print(task3.result())  # {'name': 'api3', 'data': 'Result from api3'}\n\nasyncio.run(main())\n\n# Error handling: all exceptions collected\nasync def risky_task(n: int) -> int:\n    await asyncio.sleep(0.1)\n    if n % 2 == 0:\n        raise ValueError(f\"Even number: {n}\")\n    return n * 2\n\nasync def main_with_errors():\n    try:\n        async with asyncio.TaskGroup() as tg:\n            tasks = [tg.create_task(risky_task(i)) for i in range(5)]\n    except* ValueError as eg:\n        print(f\"{len(eg.exceptions)} tasks failed:\")\n        for e in eg.exceptions:\n            print(f\"  - {e}\")\n        # Successful tasks still have results\n        for task in tasks:\n            if not task.cancelled() and task.exception() is None:\n                print(f\"  Success: {task.result()}\")\n\n# asyncio.run(main_with_errors())\n\n# Comparison: TaskGroup vs gather\n# Old way with gather (weaker error handling)\nasync def main_gather():\n    results = await asyncio.gather(\n        fetch_data('api1', 1.0),\n        fetch_data('api2', 0.5),\n        return_exceptions=True,  # Returns exceptions as values\n    )\n    for result in results:\n        if isinstance(result, Exception):\n            print(f\"Error: {result}\")\n        else:\n            print(f\"Success: {result}\")\n\n# New way with TaskGroup (structured concurrency)\nasync def main_taskgroup():\n    async with asyncio.TaskGroup() as tg:\n        task1 = tg.create_task(fetch_data('api1', 1.0))\n        task2 = tg.create_task(fetch_data('api2', 0.5))\n    # Guaranteed: both tasks done, errors raised as ExceptionGroup\n\n# Real-world: parallel API calls with timeout\nasync def fetch_with_timeout(url: str, timeout: float = 5.0) -> dict:\n    async with asyncio.timeout(timeout):\n        await asyncio.sleep(0.5)  # Simulate request\n        return {'url': url, 'status': 200}\n\nasync def fetch_all_apis():\n    urls = ['https://api1.com', 'https://api2.com', 'https://api3.com']\n    results = []\n\n    async with asyncio.TaskGroup() as tg:\n        tasks = [tg.create_task(fetch_with_timeout(url)) for url in urls]\n\n    return [task.result() for task in tasks]",
+          "code_language": "python",
+          "key_points": [
+            "TaskGroup ensures all tasks complete before the async with block exits",
+            "If any task fails, all remaining tasks are canceled automatically",
+            "Errors are collected into an ExceptionGroup; use except* to handle",
+            "create_task returns a Task; access results with .result() after the block",
+            "Replaces asyncio.gather with better error handling and structured lifetimes"
+          ],
+          "gotchas": [
+            "TaskGroup raises ExceptionGroup, not individual exceptions; use except* to handle",
+            "Cannot add tasks to a TaskGroup after its async with block has started exiting",
+            "asyncio.timeout() (3.11+) works well with TaskGroup for per-task timeouts"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`asyncio.TaskGroup` (3.11+) provides structured concurrency: all tasks complete or are canceled before the block exits. Errors become `ExceptionGroup`. Replaces `asyncio.gather` with better error handling.",
+          "pseudo_code": "",
+          "actual_code": "async with asyncio.TaskGroup() as tg:\n    t1 = tg.create_task(fetch('api1'))\n    t2 = tg.create_task(fetch('api2'))\n# Both tasks done here\nprint(t1.result(), t2.result())\n\n# Error handling\ntry:\n    async with asyncio.TaskGroup() as tg:\n        tg.create_task(risky())\nexcept* ValueError as eg:\n    print(f\"{len(eg.exceptions)} failures\")",
+          "code_language": "python",
+          "key_points": [
+            "Structured concurrency: tasks have defined lifetimes",
+            "Errors as ExceptionGroup; except* to handle"
+          ],
+          "gotchas": [
+            "Uses ExceptionGroup, not regular exceptions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the improvements to f-strings in Python 3.12?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["f-strings", "python-3.12", "string-formatting"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3.12 (PEP 701) made major improvements to f-strings by reimplementing the parser:\n\n1. **Nested f-strings**: You can now use f-strings inside f-strings.\n2. **Same quote reuse**: Use the same quote character inside and outside.\n3. **Backslash in expressions**: Backslashes are now allowed in f-string expressions.\n4. **Multi-line expressions**: Expressions can span multiple lines with comments.\n5. **Better error messages**: More precise syntax errors.",
+          "pseudo_code": "Pre-3.12 limitations removed:\n- Can now nest f-strings: f\"{f'{x}'}\"  \n- Can reuse quotes: f\"{'hello'}\" (same quotes)\n- Can use backslash: f\"{chr(10)}\" or f\"{'\\n'.join(items)}\"\n- Multi-line expressions with # comments",
+          "actual_code": "# Python 3.12: Nested f-strings\nusers = [{'name': 'Alice', 'role': 'admin'}, {'name': 'Bob', 'role': 'user'}]\n\n# Before 3.12: had to use different quote styles or variables\n# f\"{', '.join(f'{u[\"name\"]}' for u in users)}\"  # SyntaxError pre-3.12!\n\n# Python 3.12: same quotes work\nresult = f\"Users: {', '.join(f\"{u['name']}\" for u in users)}\"\nprint(result)  # Users: Alice, Bob\n\n# Nested f-strings for formatting\nvalue = 3.14159\nwidth = 10\nresult = f\"{f'{value:.2f}':>{width}}\"\nprint(result)  # '      3.14'\n\n# Backslashes in f-string expressions (new in 3.12)\nitems = ['apple', 'banana', 'cherry']\nresult = f\"Items: {'\\n'.join(items)}\"  # Was SyntaxError before 3.12!\nprint(result)\n# Items: apple\n# banana\n# cherry\n\n# Multi-line expressions with comments\ndata = {'name': 'Alice', 'age': 30, 'city': 'NYC'}\nresult = f\"User: {data['name']  # Get the name\n}, Age: {data['age']  # Get the age\n}\"\n\n# Practical: complex formatting\nfrom datetime import datetime\n\nevents = [\n    {'name': 'Meeting', 'date': datetime(2024, 1, 15, 10, 30)},\n    {'name': 'Lunch', 'date': datetime(2024, 1, 15, 12, 0)},\n]\n\n# Complex nested f-strings\nschedule = f\"\"\"Today's Schedule:\n{chr(10).join(\n    f\"  {i+1}. {e['name']} at {f\"{e['date']:%H:%M}\"}\"  # Nested f-string!\n    for i, e in enumerate(events)\n)}\"\"\"\nprint(schedule)\n# Today's Schedule:\n#   1. Meeting at 10:30\n#   2. Lunch at 12:00\n\n# Before 3.12 workarounds that are no longer needed:\n\n# Workaround 1: different quotes (still works, no longer necessary)\nresult = f\"Name: {user['name']}\"  # Single inside double\nresult = f'Name: {user[\"name\"]}'  # Double inside single\n\n# Workaround 2: variable for backslash (no longer needed in 3.12)\nnewline = '\\n'\nresult = f\"Items: {newline.join(items)}\"  # Pre-3.12 workaround\n\n# Workaround 3: helper function (no longer needed)\ndef join_lines(items):\n    return '\\n'.join(items)\nresult = f\"Items: {join_lines(items)}\"  # Pre-3.12 workaround\n\n# Better error messages in 3.12\n# Before: generic SyntaxError\n# After: specific error pointing to the exact problem in the f-string",
+          "code_language": "python",
+          "key_points": [
+            "Python 3.12 allows nested f-strings: f\"{f'{x}'}\"",
+            "Same quote character can be used inside and outside f-string expressions",
+            "Backslashes are now allowed in f-string expressions",
+            "Multi-line expressions with comments inside f-strings",
+            "Better error messages for f-string syntax errors"
+          ],
+          "gotchas": [
+            "These improvements require Python 3.12+; older versions still have the restrictions",
+            "While possible, deeply nested f-strings can hurt readability; use variables when complex",
+            "Pre-3.12 workarounds (different quotes, helper functions) still work and may be more readable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python 3.12 removes f-string limitations: nested f-strings, same-quote reuse, backslashes in expressions, and multi-line expressions all work now. Better error messages too.",
+          "pseudo_code": "",
+          "actual_code": "# Python 3.12: nested f-strings\nresult = f\"Users: {', '.join(f\"{u['name']}\" for u in users)}\"\n\n# Backslash in expressions\nresult = f\"Items: {'\\n'.join(items)}\"\n\n# Same quotes inside and outside\nresult = f\"Hello {f\"{name}\"}\"",
+          "code_language": "python",
+          "key_points": [
+            "Nested f-strings, same quotes, backslashes all allowed in 3.12",
+            "Better error messages for f-string syntax errors"
+          ],
+          "gotchas": [
+            "3.12+ only; use variable workarounds for older versions"
+          ]
+        }
+      ]
+    }
+  ]
+}

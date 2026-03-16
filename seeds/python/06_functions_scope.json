@@ -1,0 +1,761 @@
+{
+  "concept_slug": "functions-scope",
+  "questions": [
+    {
+      "title": "How do you define and call functions in Python?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["def", "functions", "basics"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Functions are defined with the `def` keyword:\n\n```python\ndef function_name(parameters):\n    \"\"\"Docstring.\"\"\"\n    body\n    return value\n```\n\n**Key rules:**\n- `def` creates a function object and binds it to the name\n- Parameters are local to the function\n- `return` sends a value back (default is `None`)\n- Functions are first-class objects (can be assigned, passed, stored)\n- Indentation defines the function body\n\n**Return behavior:**\n- `return` with no value returns `None`\n- No `return` statement returns `None`\n- Can return multiple values (actually returns a tuple)\n- `return` immediately exits the function",
+          "pseudo_code": "def name(params):\n    \"\"\"docstring\"\"\"\n    body\n    return value\n\n- Functions are objects\n- return None by default\n- return x, y returns a tuple (x, y)",
+          "actual_code": "# Basic function\ndef greet(name):\n    \"\"\"Return a greeting string.\"\"\"\n    return f\"Hello, {name}!\"\n\nprint(greet(\"Alice\"))  # Hello, Alice!\n\n# Function without return\ndef print_greeting(name):\n    print(f\"Hello, {name}!\")\n\nresult = print_greeting(\"Bob\")  # prints: Hello, Bob!\nprint(result)                   # None\n\n# Multiple return values (tuple)\ndef min_max(numbers):\n    return min(numbers), max(numbers)\n\nlo, hi = min_max([3, 1, 4, 1, 5])\nprint(f\"min={lo}, max={hi}\")  # min=1, max=5\n\nresult = min_max([3, 1, 4])\nprint(type(result))  # <class 'tuple'>\n\n# Early return\ndef divide(a, b):\n    if b == 0:\n        return None  # early exit\n    return a / b\n\nprint(divide(10, 3))   # 3.333...\nprint(divide(10, 0))   # None\n\n# Functions are objects\ndef square(x):\n    return x ** 2\n\nf = square           # assign function to variable\nprint(f(5))          # 25\nprint(type(square))  # <class 'function'>\n\n# Functions can be passed as arguments\ndef apply(func, value):\n    return func(value)\n\nprint(apply(square, 4))     # 16\nprint(apply(len, \"hello\"))  # 5\n\n# Nested function definition\ndef outer():\n    def inner():\n        return \"inner\"\n    return inner()\n\nprint(outer())  # 'inner'\n\n# Docstring access\nprint(greet.__doc__)  # 'Return a greeting string.'\nhelp(greet)",
+          "code_language": "python",
+          "key_points": [
+            "def creates a function object bound to a name",
+            "return None by default (no return or bare return)",
+            "Multiple return values are actually tuples",
+            "Functions are first-class objects (assignable, passable)",
+            "Docstrings are accessible via __doc__ or help()"
+          ],
+          "gotchas": [
+            "def is executed at runtime, not compile time -- function is created when def runs",
+            "Functions without return give None -- do not use the result accidentally",
+            "Parameter names are local -- they do not affect variables with the same name outside",
+            "return immediately exits -- code after return is unreachable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define with `def name(params):`, call with `name(args)`. Returns `None` by default. Multiple returns create a tuple. Functions are first-class objects.",
+          "pseudo_code": "",
+          "actual_code": "def add(a, b):\n    return a + b\n\nprint(add(3, 4))  # 7\n\ndef min_max(lst):\n    return min(lst), max(lst)  # returns tuple\n\nlo, hi = min_max([1, 5, 3])",
+          "code_language": "python",
+          "key_points": [
+            "return None by default",
+            "Functions are first-class objects"
+          ],
+          "gotchas": [
+            "Functions without return give None"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do default arguments work in Python and what is the mutable default argument trap?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["default-arguments", "mutable-default", "gotcha"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Default arguments provide a value when the caller does not supply one:\n\n```python\ndef func(a, b=10, c='hello'):\n```\n\n**Critical rule:** Default values are evaluated **once** when the function is **defined**, not each time the function is called.\n\nThis creates the **mutable default argument trap**: if the default is a mutable object (list, dict, set), the same object is shared across all calls.\n\n**The fix:** Use `None` as the default and create a fresh object inside the function.\n\n**Why this happens:** The default value is stored as an attribute of the function object (`func.__defaults__`). Since `def` runs once, the default is created once.",
+          "pseudo_code": "TRAP:\n  def f(lst=[]):       # default [] created ONCE at def time\n      lst.append(1)    # mutates the SAME list\n      return lst\n  f() -> [1]\n  f() -> [1, 1]  # BUG!\n\nFIX:\n  def f(lst=None):     # None is immutable sentinel\n      if lst is None:\n          lst = []     # fresh list each call\n      lst.append(1)\n      return lst",
+          "actual_code": "# Default arguments\ndef greet(name, greeting=\"Hello\"):\n    return f\"{greeting}, {name}!\"\n\nprint(greet(\"Alice\"))               # Hello, Alice!\nprint(greet(\"Bob\", \"Howdy\"))        # Howdy, Bob!\n\n# THE MUTABLE DEFAULT TRAP\ndef bad_append(item, lst=[]):\n    lst.append(item)\n    return lst\n\nprint(bad_append(1))  # [1]\nprint(bad_append(2))  # [1, 2] -- BUG! Same list reused!\nprint(bad_append(3))  # [1, 2, 3] -- keeps accumulating!\n\n# Inspect the default\nprint(bad_append.__defaults__)  # ([1, 2, 3],) -- stored on function\n\n# THE FIX: Use None sentinel\ndef good_append(item, lst=None):\n    if lst is None:\n        lst = []\n    lst.append(item)\n    return lst\n\nprint(good_append(1))  # [1]\nprint(good_append(2))  # [2] -- fresh list each time!\nprint(good_append(3, [10, 20]))  # [10, 20, 3] -- uses provided list\n\n# Same trap with dict\ndef bad_config(key, value, config={}):\n    config[key] = value\n    return config\n\nprint(bad_config(\"a\", 1))  # {'a': 1}\nprint(bad_config(\"b\", 2))  # {'a': 1, 'b': 2} -- BUG!\n\n# Fix\ndef good_config(key, value, config=None):\n    if config is None:\n        config = {}\n    config[key] = value\n    return config\n\n# Default evaluated at def time, not call time\nimport datetime\n\ndef bad_timestamp(when=datetime.datetime.now()):\n    return when\n\nt1 = bad_timestamp()\nimport time\ntime.sleep(0.1)\nt2 = bad_timestamp()\nprint(t1 == t2)  # True! Same timestamp -- evaluated once at def time\n\ndef good_timestamp(when=None):\n    if when is None:\n        when = datetime.datetime.now()\n    return when",
+          "code_language": "python",
+          "key_points": [
+            "Default values are evaluated ONCE at function definition time",
+            "Mutable defaults (list, dict, set) are shared across calls",
+            "Always use None as default for mutable arguments",
+            "The pattern: if param is None: param = fresh_value",
+            "Defaults are stored in func.__defaults__"
+          ],
+          "gotchas": [
+            "def f(lst=[]): is one of Python's most common beginner bugs",
+            "datetime.now() as default gives the same time every call",
+            "The None pattern also applies to dicts, sets, and any mutable object",
+            "Default arguments must come after non-default: def f(a, b=1) is OK, def f(a=1, b) is not"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Default values are evaluated **once** at definition time. Mutable defaults (list, dict) are shared across calls -- use `None` sentinel instead.",
+          "pseudo_code": "",
+          "actual_code": "# BUG:\ndef bad(lst=[]):\n    lst.append(1)\n    return lst\nprint(bad(), bad())  # [1] [1, 1]\n\n# FIX:\ndef good(lst=None):\n    if lst is None:\n        lst = []\n    lst.append(1)\n    return lst\nprint(good(), good())  # [1] [1]",
+          "code_language": "python",
+          "key_points": [
+            "Defaults evaluated once at def time",
+            "Use None sentinel for mutable defaults"
+          ],
+          "gotchas": [
+            "def f(lst=[]): shares the same list across calls"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do *args and **kwargs work?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["args", "kwargs", "variadic", "unpacking"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`*args` collects extra **positional** arguments into a tuple.\n`**kwargs` collects extra **keyword** arguments into a dict.\n\n**Order in function signature:**\n```python\ndef func(pos1, pos2, /, normal, *args, kw_only, **kwargs):\n```\n1. Positional-only (before `/`)\n2. Normal parameters\n3. `*args` (catches remaining positional)\n4. Keyword-only (after `*args` or bare `*`)\n5. `**kwargs` (catches remaining keyword)\n\n**Unpacking in function calls:**\n- `func(*iterable)` unpacks iterable as positional args\n- `func(**dict)` unpacks dict as keyword args",
+          "pseudo_code": "def func(*args, **kwargs):\n    args is a tuple of positional arguments\n    kwargs is a dict of keyword arguments\n\nCalling:\n    func(1, 2, 3, a=4, b=5)\n    args = (1, 2, 3)\n    kwargs = {'a': 4, 'b': 5}\n\nUnpacking:\n    func(*[1, 2, 3])  -> func(1, 2, 3)\n    func(**{'a': 1})   -> func(a=1)",
+          "actual_code": "# *args -- collects positional arguments into tuple\ndef sum_all(*args):\n    print(f\"args = {args}\")  # tuple\n    return sum(args)\n\nprint(sum_all(1, 2, 3))       # args = (1, 2, 3), returns 6\nprint(sum_all(1, 2, 3, 4, 5)) # args = (1, 2, 3, 4, 5), returns 15\n\n# **kwargs -- collects keyword arguments into dict\ndef print_info(**kwargs):\n    print(f\"kwargs = {kwargs}\")  # dict\n    for key, value in kwargs.items():\n        print(f\"  {key}: {value}\")\n\nprint_info(name=\"Alice\", age=30, city=\"NYC\")\n# kwargs = {'name': 'Alice', 'age': 30, 'city': 'NYC'}\n\n# Both together\ndef func(a, b, *args, **kwargs):\n    print(f\"a={a}, b={b}\")\n    print(f\"args={args}\")\n    print(f\"kwargs={kwargs}\")\n\nfunc(1, 2, 3, 4, x=5, y=6)\n# a=1, b=2\n# args=(3, 4)\n# kwargs={'x': 5, 'y': 6}\n\n# Unpacking in calls\ndef add(a, b, c):\n    return a + b + c\n\nnums = [1, 2, 3]\nprint(add(*nums))  # 6 (unpacks list as positional args)\n\nkw = {\"a\": 1, \"b\": 2, \"c\": 3}\nprint(add(**kw))   # 6 (unpacks dict as keyword args)\n\n# Forwarding arguments (decorator pattern)\ndef decorator(func):\n    def wrapper(*args, **kwargs):\n        print(f\"Calling {func.__name__}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n@decorator\ndef greet(name, greeting=\"Hello\"):\n    return f\"{greeting}, {name}!\"\n\nprint(greet(\"Alice\"))  # Calling greet, Hello, Alice!\n\n# Practical: merge dicts with **\ndef create_user(**kwargs):\n    defaults = {\"role\": \"user\", \"active\": True}\n    return {**defaults, **kwargs}\n\nuser = create_user(name=\"Alice\", role=\"admin\")\nprint(user)  # {'role': 'admin', 'active': True, 'name': 'Alice'}\n\n# *args to forward to another function\ndef log_and_call(func, *args, **kwargs):\n    print(f\"Calling {func.__name__} with args={args}, kwargs={kwargs}\")\n    return func(*args, **kwargs)\n\nresult = log_and_call(max, 1, 5, 3)\nprint(result)  # 5",
+          "code_language": "python",
+          "key_points": [
+            "*args collects extra positional args as a tuple",
+            "**kwargs collects extra keyword args as a dict",
+            "Order: positional, *args, keyword-only, **kwargs",
+            "*iterable unpacks in calls, **dict unpacks as keywords",
+            "Common in decorators for argument forwarding"
+          ],
+          "gotchas": [
+            "*args and **kwargs are just naming conventions -- *x and **y also work",
+            "Cannot use *args and **kwargs with the same name as existing parameters",
+            "dict(**dict1, **dict2) fails on duplicate keys in Python < 3.9",
+            "Passing a dict as *args unpacks the keys, not the items"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`*args` collects extra positional args as a tuple. `**kwargs` collects extra keyword args as a dict. Use `*list` and `**dict` to unpack in calls.",
+          "pseudo_code": "",
+          "actual_code": "def func(*args, **kwargs):\n    print(args, kwargs)\n\nfunc(1, 2, x=3)  # (1, 2) {'x': 3}\n\ndef add(a, b): return a + b\nprint(add(*[3, 4]))    # 7\nprint(add(**{'a':3,'b':4}))  # 7",
+          "code_language": "python",
+          "key_points": [
+            "*args = tuple of positional, **kwargs = dict of keyword",
+            "Unpack with * and ** in calls"
+          ],
+          "gotchas": [
+            "*args/**kwargs are conventions -- any names work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are keyword-only and positional-only arguments?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["keyword-only", "positional-only", "function-signature"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python 3 allows you to enforce how arguments are passed:\n\n**Keyword-only arguments** (after `*` or `*args`):\nMust be passed by name. Cannot be passed positionally.\n```python\ndef func(a, b, *, key_only):\n```\n\n**Positional-only arguments** (before `/`, Python 3.8+):\nMust be passed by position. Cannot be passed by name.\n```python\ndef func(pos_only, /, normal):\n```\n\n**Full signature order:**\n```python\ndef func(pos_only, /, normal, *, kw_only):\n```\n\n**Why use these?**\n- Keyword-only: prevent ambiguity, force clarity (e.g., `verbose=True`)\n- Positional-only: allow parameter name changes without breaking callers, match C functions",
+          "pseudo_code": "def f(a, b, /, c, d, *, e, f):\n    a, b     -> positional only\n    c, d     -> normal (either way)\n    e, f     -> keyword only\n\nf(1, 2, 3, d=4, e=5, f=6)  # valid\nf(a=1, ...)  # TypeError (a is positional-only)\nf(1, 2, 3, 4, 5, 6)  # TypeError (e, f are keyword-only)",
+          "actual_code": "# Keyword-only arguments (after * or *args)\ndef connect(host, port, *, timeout=30, verbose=False):\n    print(f\"Connecting to {host}:{port} (timeout={timeout}, verbose={verbose})\")\n\nconnect(\"localhost\", 5432)                        # OK\nconnect(\"localhost\", 5432, timeout=60)             # OK\nconnect(\"localhost\", 5432, verbose=True)           # OK\n# connect(\"localhost\", 5432, 60)                   # TypeError! timeout is keyword-only\n\n# Bare * forces keyword-only for all following params\ndef create_user(*, name, email, role=\"user\"):\n    return {\"name\": name, \"email\": email, \"role\": role}\n\nuser = create_user(name=\"Alice\", email=\"alice@example.com\")\nprint(user)\n# create_user(\"Alice\", \"alice@example.com\")  # TypeError!\n\n# Positional-only arguments (before /, Python 3.8+)\ndef pow(base, exp, /):\n    return base ** exp\n\nprint(pow(2, 10))   # 1024\n# pow(base=2, exp=10)  # TypeError! positional-only\n\n# Why positional-only? Allows renaming without breaking callers\ndef distance(x1, y1, x2, y2, /):\n    return ((x2-x1)**2 + (y2-y1)**2) ** 0.5\n\nprint(distance(0, 0, 3, 4))  # 5.0\n# Can rename params without breaking anything\n\n# Full signature\ndef example(pos_only, /, normal, *, kw_only):\n    print(f\"pos={pos_only}, norm={normal}, kw={kw_only}\")\n\nexample(1, 2, kw_only=3)         # OK\nexample(1, normal=2, kw_only=3)  # OK\n# example(pos_only=1, ...)        # TypeError\n# example(1, 2, 3)                # TypeError\n\n# Real-world example: built-in functions use positional-only\n# len() only accepts positional:\nprint(len([1, 2, 3]))  # 3\n# len(obj=[1, 2, 3])   # TypeError\n\n# Keyword-only with *args\ndef func(a, *args, verbose=False):\n    if verbose:\n        print(f\"a={a}, extra={args}\")\n    return a\n\nfunc(1, 2, 3, verbose=True)  # a=1, extra=(2, 3)",
+          "code_language": "python",
+          "key_points": [
+            "After *: keyword-only (must pass by name)",
+            "Before /: positional-only (must pass by position, Python 3.8+)",
+            "Keyword-only prevents positional ambiguity",
+            "Positional-only allows internal parameter renaming",
+            "Many built-in functions use positional-only parameters"
+          ],
+          "gotchas": [
+            "Bare * (no args) forces all following to be keyword-only: def f(*, a, b)",
+            "Positional-only (/) requires Python 3.8+",
+            "You can have the same name for a positional-only param and a **kwargs key",
+            "Using keyword-only for boolean flags (verbose=True) is a best practice"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "After `*`: keyword-only (must use name). Before `/`: positional-only (must use position, Python 3.8+). Use keyword-only for clarity (`*, verbose=False`).",
+          "pseudo_code": "",
+          "actual_code": "def func(pos_only, /, normal, *, kw_only):\n    pass\n\nfunc(1, 2, kw_only=3)         # OK\nfunc(1, normal=2, kw_only=3)  # OK\n# func(pos_only=1, ...)       # TypeError",
+          "code_language": "python",
+          "key_points": [
+            "* for keyword-only, / for positional-only",
+            "Keyword-only for clarity on boolean flags"
+          ],
+          "gotchas": [
+            "/ requires Python 3.8+"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the LEGB scope rule in Python?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["LEGB", "scope", "namespace"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "LEGB is the order Python looks up variable names:\n\n**L** -- **Local:** Inside the current function\n**E** -- **Enclosing:** Inside enclosing functions (for nested functions)\n**G** -- **Global:** Module-level (top of the file)\n**B** -- **Built-in:** Python built-in names (`print`, `len`, `range`, etc.)\n\nPython searches from innermost to outermost scope. The first match wins.\n\n**Key rules:**\n- Assignment in a function makes a variable local (unless `global` or `nonlocal`)\n- Reading a variable searches LEGB\n- The `global` keyword accesses/modifies module-level variables\n- The `nonlocal` keyword accesses/modifies enclosing function variables",
+          "pseudo_code": "L - Local: variables inside current function\nE - Enclosing: variables in outer function (for closures)\nG - Global: module-level variables\nB - Built-in: print, len, range, etc.\n\nLookup: L -> E -> G -> B (first match wins)\nAssignment: creates in local scope by default",
+          "actual_code": "# Local scope\ndef func():\n    x = 10  # local\n    print(x)  # 10\n\nfunc()\n# print(x)  # NameError: x is not defined (local to func)\n\n# Global scope\nx = \"global\"\n\ndef func():\n    print(x)  # reads global x\n\nfunc()  # 'global'\n\n# Assignment creates local (shadowing)\nx = \"global\"\n\ndef func():\n    x = \"local\"  # creates NEW local x, does not modify global\n    print(x)     # 'local'\n\nfunc()\nprint(x)  # 'global' (unchanged)\n\n# The UnboundLocalError trap\nx = 10\n\ndef broken():\n    print(x)  # UnboundLocalError! x is local (due to assignment below)\n    x = 20    # this assignment makes x local for the ENTIRE function\n\n# broken()  # UnboundLocalError: local variable 'x' referenced before assignment\n\n# Enclosing scope (closures)\ndef outer():\n    x = \"enclosing\"\n    def inner():\n        print(x)  # reads from enclosing scope\n    inner()\n\nouter()  # 'enclosing'\n\n# global keyword\ncounter = 0\n\ndef increment():\n    global counter\n    counter += 1\n\nincrement()\nincrement()\nprint(counter)  # 2\n\n# nonlocal keyword (for enclosing scope)\ndef outer():\n    count = 0\n    def increment():\n        nonlocal count\n        count += 1\n    increment()\n    increment()\n    print(count)  # 2\n\nouter()\n\n# Built-in scope\nprint(len([1, 2, 3]))  # 3 -- len is in built-in scope\n\n# Shadowing built-ins (bad practice)\ndef bad_idea():\n    len = 42      # shadows built-in len\n    # print(len([1,2]))  # TypeError: 'int' object is not callable\n    print(len)    # 42\n\nbad_idea()\nprint(len([1, 2]))  # 2 -- global len is fine\n\n# LEGB in action\nx = \"global\"\n\ndef outer():\n    x = \"enclosing\"\n    def inner():\n        x = \"local\"\n        print(x)  # 'local' (L)\n    inner()\n    print(x)      # 'enclosing' (E)\n\nouter()\nprint(x)          # 'global' (G)",
+          "code_language": "python",
+          "key_points": [
+            "LEGB: Local -> Enclosing -> Global -> Built-in",
+            "Assignment in a function makes a variable local",
+            "global keyword to modify module-level variables",
+            "nonlocal keyword to modify enclosing function variables",
+            "UnboundLocalError occurs when reading before local assignment"
+          ],
+          "gotchas": [
+            "Assignment anywhere in a function makes the variable local for the ENTIRE function",
+            "UnboundLocalError: reading a variable before assignment when a later assignment makes it local",
+            "Shadowing built-ins (list = [], len = 42) is legal but dangerous",
+            "global and nonlocal are generally discouraged -- prefer return values and parameters"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "LEGB: **L**ocal -> **E**nclosing -> **G**lobal -> **B**uilt-in. Assignment makes a variable local. Use `global` for module-level and `nonlocal` for enclosing scope.",
+          "pseudo_code": "",
+          "actual_code": "x = \"global\"\ndef outer():\n    x = \"enclosing\"\n    def inner():\n        x = \"local\"\n        print(x)   # 'local'\n    inner()\n    print(x)       # 'enclosing'\nouter()\nprint(x)           # 'global'",
+          "code_language": "python",
+          "key_points": [
+            "Local -> Enclosing -> Global -> Built-in",
+            "Assignment makes variable local"
+          ],
+          "gotchas": [
+            "Assignment anywhere in a function makes it local for the ENTIRE function"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are global and nonlocal keywords and when should you use them?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["global", "nonlocal", "scope"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`global` declares that a variable inside a function refers to the **module-level** (global) variable.\n\n`nonlocal` declares that a variable inside a nested function refers to the **enclosing function's** variable.\n\nBoth are needed only for **assignment** -- reading from outer scopes works without them.\n\n**When to use:**\n- `global`: Module-level counters, configuration, singletons (use sparingly)\n- `nonlocal`: Closures that need to modify enclosing state (counters, accumulators)\n\n**Best practice:** Avoid `global` when possible. Prefer:\n- Return values from functions\n- Class attributes / instance variables\n- Mutable container arguments",
+          "pseudo_code": "global var: assignment modifies module-level variable\nnonlocal var: assignment modifies enclosing function's variable\n\nWithout these keywords:\n  - Reading from outer scopes: works automatically\n  - Assignment: creates a new local variable (shadows outer)",
+          "actual_code": "# global -- modify module-level variable\ntotal = 0\n\ndef add_to_total(amount):\n    global total\n    total += amount\n\nadd_to_total(10)\nadd_to_total(20)\nprint(total)  # 30\n\n# Without global: creates local variable\ntotal = 0\n\ndef broken_add(amount):\n    # total += amount  # UnboundLocalError without global!\n    pass\n\n# nonlocal -- modify enclosing function's variable\ndef make_counter():\n    count = 0\n    def increment():\n        nonlocal count\n        count += 1\n        return count\n    return increment\n\ncounter = make_counter()\nprint(counter())  # 1\nprint(counter())  # 2\nprint(counter())  # 3\n\n# Without nonlocal: creates local variable\ndef make_broken_counter():\n    count = 0\n    def increment():\n        # count += 1  # UnboundLocalError without nonlocal!\n        return 0\n    return increment\n\n# Workaround without nonlocal: mutable container\ndef make_counter_alt():\n    count = [0]  # mutable list\n    def increment():\n        count[0] += 1  # modifying contents, not rebinding\n        return count[0]\n    return increment\n\ncounter = make_counter_alt()\nprint(counter())  # 1\nprint(counter())  # 2\n\n# Why avoid global (prefer class or return)\nclass Counter:\n    def __init__(self):\n        self.value = 0\n    \n    def increment(self):\n        self.value += 1\n        return self.value\n\nc = Counter()\nprint(c.increment())  # 1\nprint(c.increment())  # 2\n\n# nonlocal with multiple nesting levels\ndef outer():\n    x = 1\n    def middle():\n        def inner():\n            nonlocal x  # refers to outer's x\n            x = 10\n        inner()\n        print(x)  # 10\n    middle()\n\nouter()",
+          "code_language": "python",
+          "key_points": [
+            "global: access/modify module-level variable inside a function",
+            "nonlocal: access/modify enclosing function variable in nested function",
+            "Only needed for assignment, not for reading",
+            "Prefer return values and classes over global",
+            "Mutable containers (list, dict) can work around nonlocal"
+          ],
+          "gotchas": [
+            "global and nonlocal must be declared before use in the function",
+            "nonlocal cannot refer to global scope -- only enclosing functions",
+            "Using global makes code harder to test and reason about",
+            "nonlocal in deeply nested functions refers to the nearest enclosing scope"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`global` modifies module-level variables. `nonlocal` modifies enclosing function variables. Both only needed for assignment. Prefer return values and classes.",
+          "pseudo_code": "",
+          "actual_code": "total = 0\ndef add(n):\n    global total\n    total += n\nadd(5); print(total)  # 5\n\ndef make_counter():\n    count = 0\n    def inc():\n        nonlocal count\n        count += 1\n        return count\n    return inc",
+          "code_language": "python",
+          "key_points": [
+            "global for module-level, nonlocal for enclosing scope",
+            "Only needed for assignment"
+          ],
+          "gotchas": [
+            "Avoid global when possible"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are first-class functions and higher-order functions?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["first-class", "higher-order", "functional"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Python, functions are **first-class objects**, meaning they can be:\n1. Assigned to variables\n2. Passed as arguments to other functions\n3. Returned from functions\n4. Stored in data structures (lists, dicts)\n5. Created at runtime\n\n**Higher-order functions** are functions that either:\n- Take a function as an argument, OR\n- Return a function\n\nBuilt-in higher-order functions: `map()`, `filter()`, `sorted()` (with key), `functools.reduce()`.\n\nThis is the foundation for decorators, callbacks, and functional programming patterns.",
+          "pseudo_code": "First-class: functions are objects\n  f = some_function    # assign to variable\n  funcs = [f1, f2]     # store in data structure\n  call(f)              # pass as argument\n  return f             # return from function\n\nHigher-order: takes or returns functions\n  map(func, iterable)\n  filter(func, iterable)\n  sorted(data, key=func)",
+          "actual_code": "# Functions are objects\ndef square(x):\n    return x ** 2\n\nprint(type(square))    # <class 'function'>\nprint(square.__name__) # 'square'\n\n# Assign to variable\nf = square\nprint(f(5))  # 25\n\n# Store in data structures\noperations = {\n    \"square\": lambda x: x ** 2,\n    \"double\": lambda x: x * 2,\n    \"negate\": lambda x: -x\n}\n\nfor name, func in operations.items():\n    print(f\"{name}(5) = {func(5)}\")\n\n# Pass as argument (higher-order function)\ndef apply_twice(func, value):\n    return func(func(value))\n\nprint(apply_twice(square, 3))   # 81 (square(square(3)) = square(9))\nprint(apply_twice(lambda x: x + 1, 5))  # 7\n\n# Return from function (function factory)\ndef make_multiplier(n):\n    def multiplier(x):\n        return x * n\n    return multiplier\n\ndouble = make_multiplier(2)\ntriple = make_multiplier(3)\nprint(double(5))   # 10\nprint(triple(5))   # 15\n\n# Built-in higher-order functions\nnumbers = [1, -2, 3, -4, 5]\n\n# map: apply function to each element\nsquares = list(map(square, numbers))\nprint(squares)  # [1, 4, 9, 16, 25]\n\n# filter: keep elements where function returns truthy\npositives = list(filter(lambda x: x > 0, numbers))\nprint(positives)  # [1, 3, 5]\n\n# sorted with key\nwords = [\"banana\", \"fig\", \"cherry\", \"apple\"]\nprint(sorted(words, key=len))  # ['fig', 'apple', 'banana', 'cherry']\n\n# functools.reduce\nfrom functools import reduce\nproduct = reduce(lambda a, b: a * b, [1, 2, 3, 4, 5])\nprint(product)  # 120\n\n# Practical: strategy pattern\ndef process_data(data, transform):\n    return [transform(x) for x in data]\n\ndata = [1, 2, 3, 4, 5]\nprint(process_data(data, str))             # ['1', '2', '3', '4', '5']\nprint(process_data(data, lambda x: x**2))  # [1, 4, 9, 16, 25]",
+          "code_language": "python",
+          "key_points": [
+            "Functions are objects: assignable, passable, returnable, storable",
+            "Higher-order functions take or return functions",
+            "Built-in HOFs: map, filter, sorted (with key), reduce",
+            "Function factories return customized functions",
+            "Foundation for decorators and functional patterns"
+          ],
+          "gotchas": [
+            "map() and filter() return iterators, not lists -- wrap with list() if needed",
+            "List comprehensions are often more Pythonic than map/filter",
+            "Assigning a function (f = func) does not copy it -- same object",
+            "reduce() was moved to functools in Python 3"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Functions are first-class objects: assignable, passable, returnable. Higher-order functions take or return functions. Built-in: `map()`, `filter()`, `sorted(key=)`, `reduce()`.",
+          "pseudo_code": "",
+          "actual_code": "def square(x): return x ** 2\nf = square          # assign\nprint(f(5))         # 25\n\n# Higher-order\nresult = list(map(square, [1, 2, 3]))  # [1, 4, 9]\npositives = list(filter(lambda x: x > 0, [-1, 2, -3, 4]))",
+          "code_language": "python",
+          "key_points": [
+            "Functions are objects",
+            "Higher-order: takes or returns functions"
+          ],
+          "gotchas": [
+            "map/filter return iterators in Python 3"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are lambda functions and when should you use them?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["lambda", "anonymous", "inline"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `lambda` is an anonymous (unnamed) function defined in a single expression:\n\n```python\nlambda parameters: expression\n```\n\n**Limitations:**\n- Single expression only (no statements, no assignments, no multi-line)\n- No docstrings\n- Harder to debug (shows as `<lambda>` in tracebacks)\n\n**When to use:**\n- Short, throwaway functions (especially as arguments to `sorted`, `map`, `filter`)\n- Key functions: `sorted(data, key=lambda x: x[1])`\n- Simple callbacks\n\n**When NOT to use:**\n- Complex logic (use `def`)\n- When you need a name for clarity\n- When you need multiple statements\n- When assigning to a variable (PEP 8 says use `def`)",
+          "pseudo_code": "lambda x: x ** 2  # equivalent to def f(x): return x ** 2\nlambda x, y: x + y  # two parameters\nlambda: 42  # no parameters\n\nUse for: short callbacks, key functions, inline\nAvoid for: complex logic, named assignments",
+          "actual_code": "# Basic lambda\nsquare = lambda x: x ** 2   # PEP 8: prefer def for assignments\nprint(square(5))  # 25\n\n# Multiple parameters\nadd = lambda x, y: x + y\nprint(add(3, 4))  # 7\n\n# No parameters\ngreeting = lambda: \"Hello!\"\nprint(greeting())  # Hello!\n\n# Common use: key functions\nstudents = [(\"Alice\", 95), (\"Bob\", 87), (\"Charlie\", 92)]\nby_grade = sorted(students, key=lambda s: s[1], reverse=True)\nprint(by_grade)  # [('Alice', 95), ('Charlie', 92), ('Bob', 87)]\n\n# Common use: map and filter\nnumbers = [1, 2, 3, 4, 5]\nsquares = list(map(lambda x: x**2, numbers))\nprint(squares)  # [1, 4, 9, 16, 25]\n\nevens = list(filter(lambda x: x % 2 == 0, numbers))\nprint(evens)  # [2, 4]\n\n# Lambda with conditional\nabs_val = lambda x: x if x >= 0 else -x\nprint(abs_val(-5))  # 5\n\n# Lambda in data structures\noperations = {\n    \"+\": lambda a, b: a + b,\n    \"-\": lambda a, b: a - b,\n    \"*\": lambda a, b: a * b,\n    \"/\": lambda a, b: a / b if b != 0 else None\n}\n\nprint(operations[\"+\"](10, 3))  # 13\nprint(operations[\"*\"](10, 3))  # 30\n\n# Lambda vs def -- prefer def for assignments\n# Bad (PEP 8):\nmy_func = lambda x: x ** 2\n\n# Good:\ndef my_func(x):\n    return x ** 2\n\n# Lambda closure gotcha\nfuncs = [lambda x: x + i for i in range(5)]\nprint([f(0) for f in funcs])  # [4, 4, 4, 4, 4] -- BUG! i is captured by reference\n\n# Fix: default argument captures value\nfuncs = [lambda x, i=i: x + i for i in range(5)]\nprint([f(0) for f in funcs])  # [0, 1, 2, 3, 4] -- correct",
+          "code_language": "python",
+          "key_points": [
+            "Lambda: anonymous single-expression function",
+            "Best for short callbacks and key functions",
+            "PEP 8: do not assign lambdas to variables -- use def instead",
+            "Limited: single expression, no statements, no docstrings",
+            "Common with sorted(), map(), filter()"
+          ],
+          "gotchas": [
+            "Lambda in a loop captures the variable by reference, not value -- use default arg to fix",
+            "Lambdas show as <lambda> in tracebacks -- harder to debug",
+            "Cannot use statements (print, assignment, raise) inside lambda",
+            "PEP 8 discourages assigning lambdas to names: use def instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Lambda: `lambda args: expression`. Anonymous single-expression function. Use for short callbacks and key functions. Do not assign to variables (use `def` instead per PEP 8).",
+          "pseudo_code": "",
+          "actual_code": "# Sorting key\ndata = [(\"b\", 2), (\"a\", 1), (\"c\", 3)]\nprint(sorted(data, key=lambda x: x[1]))  # [('a',1), ('b',2), ('c',3)]\n\n# Filter\nprint(list(filter(lambda x: x > 0, [-1, 2, -3, 4])))  # [2, 4]",
+          "code_language": "python",
+          "key_points": [
+            "Single expression only",
+            "Best for short callbacks"
+          ],
+          "gotchas": [
+            "Lambda in loop captures variable by reference -- use default arg to fix"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do map(), filter(), and reduce() work?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["map", "filter", "reduce", "functional"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`map(func, iterable)`** applies `func` to each element and returns an iterator of results.\n\n**`filter(func, iterable)`** returns an iterator of elements where `func(element)` is truthy. If `func` is `None`, filters out falsy values.\n\n**`functools.reduce(func, iterable, initial)`** applies a two-argument function cumulatively: `reduce(f, [a,b,c])` = `f(f(a,b), c)`.\n\n**Modern alternatives (usually preferred):**\n- `map` -> list comprehension: `[f(x) for x in iterable]`\n- `filter` -> comprehension with condition: `[x for x in iterable if cond(x)]`\n- `reduce` -> `sum()`, `math.prod()`, or explicit loop\n\nList comprehensions are generally more readable and Pythonic.",
+          "pseudo_code": "map(f, [a, b, c]) -> [f(a), f(b), f(c)]\nfilter(f, [a, b, c]) -> [x for x in [a,b,c] if f(x)]\nreduce(f, [a, b, c]) -> f(f(a, b), c)\nreduce(f, [a, b, c], init) -> f(f(f(init, a), b), c)",
+          "actual_code": "# map -- apply function to each element\nnumbers = [1, 2, 3, 4, 5]\nsquares = list(map(lambda x: x**2, numbers))\nprint(squares)  # [1, 4, 9, 16, 25]\n\n# Equivalent comprehension (preferred)\nsquares = [x**2 for x in numbers]\n\n# map with multiple iterables\nresult = list(map(lambda a, b: a + b, [1, 2, 3], [10, 20, 30]))\nprint(result)  # [11, 22, 33]\n\n# map for type conversion\nstrings = [\"1\", \"2\", \"3\"]\nnums = list(map(int, strings))\nprint(nums)  # [1, 2, 3]\n\n# filter -- keep elements where function is truthy\nnumbers = [1, -2, 3, -4, 5, 0]\npositives = list(filter(lambda x: x > 0, numbers))\nprint(positives)  # [1, 3, 5]\n\n# filter with None removes falsy values\nmixed = [0, 1, \"\", \"hello\", None, True, False, [], [1]]\ntruthy = list(filter(None, mixed))\nprint(truthy)  # [1, 'hello', True, [1]]\n\n# Equivalent comprehension (preferred)\npositives = [x for x in numbers if x > 0]\n\n# reduce -- cumulative application\nfrom functools import reduce\n\n# Sum\ntotal = reduce(lambda a, b: a + b, [1, 2, 3, 4, 5])\nprint(total)  # 15\n\n# Product\nproduct = reduce(lambda a, b: a * b, [1, 2, 3, 4, 5])\nprint(product)  # 120\n\n# With initial value\ntotal = reduce(lambda a, b: a + b, [1, 2, 3], 100)\nprint(total)  # 106\n\n# Max (reduce version -- prefer built-in max)\nresult = reduce(lambda a, b: a if a > b else b, [3, 1, 4, 1, 5])\nprint(result)  # 5\n\n# Prefer built-ins over reduce\nprint(sum([1, 2, 3, 4, 5]))        # 15 (clearer than reduce)\nimport math\nprint(math.prod([1, 2, 3, 4, 5]))  # 120 (Python 3.8+)\n\n# Chaining map and filter\nresult = list(\n    map(lambda x: x**2,\n        filter(lambda x: x > 0,\n               [-1, 2, -3, 4, 5]))\n)\nprint(result)  # [4, 16, 25]\n\n# Comprehension is cleaner\nresult = [x**2 for x in [-1, 2, -3, 4, 5] if x > 0]\nprint(result)  # [4, 16, 25]",
+          "code_language": "python",
+          "key_points": [
+            "map: applies function to each element",
+            "filter: keeps elements where function returns truthy",
+            "reduce: cumulative left fold",
+            "All three return iterators (lazy) in Python 3",
+            "List comprehensions are usually more Pythonic"
+          ],
+          "gotchas": [
+            "map/filter return iterators, not lists -- wrap with list() if needed",
+            "reduce is in functools (not built-in in Python 3)",
+            "reduce on empty iterable without initial value raises TypeError",
+            "filter(None, iterable) removes all falsy values"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`map(f, iter)`: apply f to each. `filter(f, iter)`: keep truthy. `reduce(f, iter)`: cumulative fold. All return iterators. List comprehensions are usually preferred.",
+          "pseudo_code": "",
+          "actual_code": "print(list(map(str.upper, [\"a\", \"b\"])))  # ['A', 'B']\nprint(list(filter(None, [0, 1, \"\", \"x\"])))  # [1, 'x']\n\nfrom functools import reduce\nprint(reduce(lambda a,b: a*b, [1,2,3,4]))  # 24",
+          "code_language": "python",
+          "key_points": [
+            "map, filter return iterators",
+            "Comprehensions usually preferred"
+          ],
+          "gotchas": [
+            "reduce is in functools, not built-in"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is recursion in Python and what are its limitations?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["recursion", "stack", "base-case"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Recursion is when a function calls itself. Every recursive function needs:\n1. **Base case:** stops the recursion\n2. **Recursive case:** calls itself with a simpler input\n\n**Python limitations:**\n- Default recursion limit: 1000 (configurable with `sys.setrecursionlimit()`)\n- No tail-call optimization (TCO)\n- Each call uses stack memory -> deep recursion can cause `RecursionError`\n\n**When to use recursion:**\n- Tree traversal\n- Divide-and-conquer algorithms\n- Mathematical definitions (factorial, Fibonacci)\n- Directory traversal\n\n**When to prefer iteration:**\n- Deep recursion (> 1000 levels)\n- Performance-critical code\n- Simple loops that could replace the recursion",
+          "pseudo_code": "def recursive_func(input):\n    if base_case(input):    # stop condition\n        return base_value\n    return combine(recursive_func(smaller_input))\n\nLimitations:\n  - Default limit: 1000 calls deep\n  - No tail-call optimization\n  - Stack memory for each call",
+          "actual_code": "# Factorial\ndef factorial(n):\n    if n <= 1:       # base case\n        return 1\n    return n * factorial(n - 1)  # recursive case\n\nprint(factorial(5))   # 120\nprint(factorial(10))  # 3628800\n\n# Fibonacci (naive -- exponential time)\ndef fib_naive(n):\n    if n <= 1:\n        return n\n    return fib_naive(n - 1) + fib_naive(n - 2)\n\nprint(fib_naive(10))  # 55\n\n# Fibonacci with memoization (linear time)\nfrom functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef fib(n):\n    if n <= 1:\n        return n\n    return fib(n - 1) + fib(n - 2)\n\nprint(fib(100))  # 354224848179261915075 (instant with cache)\n\n# Binary search (recursive)\ndef binary_search(arr, target, low=0, high=None):\n    if high is None:\n        high = len(arr) - 1\n    if low > high:\n        return -1\n    mid = (low + high) // 2\n    if arr[mid] == target:\n        return mid\n    elif arr[mid] < target:\n        return binary_search(arr, target, mid + 1, high)\n    else:\n        return binary_search(arr, target, low, mid - 1)\n\narr = [1, 3, 5, 7, 9, 11, 13]\nprint(binary_search(arr, 7))   # 3\nprint(binary_search(arr, 6))   # -1\n\n# Flatten nested list (recursive)\ndef flatten(lst):\n    result = []\n    for item in lst:\n        if isinstance(item, list):\n            result.extend(flatten(item))\n        else:\n            result.append(item)\n    return result\n\nprint(flatten([1, [2, [3, 4]], 5]))  # [1, 2, 3, 4, 5]\n\n# Recursion limit\nimport sys\nprint(sys.getrecursionlimit())  # 1000 (default)\n\n# Converting recursion to iteration\ndef factorial_iterative(n):\n    result = 1\n    for i in range(2, n + 1):\n        result *= i\n    return result\n\nprint(factorial_iterative(5))  # 120\n\n# RecursionError example\ndef infinite():\n    return infinite()\n\ntry:\n    infinite()\nexcept RecursionError as e:\n    print(f\"Error: {e}\")  # maximum recursion depth exceeded",
+          "code_language": "python",
+          "key_points": [
+            "Every recursion needs a base case and recursive case",
+            "Python default recursion limit is 1000",
+            "No tail-call optimization in Python",
+            "Use @lru_cache for memoized recursion",
+            "Consider iterative alternatives for deep recursion"
+          ],
+          "gotchas": [
+            "Forgetting the base case causes infinite recursion -> RecursionError",
+            "Naive recursive Fibonacci is O(2^n) -- use memoization",
+            "sys.setrecursionlimit() can be increased but stack memory is still finite",
+            "Recursion in Python is slower than iteration due to function call overhead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Recursion: function calls itself. Needs base case + recursive case. Python limit: 1000 deep (no TCO). Use `@lru_cache` for memoization. Prefer iteration for deep recursion.",
+          "pseudo_code": "",
+          "actual_code": "def factorial(n):\n    if n <= 1: return 1\n    return n * factorial(n - 1)\n\nprint(factorial(5))  # 120\n\nfrom functools import lru_cache\n@lru_cache\ndef fib(n):\n    if n <= 1: return n\n    return fib(n-1) + fib(n-2)",
+          "code_language": "python",
+          "key_points": [
+            "Base case + recursive case",
+            "Default limit 1000, use @lru_cache"
+          ],
+          "gotchas": [
+            "No tail-call optimization in Python"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are closures in Python?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["closures", "enclosing-scope", "factory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **closure** is a function that remembers values from its enclosing scope, even after the enclosing function has finished executing.\n\nA closure occurs when:\n1. There is a nested function (inner function)\n2. The inner function references variables from the enclosing function\n3. The enclosing function returns the inner function\n\nThe inner function \"closes over\" the enclosing variables, keeping them alive.\n\n**Use cases:**\n- Function factories (make_multiplier, make_adder)\n- Data hiding (encapsulation without classes)\n- Callbacks with state\n- Decorators (built on closures)",
+          "pseudo_code": "def outer(x):\n    def inner(y):\n        return x + y  # x is from enclosing scope\n    return inner      # return the inner function\n\nadd5 = outer(5)  # x=5 is \"closed over\"\nadd5(3) -> 8     # inner still has access to x=5",
+          "actual_code": "# Basic closure\ndef make_adder(x):\n    def adder(y):\n        return x + y  # x is from enclosing scope\n    return adder\n\nadd5 = make_adder(5)\nadd10 = make_adder(10)\n\nprint(add5(3))   # 8\nprint(add10(3))  # 13\n\n# x is remembered even though make_adder has finished\nprint(add5.__closure__)  # (<cell ...>,)\nprint(add5.__closure__[0].cell_contents)  # 5\n\n# Closure as counter (with nonlocal)\ndef make_counter(start=0):\n    count = start\n    def counter():\n        nonlocal count\n        count += 1\n        return count\n    return counter\n\nc = make_counter()\nprint(c())  # 1\nprint(c())  # 2\nprint(c())  # 3\n\n# Each call to make_counter creates independent state\nc1 = make_counter()\nc2 = make_counter(10)\nprint(c1(), c1())    # 1 2\nprint(c2(), c2())    # 11 12\n\n# Closure for data hiding\ndef make_account(initial_balance):\n    balance = initial_balance\n    \n    def deposit(amount):\n        nonlocal balance\n        balance += amount\n        return balance\n    \n    def withdraw(amount):\n        nonlocal balance\n        if amount > balance:\n            raise ValueError(\"Insufficient funds\")\n        balance -= amount\n        return balance\n    \n    def get_balance():\n        return balance\n    \n    return deposit, withdraw, get_balance\n\ndeposit, withdraw, balance = make_account(100)\nprint(balance())      # 100\nprint(deposit(50))    # 150\nprint(withdraw(30))   # 120\n\n# Closure gotcha: late binding\ndef make_functions():\n    funcs = []\n    for i in range(5):\n        funcs.append(lambda: i)  # all capture same 'i'\n    return funcs\n\nfuncs = make_functions()\nprint([f() for f in funcs])  # [4, 4, 4, 4, 4] -- BUG!\n\n# Fix: capture value with default arg\ndef make_functions_fixed():\n    funcs = []\n    for i in range(5):\n        funcs.append(lambda i=i: i)  # capture current value\n    return funcs\n\nfuncs = make_functions_fixed()\nprint([f() for f in funcs])  # [0, 1, 2, 3, 4]",
+          "code_language": "python",
+          "key_points": [
+            "Closure = inner function + enclosing variables",
+            "The inner function remembers enclosing variables after outer returns",
+            "Use nonlocal to modify enclosing variables",
+            "Each call to the outer function creates independent state",
+            "Foundation for decorators and function factories"
+          ],
+          "gotchas": [
+            "Late binding: closures capture variables by reference, not value",
+            "Lambda in a loop captures the loop variable, not its value at each step",
+            "Fix late binding with default arguments: lambda i=i: i",
+            "__closure__ attribute shows the captured cell objects"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A closure is a nested function that remembers variables from its enclosing scope. Used for function factories, counters, and decorators. Watch out for late binding in loops.",
+          "pseudo_code": "",
+          "actual_code": "def make_adder(x):\n    def adder(y):\n        return x + y\n    return adder\n\nadd5 = make_adder(5)\nprint(add5(3))  # 8",
+          "code_language": "python",
+          "key_points": [
+            "Inner function remembers enclosing variables",
+            "Foundation for decorators"
+          ],
+          "gotchas": [
+            "Late binding: lambda in loop captures variable reference, not value"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do nested functions work in Python?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["nested-functions", "inner-functions", "encapsulation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python allows defining functions inside other functions. The inner function:\n- Has access to the enclosing function's variables (closure)\n- Is local to the enclosing function (not accessible outside)\n- Is created each time the enclosing function runs\n\n**Use cases:**\n1. **Helper functions:** Internal logic not needed outside\n2. **Closures:** Capturing enclosing state\n3. **Decorators:** The wrapper function is nested\n4. **Encapsulation:** Hiding implementation details\n5. **Avoiding code repetition** within a function",
+          "pseudo_code": "def outer(x):\n    def inner(y):     # nested/inner function\n        return x + y  # can access outer's x\n    return inner(10)  # call inner, or return inner\n\ninner() is local to outer()\ninner() has access to outer's variables\ninner() is created each time outer() runs",
+          "actual_code": "# Helper function (not needed outside)\ndef process_data(data):\n    def clean(item):\n        return item.strip().lower()\n    \n    def validate(item):\n        return len(item) > 0\n    \n    cleaned = [clean(item) for item in data]\n    return [item for item in cleaned if validate(item)]\n\nresult = process_data([\"  Hello  \", \"  \", \"World  \", \"\"])\nprint(result)  # ['hello', 'world']\n\n# clean and validate are NOT accessible here\n# clean(\"test\")  # NameError\n\n# Nested function for DRY (Don't Repeat Yourself)\ndef report(users):\n    def format_user(user):\n        return f\"{user['name']} ({user['age']})\"\n    \n    active = [format_user(u) for u in users if u['active']]\n    inactive = [format_user(u) for u in users if not u['active']]\n    \n    return f\"Active: {', '.join(active)}\\nInactive: {', '.join(inactive)}\"\n\nusers = [\n    {\"name\": \"Alice\", \"age\": 30, \"active\": True},\n    {\"name\": \"Bob\", \"age\": 25, \"active\": False},\n    {\"name\": \"Charlie\", \"age\": 35, \"active\": True}\n]\nprint(report(users))\n\n# Recursive helper\ndef flatten(lst):\n    def _flatten(items, result):\n        for item in items:\n            if isinstance(item, list):\n                _flatten(item, result)\n            else:\n                result.append(item)\n    \n    result = []\n    _flatten(lst, result)\n    return result\n\nprint(flatten([1, [2, [3, 4]], 5]))  # [1, 2, 3, 4, 5]\n\n# Nested function created each time\ndef outer():\n    def inner():\n        pass\n    print(id(inner))  # different id each call\n\nouter()  # prints some id\nouter()  # prints different id",
+          "code_language": "python",
+          "key_points": [
+            "Inner functions are local to the enclosing function",
+            "They have access to enclosing variables (closure)",
+            "Created each time the outer function runs",
+            "Great for helper logic and encapsulation",
+            "Foundation for closures and decorators"
+          ],
+          "gotchas": [
+            "Inner function is recreated each call (minor overhead)",
+            "Inner function is not accessible outside the outer function",
+            "Assignment in inner function creates local variable (use nonlocal to modify outer)",
+            "Too many levels of nesting hurts readability"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Functions defined inside other functions are local and have access to enclosing variables. Useful for helpers, closures, and encapsulation.",
+          "pseudo_code": "",
+          "actual_code": "def process(data):\n    def clean(s):\n        return s.strip().lower()\n    return [clean(item) for item in data]\n\nprint(process([\" Hello \", \" World \"]))  # ['hello', 'world']",
+          "code_language": "python",
+          "key_points": [
+            "Local to enclosing function",
+            "Access enclosing variables"
+          ],
+          "gotchas": [
+            "Recreated each call (minor overhead)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are function annotations and type hints?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["type-hints", "annotations", "typing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Function annotations (PEP 3107) let you attach metadata to parameters and return values. Type hints (PEP 484) use annotations to specify expected types.\n\n**Syntax:**\n```python\ndef func(param: type, param2: type = default) -> return_type:\n```\n\n**Key points:**\n- Annotations are **NOT enforced** at runtime by Python\n- They are metadata stored in `func.__annotations__`\n- Static type checkers (mypy, pyright) use them for analysis\n- IDEs use them for autocompletion and error detection\n\n**Common typing module types:**\n- `List[int]`, `Dict[str, int]`, `Tuple[int, ...]`\n- `Optional[str]` = `str | None`\n- `Union[int, str]` = `int | str`\n- `Callable[[int, int], int]`\n- `Any`, `TypeVar`, `Protocol`",
+          "pseudo_code": "def func(x: int, y: str = 'hello') -> bool:\n    ...\n\nAnnotations are NOT enforced at runtime\nUsed by: mypy, pyright, IDEs\nStored in: func.__annotations__",
+          "actual_code": "# Basic type hints\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\nprint(greet(\"Alice\"))    # Hello, Alice!\nprint(greet(42))         # Hello, 42! -- no runtime error!\n\n# View annotations\nprint(greet.__annotations__)\n# {'name': <class 'str'>, 'return': <class 'str'>}\n\n# Common types\ndef process_scores(scores: list[int]) -> float:  # Python 3.9+\n    return sum(scores) / len(scores)\n\n# Python 3.8 and earlier: use typing module\nfrom typing import List, Dict, Tuple, Optional, Union, Callable\n\ndef process_legacy(scores: List[int]) -> float:\n    return sum(scores) / len(scores)\n\n# Optional (can be None)\ndef find_user(user_id: int) -> Optional[str]:\n    users = {1: \"Alice\", 2: \"Bob\"}\n    return users.get(user_id)\n\nresult: Optional[str] = find_user(3)  # None\n\n# Union types\ndef double(x: Union[int, float]) -> Union[int, float]:\n    return x * 2\n\n# Python 3.10+: use | syntax\ndef double_modern(x: int | float) -> int | float:\n    return x * 2\n\n# Callable type hint\ndef apply(func: Callable[[int], int], value: int) -> int:\n    return func(value)\n\nresult = apply(lambda x: x ** 2, 5)  # 25\n\n# Complex type hints\ndef analyze(data: dict[str, list[int]]) -> dict[str, float]:\n    return {key: sum(vals) / len(vals) for key, vals in data.items()}\n\nresult = analyze({\"math\": [90, 85, 95], \"science\": [80, 88]})\nprint(result)  # {'math': 90.0, 'science': 84.0}\n\n# Variable annotations\nname: str = \"Alice\"\nage: int = 30\nscores: list[int] = [95, 87, 92]\n\n# TypeVar for generics\nfrom typing import TypeVar\n\nT = TypeVar('T')\n\ndef first(lst: list[T]) -> T:\n    return lst[0]\n\nprint(first([1, 2, 3]))      # 1 (int)\nprint(first([\"a\", \"b\"]))     # 'a' (str)",
+          "code_language": "python",
+          "key_points": [
+            "Type hints are NOT enforced at runtime",
+            "Stored in __annotations__, used by mypy/pyright/IDEs",
+            "Python 3.9+: built-in types for generics (list[int], dict[str, int])",
+            "Python 3.10+: X | Y syntax for union types",
+            "Optional[X] is shorthand for X | None"
+          ],
+          "gotchas": [
+            "Type hints do NOT prevent passing wrong types at runtime",
+            "Python < 3.9 needs typing.List instead of list[int]",
+            "Circular imports can occur with type hints -- use from __future__ import annotations",
+            "Runtime type checking requires third-party libraries (pydantic, beartype)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Type hints: `def f(x: int) -> str:`. Not enforced at runtime -- used by mypy, IDEs. Python 3.10+: `int | str` for unions. `Optional[X]` = `X | None`.",
+          "pseudo_code": "",
+          "actual_code": "def greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\ndef find(user_id: int) -> str | None:  # 3.10+\n    return {1: \"Alice\"}.get(user_id)\n\nprint(greet.__annotations__)  # {'name': str, 'return': str}",
+          "code_language": "python",
+          "key_points": [
+            "Not enforced at runtime",
+            "Used by mypy and IDEs"
+          ],
+          "gotchas": [
+            "Type hints do NOT prevent wrong types at runtime"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do docstrings work and what is the Google style?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["docstrings", "documentation", "google-style"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Docstrings are string literals that appear as the first statement in a module, class, method, or function. They are stored in the `__doc__` attribute.\n\n**Access:** `func.__doc__`, `help(func)`, IDE hover\n\n**Common styles:**\n- **Google style:** Easy to read, sections with indentation\n- **NumPy style:** Sections with underlines\n- **reStructuredText:** Sphinx-compatible\n\n**PEP 257 conventions:**\n- Use triple double quotes `\"\"\"\"`\n- One-line docstrings for simple functions\n- Multi-line for complex functions\n- First line is a summary, followed by blank line, then details",
+          "pseudo_code": "One-line: \"\"\"Return the square of x.\"\"\"\n\nMulti-line (Google style):\n\"\"\"Summary line.\n\nArgs:\n    param1: Description.\n    param2: Description.\n\nReturns:\n    Description of return value.\n\nRaises:\n    ValueError: If param1 is invalid.\n\"\"\"",
+          "actual_code": "# One-line docstring\ndef square(x):\n    \"\"\"Return the square of x.\"\"\"\n    return x ** 2\n\n# Multi-line docstring (Google style)\ndef calculate_bmi(weight_kg, height_m):\n    \"\"\"Calculate Body Mass Index.\n\n    Args:\n        weight_kg: Weight in kilograms.\n        height_m: Height in meters.\n\n    Returns:\n        The BMI value as a float.\n\n    Raises:\n        ValueError: If weight or height is non-positive.\n\n    Examples:\n        >>> calculate_bmi(70, 1.75)\n        22.857142857142858\n    \"\"\"\n    if weight_kg <= 0 or height_m <= 0:\n        raise ValueError(\"Weight and height must be positive\")\n    return weight_kg / (height_m ** 2)\n\n# Access docstring\nprint(calculate_bmi.__doc__)\nhelp(calculate_bmi)\n\n# Class docstring\nclass Rectangle:\n    \"\"\"A rectangle defined by width and height.\n\n    Attributes:\n        width: The width of the rectangle.\n        height: The height of the rectangle.\n    \"\"\"\n\n    def __init__(self, width, height):\n        \"\"\"Initialize Rectangle with width and height.\n\n        Args:\n            width: The width (must be positive).\n            height: The height (must be positive).\n        \"\"\"\n        self.width = width\n        self.height = height\n\n    def area(self):\n        \"\"\"Return the area of the rectangle.\"\"\"\n        return self.width * self.height\n\n# Module docstring (first line of file)\n# \"\"\"This module provides geometric calculations.\"\"\"\n\n# Doctest (runnable examples in docstrings)\ndef add(a, b):\n    \"\"\"Add two numbers.\n\n    Examples:\n        >>> add(2, 3)\n        5\n        >>> add(-1, 1)\n        0\n    \"\"\"\n    return a + b\n\n# Run doctests\nif __name__ == \"__main__\":\n    import doctest\n    doctest.testmod(verbose=True)",
+          "code_language": "python",
+          "key_points": [
+            "Triple double quotes for docstrings",
+            "First statement in module/class/function",
+            "Stored in __doc__ attribute",
+            "Google style: Args, Returns, Raises, Examples sections",
+            "Doctests provide runnable examples in docstrings"
+          ],
+          "gotchas": [
+            "Docstrings must be the FIRST statement (not after assignments)",
+            "f-strings cannot be docstrings (they are not string literals in bytecode)",
+            "Docstrings are included in __doc__ -- they take memory at runtime",
+            "Running python -O strips docstrings (optimization mode)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Docstrings are triple-quoted strings as the first statement. Stored in `__doc__`. Google style uses Args/Returns/Raises sections. Access with `help()` or IDE hover.",
+          "pseudo_code": "",
+          "actual_code": "def add(a, b):\n    \"\"\"Add two numbers.\n\n    Args:\n        a: First number.\n        b: Second number.\n\n    Returns:\n        Sum of a and b.\n    \"\"\"\n    return a + b\n\nprint(add.__doc__)",
+          "code_language": "python",
+          "key_points": [
+            "First statement, triple-quoted",
+            "Google style: Args/Returns/Raises"
+          ],
+          "gotchas": [
+            "Must be the FIRST statement in the function"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Python pass arguments -- by value or by reference?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["pass-by-assignment", "call-semantics", "references"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python uses **pass by assignment** (also called \"pass by object reference\"). It is neither purely \"by value\" nor \"by reference\" in the C/C++ sense.\n\n**What happens:**\n1. The function parameter becomes a **new name** (local variable)\n2. This name is bound to the **same object** the caller passed\n3. **Reassignment** inside the function creates a new local binding (does not affect caller)\n4. **Mutation** of the object (if mutable) is visible to the caller\n\n**Rules:**\n- Immutable arguments (int, str, tuple): function cannot modify the caller's value\n- Mutable arguments (list, dict, set): function CAN modify the caller's object via mutation\n- Reassignment NEVER affects the caller (it just rebinds the local name)",
+          "pseudo_code": "Immutable (int, str, tuple):\n  x = 5\n  func(x) -> func receives reference to same int(5)\n  Inside func: x = 10 rebinds local name, caller's x unchanged\n\nMutable (list, dict):\n  lst = [1, 2]\n  func(lst) -> func receives reference to same list\n  Inside func: lst.append(3) modifies the SAME list\n  Inside func: lst = [4, 5] rebinds local name, caller's lst unchanged",
+          "actual_code": "# Immutable argument: cannot modify caller's value\ndef try_modify_int(x):\n    print(f\"Before: id={id(x)}, x={x}\")\n    x = 99  # rebinds local name\n    print(f\"After: id={id(x)}, x={x}\")\n\nn = 42\ntry_modify_int(n)\nprint(f\"Caller: n={n}\")  # 42 (unchanged)\n\n# Mutable argument: mutation visible to caller\ndef modify_list(lst):\n    lst.append(99)  # mutates the same object\n\nmy_list = [1, 2, 3]\nmodify_list(my_list)\nprint(my_list)  # [1, 2, 3, 99] (modified!)\n\n# Reassignment does NOT affect caller\ndef reassign_list(lst):\n    lst = [10, 20, 30]  # rebinds local name\n    print(f\"Inside: {lst}\")\n\nmy_list = [1, 2, 3]\nreassign_list(my_list)\nprint(f\"Outside: {my_list}\")  # [1, 2, 3] (unchanged)\n\n# Common pattern: return modified value for immutables\ndef increment(x):\n    return x + 1  # return new value\n\nn = 5\nn = increment(n)  # caller rebinds\nprint(n)  # 6\n\n# Defensive copying to prevent modification\ndef safe_process(lst):\n    local_copy = lst.copy()  # or lst[:] or list(lst)\n    local_copy.sort()\n    return local_copy\n\noriginal = [3, 1, 4, 1, 5]\nsorted_list = safe_process(original)\nprint(original)     # [3, 1, 4, 1, 5] (unchanged)\nprint(sorted_list)  # [1, 1, 3, 4, 5]\n\n# Mutation vs reassignment: the key distinction\ndef demo(lst):\n    # MUTATION: modifies the object -> caller sees it\n    lst.append(\"mutation\")\n    \n    # REASSIGNMENT: rebinds local name -> caller does NOT see it\n    lst = [\"new\", \"list\"]\n    lst.append(\"only local\")\n    print(f\"Inside: {lst}\")\n\nmy_list = [1, 2]\ndemo(my_list)\nprint(f\"Outside: {my_list}\")  # [1, 2, 'mutation']",
+          "code_language": "python",
+          "key_points": [
+            "Python uses 'pass by assignment' (pass by object reference)",
+            "Function parameters are new local names bound to the same objects",
+            "Mutation of mutable objects is visible to the caller",
+            "Reassignment inside a function only affects the local name",
+            "Immutable objects cannot be modified, only rebound"
+          ],
+          "gotchas": [
+            "lst.sort() inside a function modifies the caller's list",
+            "lst = sorted(lst) inside a function does NOT modify the caller's list (reassignment)",
+            "Default mutable arguments compound this issue (shared across calls)",
+            "If you do not want side effects, copy the argument first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python passes by assignment (object reference). Mutation of mutable args is visible to caller. Reassignment only affects local name. Immutables cannot be modified.",
+          "pseudo_code": "",
+          "actual_code": "def modify(lst):\n    lst.append(99)   # mutation: caller sees this\n    lst = [1, 2, 3]  # reassignment: caller does NOT see this\n\nmy_list = [10]\nmodify(my_list)\nprint(my_list)  # [10, 99]",
+          "code_language": "python",
+          "key_points": [
+            "Mutation visible to caller, reassignment is not",
+            "Copy arguments to prevent side effects"
+          ],
+          "gotchas": [
+            "lst.sort() modifies caller's list, sorted(lst) does not"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between return and yield in a function?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": ["return", "yield", "generator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`return` exits the function and sends a value to the caller. The function's state is destroyed.\n\n`yield` pauses the function and produces a value. The function becomes a **generator** that can be resumed where it left off.\n\n**Key differences:**\n| Feature | return | yield |\n|---------|--------|-------|\n| Function type | Regular | Generator |\n| Execution | Runs to completion | Pauses and resumes |\n| State | Lost after return | Preserved between yields |\n| Memory | All at once | Lazy, one at a time |\n| Result | Single value | Iterator of values |\n\nA function with `yield` anywhere in its body becomes a generator function. Calling it returns a generator object (does not execute the body).",
+          "pseudo_code": "return: exits function, returns value, state destroyed\nyield: pauses function, produces value, state preserved\n\ndef regular():\n    return [1, 2, 3]  # all at once\n\ndef generator():\n    yield 1  # pause, produce 1\n    yield 2  # resume, produce 2\n    yield 3  # resume, produce 3",
+          "actual_code": "# return -- all at once\ndef get_squares_list(n):\n    result = []\n    for i in range(n):\n        result.append(i ** 2)\n    return result  # creates entire list in memory\n\nprint(get_squares_list(5))  # [0, 1, 4, 9, 16]\n\n# yield -- lazy, one at a time\ndef get_squares_gen(n):\n    for i in range(n):\n        yield i ** 2  # produces one value, pauses\n\ngen = get_squares_gen(5)\nprint(type(gen))   # <class 'generator'>\nprint(next(gen))   # 0\nprint(next(gen))   # 1\nprint(next(gen))   # 4\n\n# Iterate with for loop\nfor sq in get_squares_gen(5):\n    print(sq, end=\" \")\nprint()  # 0 1 4 9 16\n\n# Memory comparison\nimport sys\n\nlst = get_squares_list(1000000)\ngen = get_squares_gen(1000000)\n\nprint(f\"List size: {sys.getsizeof(lst)} bytes\")  # ~8 MB\nprint(f\"Generator size: {sys.getsizeof(gen)} bytes\")  # ~200 bytes\n\n# State preservation\ndef countdown(n):\n    print(f\"Starting countdown from {n}\")\n    while n > 0:\n        yield n\n        n -= 1\n    print(\"Blastoff!\")\n\nc = countdown(3)\nprint(next(c))  # Starting countdown from 3, then 3\nprint(next(c))  # 2 (resumes from where it paused)\nprint(next(c))  # 1\n# next(c) would print \"Blastoff!\" then raise StopIteration\n\n# yield can also receive values with send()\ndef accumulator():\n    total = 0\n    while True:\n        value = yield total\n        if value is None:\n            break\n        total += value\n\nacc = accumulator()\nnext(acc)         # prime the generator (run to first yield)\nprint(acc.send(10))  # 10\nprint(acc.send(20))  # 30\nprint(acc.send(30))  # 60\n\n# Multiple returns vs multiple yields\ndef multi_return():\n    return 1  # exits here\n    return 2  # never reached\n\ndef multi_yield():\n    yield 1   # first value\n    yield 2   # second value\n    yield 3   # third value\n\nprint(multi_return())           # 1\nprint(list(multi_yield()))      # [1, 2, 3]",
+          "code_language": "python",
+          "key_points": [
+            "return exits and destroys state; yield pauses and preserves state",
+            "yield makes a function a generator (lazy iterator)",
+            "Generators use minimal memory (one value at a time)",
+            "Calling a generator function returns a generator object",
+            "Use next() or for loop to consume generator values"
+          ],
+          "gotchas": [
+            "Calling gen_func() does NOT execute the body -- it returns a generator object",
+            "Generators are one-shot: exhausted after one pass",
+            "StopIteration is raised when generator is exhausted",
+            "Cannot use return with a value in a generator (pre-Python 3.3)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`return` exits function (state destroyed). `yield` pauses function (state preserved), creating a generator. Generators are lazy -- produce values one at a time, using minimal memory.",
+          "pseudo_code": "",
+          "actual_code": "def squares(n):\n    for i in range(n):\n        yield i ** 2\n\ngen = squares(5)\nprint(next(gen))  # 0\nprint(next(gen))  # 1\nprint(list(gen))  # [4, 9, 16] (remaining)",
+          "code_language": "python",
+          "key_points": [
+            "yield pauses, return exits",
+            "Generators use minimal memory"
+          ],
+          "gotchas": [
+            "Generators are one-shot -- cannot reuse"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What happens when you use a mutable object as a default argument?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": ["mutable-default", "gotcha", "best-practice"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "This is one of Python's most infamous gotchas. When you use a mutable object (list, dict, set) as a default argument, the default is created **once** when the function is defined and shared across all calls.\n\nSince the object is mutable, modifications persist between calls.\n\n**Why this happens:**\n- `def` is an executable statement\n- Default values are evaluated when `def` runs (once)\n- The default object is stored in `func.__defaults__`\n- Each call that uses the default gets the SAME object\n\n**The fix:**\nUse `None` as the default and create a fresh mutable object inside the function body.\n\nThis is tested in almost every Python interview.",
+          "pseudo_code": "BUG:\n  def f(lst=[]):  # [] created once at def time\n      lst.append(1)\n      return lst\n  f() -> [1]      # first call\n  f() -> [1, 1]   # second call -- same list!\n\nFIX:\n  def f(lst=None):\n      if lst is None:\n          lst = []   # fresh list each call\n      lst.append(1)\n      return lst",
+          "actual_code": "# THE BUG\ndef append_to(item, target=[]):\n    target.append(item)\n    return target\n\nprint(append_to(1))  # [1]\nprint(append_to(2))  # [1, 2] -- BUG! Expected [2]\nprint(append_to(3))  # [1, 2, 3] -- BUG! Expected [3]\n\n# Inspect the default\nprint(append_to.__defaults__)  # ([1, 2, 3],)\n\n# THE FIX\ndef append_to_fixed(item, target=None):\n    if target is None:\n        target = []\n    target.append(item)\n    return target\n\nprint(append_to_fixed(1))  # [1]\nprint(append_to_fixed(2))  # [2] -- correct!\nprint(append_to_fixed(3))  # [3] -- correct!\n\n# Still works with explicit argument\nprint(append_to_fixed(4, [10, 20]))  # [10, 20, 4]\n\n# Same issue with dicts\ndef bad_register(name, registry={}):\n    registry[name] = True\n    return registry\n\nprint(bad_register(\"Alice\"))    # {'Alice': True}\nprint(bad_register(\"Bob\"))      # {'Alice': True, 'Bob': True}\n\n# Same issue with sets\ndef bad_collect(item, seen=set()):\n    seen.add(item)\n    return seen\n\nprint(bad_collect(1))  # {1}\nprint(bad_collect(2))  # {1, 2}\n\n# Intentional use: memoization cache\ndef fibonacci(n, cache={0: 0, 1: 1}):\n    if n not in cache:\n        cache[n] = fibonacci(n-1) + fibonacci(n-2)\n    return cache[n]\n\nprint(fibonacci(10))  # 55\nprint(fibonacci(20))  # 6765 (uses cached values)\n\n# The fix with type hints\nfrom typing import Optional\n\ndef create_user(name: str, roles: Optional[list[str]] = None) -> dict:\n    if roles is None:\n        roles = []\n    return {\"name\": name, \"roles\": roles}",
+          "code_language": "python",
+          "key_points": [
+            "Default values are evaluated ONCE at def time, not per call",
+            "Mutable defaults are shared across all calls",
+            "Always use None as default for mutable arguments",
+            "Pattern: if param is None: param = fresh_value",
+            "The shared default CAN be useful intentionally (e.g., caching)"
+          ],
+          "gotchas": [
+            "This is one of the most common Python interview questions",
+            "The bug is subtle: first call appears correct, second call reveals the issue",
+            "func.__defaults__ shows the shared default objects",
+            "This also applies to class method defaults"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Mutable default arguments are shared across calls (created once at def time). Use `None` sentinel: `def f(lst=None): if lst is None: lst = []`.",
+          "pseudo_code": "",
+          "actual_code": "# BUG:\ndef bad(lst=[]):\n    lst.append(1)\n    return lst\nprint(bad(), bad())  # [1] [1, 1]\n\n# FIX:\ndef good(lst=None):\n    lst = lst if lst is not None else []\n    lst.append(1)\n    return lst\nprint(good(), good())  # [1] [1]",
+          "code_language": "python",
+          "key_points": [
+            "Defaults evaluated once at def time",
+            "Use None sentinel for mutables"
+          ],
+          "gotchas": [
+            "First call looks correct -- bug only shows on subsequent calls"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write a function decorator from scratch?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "closures", "functools-wraps"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **decorator** is a function that takes a function and returns a modified version. It is syntactic sugar:\n\n```python\n@decorator\ndef func():\n    ...\n# is equivalent to:\nfunc = decorator(func)\n```\n\n**Basic decorator structure:**\n1. Define outer function that takes the original function\n2. Define inner wrapper function that calls the original\n3. Return the wrapper\n\n**Always use `@functools.wraps(func)`** on the wrapper to preserve the original function's name, docstring, and metadata.\n\n**Common decorator use cases:**\n- Logging, timing, authentication\n- Caching (memoization)\n- Input validation\n- Retry logic",
+          "pseudo_code": "def my_decorator(func):\n    @functools.wraps(func)  # preserve metadata\n    def wrapper(*args, **kwargs):\n        # before\n        result = func(*args, **kwargs)  # call original\n        # after\n        return result\n    return wrapper\n\n@my_decorator\ndef my_function():\n    ...\n\n# equivalent to: my_function = my_decorator(my_function)",
+          "actual_code": "import functools\nimport time\n\n# Basic decorator\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        elapsed = time.time() - start\n        print(f\"{func.__name__} took {elapsed:.4f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow_function(n):\n    \"\"\"Sleep for n seconds.\"\"\"\n    time.sleep(n)\n    return f\"Done after {n}s\"\n\nresult = slow_function(0.1)  # slow_function took 0.1001s\nprint(result)                # Done after 0.1s\n\n# functools.wraps preserves metadata\nprint(slow_function.__name__)  # 'slow_function' (not 'wrapper')\nprint(slow_function.__doc__)   # 'Sleep for n seconds.'\n\n# Decorator with arguments\ndef retry(max_attempts=3):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            for attempt in range(1, max_attempts + 1):\n                try:\n                    return func(*args, **kwargs)\n                except Exception as e:\n                    print(f\"Attempt {attempt} failed: {e}\")\n                    if attempt == max_attempts:\n                        raise\n        return wrapper\n    return decorator\n\nimport random\n\n@retry(max_attempts=5)\ndef unreliable():\n    if random.random() < 0.7:\n        raise ValueError(\"Random failure\")\n    return \"Success!\"\n\ntry:\n    print(unreliable())\nexcept ValueError:\n    print(\"All attempts failed\")\n\n# Logging decorator\ndef log_calls(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        args_repr = [repr(a) for a in args]\n        kwargs_repr = [f\"{k}={v!r}\" for k, v in kwargs.items()]\n        signature = \", \".join(args_repr + kwargs_repr)\n        print(f\"Calling {func.__name__}({signature})\")\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__} returned {result!r}\")\n        return result\n    return wrapper\n\n@log_calls\ndef add(a, b):\n    return a + b\n\nadd(3, 4)\n# Calling add(3, 4)\n# add returned 7\n\n# Stacking decorators\n@timer\n@log_calls\ndef multiply(a, b):\n    return a * b\n\nmultiply(3, 4)\n# Applied bottom-up: log_calls wraps multiply, then timer wraps that",
+          "code_language": "python",
+          "key_points": [
+            "@decorator is syntactic sugar for func = decorator(func)",
+            "Always use @functools.wraps to preserve metadata",
+            "Wrapper must accept *args, **kwargs for flexibility",
+            "Decorator with arguments needs an extra level of nesting",
+            "Decorators are stacked bottom-up"
+          ],
+          "gotchas": [
+            "Without @functools.wraps, __name__ and __doc__ show the wrapper, not the original",
+            "Decorator with arguments @retry(3) needs three levels of nesting",
+            "@retry (without parens) vs @retry() behaves differently if not handled",
+            "Decorators run at function definition time, not call time"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A decorator takes a function, wraps it, and returns the wrapper. Use `@functools.wraps(func)` to preserve metadata. `@decorator` is sugar for `func = decorator(func)`.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        import time\n        start = time.time()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__}: {time.time()-start:.4f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow(): pass",
+          "code_language": "python",
+          "key_points": [
+            "Takes function, returns wrapper",
+            "Use @functools.wraps always"
+          ],
+          "gotchas": [
+            "Without @wraps, metadata is lost"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,415 @@
+{
+  "concept_slug": "modules-packages-imports",
+  "questions": [
+    {
+      "title": "How does Python's import system work, and what happens when you import a module?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["import", "modules", "sys.modules"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you execute `import module`, Python follows this process:\n\n1. **Check `sys.modules` cache**: If the module was already imported, return the cached version. This prevents re-execution and ensures singletons.\n\n2. **Find the module**: Search `sys.path` (list of directories) and finders in `sys.meta_path` for the module.\n\n3. **Load the module**: Use the appropriate loader (file-based, built-in, frozen, etc.) to read the module's code.\n\n4. **Create module object**: Create a new `types.ModuleType` object.\n\n5. **Add to `sys.modules`**: Cache the module object BEFORE executing the code (important for circular imports).\n\n6. **Execute module code**: Run the module's top-level code in the module's namespace.\n\n7. **Bind the name**: Bind the module name in the importing module's namespace.\n\nThe search order in `sys.path` is: current directory, `PYTHONPATH` environment variable, standard library, site-packages (third-party).",
+          "pseudo_code": "import foo:\n1. if 'foo' in sys.modules: return cached\n2. Find foo.py in sys.path\n3. Create module object\n4. sys.modules['foo'] = module (before execution!)\n5. Execute foo.py code in module namespace\n6. Bind name: caller.foo = module\n\nImport variants:\n  import foo          -> foo.bar()\n  from foo import bar -> bar()\n  import foo as f     -> f.bar()\n  from foo import *   -> bar() (uses __all__)",
+          "actual_code": "import sys\n\n# sys.modules is the cache of all imported modules\nprint('os' in sys.modules)  # True (already imported by Python)\nprint('json' in sys.modules)  # May be False\n\nimport json\nprint('json' in sys.modules)  # True (now cached)\n\n# Importing again returns the cached version\nimport json as j1\nimport json as j2\nprint(j1 is j2)  # True -- same object\n\n# sys.path controls where Python looks for modules\nprint(sys.path[:3])  # ['', '/usr/lib/python3.x', ...]\n\n# Import variants\nimport os                    # import module\nfrom os.path import join     # import specific name\nimport os.path as osp        # import with alias\n\n# Module attributes\nprint(json.__name__)    # 'json'\nprint(json.__file__)    # '/usr/lib/python3.x/json/__init__.py'\nprint(json.__package__) # 'json'\n\n# Force reimport (for development/testing)\nimport importlib\nimportlib.reload(json)  # re-executes the module code\n\n# Module is executed only once\n# Create a test to demonstrate:\nimport types\ntest_module = types.ModuleType('test_mod')\nexec('print(\"Module executed!\"); VALUE = 42', test_module.__dict__)\nsys.modules['test_mod'] = test_module\n\nimport test_mod  # does NOT print again -- cached\nprint(test_mod.VALUE)  # 42\n\n# Cleanup\ndel sys.modules['test_mod']\n\n# Import time side effects\n# When you import, ALL top-level code in the module runs:\n# - Function/class definitions (fast)\n# - Variable assignments (fast)\n# - Print statements, API calls, DB connections (slow, side effects!)\n# Best practice: put side effects inside if __name__ == '__main__'",
+          "code_language": "python",
+          "key_points": [
+            "Modules are cached in sys.modules -- imported only once",
+            "sys.path controls the search order for modules",
+            "Module code is executed on first import (top-level statements run)",
+            "importlib.reload() forces re-execution of module code"
+          ],
+          "gotchas": [
+            "Modifying a module after import doesn't require reimport (it's the same object)",
+            "from module import x copies the reference -- reassigning x doesn't affect the module",
+            "Circular imports work because sys.modules is populated before execution completes",
+            "sys.path can be modified at runtime to add custom import locations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Python checks `sys.modules` cache first, then searches `sys.path` for the module file, executes it once, and caches it. Subsequent imports return the cached version.",
+          "pseudo_code": "",
+          "actual_code": "import sys\nimport json\n\n# Module is cached\nprint('json' in sys.modules)  # True\n\n# Same object returned\nimport json as j\nprint(json is j)  # True\n\n# Where Python looks\nprint(sys.path[:2])  # ['', '/usr/lib/...']",
+          "code_language": "python",
+          "key_points": [
+            "Modules cached in sys.modules, imported once",
+            "sys.path controls search locations"
+          ],
+          "gotchas": [
+            "from module import x copies the reference at import time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is `__init__.py` and how do packages work in Python?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["__init__", "packages", "structure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A Python package is a directory containing an `__init__.py` file. This file:\n1. Marks the directory as a Python package\n2. Is executed when the package is imported\n3. Can define the package's public API\n4. Can import submodules for convenience\n5. Can define `__all__` to control `from package import *`\n\n**Regular packages** have `__init__.py`. **Namespace packages** (Python 3.3+) don't need `__init__.py` and can span multiple directories.\n\n`__init__.py` can be empty (just marks the directory as a package) or contain initialization code, convenience imports, and API definitions.\n\nPackage structure example:\n```\nmy_package/\n    __init__.py\n    module_a.py\n    module_b.py\n    sub_package/\n        __init__.py\n        module_c.py\n```",
+          "pseudo_code": "Package structure:\n  mypackage/\n    __init__.py    -- package init, runs on import\n    core.py        -- submodule\n    utils.py       -- submodule\n    sub/\n      __init__.py  -- sub-package\n      helpers.py   -- sub-submodule\n\n__init__.py can:\n  - Be empty (just marks as package)\n  - Import submodules for convenience\n  - Define __all__ for 'from package import *'\n  - Run initialization code",
+          "actual_code": "# Example __init__.py for a package\n# mypackage/__init__.py\n\n# Version info\n__version__ = \"1.0.0\"\n__author__ = \"Alice\"\n\n# Control 'from mypackage import *'\n__all__ = [\"core\", \"utils\", \"Config\"]\n\n# Convenience imports -- so users can do:\n# from mypackage import Config\n# instead of: from mypackage.core import Config\n# from .core import Config\n# from .utils import helper_function\n\n# Example package structure and usage:\n# mypackage/\n#   __init__.py\n#   core.py        (contains Config class)\n#   utils.py       (contains helper_function)\n#   models/\n#     __init__.py\n#     user.py\n#     product.py\n\n# Users can import as:\n# import mypackage\n# from mypackage import Config\n# from mypackage.models import user\n# from mypackage.models.user import User\n\n# Demonstrating with a real temporary package\nimport tempfile\nimport os\nimport sys\n\n# Create a temporary package\npkg_dir = tempfile.mkdtemp()\npkg_path = os.path.join(pkg_dir, \"demo_pkg\")\nos.makedirs(pkg_path)\n\n# Write __init__.py\nwith open(os.path.join(pkg_path, \"__init__.py\"), \"w\") as f:\n    f.write(\"\"\"\n__version__ = '1.0.0'\n__all__ = ['greet']\n\ndef greet(name):\n    return f'Hello, {name} from demo_pkg!'\n\"\"\")\n\n# Write a submodule\nwith open(os.path.join(pkg_path, \"utils.py\"), \"w\") as f:\n    f.write(\"\"\"\ndef add(a, b):\n    return a + b\n\"\"\")\n\n# Add to path and import\nsys.path.insert(0, pkg_dir)\n\nimport demo_pkg\nprint(demo_pkg.__version__)     # 1.0.0\nprint(demo_pkg.greet(\"World\"))  # Hello, World from demo_pkg!\n\nfrom demo_pkg.utils import add\nprint(add(1, 2))  # 3\n\n# Cleanup\nsys.path.remove(pkg_dir)\ndel sys.modules['demo_pkg']\ndel sys.modules['demo_pkg.utils']\nimport shutil\nshutil.rmtree(pkg_dir)",
+          "code_language": "python",
+          "key_points": [
+            "__init__.py marks a directory as a package and runs on import",
+            "Can be empty or contain convenience imports and __all__",
+            "__all__ controls what 'from package import *' exports",
+            "Namespace packages (3.3+) don't need __init__.py"
+          ],
+          "gotchas": [
+            "Heavy __init__.py slows down import (all top-level code runs)",
+            "Circular imports in __init__.py are common -- use lazy imports or restructure",
+            "from package import * only imports names in __all__ (if defined)",
+            "Empty __init__.py is fine -- it just marks the directory as a package"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__init__.py` marks a directory as a Python package. It runs on import, can define the public API via `__all__`, and can provide convenience imports for users.",
+          "pseudo_code": "",
+          "actual_code": "# mypackage/__init__.py\n__version__ = \"1.0.0\"\n__all__ = [\"Config\", \"utils\"]\n\n# Convenience import\nfrom .core import Config\n\n# Usage:\n# from mypackage import Config  # works due to __init__.py import",
+          "code_language": "python",
+          "key_points": [
+            "__init__.py marks directory as package",
+            "__all__ controls 'from package import *'"
+          ],
+          "gotchas": [
+            "Heavy __init__.py slows import time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do relative and absolute imports work in Python?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["relative-imports", "absolute-imports", "from-import"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Absolute imports** use the full path from the project root:\n```python\nfrom mypackage.utils import helper\n```\n\n**Relative imports** use dots to refer to the current and parent packages:\n```python\nfrom . import utils          # current package\nfrom .utils import helper     # current package's module\nfrom .. import other_pkg      # parent package\nfrom ..sibling import module  # sibling package\n```\n\nDot notation:\n- `.` = current package\n- `..` = parent package\n- `...` = grandparent package\n\n**PEP 8 recommends absolute imports** for most cases because they're clearer. Relative imports are acceptable within a package to avoid hardcoding the package name.\n\n**Important**: Relative imports only work inside packages (directories with `__init__.py`). They don't work in scripts run directly (`python script.py`).",
+          "pseudo_code": "Absolute:\n  from mypackage.module import Class\n  Explicit, clear, always works\n\nRelative:\n  from . import module        -- current package\n  from .module import Class   -- current package module\n  from .. import parent_mod   -- parent package\n  from ..sibling import mod   -- sibling package\n\nRules:\n  - Relative only works inside packages\n  - Cannot use relative in __main__ script\n  - PEP 8 prefers absolute imports",
+          "actual_code": "# Package structure:\n# myproject/\n#   __init__.py\n#   main.py\n#   config.py\n#   utils/\n#     __init__.py\n#     helpers.py\n#     formatters.py\n#   models/\n#     __init__.py\n#     user.py\n#     product.py\n\n# In myproject/utils/helpers.py:\n# Absolute imports (preferred by PEP 8)\n# from myproject.config import Settings\n# from myproject.models.user import User\n\n# Relative imports (acceptable within a package)\n# from ..config import Settings         # parent package\n# from ..models.user import User        # sibling package\n# from .formatters import format_date   # same package\n# from . import formatters              # same package module\n\n# In myproject/models/user.py:\n# from ..utils.helpers import validate  # parent's sibling\n# from .product import Product          # same package\n\n# Demonstration with actual code\nimport tempfile, os, sys\n\npkg = tempfile.mkdtemp()\nbase = os.path.join(pkg, \"demo\")\nos.makedirs(os.path.join(base, \"sub\"))\n\n# Create package files\nwith open(os.path.join(base, \"__init__.py\"), \"w\") as f:\n    f.write(\"\")\n\nwith open(os.path.join(base, \"config.py\"), \"w\") as f:\n    f.write(\"DB_URL = 'sqlite:///app.db'\\n\")\n\nwith open(os.path.join(base, \"sub\", \"__init__.py\"), \"w\") as f:\n    f.write(\"\")\n\nwith open(os.path.join(base, \"sub\", \"worker.py\"), \"w\") as f:\n    f.write(\"\"\"\n# Relative import from parent package\nfrom ..config import DB_URL\n\ndef get_db():\n    return f\"Connecting to {DB_URL}\"\n\"\"\")\n\nsys.path.insert(0, pkg)\n\nfrom demo.sub.worker import get_db\nprint(get_db())  # Connecting to sqlite:///app.db\n\n# Why relative imports fail in scripts:\n# Running `python demo/sub/worker.py` directly fails because\n# Python doesn't know the package context.\n# Solution: run as module: python -m demo.sub.worker\n\n# Cleanup\nsys.path.remove(pkg)\nfor mod in list(sys.modules):\n    if mod.startswith('demo'):\n        del sys.modules[mod]\nimport shutil\nshutil.rmtree(pkg)",
+          "code_language": "python",
+          "key_points": [
+            "Absolute imports use full path from project root (PEP 8 preferred)",
+            "Relative imports use dots: . = current, .. = parent package",
+            "Relative imports only work inside packages, not in scripts run directly",
+            "Use python -m package.module to run modules with relative imports"
+          ],
+          "gotchas": [
+            "Relative imports don't work when running a script directly (python script.py)",
+            "from . import X fails in __main__ -- use python -m instead",
+            "Mixing relative and absolute imports for the same package can cause confusion",
+            "Relative imports can make refactoring (moving files) harder"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Absolute imports use the full path (`from pkg.mod import X`). Relative imports use dots (`.` = current, `..` = parent). PEP 8 prefers absolute. Relative only works inside packages.",
+          "pseudo_code": "",
+          "actual_code": "# Absolute (preferred)\nfrom mypackage.utils import helper\n\n# Relative (within package)\nfrom . import utils            # current package\nfrom .utils import helper      # current package module\nfrom ..config import Settings  # parent package",
+          "code_language": "python",
+          "key_points": [
+            "Absolute: full path, always clear",
+            "Relative: dots for current/parent package"
+          ],
+          "gotchas": [
+            "Relative imports fail in directly-run scripts"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does `__all__` do, and how does `from module import *` work?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["__all__", "import-star", "public-api"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__all__` is a list of strings that defines the public API of a module or package. It controls what is exported when someone uses `from module import *`.\n\n**If `__all__` is defined**: Only names listed in `__all__` are imported with `import *`.\n\n**If `__all__` is NOT defined**: All names that don't start with underscore are imported with `import *`.\n\n`__all__` serves multiple purposes:\n1. Controls `import *` behavior\n2. Documents the module's public API\n3. Helps IDEs and linters identify public symbols\n4. In packages, controls which submodules `import *` exports\n\nNote: `__all__` does NOT prevent direct imports. `from module import _private_func` still works even if `_private_func` is not in `__all__`.",
+          "pseudo_code": "With __all__ defined:\n  from module import *  -> imports only names in __all__\n\nWithout __all__:\n  from module import *  -> imports all names not starting with _\n\n__all__ does NOT:\n  - Prevent direct imports (from mod import _private)\n  - Affect regular imports (import mod; mod._private)\n  - Enforce access control (it's just a convention)",
+          "actual_code": "# Module with __all__ defined\n# mymodule.py\n\"\"\"\n__all__ = ['public_func', 'PublicClass']\n\ndef public_func():\n    return 'public'\n\ndef _private_func():\n    return 'private'\n\ndef helper_func():\n    return 'helper'\n\nclass PublicClass:\n    pass\n\nclass _InternalClass:\n    pass\n\"\"\"\n\n# from mymodule import *\n# Only imports: public_func, PublicClass\n# Does NOT import: _private_func, helper_func, _InternalClass\n\n# Direct imports still work:\n# from mymodule import helper_func  -- works!\n# from mymodule import _private_func  -- works!\n\n# Demonstration\nimport types\nimport sys\n\n# Create module with __all__\nmod = types.ModuleType('demo_mod')\nmod.__all__ = ['greet', 'VERSION']\nmod.greet = lambda name: f\"Hello, {name}\"\nmod.VERSION = \"1.0\"\nmod._internal = \"secret\"\nmod.helper = \"not exported\"\nsys.modules['demo_mod'] = mod\n\n# Simulate 'from demo_mod import *'\n# Python checks __all__ and only imports those names\nnamespace = {}\nexec(\"from demo_mod import *\", namespace)\nprint('greet' in namespace)     # True\nprint('VERSION' in namespace)   # True\nprint('_internal' in namespace) # False\nprint('helper' in namespace)    # False (not in __all__)\n\n# Direct import still works\nexec(\"from demo_mod import helper\", namespace)\nprint(namespace['helper'])  # 'not exported'\n\n# __all__ in packages (__init__.py)\n# mypackage/__init__.py\n# __all__ = ['module_a', 'module_b']  # controls submodule exports\n# from mypackage import *  -> imports module_a and module_b\n\n# Best practice: always define __all__ in public modules\n# It documents the API and prevents accidental exports\n\n# __all__ as documentation\ndef get_public_api(module):\n    if hasattr(module, '__all__'):\n        return module.__all__\n    return [name for name in dir(module) if not name.startswith('_')]\n\nimport json\nprint(get_public_api(json)[:5])  # ['JSONDecodeError', 'JSONDecoder', 'JSONEncoder', ...]\n\ndel sys.modules['demo_mod']",
+          "code_language": "python",
+          "key_points": [
+            "__all__ controls what 'from module import *' exports",
+            "Without __all__, all non-underscore names are exported",
+            "__all__ does NOT prevent direct imports",
+            "Use __all__ to document and control the public API"
+          ],
+          "gotchas": [
+            "__all__ is a convention, not access control -- direct imports still work",
+            "Forgetting to update __all__ when adding new public functions",
+            "In packages, __all__ controls submodule export, not function export",
+            "PEP 8 discourages 'from module import *' except in __init__.py"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__all__` is a list of names exported by `from module import *`. Without it, all non-underscore names are exported. It documents the public API but doesn't prevent direct imports.",
+          "pseudo_code": "",
+          "actual_code": "# mymodule.py\n__all__ = ['public_func', 'Config']\n\ndef public_func(): return \"public\"\ndef _private(): return \"private\"\ndef helper(): return \"not exported by *\"\n\n# from mymodule import *  -> only public_func, Config\n# from mymodule import helper  -> still works!",
+          "code_language": "python",
+          "key_points": [
+            "__all__ controls import * behavior",
+            "Does not prevent direct imports"
+          ],
+          "gotchas": [
+            "__all__ must be kept in sync with actual code"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does `if __name__ == '__main__'` do, and why is it important?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["__name__", "__main__", "entry-point"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`__name__` is a special variable set by Python:\n- When a file is run directly: `__name__ == '__main__'`\n- When a file is imported: `__name__ == 'module_name'`\n\nThe `if __name__ == '__main__':` guard ensures that code only runs when the script is executed directly, not when it's imported as a module.\n\nThis is important because:\n1. **Prevents side effects on import**: Test code, prints, and setup don't run when importing\n2. **Enables dual-use files**: Same file works as both a module (importable) and a script (runnable)\n3. **Required for multiprocessing**: Without the guard, child processes may re-execute code\n4. **Testing friendly**: Can import functions without triggering script behavior",
+          "pseudo_code": "# script.py\ndef useful_function():\n    return 42\n\n# Code below only runs if script.py is run directly\nif __name__ == '__main__':\n    print(useful_function())\n\n# Running directly:  python script.py -> prints 42\n# Importing:         import script     -> nothing printed",
+          "actual_code": "# Example: dual-use module/script\n# calculator.py\n\ndef add(a, b):\n    return a + b\n\ndef multiply(a, b):\n    return a * b\n\ndef main():\n    \"\"\"Entry point when run as a script.\"\"\"\n    import sys\n    if len(sys.argv) != 4:\n        print(\"Usage: calculator.py <op> <a> <b>\")\n        sys.exit(1)\n\n    op, a, b = sys.argv[1], float(sys.argv[2]), float(sys.argv[3])\n    ops = {'add': add, 'mul': multiply}\n\n    if op in ops:\n        print(f\"Result: {ops[op](a, b)}\")\n    else:\n        print(f\"Unknown operation: {op}\")\n\nif __name__ == '__main__':\n    main()\n\n# As a script: python calculator.py add 2 3 -> Result: 5.0\n# As a module: from calculator import add; add(2, 3) -> 5\n\n# __name__ values in different contexts\nprint(f\"This module's __name__: {__name__}\")\n# If running directly: __main__\n# If imported: the module name\n\nimport json\nprint(json.__name__)  # 'json'\n\nimport os\nprint(os.__name__)    # 'os'\n\n# Package entry point: __main__.py\n# mypackage/\n#   __init__.py\n#   __main__.py  <- runs with: python -m mypackage\n#   core.py\n\n# __main__.py allows:\n# python -m mypackage  -> executes __main__.py\n\n# Why it matters for multiprocessing\n# Without the guard, each worker process re-imports the module\n# and re-executes top-level code, causing infinite process spawning\n\n# from multiprocessing import Pool\n# def work(x):\n#     return x * 2\n# if __name__ == '__main__':  # REQUIRED for multiprocessing!\n#     with Pool(4) as p:\n#         print(p.map(work, range(10)))",
+          "code_language": "python",
+          "key_points": [
+            "__name__ is '__main__' when run directly, module name when imported",
+            "Prevents code from running on import (side effects, tests, etc.)",
+            "Enables files to work as both importable modules and runnable scripts",
+            "Required for multiprocessing to prevent infinite process spawning"
+          ],
+          "gotchas": [
+            "Code above the guard runs on BOTH import and direct execution",
+            "Heavy computation at module level (outside the guard) slows down imports",
+            "python -m package runs __main__.py, not __init__.py",
+            "In Jupyter notebooks, __name__ is always '__main__'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__name__` is `'__main__'` when run directly, module name when imported. The `if __name__ == '__main__':` guard prevents code from running on import.",
+          "pseudo_code": "",
+          "actual_code": "def greet(name):\n    return f\"Hello, {name}!\"\n\nif __name__ == '__main__':\n    # Only runs when script is executed directly\n    print(greet(\"World\"))  # not on import\n\n# python script.py -> prints \"Hello, World!\"\n# import script    -> nothing printed",
+          "code_language": "python",
+          "key_points": [
+            "'__main__' when run directly, module name when imported",
+            "Prevents side effects on import"
+          ],
+          "gotchas": [
+            "Code outside the guard always runs (on both import and direct execution)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do circular imports happen, and how do you fix them?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["circular-imports", "import-errors", "refactoring"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Circular imports occur when module A imports module B, and module B imports module A (directly or through a chain). This creates a dependency cycle.\n\nPython handles circular imports by returning a partially initialized module from `sys.modules`. This means some names may not yet be defined when the import runs, causing `ImportError` or `AttributeError`.\n\nThe error typically manifests as `ImportError: cannot import name 'X' from partially initialized module 'Y'`.\n\n**Solutions:**\n1. **Restructure**: Move shared code to a third module\n2. **Import inside functions**: Defer import to call time (lazy import)\n3. **Import the module, not the name**: Use `import module` instead of `from module import name`\n4. **Use TYPE_CHECKING**: For type hints that cause circular imports\n5. **Merge modules**: If they're tightly coupled, they may belong together",
+          "pseudo_code": "Problem:\n  a.py: from b import func_b\n  b.py: from a import func_a\n  -> ImportError on circular dependency\n\nFix 1: Restructure\n  common.py: shared code\n  a.py: from common import X\n  b.py: from common import X\n\nFix 2: Lazy import\n  def my_func():\n      from b import func_b  # import at call time\n\nFix 3: Import module, not name\n  import b  # instead of: from b import func_b\n  b.func_b()  # access at call time",
+          "actual_code": "# PROBLEM: Circular import\n# a.py:\n# from b import func_b\n# def func_a(): return \"A\" + func_b()\n\n# b.py:\n# from a import func_a  # ImportError!\n# def func_b(): return \"B\" + func_a()\n\n# FIX 1: Move to function level (lazy import)\n# a.py:\n# def func_a():\n#     from b import func_b  # deferred import\n#     return \"A\" + func_b()\n\n# FIX 2: Import module, not name\n# a.py:\n# import b\n# def func_a():\n#     return \"A\" + b.func_b()  # resolved at call time\n\n# FIX 3: Restructure with a common module\n# common.py:\n# def shared_func(): return \"shared\"\n\n# a.py:\n# from common import shared_func\n# def func_a(): return shared_func()\n\n# FIX 4: TYPE_CHECKING for type hints\nfrom __future__ import annotations  # makes all annotations strings\nfrom typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    # Only imported during type checking (mypy), not at runtime\n    from some_module import SomeClass\n\ndef process(obj: \"SomeClass\") -> None:  # string annotation\n    pass\n\n# Demonstration of the fix pattern\nimport types\nimport sys\n\n# Create modules that would normally cause circular import\nmod_a = types.ModuleType('mod_a')\nmod_b = types.ModuleType('mod_b')\n\n# Using lazy imports to break the cycle\nmod_a_code = \"\"\"\ndef func_a():\n    import mod_b  # lazy import inside function\n    return 'A calls ' + mod_b.func_b_safe()\n\ndef func_a_safe():\n    return 'A'\n\"\"\"\n\nmod_b_code = \"\"\"\ndef func_b():\n    import mod_a  # lazy import inside function\n    return 'B calls ' + mod_a.func_a_safe()\n\ndef func_b_safe():\n    return 'B'\n\"\"\"\n\nsys.modules['mod_a'] = mod_a\nsys.modules['mod_b'] = mod_b\nexec(mod_a_code, mod_a.__dict__)\nexec(mod_b_code, mod_b.__dict__)\n\nprint(mod_a.func_a())  # A calls B\nprint(mod_b.func_b())  # B calls A\n\n# Cleanup\ndel sys.modules['mod_a']\ndel sys.modules['mod_b']",
+          "code_language": "python",
+          "key_points": [
+            "Circular imports happen when A imports B and B imports A",
+            "Fix by restructuring, lazy imports, or importing modules instead of names",
+            "TYPE_CHECKING guard for type-hint-only imports",
+            "Circular imports are usually a sign of poor architecture"
+          ],
+          "gotchas": [
+            "from module import name fails with circular imports; import module may work",
+            "Python returns partially initialized modules from sys.modules during circular imports",
+            "Lazy imports add slight overhead and make dependencies less visible",
+            "Circular imports usually indicate modules are too tightly coupled"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Circular imports happen when A imports B and B imports A. Fix by restructuring, using lazy imports (inside functions), or importing modules instead of names.",
+          "pseudo_code": "",
+          "actual_code": "# Problem: from b import X when b also imports from a\n\n# Fix 1: Lazy import\ndef my_function():\n    from other_module import helper  # import at call time\n    return helper()\n\n# Fix 2: TYPE_CHECKING for type hints\nfrom typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from other_module import MyClass  # only for type checking",
+          "code_language": "python",
+          "key_points": [
+            "Restructure, lazy import, or import module not name",
+            "TYPE_CHECKING for type-hint-only imports"
+          ],
+          "gotchas": [
+            "Usually a sign of poor architecture -- consider restructuring"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `sys.path` work, and how can you customize module search paths?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["sys.path", "PYTHONPATH", "import-paths"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`sys.path` is a list of strings that specifies where Python looks for modules. When you `import module`, Python searches these directories in order.\n\n`sys.path` is initialized from:\n1. The directory of the script being run (or `''` for interactive)\n2. `PYTHONPATH` environment variable\n3. Installation-dependent defaults (standard library, site-packages)\n\nYou can modify `sys.path` at runtime, but there are better approaches:\n- **`PYTHONPATH` env var**: Set before running Python\n- **`.pth` files**: Place in site-packages for persistent paths\n- **`pip install -e .`**: Editable installs for development\n- **Package structure**: Proper packaging with setup.py/pyproject.toml",
+          "pseudo_code": "sys.path search order:\n1. Script directory (or '' for interactive)\n2. PYTHONPATH directories\n3. Standard library\n4. site-packages (pip packages)\n\nModification options:\n  sys.path.insert(0, '/my/path')  -- runtime\n  PYTHONPATH=/my/path python ...  -- env var\n  pip install -e .                -- development install",
+          "actual_code": "import sys\nimport os\n\n# Current sys.path\nprint(\"sys.path:\")\nfor i, p in enumerate(sys.path[:5]):\n    print(f\"  {i}: {p}\")\n\n# First entry is the script's directory (or '' for interactive)\nprint(f\"\\nFirst entry: {sys.path[0]!r}\")\n\n# Adding a custom path at runtime\ncustom_path = \"/tmp/my_modules\"\nos.makedirs(custom_path, exist_ok=True)\n\n# Write a module to the custom path\nwith open(os.path.join(custom_path, \"custom_mod.py\"), \"w\") as f:\n    f.write(\"CUSTOM_VALUE = 42\\n\")\n\n# Add to sys.path\nsys.path.insert(0, custom_path)  # insert at beginning for priority\n\nimport custom_mod\nprint(custom_mod.CUSTOM_VALUE)  # 42\n\n# Remove from path\nsys.path.remove(custom_path)\n\n# site-packages location\nimport site\nprint(f\"\\nsite-packages: {site.getsitepackages()}\")\nprint(f\"user site-packages: {site.getusersitepackages()}\")\n\n# Finding where a module is located\nimport json\nprint(f\"\\njson location: {json.__file__}\")\n\nimport os.path\nprint(f\"os.path location: {os.path.__file__}\")\n\n# PYTHONPATH environment variable\n# Set before running Python:\n# export PYTHONPATH=\"/my/path:/other/path\"\n# python script.py\n\n# .pth files for persistent paths\n# Create a .pth file in site-packages:\n# /path/to/site-packages/my_project.pth\n# Contents: /path/to/my/project\n\n# Best practice: use pip install -e for development\n# In your project directory with setup.py or pyproject.toml:\n# pip install -e .\n# This adds your project to sys.path properly\n\n# Cleanup\ndel sys.modules['custom_mod']\nimport shutil\nshutil.rmtree(custom_path)",
+          "code_language": "python",
+          "key_points": [
+            "sys.path is searched in order for module files",
+            "First entry is script directory, then PYTHONPATH, then stdlib, then site-packages",
+            "sys.path.insert(0, path) for runtime customization",
+            "pip install -e . is the proper way for development"
+          ],
+          "gotchas": [
+            "Modifying sys.path at runtime makes code fragile and non-portable",
+            "Empty string '' in sys.path means current directory, which changes with os.chdir()",
+            "PYTHONPATH persists for the entire session -- can cause unexpected imports",
+            "sys.path modifications don't persist across Python sessions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sys.path` is a list of directories Python searches for modules. It includes script dir, PYTHONPATH, stdlib, and site-packages. Use `pip install -e .` for development.",
+          "pseudo_code": "",
+          "actual_code": "import sys\n\n# View current search paths\nprint(sys.path[:3])\n\n# Add custom path (not recommended for production)\nsys.path.insert(0, \"/my/custom/path\")\n\n# Better: use PYTHONPATH env var or pip install -e .",
+          "code_language": "python",
+          "key_points": [
+            "sys.path searched in order: script dir, PYTHONPATH, stdlib, site-packages",
+            "pip install -e . for development is the proper approach"
+          ],
+          "gotchas": [
+            "Runtime sys.path modifications are fragile"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `importlib` enable dynamic imports and module reloading?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["importlib", "dynamic-import", "reload"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`importlib` is Python's programmatic interface to the import system. Key functions:\n\n- **`importlib.import_module(name)`**: Import a module by string name (dynamic import)\n- **`importlib.reload(module)`**: Re-execute a module's code (for development)\n- **`importlib.resources`**: Access data files in packages\n- **`importlib.metadata`**: Access package metadata (version, etc.)\n\nDynamic imports are useful for:\n- Plugin systems: Load modules based on configuration\n- Factory patterns: Instantiate classes by name\n- Conditional imports: Load platform-specific modules\n- Lazy loading: Import expensive modules only when needed",
+          "pseudo_code": "importlib.import_module('json')  -> same as 'import json'\nimportlib.import_module('.utils', 'mypackage')  -> relative import\nimportlib.reload(module)  -> re-execute module code\n\nUse cases:\n  - Plugin loading by name\n  - Factory pattern with class names\n  - Hot-reloading in development",
+          "actual_code": "import importlib\nimport sys\n\n# Dynamic import by string name\njson_mod = importlib.import_module('json')\nprint(json_mod.dumps({\"key\": \"value\"}))  # {\"key\": \"value\"}\n\n# Import submodule\nos_path = importlib.import_module('os.path')\nprint(os_path.join('/tmp', 'file.txt'))  # /tmp/file.txt\n\n# Plugin system pattern\ndef load_plugin(plugin_name):\n    \"\"\"Load a plugin module by name.\"\"\"\n    try:\n        module = importlib.import_module(f\"plugins.{plugin_name}\")\n        return module\n    except ModuleNotFoundError:\n        print(f\"Plugin '{plugin_name}' not found\")\n        return None\n\n# Factory pattern: create class by string name\ndef create_object(module_path, class_name, *args, **kwargs):\n    \"\"\"Create an object from module path and class name.\"\"\"\n    module = importlib.import_module(module_path)\n    cls = getattr(module, class_name)\n    return cls(*args, **kwargs)\n\n# Example: create a datetime object dynamically\nfrom datetime import datetime\ndt = create_object('datetime', 'datetime', 2024, 1, 15)\nprint(dt)  # 2024-01-15 00:00:00\n\n# Module reloading (development use)\nimport types\nmod = types.ModuleType('dev_mod')\nmod.__file__ = '<dynamic>'\nexec('VERSION = 1', mod.__dict__)\nsys.modules['dev_mod'] = mod\n\nimport dev_mod\nprint(dev_mod.VERSION)  # 1\n\n# Simulate code change\nexec('VERSION = 2', mod.__dict__)\nimportlib.reload(dev_mod)\nprint(dev_mod.VERSION)  # 2\n\n# Conditional/platform-specific imports\ndef get_platform_module():\n    import platform\n    os_name = platform.system().lower()\n    try:\n        return importlib.import_module(f\"platform_support.{os_name}\")\n    except ModuleNotFoundError:\n        return importlib.import_module(\"platform_support.generic\")\n\n# Lazy import pattern\nclass LazyModule:\n    def __init__(self, name):\n        self._name = name\n        self._module = None\n\n    def __getattr__(self, attr):\n        if self._module is None:\n            self._module = importlib.import_module(self._name)\n        return getattr(self._module, attr)\n\n# numpy is only imported when first used\n# np = LazyModule('numpy')\n# np.array([1, 2, 3])  # imports numpy here\n\n# Package metadata (Python 3.8+)\nfrom importlib.metadata import version, packages_distributions\ntry:\n    print(f\"pip version: {version('pip')}\")\nexcept Exception:\n    pass\n\ndel sys.modules['dev_mod']",
+          "code_language": "python",
+          "key_points": [
+            "import_module() imports by string name (dynamic/runtime import)",
+            "reload() re-executes module code for development",
+            "Enables plugin systems, factory patterns, and lazy loading",
+            "importlib.metadata provides package version info"
+          ],
+          "gotchas": [
+            "reload() doesn't update existing references to old objects",
+            "reload() may leave stale state if module has initialization side effects",
+            "Dynamic imports make code harder to analyze statically (IDE support, type checkers)",
+            "import_module with relative names requires the package parameter"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`importlib.import_module('name')` imports dynamically by string. `importlib.reload(mod)` re-executes module code. Used for plugins, factories, and lazy loading.",
+          "pseudo_code": "",
+          "actual_code": "import importlib\n\n# Dynamic import by string\njson_mod = importlib.import_module('json')\nprint(json_mod.dumps({\"a\": 1}))  # {\"a\": 1}\n\n# Reload module (development)\nimport my_module\nimportlib.reload(my_module)  # re-execute module code",
+          "code_language": "python",
+          "key_points": [
+            "import_module for dynamic imports by string",
+            "reload for development hot-reloading"
+          ],
+          "gotchas": [
+            "reload doesn't update existing object references"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are namespace packages, and how do they differ from regular packages?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["namespace-packages", "implicit", "PEP-420"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Regular packages** have an `__init__.py` file. **Namespace packages** (PEP 420, Python 3.3+) don't require `__init__.py` and can span multiple directories.\n\nNamespace packages allow different parts of a package to be distributed separately and installed in different locations. Python finds all directories matching the package name across `sys.path` and merges them into a single namespace.\n\nUse cases:\n- Large frameworks distributed as separate installable components\n- Plugin architectures where plugins add subpackages\n- Organization-wide shared package namespaces (e.g., `google.cloud.storage`)\n\n**Key differences:**\n- No `__init__.py` file\n- No `__file__` attribute (multiple directories)\n- `__path__` contains multiple directories\n- Cannot have code at the namespace package level (no `__init__.py` to put it in)",
+          "pseudo_code": "Regular package:\n  mypackage/\n    __init__.py  <- required\n    module.py\n\nNamespace package:\n  location1/mypackage/module_a.py\n  location2/mypackage/module_b.py\n  No __init__.py anywhere!\n  Both locations in sys.path\n  -> import mypackage.module_a  (from location1)\n  -> import mypackage.module_b  (from location2)",
+          "actual_code": "import sys\nimport os\nimport tempfile\n\n# Create two separate directories, each with part of the same package\ndir1 = tempfile.mkdtemp()\ndir2 = tempfile.mkdtemp()\n\n# Create namespace package parts (NO __init__.py!)\nns_dir1 = os.path.join(dir1, \"my_namespace\")\nns_dir2 = os.path.join(dir2, \"my_namespace\")\nos.makedirs(ns_dir1)\nos.makedirs(ns_dir2)\n\n# Part 1: module_a in dir1\nwith open(os.path.join(ns_dir1, \"module_a.py\"), \"w\") as f:\n    f.write(\"def func_a(): return 'from module_a'\\n\")\n\n# Part 2: module_b in dir2\nwith open(os.path.join(ns_dir2, \"module_b.py\"), \"w\") as f:\n    f.write(\"def func_b(): return 'from module_b'\\n\")\n\n# Add both directories to sys.path\nsys.path.insert(0, dir1)\nsys.path.insert(0, dir2)\n\n# Import from both parts of the namespace package\nfrom my_namespace.module_a import func_a\nfrom my_namespace.module_b import func_b\n\nprint(func_a())  # from module_a\nprint(func_b())  # from module_b\n\n# Inspect the namespace package\nimport my_namespace\nprint(type(my_namespace))    # <class 'module'>\nprint(hasattr(my_namespace, '__file__'))  # False (no single file)\nprint(my_namespace.__path__)  # _NamespacePath([dir2/my_namespace, dir1/my_namespace])\n\n# Compare with regular package\n# Regular package has __file__ pointing to __init__.py\nimport json\nprint(hasattr(json, '__file__'))  # True\nprint(json.__file__)  # .../json/__init__.py\n\n# Real-world example: google-cloud packages\n# pip install google-cloud-storage google-cloud-bigquery\n# Both install into google/cloud/ namespace\n# from google.cloud import storage\n# from google.cloud import bigquery\n# No google/__init__.py or google/cloud/__init__.py!\n\n# Cleanup\nsys.path.remove(dir1)\nsys.path.remove(dir2)\nfor mod in list(sys.modules):\n    if 'my_namespace' in mod:\n        del sys.modules[mod]\nimport shutil\nshutil.rmtree(dir1)\nshutil.rmtree(dir2)",
+          "code_language": "python",
+          "key_points": [
+            "Namespace packages have no __init__.py and can span multiple directories",
+            "Python merges all matching directories into one namespace",
+            "__path__ contains multiple directories instead of one",
+            "Used for distributing package parts independently (google-cloud, etc.)"
+          ],
+          "gotchas": [
+            "Adding __init__.py to a namespace package directory converts it to regular (breaks merging)",
+            "Namespace packages are slower to import (must search all sys.path entries)",
+            "Cannot have package-level code (no __init__.py to put it in)",
+            "Debugging namespace packages is harder (code in multiple locations)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Namespace packages have no `__init__.py` and can span multiple directories. Python merges all matching directories into one namespace. Used for separately distributed package parts.",
+          "pseudo_code": "",
+          "actual_code": "# Two directories, no __init__.py:\n# /path1/mypkg/module_a.py\n# /path2/mypkg/module_b.py\n\n# Both in sys.path:\nimport sys\nsys.path.extend([\"/path1\", \"/path2\"])\n\nfrom mypkg.module_a import func_a  # from /path1\nfrom mypkg.module_b import func_b  # from /path2",
+          "code_language": "python",
+          "key_points": [
+            "No __init__.py needed",
+            "Merges multiple directories into one namespace"
+          ],
+          "gotchas": [
+            "Adding __init__.py breaks the namespace merging"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the best practices for structuring Python packages?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["package-structure", "best-practices", "project-layout"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A well-structured Python package follows conventions that make it easy to install, test, and maintain.\n\n**Recommended project layout (src layout):**\n```\nmy_project/\n    pyproject.toml\n    README.md\n    src/\n        my_package/\n            __init__.py\n            core.py\n            utils.py\n            models/\n                __init__.py\n                user.py\n    tests/\n        __init__.py\n        test_core.py\n        test_utils.py\n```\n\n**Key principles:**\n1. Use `pyproject.toml` for project metadata and build config\n2. Use `src/` layout to prevent accidental imports from the project root\n3. Keep `__init__.py` minimal (imports and `__all__`)\n4. Separate tests from source code\n5. One class/concept per module (don't overstuff)\n6. Use absolute imports for clarity\n7. Define `__all__` in public modules",
+          "pseudo_code": "project/\n  pyproject.toml       -- project metadata, dependencies\n  src/\n    mypackage/\n      __init__.py      -- minimal: version, __all__, convenience imports\n      core.py          -- main functionality\n      utils.py         -- helpers\n      exceptions.py    -- custom exceptions\n      models/\n        __init__.py\n        user.py\n  tests/\n    test_core.py\n    test_utils.py\n    conftest.py        -- pytest fixtures",
+          "actual_code": "# pyproject.toml (modern packaging)\n# [project]\n# name = \"my-package\"\n# version = \"1.0.0\"\n# requires-python = \">=3.8\"\n# dependencies = [\"requests>=2.28\"]\n#\n# [project.optional-dependencies]\n# dev = [\"pytest\", \"mypy\", \"ruff\"]\n#\n# [build-system]\n# requires = [\"setuptools>=64\"]\n# build-backend = \"setuptools.backends._legacy:_Backend\"\n\n# src/mypackage/__init__.py (minimal and clean)\n# __version__ = \"1.0.0\"\n# __all__ = [\"Client\", \"Config\", \"AppError\"]\n#\n# from .core import Client\n# from .config import Config\n# from .exceptions import AppError\n\n# src/mypackage/exceptions.py (custom exceptions)\n# class AppError(Exception):\n#     pass\n# class NotFoundError(AppError):\n#     pass\n# class ValidationError(AppError):\n#     pass\n\n# src/mypackage/core.py (main module)\n# from .config import Config\n# from .exceptions import NotFoundError\n#\n# class Client:\n#     def __init__(self, config: Config):\n#         self.config = config\n\n# Installation and usage:\n# pip install -e .            # development install\n# pip install -e \".[dev]\"     # with dev dependencies\n# from mypackage import Client, Config\n\n# Testing structure:\n# tests/conftest.py\n# import pytest\n# from mypackage import Client, Config\n#\n# @pytest.fixture\n# def client():\n#     return Client(Config(debug=True))\n\n# tests/test_core.py\n# def test_client_creation(client):\n#     assert client is not None\n\n# Why src/ layout is better:\n# Without src/:\n#   my_project/\n#     my_package/\n#     tests/\n#   Running tests from my_project/ imports local my_package/\n#   even if it's not installed -- hides import bugs\n#\n# With src/:\n#   my_project/\n#     src/my_package/\n#     tests/\n#   Must install (pip install -e .) to import\n#   Tests always use the installed version\n\n# Module organization principles\nprint(\"\"\"\nPackage Structure Best Practices:\n1. pyproject.toml for metadata (not setup.py)\n2. src/ layout to prevent accidental imports\n3. Minimal __init__.py with __all__\n4. One responsibility per module\n5. Custom exceptions in exceptions.py\n6. Tests mirror source structure\n7. conftest.py for shared fixtures\n8. Use absolute imports in source\n9. Type hints on all public functions\n10. Docstrings on all public modules/classes/functions\n\"\"\")",
+          "code_language": "python",
+          "key_points": [
+            "Use src/ layout to prevent accidental imports",
+            "pyproject.toml for project metadata (modern standard)",
+            "Minimal __init__.py with __all__ and convenience imports",
+            "Separate tests from source, mirror the package structure"
+          ],
+          "gotchas": [
+            "Without src/ layout, tests may accidentally import uninstalled local code",
+            "Overstuffing __init__.py with code slows down all imports of the package",
+            "Forgetting __init__.py in test directories can cause pytest discovery issues",
+            "Circular imports in __init__.py are common -- use lazy imports if needed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `src/` layout, `pyproject.toml`, minimal `__init__.py` with `__all__`, and separate `tests/` directory. Install with `pip install -e .` for development.",
+          "pseudo_code": "",
+          "actual_code": "# Project structure:\n# my_project/\n#   pyproject.toml\n#   src/\n#     mypackage/\n#       __init__.py   -> __all__ = ['Client']\n#       core.py       -> class Client: ...\n#   tests/\n#     test_core.py\n\n# Install for development:\n# pip install -e .\n\n# Then import normally:\n# from mypackage import Client",
+          "code_language": "python",
+          "key_points": [
+            "src/ layout, pyproject.toml, minimal __init__.py",
+            "pip install -e . for development"
+          ],
+          "gotchas": [
+            "Without src/, tests may import uninstalled local code"
+          ]
+        }
+      ]
+    }
+  ]
+}

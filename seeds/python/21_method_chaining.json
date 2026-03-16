@@ -1,0 +1,497 @@
+{
+  "concept_slug": "method-chaining",
+  "questions": [
+    {
+      "title": "What is method chaining and how does it work in Python?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["method-chaining", "fluent-interface", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Method chaining is a pattern where multiple method calls are linked together in a single expression. Each method returns an object (usually `self`) that allows the next method to be called on it.\n\n### How it works:\n- Each method performs its operation\n- Each method returns `self` (or a new object of the same type)\n- The caller can chain `.method()` calls without intermediate variables\n\n### Two flavors:\n1. **Mutable chaining**: Methods modify `self` and return `self`\n2. **Immutable chaining**: Methods return a new object (like Django QuerySets)\n\n### Real-world examples:\n- Django QuerySet: `User.objects.filter(...).exclude(...).order_by(...)`\n- pandas: `df.dropna().groupby('col').mean()`\n- SQLAlchemy: `session.query(User).filter(...).order_by(...).limit(10)`\n- String methods: `'  hello  '.strip().upper().replace('H', 'J')`",
+          "pseudo_code": "class Query:\n    def filter(self, **kwargs):\n        # apply filter\n        return self  # enables chaining\n\n    def order_by(self, field):\n        # set ordering\n        return self  # enables chaining\n\n    def limit(self, n):\n        # set limit\n        return self  # enables chaining\n\n# Usage:\nresult = Query().filter(active=True).order_by('name').limit(10)",
+          "actual_code": "# Basic method chaining with return self\nclass Query:\n    def __init__(self):\n        self._filters = []\n        self._order = None\n        self._limit = None\n\n    def filter(self, **kwargs):\n        self._filters.append(kwargs)\n        return self  # return self for chaining\n\n    def order_by(self, field):\n        self._order = field\n        return self\n\n    def limit(self, n):\n        self._limit = n\n        return self\n\n    def build(self):\n        parts = [\"SELECT * FROM table\"]\n        for f in self._filters:\n            conditions = ' AND '.join(f\"{k}={v!r}\" for k, v in f.items())\n            parts.append(f\"WHERE {conditions}\")\n        if self._order:\n            parts.append(f\"ORDER BY {self._order}\")\n        if self._limit:\n            parts.append(f\"LIMIT {self._limit}\")\n        return ' '.join(parts)\n\n# Chained usage\nresult = (Query()\n    .filter(active=True)\n    .filter(role='admin')\n    .order_by('name')\n    .limit(10)\n    .build())\nprint(result)\n# SELECT * FROM table WHERE active=True WHERE role='admin' ORDER BY name LIMIT 10\n\n# Python built-in chaining (strings are immutable -- each returns new string)\nresult = '  Hello, World!  '.strip().lower().replace('world', 'python')\nprint(result)  # 'hello, python!'\n\n# List methods that DON'T support chaining (return None)\nmy_list = [3, 1, 2]\n# WRONG: my_list.sort().append(4)  -- sort() returns None!\n# RIGHT:\nmy_list.sort()\nmy_list.append(4)",
+          "code_language": "python",
+          "key_points": [
+            "Each method returns self (or a new object) to enable chaining",
+            "Reduces intermediate variables and makes code more readable",
+            "Python strings naturally support chaining (each method returns new string)",
+            "Two styles: mutable (modify self) and immutable (return new object)"
+          ],
+          "gotchas": [
+            "Many built-in list methods (sort, append, extend, reverse) return None -- NOT chainable",
+            "Mutable chaining modifies the original object -- callers may not expect this",
+            "Long chains can be hard to debug -- which call failed?",
+            "Returning self from __init__ is not possible (it must return None)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Method chaining: each method returns `self`, allowing `.method().method().method()`. Reduces variables, improves readability. Two styles: mutable (modify self) and immutable (return new copy).",
+          "pseudo_code": "",
+          "actual_code": "class Builder:\n    def __init__(self):\n        self.data = {}\n    def set(self, key, value):\n        self.data[key] = value\n        return self  # enables chaining\n\nresult = Builder().set('a', 1).set('b', 2).data\nprint(result)  # {'a': 1, 'b': 2}",
+          "code_language": "python",
+          "key_points": [
+            "Return self from methods to enable chaining",
+            "Strings chain naturally; list methods mostly return None"
+          ],
+          "gotchas": [
+            "list.sort() returns None -- not chainable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the Builder pattern with method chaining in Python?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["builder-pattern", "method-chaining", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Builder pattern** constructs complex objects step by step using method chaining. Instead of a constructor with many parameters, you set properties through named methods, then call `.build()` to create the final object.\n\n### Benefits:\n- Readable construction of complex objects\n- Optional parameters without None defaults\n- Validation can happen at build time\n- Immutable final objects from mutable builder",
+          "pseudo_code": "user = (UserBuilder()\n    .name('Alice')\n    .email('alice@example.com')\n    .role('admin')\n    .build())\n\n# Clearer than:\n# User('Alice', 'alice@example.com', None, 'admin', None, None, True)",
+          "actual_code": "from dataclasses import dataclass\nfrom typing import Optional\n\n# The final immutable object\n@dataclass(frozen=True)\nclass HttpRequest:\n    method: str\n    url: str\n    headers: dict\n    body: Optional[str]\n    timeout: int\n    auth: Optional[tuple]\n\n# The builder\nclass HttpRequestBuilder:\n    def __init__(self):\n        self._method = 'GET'\n        self._url = ''\n        self._headers = {}\n        self._body = None\n        self._timeout = 30\n        self._auth = None\n\n    def method(self, method):\n        self._method = method.upper()\n        return self\n\n    def url(self, url):\n        self._url = url\n        return self\n\n    def header(self, key, value):\n        self._headers[key] = value\n        return self\n\n    def body(self, body):\n        self._body = body\n        return self\n\n    def timeout(self, seconds):\n        self._timeout = seconds\n        return self\n\n    def auth(self, username, password):\n        self._auth = (username, password)\n        return self\n\n    def build(self):\n        if not self._url:\n            raise ValueError('URL is required')\n        if self._method in ('POST', 'PUT') and self._body is None:\n            raise ValueError(f'{self._method} requires a body')\n        return HttpRequest(\n            method=self._method,\n            url=self._url,\n            headers=dict(self._headers),  # copy\n            body=self._body,\n            timeout=self._timeout,\n            auth=self._auth,\n        )\n\n# Usage\nrequest = (HttpRequestBuilder()\n    .method('POST')\n    .url('https://api.example.com/users')\n    .header('Content-Type', 'application/json')\n    .header('Accept', 'application/json')\n    .body('{\"name\": \"Alice\"}')\n    .timeout(10)\n    .auth('user', 'pass')\n    .build())\n\nprint(request.method)   # POST\nprint(request.url)      # https://api.example.com/users\nprint(request.headers)  # {'Content-Type': 'application/json', 'Accept': 'application/json'}\n\n# Simpler GET request\nget_request = (HttpRequestBuilder()\n    .url('https://api.example.com/users')\n    .header('Accept', 'application/json')\n    .build())\n\nprint(get_request.method)   # GET (default)\nprint(get_request.timeout)  # 30 (default)\n\n# Reusable builder template\nbase_builder = HttpRequestBuilder().header('Accept', 'application/json').timeout(15)\n# Note: this shares state! Clone if reusing.\n\n# HTML builder example\nclass HtmlBuilder:\n    def __init__(self, tag):\n        self._tag = tag\n        self._children = []\n        self._attrs = {}\n\n    def attr(self, key, value):\n        self._attrs[key] = value\n        return self\n\n    def child(self, tag_or_text):\n        if isinstance(tag_or_text, HtmlBuilder):\n            self._children.append(tag_or_text)\n        else:\n            self._children.append(str(tag_or_text))\n        return self\n\n    def build(self):\n        attrs = ' '.join(f'{k}=\"{v}\"' for k, v in self._attrs.items())\n        opening = f'<{self._tag} {attrs}>' if attrs else f'<{self._tag}>'\n        children = ''.join(\n            c.build() if isinstance(c, HtmlBuilder) else c\n            for c in self._children\n        )\n        return f'{opening}{children}</{self._tag}>'\n\nhtml = (HtmlBuilder('div')\n    .attr('class', 'container')\n    .child(HtmlBuilder('h1').child('Title'))\n    .child(HtmlBuilder('p').attr('class', 'text').child('Hello world'))\n    .build())\nprint(html)\n# <div class=\"container\"><h1>Title</h1><p class=\"text\">Hello world</p></div>",
+          "code_language": "python",
+          "key_points": [
+            "Builder collects configuration via chained methods, then build() creates the object",
+            "Validation happens in build(), not during construction",
+            "Final object can be immutable (frozen dataclass) while builder is mutable",
+            "Each method returns self for chaining; build() returns the final product"
+          ],
+          "gotchas": [
+            "Builder instances are mutable -- reusing a builder between builds shares state",
+            "Forgetting to call build() means you get the builder, not the product",
+            "Python's keyword arguments often eliminate the need for a Builder pattern",
+            "Type checkers may not know the return type of chained methods -- use type hints"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Builder pattern: set properties via chained methods, then `.build()` creates the final object. Separates construction from representation. Each setter returns `self`.",
+          "pseudo_code": "",
+          "actual_code": "class QueryBuilder:\n    def __init__(self):\n        self._table = ''\n        self._where = []\n    def table(self, name):\n        self._table = name\n        return self\n    def where(self, condition):\n        self._where.append(condition)\n        return self\n    def build(self):\n        sql = f\"SELECT * FROM {self._table}\"\n        if self._where:\n            sql += \" WHERE \" + \" AND \".join(self._where)\n        return sql\n\nprint(QueryBuilder().table('users').where('active=1').where('age>18').build())",
+          "code_language": "python",
+          "key_points": [
+            "Chain setters, call build() to produce result",
+            "Validates at build time, not at set time"
+          ],
+          "gotchas": [
+            "Python kwargs often make Builder pattern unnecessary"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does pandas-style method chaining work and why is it powerful?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["pandas", "method-chaining", "data-analysis"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pandas DataFrames support extensive method chaining where each operation returns a new DataFrame. This creates readable data transformation pipelines.\n\n### Why it works:\n- Most pandas methods return a **new DataFrame** (immutable style)\n- Methods like `assign()`, `query()`, `pipe()` are designed for chaining\n- `pipe()` lets you chain custom functions\n\n### The `pipe()` method:\n`df.pipe(func, *args)` is equivalent to `func(df, *args)` -- lets you chain any function that takes a DataFrame as its first argument.",
+          "pseudo_code": "result = (df\n    .query('age > 18')\n    .assign(full_name=lambda x: x['first'] + ' ' + x['last'])\n    .groupby('department')\n    .agg({'salary': 'mean'})\n    .sort_values('salary', ascending=False)\n    .head(10))",
+          "actual_code": "import pandas as pd\n\n# Sample data\ndf = pd.DataFrame({\n    'name': ['Alice', 'Bob', 'Charlie', 'Diana', 'Eve'],\n    'department': ['Engineering', 'Marketing', 'Engineering', 'Marketing', 'Engineering'],\n    'salary': [95000, 65000, 110000, 70000, 105000],\n    'years': [5, 3, 8, 2, 6],\n    'active': [True, True, True, False, True],\n})\n\n# Method chaining pipeline\nresult = (df\n    .query('active == True')                          # filter\n    .assign(\n        salary_k=lambda x: x['salary'] / 1000,       # add computed column\n        experience=lambda x: x['years'].apply(\n            lambda y: 'senior' if y >= 5 else 'junior'\n        ),\n    )\n    .sort_values('salary', ascending=False)            # sort\n    .reset_index(drop=True)                            # clean index\n)\nprint(result)\n\n# Groupby chaining\nstats = (df\n    .query('active == True')\n    .groupby('department')\n    .agg(\n        avg_salary=('salary', 'mean'),\n        headcount=('name', 'count'),\n        max_years=('years', 'max'),\n    )\n    .sort_values('avg_salary', ascending=False)\n    .reset_index()\n)\nprint(stats)\n\n# Using pipe() for custom functions\ndef add_salary_band(df, low=60000, high=100000):\n    return df.assign(\n        band=pd.cut(df['salary'], bins=[0, low, high, float('inf')],\n                     labels=['low', 'mid', 'high'])\n    )\n\ndef filter_department(df, dept):\n    return df.query(f'department == \"{dept}\"')\n\nresult = (df\n    .pipe(add_salary_band, low=70000, high=100000)\n    .pipe(filter_department, dept='Engineering')\n    .sort_values('salary')\n)\nprint(result)\n\n# String method chaining\nresult = (df\n    .assign(name_upper=lambda x: x['name'].str.upper())\n    .assign(name_len=lambda x: x['name'].str.len())\n)\nprint(result[['name', 'name_upper', 'name_len']])\n\n# Chaining with rename and drop\ncleaned = (df\n    .rename(columns={'name': 'employee_name', 'years': 'tenure'})\n    .drop(columns=['active'])\n    .set_index('employee_name')\n)\nprint(cleaned)",
+          "code_language": "python",
+          "key_points": [
+            "Most pandas methods return new DataFrames, enabling natural chaining",
+            "assign() adds computed columns; query() filters with string expressions",
+            "pipe() lets you chain any function that takes a DataFrame first",
+            "Parentheses allow multi-line chains without backslashes"
+          ],
+          "gotchas": [
+            "Chaining creates new DataFrames at each step -- can use more memory than in-place operations",
+            "Some pandas methods modify in-place (inplace=True) and return None -- breaks chains",
+            "Long chains can be hard to debug -- extract intermediate steps when troubleshooting",
+            "query() uses string expressions which bypass IDE autocomplete and type checking"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pandas methods return new DataFrames, enabling `df.query(...).assign(...).groupby(...).sort_values(...)`. Use `pipe()` to chain custom functions. Wrap in parentheses for multi-line.",
+          "pseudo_code": "",
+          "actual_code": "result = (df\n    .query('active == True')\n    .assign(salary_k=lambda x: x['salary'] / 1000)\n    .groupby('department')\n    .agg({'salary_k': 'mean'})\n    .sort_values('salary_k', ascending=False))",
+          "code_language": "python",
+          "key_points": [
+            "Each method returns a new DataFrame",
+            "pipe() for chaining custom functions"
+          ],
+          "gotchas": [
+            "inplace=True returns None -- breaks chains"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does SQLAlchemy query chaining work?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["SQLAlchemy", "query-chaining", "ORM"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy queries are built by chaining methods on a `Query` object (legacy) or `select()` statement (2.0 style). Each method returns a new query object with the additional constraint.\n\n### Key chainable methods:\n- `filter()` / `where()`: Add WHERE clauses\n- `order_by()`: Set ordering\n- `limit()` / `offset()`: Pagination\n- `join()`: Table joins\n- `group_by()` / `having()`: Grouping\n- `options()`: Eager loading configuration\n\nQueries are **lazy** -- SQL is only generated and executed when you call `.all()`, `.first()`, `.one()`, or iterate.",
+          "pseudo_code": "# Legacy (1.x)\nquery = session.query(User).filter(...).order_by(...).limit(10)\n\n# Modern (2.0)\nstmt = select(User).where(...).order_by(...).limit(10)\nresult = session.execute(stmt)",
+          "actual_code": "from sqlalchemy import create_engine, select, func, and_, or_\nfrom sqlalchemy.orm import Session, DeclarativeBase, Mapped, mapped_column, relationship\nfrom sqlalchemy import String, Integer, Boolean, ForeignKey\n\nclass Base(DeclarativeBase):\n    pass\n\nclass User(Base):\n    __tablename__ = 'users'\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    email: Mapped[str] = mapped_column(String(200), unique=True)\n    active: Mapped[bool] = mapped_column(Boolean, default=True)\n    department: Mapped[str] = mapped_column(String(50))\n    posts: Mapped[list['Post']] = relationship(back_populates='author')\n\nclass Post(Base):\n    __tablename__ = 'posts'\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))\n    published: Mapped[bool] = mapped_column(Boolean, default=False)\n    author: Mapped['User'] = relationship(back_populates='posts')\n\n# SQLAlchemy 2.0 style chaining\nengine = create_engine('sqlite:///:memory:')\nBase.metadata.create_all(engine)\n\nwith Session(engine) as session:\n    # Build query step by step\n    stmt = (\n        select(User)\n        .where(User.active == True)\n        .where(User.department == 'Engineering')\n        .order_by(User.name)\n        .limit(10)\n    )\n    users = session.execute(stmt).scalars().all()\n\n    # Complex chaining with joins\n    stmt = (\n        select(User, func.count(Post.id).label('post_count'))\n        .join(Post, User.id == Post.user_id)\n        .where(Post.published == True)\n        .group_by(User.id)\n        .having(func.count(Post.id) >= 5)\n        .order_by(func.count(Post.id).desc())\n    )\n    results = session.execute(stmt).all()\n\n    # Conditional chaining\n    def search_users(name=None, department=None, active_only=True):\n        stmt = select(User)\n        if name:\n            stmt = stmt.where(User.name.ilike(f'%{name}%'))\n        if department:\n            stmt = stmt.where(User.department == department)\n        if active_only:\n            stmt = stmt.where(User.active == True)\n        return stmt.order_by(User.name)\n\n    stmt = search_users(name='alice', active_only=True)\n    results = session.execute(stmt).scalars().all()\n\n    # OR conditions\n    stmt = (\n        select(User)\n        .where(or_(\n            User.department == 'Engineering',\n            User.department == 'Research'\n        ))\n        .order_by(User.name)\n    )\n\n    # Subquery chaining\n    subq = (\n        select(Post.user_id)\n        .where(Post.published == True)\n        .group_by(Post.user_id)\n        .having(func.count(Post.id) > 3)\n        .subquery()\n    )\n    stmt = select(User).where(User.id.in_(select(subq.c.user_id)))",
+          "code_language": "python",
+          "key_points": [
+            "Each chained method returns a new statement object (immutable chaining)",
+            "Queries are lazy -- SQL executes only when .all(), .first(), or iterate",
+            "Conditional chaining lets you build dynamic queries",
+            "SQLAlchemy 2.0 uses select() statements instead of session.query()"
+          ],
+          "gotchas": [
+            "Each .where() adds an AND condition; use or_() for OR logic",
+            "Forgetting session.execute() means the query never runs",
+            ".scalars().all() extracts model instances; .all() returns Row tuples",
+            "Chaining .where() multiple times uses AND -- use or_() explicitly for OR"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SQLAlchemy queries chain with `.where().order_by().limit()`. Each call returns a new statement (immutable). Lazy -- executes on `.all()`/`.first()`. Use `select()` in 2.0 style.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import select\n\nstmt = (\n    select(User)\n    .where(User.active == True)\n    .order_by(User.name)\n    .limit(10)\n)\nresults = session.execute(stmt).scalars().all()",
+          "code_language": "python",
+          "key_points": [
+            "Immutable chaining -- each call returns new statement",
+            "Lazy execution on .all()/.first()"
+          ],
+          "gotchas": [
+            "Multiple .where() are ANDed; use or_() for OR"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you design a chainable API class in Python?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["API-design", "method-chaining", "fluent-interface"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A chainable (fluent) API requires careful design to be intuitive and robust.\n\n### Design principles:\n1. **Return `self`** from every configuration method\n2. **Separate configuration from execution** (builder methods vs terminal operations)\n3. **Use type hints** to help IDE autocomplete\n4. **Support both chained and non-chained usage**\n5. **Make terminal operations clear** (e.g., `.execute()`, `.build()`, `.send()`)\n\n### Terminal vs non-terminal methods:\n- **Non-terminal**: Return `self` for continued chaining (`.filter()`, `.sort()`)\n- **Terminal**: Return the final result (`.execute()`, `.count()`, `.first()`)",
+          "pseudo_code": "class Chainable:\n    def config_method(self, ...) -> 'Chainable':  # non-terminal\n        # modify state\n        return self\n\n    def terminal_method(self) -> Result:  # terminal\n        # compute and return result\n        return result",
+          "actual_code": "from __future__ import annotations\nfrom typing import TypeVar, Generic, Callable, Any\n\n# Example: Email builder with chainable API\nclass EmailMessage:\n    def __init__(self):\n        self._to: list[str] = []\n        self._cc: list[str] = []\n        self._subject: str = ''\n        self._body: str = ''\n        self._attachments: list[str] = []\n        self._html: bool = False\n\n    # Non-terminal methods (return self)\n    def to(self, *addresses: str) -> EmailMessage:\n        self._to.extend(addresses)\n        return self\n\n    def cc(self, *addresses: str) -> EmailMessage:\n        self._cc.extend(addresses)\n        return self\n\n    def subject(self, text: str) -> EmailMessage:\n        self._subject = text\n        return self\n\n    def body(self, text: str) -> EmailMessage:\n        self._body = text\n        return self\n\n    def html(self) -> EmailMessage:\n        self._html = True\n        return self\n\n    def attach(self, filepath: str) -> EmailMessage:\n        self._attachments.append(filepath)\n        return self\n\n    # Terminal method\n    def send(self) -> dict:\n        if not self._to:\n            raise ValueError('At least one recipient required')\n        if not self._subject:\n            raise ValueError('Subject required')\n\n        result = {\n            'to': self._to,\n            'cc': self._cc,\n            'subject': self._subject,\n            'body': self._body,\n            'html': self._html,\n            'attachments': self._attachments,\n            'status': 'sent',\n        }\n        print(f\"Sending email to {', '.join(self._to)}: {self._subject}\")\n        return result\n\n    def preview(self) -> str:\n        \"\"\"Terminal method for debugging.\"\"\"\n        return (f\"To: {', '.join(self._to)}\\n\"\n                f\"CC: {', '.join(self._cc)}\\n\"\n                f\"Subject: {self._subject}\\n\"\n                f\"Body: {self._body[:100]}...\")\n\n# Usage\nresult = (EmailMessage()\n    .to('alice@example.com', 'bob@example.com')\n    .cc('manager@example.com')\n    .subject('Weekly Report')\n    .body('<h1>Report</h1><p>All metrics are up.</p>')\n    .html()\n    .attach('report.pdf')\n    .send())\n\nprint(result['status'])  # 'sent'\n\n# Preview without sending\npreview = (EmailMessage()\n    .to('test@example.com')\n    .subject('Test')\n    .body('Hello')\n    .preview())\nprint(preview)\n\n# Validation chain example\nclass Validator:\n    def __init__(self, value: Any):\n        self._value = value\n        self._errors: list[str] = []\n\n    def required(self) -> Validator:\n        if self._value is None or self._value == '':\n            self._errors.append('Value is required')\n        return self\n\n    def min_length(self, n: int) -> Validator:\n        if isinstance(self._value, str) and len(self._value) < n:\n            self._errors.append(f'Must be at least {n} characters')\n        return self\n\n    def max_length(self, n: int) -> Validator:\n        if isinstance(self._value, str) and len(self._value) > n:\n            self._errors.append(f'Must be at most {n} characters')\n        return self\n\n    def matches(self, pattern: str) -> Validator:\n        import re\n        if isinstance(self._value, str) and not re.match(pattern, self._value):\n            self._errors.append(f'Must match pattern {pattern}')\n        return self\n\n    # Terminal\n    def is_valid(self) -> bool:\n        return len(self._errors) == 0\n\n    def errors(self) -> list[str]:\n        return self._errors\n\n# Usage\nv = Validator('ab').required().min_length(3).max_length(50)\nprint(v.is_valid())  # False\nprint(v.errors())    # ['Must be at least 3 characters']",
+          "code_language": "python",
+          "key_points": [
+            "Non-terminal methods return self; terminal methods return the result",
+            "Type hint return as the class name for IDE autocomplete on chains",
+            "Validate in terminal methods, not configuration methods",
+            "Separate configuration (chainable) from execution (terminal)"
+          ],
+          "gotchas": [
+            "Forgetting to return self silently returns None, breaking the chain",
+            "Type hints with string annotations need from __future__ import annotations",
+            "Mutable state means chaining is not thread-safe by default",
+            "Terminal methods should be clearly named to indicate they end the chain"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Design rules: config methods return `self` (non-terminal), result methods return data (terminal). Type hint return as class name. Validate at terminal call.",
+          "pseudo_code": "",
+          "actual_code": "class Email:\n    def to(self, addr) -> 'Email':\n        self._to = addr\n        return self  # non-terminal\n    def subject(self, text) -> 'Email':\n        self._subject = text\n        return self  # non-terminal\n    def send(self) -> dict:  # terminal\n        return {'to': self._to, 'subject': self._subject}",
+          "code_language": "python",
+          "key_points": [
+            "Return self for chaining, return result for terminal",
+            "Type hints enable IDE autocomplete on chains"
+          ],
+          "gotchas": [
+            "Forgetting return self silently returns None"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is immutable chaining and how does it differ from mutable chaining?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["immutable", "mutable", "method-chaining"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Mutable chaining\nEach method modifies `self` in place and returns `self`. The original object changes.\n```python\nobj.filter(x).sort(y)  # obj is modified\n```\n\n### Immutable chaining\nEach method creates and returns a **new object** with the modification. The original is untouched.\n```python\nnew_obj = obj.filter(x).sort(y)  # obj is unchanged\n```\n\n### When to use each:\n- **Mutable**: Simpler, less memory, good for builders that are used once\n- **Immutable**: Safer, no side effects, good for shared/reusable objects (Django QuerySets, pandas DataFrames)\n\nDjango QuerySets use immutable chaining -- each `.filter()` returns a NEW QuerySet.",
+          "pseudo_code": "Mutable: obj.add(1).add(2)  -> obj has [1, 2]\nImmutable: new = obj.add(1).add(2)  -> obj has [], new has [1, 2]",
+          "actual_code": "import copy\n\n# Mutable chaining\nclass MutableQuery:\n    def __init__(self):\n        self.filters = []\n        self.ordering = None\n\n    def filter(self, condition):\n        self.filters.append(condition)  # modifies self\n        return self\n\n    def order_by(self, field):\n        self.ordering = field  # modifies self\n        return self\n\nq = MutableQuery()\nq.filter('active=True')\nq2 = q.filter('role=admin')  # q and q2 are the SAME object!\nprint(q is q2)  # True\nprint(q.filters)  # ['active=True', 'role=admin'] -- q was modified!\n\n# Immutable chaining (like Django QuerySets)\nclass ImmutableQuery:\n    def __init__(self, filters=None, ordering=None):\n        self._filters = list(filters or [])\n        self._ordering = ordering\n\n    def filter(self, condition):\n        # Return a NEW object with the additional filter\n        new_filters = self._filters + [condition]\n        return ImmutableQuery(filters=new_filters, ordering=self._ordering)\n\n    def order_by(self, field):\n        return ImmutableQuery(filters=self._filters, ordering=field)\n\n    def __repr__(self):\n        return f\"Query(filters={self._filters}, order={self._ordering})\"\n\nbase = ImmutableQuery()\nactive = base.filter('active=True')\nadmins = active.filter('role=admin')\nregular = active.filter('role=user')\n\nprint(base)     # Query(filters=[], order=None) -- unchanged!\nprint(active)   # Query(filters=['active=True'], order=None)\nprint(admins)   # Query(filters=['active=True', 'role=admin'], order=None)\nprint(regular)  # Query(filters=['active=True', 'role=user'], order=None)\n\n# Branching works safely with immutable chaining\nprint(admins is not regular)  # True -- different objects\n\n# Using copy for immutable-style with less boilerplate\nclass CopyChain:\n    def __init__(self):\n        self.filters = []\n        self.limit_val = None\n\n    def _clone(self):\n        return copy.deepcopy(self)\n\n    def filter(self, condition):\n        clone = self._clone()\n        clone.filters.append(condition)\n        return clone\n\n    def limit(self, n):\n        clone = self._clone()\n        clone.limit_val = n\n        return clone\n\nbase = CopyChain()\nq1 = base.filter('a=1').limit(10)\nq2 = base.filter('b=2').limit(5)\nprint(base.filters)  # [] -- unchanged\nprint(q1.filters)    # ['a=1']\nprint(q2.filters)    # ['b=2']",
+          "code_language": "python",
+          "key_points": [
+            "Mutable: modifies self, returns self. Simpler but dangerous with shared references.",
+            "Immutable: returns new object each time. Safer, supports branching.",
+            "Django QuerySets and pandas DataFrames use immutable chaining.",
+            "Use _clone() / copy.deepcopy() for immutable-style with less boilerplate."
+          ],
+          "gotchas": [
+            "Mutable chaining means q1 = q.filter(x); q2 = q.filter(y) gives SAME object -- q1 and q2 are identical",
+            "Immutable chaining uses more memory (copies per call) but is much safer",
+            "deepcopy can be slow for large objects -- optimize with shallow copy + selective deep copy",
+            "Forgetting to use the returned value in immutable chains means changes are lost"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Mutable: modifies + returns `self` (shared state). Immutable: returns new object (safe branching). Django/pandas use immutable. Mutable is simpler but risky with shared references.",
+          "pseudo_code": "",
+          "actual_code": "# Immutable: each call returns new object\nclass Query:\n    def __init__(self, filters=None):\n        self._filters = list(filters or [])\n    def filter(self, cond):\n        return Query(self._filters + [cond])  # new object!\n\nbase = Query()\nq1 = base.filter('a=1')  # base unchanged\nq2 = base.filter('b=2')  # base unchanged, q2 != q1",
+          "code_language": "python",
+          "key_points": [
+            "Immutable returns new object; mutable returns self",
+            "Immutable is safer for branching queries"
+          ],
+          "gotchas": [
+            "Mutable chaining shares state between references"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do __enter__ and __exit__ enable context manager chaining?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["context-manager", "with-statement", "chaining"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Context managers (`with` statement) use `__enter__` and `__exit__` for resource management. While not traditional method chaining, they enable **context chaining** patterns:\n\n1. **Nested with statements** (Python 3.1+ single line)\n2. **ExitStack** for dynamic context management\n3. **__enter__ returning self** for method chaining within the context\n\n### `__enter__` returning self:\nWhen `__enter__` returns `self`, you can chain methods on the context variable that's also the manager.",
+          "pseudo_code": "# __enter__ returns self for chaining\nwith Resource().configure(x=1) as r:\n    r.do_something()\n# __exit__ handles cleanup\n\n# Multiple contexts in one with\nwith open('a') as f1, open('b') as f2:\n    ...\n\n# ExitStack for dynamic contexts\nwith ExitStack() as stack:\n    files = [stack.enter_context(open(f)) for f in filenames]",
+          "actual_code": "from contextlib import contextmanager, ExitStack\n\n# Context manager with chainable configuration\nclass Connection:\n    def __init__(self, host='localhost'):\n        self.host = host\n        self._timeout = 30\n        self._retries = 3\n        self._connected = False\n\n    def timeout(self, seconds):\n        self._timeout = seconds\n        return self  # chainable\n\n    def retries(self, count):\n        self._retries = count\n        return self  # chainable\n\n    def __enter__(self):\n        print(f\"Connecting to {self.host} (timeout={self._timeout}s, retries={self._retries})\")\n        self._connected = True\n        return self  # return self for use in 'as' clause\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        print(f\"Disconnecting from {self.host}\")\n        self._connected = False\n        return False  # don't suppress exceptions\n\n    def query(self, sql):\n        if not self._connected:\n            raise RuntimeError(\"Not connected\")\n        print(f\"Executing: {sql}\")\n        return [{\"id\": 1}]\n\n# Chain configuration BEFORE entering context\nwith Connection('db.example.com').timeout(10).retries(5) as conn:\n    results = conn.query('SELECT * FROM users')\n    print(results)\n# Disconnecting happens automatically\n\n# Multiple context managers (Python 3.1+)\nwith open('/dev/null', 'w') as f1, open('/dev/null', 'w') as f2:\n    f1.write('hello')\n    f2.write('world')\n\n# Python 3.10+ parenthesized context managers\n# with (\n#     open('file1') as f1,\n#     open('file2') as f2,\n#     open('file3') as f3,\n# ):\n#     ...\n\n# ExitStack for dynamic number of context managers\ndef process_files(filenames):\n    with ExitStack() as stack:\n        files = [stack.enter_context(open(f, 'w')) for f in filenames]\n        for i, f in enumerate(files):\n            f.write(f'Content for file {i}')\n    # All files closed automatically\n\n# Chainable context manager with contextlib\n@contextmanager\ndef timer(label=''):\n    import time\n    start = time.perf_counter()\n    yield\n    elapsed = time.perf_counter() - start\n    print(f\"{label}: {elapsed:.4f}s\")\n\nwith timer('database query'):\n    # simulated work\n    pass\n\n# Nested context managers as chain\nclass TransactionManager:\n    def __init__(self, db):\n        self.db = db\n        self._savepoints = []\n\n    def __enter__(self):\n        self._savepoints.append(f'sp_{len(self._savepoints)}')\n        print(f\"BEGIN {self._savepoints[-1]}\")\n        return self\n\n    def __exit__(self, exc_type, exc_val, exc_tb):\n        sp = self._savepoints.pop()\n        if exc_type:\n            print(f\"ROLLBACK {sp}\")\n        else:\n            print(f\"COMMIT {sp}\")\n        return False",
+          "code_language": "python",
+          "key_points": [
+            "__enter__ returning self enables chaining within the context block",
+            "Configure with chained methods before entering the context",
+            "ExitStack handles dynamic numbers of context managers",
+            "Python 3.10+ supports parenthesized multi-line context managers"
+          ],
+          "gotchas": [
+            "__enter__ must return the object you want in 'as' clause (usually self)",
+            "__exit__ returning True suppresses exceptions -- usually return False",
+            "Chaining .method() BEFORE 'with' means __enter__ runs on the modified object",
+            "ExitStack cleanup happens in LIFO order (last entered, first exited)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__enter__` returning `self` lets you chain methods before `with`. `ExitStack` manages dynamic context managers. Python 3.10+ supports parenthesized multi-line `with`.",
+          "pseudo_code": "",
+          "actual_code": "class DB:\n    def timeout(self, n):\n        self._timeout = n\n        return self\n    def __enter__(self):\n        print('connected')\n        return self\n    def __exit__(self, *args):\n        print('disconnected')\n\nwith DB().timeout(10) as db:\n    pass  # connected, then disconnected",
+          "code_language": "python",
+          "key_points": [
+            "Chain config before 'with'; __enter__ returns self",
+            "ExitStack for dynamic context management"
+          ],
+          "gotchas": [
+            "__exit__ returning True suppresses exceptions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the pipe pattern and how does it relate to method chaining?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["pipe", "functional", "composition"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **pipe pattern** passes data through a sequence of functions, where each function's output becomes the next function's input. It is an alternative to method chaining when you don't control the class.\n\n### Method chaining vs Pipe:\n- **Method chaining**: `obj.method1().method2().method3()`\n- **Pipe**: `pipe(data, func1, func2, func3)`\n\n### Advantages of pipe:\n- Works with any function (no need to modify classes)\n- Composable with existing functions\n- Functional programming style\n\nPandas provides `.pipe()` method. Python has no built-in pipe operator (unlike Elixir's `|>` or F#'s `|>`).",
+          "pseudo_code": "# Pipe pattern\nresult = pipe(data,\n    clean_data,\n    validate,\n    transform,\n    save\n)\n\n# Equivalent to:\nresult = save(transform(validate(clean_data(data))))\n# But pipe reads top-to-bottom, nested reads inside-out",
+          "actual_code": "from functools import reduce\nfrom typing import Callable, TypeVar, Any\n\nT = TypeVar('T')\n\n# Simple pipe function\ndef pipe(value, *functions):\n    \"\"\"Pass value through a sequence of functions.\"\"\"\n    return reduce(lambda v, f: f(v), functions, value)\n\n# Usage\ndef double(x):\n    return x * 2\n\ndef add_ten(x):\n    return x + 10\n\ndef to_string(x):\n    return f\"Result: {x}\"\n\nresult = pipe(5, double, add_ten, to_string)\nprint(result)  # \"Result: 20\"\n\n# Compared to nested calls (reads inside-out)\nresult = to_string(add_ten(double(5)))\nprint(result)  # \"Result: 20\" -- same but harder to read\n\n# Data processing pipeline\ndef strip_whitespace(text):\n    return text.strip()\n\ndef lowercase(text):\n    return text.lower()\n\ndef remove_punctuation(text):\n    import string\n    return text.translate(str.maketrans('', '', string.punctuation))\n\ndef split_words(text):\n    return text.split()\n\nwords = pipe(\n    \"  Hello, World! This is a TEST.  \",\n    strip_whitespace,\n    lowercase,\n    remove_punctuation,\n    split_words\n)\nprint(words)  # ['hello', 'world', 'this', 'is', 'a', 'test']\n\n# Pipe with lambdas for parameterized functions\nfrom functools import partial\n\ndef filter_by(items, predicate):\n    return [x for x in items if predicate(x)]\n\ndef sort_by(items, key=None, reverse=False):\n    return sorted(items, key=key, reverse=reverse)\n\ndef take(items, n):\n    return items[:n]\n\nnumbers = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]\n\nresult = pipe(\n    numbers,\n    lambda x: filter_by(x, lambda n: n > 2),\n    lambda x: sort_by(x, reverse=True),\n    lambda x: take(x, 5),\n)\nprint(result)  # [9, 6, 5, 5, 5]\n\n# Using partial for cleaner syntax\nresult = pipe(\n    numbers,\n    partial(filter_by, predicate=lambda n: n > 2),\n    partial(sort_by, reverse=True),\n    partial(take, n=5),\n)\nprint(result)  # [9, 6, 5, 5, 5]\n\n# Composing functions (create reusable pipeline)\ndef compose(*functions):\n    \"\"\"Create a function that applies functions right-to-left.\"\"\"\n    return reduce(lambda f, g: lambda x: f(g(x)), functions)\n\nprocess_text = compose(split_words, remove_punctuation, lowercase, strip_whitespace)\nresult = process_text(\"  Hello, World!  \")\nprint(result)  # ['hello', 'world']\n\n# Pipeline class for OOP style\nclass Pipeline:\n    def __init__(self, value):\n        self._value = value\n\n    def pipe(self, func, *args, **kwargs):\n        self._value = func(self._value, *args, **kwargs)\n        return self\n\n    @property\n    def value(self):\n        return self._value\n\nresult = (Pipeline(\"  Hello World!  \")\n    .pipe(str.strip)\n    .pipe(str.lower)\n    .pipe(str.replace, 'world', 'python')\n    .value)\nprint(result)  # 'hello python!'",
+          "code_language": "python",
+          "key_points": [
+            "Pipe passes data through a sequence of functions (output -> input)",
+            "Reads top-to-bottom unlike nested calls (inside-out)",
+            "Works with any function -- no need to modify classes",
+            "Use functools.partial for parameterized functions in pipes"
+          ],
+          "gotchas": [
+            "Python has no built-in pipe operator -- must use a function or library",
+            "Error messages in pipes can be unclear (which step failed?)",
+            "Lambdas in pipes reduce readability -- prefer named functions or partial()",
+            "compose() applies right-to-left; pipe() applies left-to-right -- don't mix them up"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pipe passes data through functions sequentially: `pipe(data, f1, f2, f3)`. Reads top-to-bottom (unlike nested `f3(f2(f1(data)))`). Works with any function, no class modification needed.",
+          "pseudo_code": "",
+          "actual_code": "from functools import reduce\n\ndef pipe(value, *fns):\n    return reduce(lambda v, f: f(v), fns, value)\n\nresult = pipe(5, lambda x: x*2, lambda x: x+10, str)\nprint(result)  # '20'",
+          "code_language": "python",
+          "key_points": [
+            "Sequential function application, left to right",
+            "Alternative to method chaining for standalone functions"
+          ],
+          "gotchas": [
+            "Python has no built-in pipe operator"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement method chaining with type hints for IDE support?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["type-hints", "method-chaining", "IDE"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Proper type hints on chained methods are crucial for IDE autocomplete and type checking. The key challenge is: how do you type `return self` so that subclasses work correctly?\n\n### Approaches:\n1. **String annotation**: `-> 'ClassName'`\n2. **`from __future__ import annotations`**: Deferred evaluation\n3. **`typing.Self`** (Python 3.11+): Correctly types `self` in subclasses\n4. **TypeVar bound to class**: Works before 3.11\n\n`typing.Self` is the best solution for method chaining because it correctly represents that the return type matches the actual class (important for inheritance).",
+          "pseudo_code": "# Python 3.11+\nfrom typing import Self\n\nclass Base:\n    def method(self) -> Self:  # returns actual type, not just Base\n        return self\n\nclass Child(Base):\n    pass\n\nchild = Child().method()  # type is Child, not Base",
+          "actual_code": "from __future__ import annotations\nfrom typing import TypeVar\n\n# Approach 1: String annotation (works everywhere)\nclass QueryV1:\n    def filter(self, condition: str) -> 'QueryV1':\n        return self\n\n    def limit(self, n: int) -> 'QueryV1':\n        return self\n\n# Approach 2: TypeVar for inheritance support (pre-3.11)\nT = TypeVar('T', bound='QueryV2')\n\nclass QueryV2:\n    def filter(self: T, condition: str) -> T:\n        return self\n\n    def limit(self: T, n: int) -> T:\n        return self\n\nclass SpecialQuery(QueryV2):\n    def special_method(self) -> 'SpecialQuery':\n        return self\n\n# With TypeVar, IDE knows this returns SpecialQuery, not QueryV2\nsq = SpecialQuery().filter('x=1')  # type: SpecialQuery\nsq.special_method()  # works! IDE knows it's SpecialQuery\n\n# Approach 3: typing.Self (Python 3.11+)\n# from typing import Self\n#\n# class QueryV3:\n#     def filter(self, condition: str) -> Self:\n#         return self\n#     def limit(self, n: int) -> Self:\n#         return self\n#\n# class SpecialQuery(QueryV3):\n#     def special(self) -> Self:\n#         return self\n#\n# sq = SpecialQuery().filter('x').special()  # type: SpecialQuery\n\n# Full example with proper typing\nclass HTMLBuilder:\n    def __init__(self) -> None:\n        self._tag: str = 'div'\n        self._classes: list[str] = []\n        self._attrs: dict[str, str] = {}\n        self._children: list[str] = []\n\n    def tag(self: T, tag: str) -> T:\n        self._tag = tag\n        return self\n\n    def add_class(self: T, cls: str) -> T:\n        self._classes.append(cls)\n        return self\n\n    def attr(self: T, key: str, value: str) -> T:\n        self._attrs[key] = value\n        return self\n\n    def child(self: T, content: str) -> T:\n        self._children.append(content)\n        return self\n\n    def build(self) -> str:\n        classes = f' class=\"{\" \".join(self._classes)}\"' if self._classes else ''\n        attrs = ''.join(f' {k}=\"{v}\"' for k, v in self._attrs.items())\n        children = ''.join(self._children)\n        return f'<{self._tag}{classes}{attrs}>{children}</{self._tag}>'\n\n# IDE autocomplete works on every chained call\nhtml = (HTMLBuilder()\n    .tag('section')\n    .add_class('container')\n    .add_class('main')\n    .attr('id', 'content')\n    .child('<h1>Hello</h1>')\n    .child('<p>World</p>')\n    .build())\n\nprint(html)\n# <section class=\"container main\" id=\"content\"><h1>Hello</h1><p>World</p></section>",
+          "code_language": "python",
+          "key_points": [
+            "typing.Self (3.11+) is the best solution for chained method return types",
+            "TypeVar bound to the class works for pre-3.11 with proper inheritance support",
+            "String annotations ('ClassName') work but don't handle subclasses correctly",
+            "Proper types enable IDE autocomplete on every chained call"
+          ],
+          "gotchas": [
+            "String annotation -> 'ClassName' doesn't work with inheritance (always returns base type)",
+            "TypeVar approach requires annotating self parameter explicitly: def method(self: T) -> T",
+            "from __future__ import annotations changes all annotations to strings (deferred evaluation)",
+            "mypy may need plugins or configuration for complex chaining patterns"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `typing.Self` (3.11+) or `TypeVar` bound to the class for chained method return types. Enables IDE autocomplete and correct types through inheritance.",
+          "pseudo_code": "",
+          "actual_code": "from typing import TypeVar\n\nT = TypeVar('T', bound='Builder')\n\nclass Builder:\n    def set(self: T, key: str, val: str) -> T:\n        return self  # returns actual type in subclasses\n\nclass SpecialBuilder(Builder):\n    def extra(self) -> 'SpecialBuilder':\n        return self\n\n# IDE knows this is SpecialBuilder, not Builder\nSpecialBuilder().set('a', '1').extra()",
+          "code_language": "python",
+          "key_points": [
+            "Self (3.11+) or TypeVar for correct subclass return types",
+            "Enables IDE autocomplete through the chain"
+          ],
+          "gotchas": [
+            "String annotations don't handle inheritance correctly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle errors in method chains?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["error-handling", "method-chaining", "debugging"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Error handling in method chains is tricky because errors can occur at any step, and the chain makes it hard to identify which step failed.\n\n### Strategies:\n\n1. **Fail at terminal**: Collect errors during chaining, raise at `.build()`/`.execute()`\n2. **Fail fast**: Raise immediately when a method receives invalid input\n3. **Result type**: Return a Result/Either object that carries success or error\n4. **Try/except around the chain**: Catch and add context\n5. **Logging in each step**: For debugging long chains",
+          "pseudo_code": "# Strategy 1: Collect errors, fail at terminal\nresult = (Builder()\n    .name('')      # stores error: 'name is required'\n    .email('bad')  # stores error: 'invalid email'\n    .build())      # raises ValidationError with all errors\n\n# Strategy 3: Result type\nresult = (Pipeline(data)\n    .map(parse)    # returns Result.ok or Result.error\n    .map(validate) # skips if previous was error\n    .map(save))    # skips if previous was error",
+          "actual_code": "from typing import Optional, List, Any\n\n# Strategy 1: Collect errors, fail at terminal\nclass FormBuilder:\n    def __init__(self):\n        self._data = {}\n        self._errors: List[str] = []\n\n    def field(self, name: str, value: Any, required: bool = False):\n        if required and (value is None or value == ''):\n            self._errors.append(f'{name} is required')\n        else:\n            self._data[name] = value\n        return self\n\n    def validate_email(self, field: str):\n        value = self._data.get(field, '')\n        if value and '@' not in value:\n            self._errors.append(f'{field} is not a valid email')\n        return self\n\n    def build(self) -> dict:\n        if self._errors:\n            raise ValueError(f\"Validation errors: {'; '.join(self._errors)}\")\n        return self._data\n\n    @property\n    def errors(self) -> List[str]:\n        return self._errors\n\n# Usage\ntry:\n    result = (FormBuilder()\n        .field('name', '', required=True)\n        .field('email', 'bad-email', required=True)\n        .validate_email('email')\n        .build())\nexcept ValueError as e:\n    print(e)  # Validation errors: name is required; email is not a valid email\n\n# Strategy 2: Result type (monadic error handling)\nclass Result:\n    def __init__(self, value=None, error=None):\n        self._value = value\n        self._error = error\n\n    @staticmethod\n    def ok(value):\n        return Result(value=value)\n\n    @staticmethod\n    def fail(error):\n        return Result(error=error)\n\n    @property\n    def is_ok(self):\n        return self._error is None\n\n    @property\n    def value(self):\n        if not self.is_ok:\n            raise ValueError(f\"Cannot get value from error result: {self._error}\")\n        return self._value\n\n    @property\n    def error(self):\n        return self._error\n\n    def map(self, func):\n        \"\"\"Apply func if ok, skip if error.\"\"\"\n        if not self.is_ok:\n            return self  # propagate error\n        try:\n            return Result.ok(func(self._value))\n        except Exception as e:\n            return Result.fail(str(e))\n\n    def flat_map(self, func):\n        \"\"\"Apply func that returns Result.\"\"\"\n        if not self.is_ok:\n            return self\n        return func(self._value)\n\n# Usage: errors propagate through the chain\ndef parse_int(s):\n    return int(s)\n\ndef double(n):\n    return n * 2\n\ndef check_positive(n):\n    if n <= 0:\n        raise ValueError('Must be positive')\n    return n\n\n# Success case\nresult = Result.ok('42').map(parse_int).map(check_positive).map(double)\nprint(f\"Success: {result.value}\")  # 84\n\n# Error case -- error propagates, later steps skipped\nresult = Result.ok('abc').map(parse_int).map(check_positive).map(double)\nprint(f\"Error: {result.error}\")  # \"invalid literal for int()...\"\n\n# Error in middle -- later steps skipped\nresult = Result.ok('-5').map(parse_int).map(check_positive).map(double)\nprint(f\"Error: {result.error}\")  # \"Must be positive\"\n\n# Strategy 3: Debug helper for long chains\ndef debug(label=''):\n    def _debug(value):\n        print(f\"[{label}] {type(value).__name__}: {value!r}\")\n        return value\n    return _debug\n\nresult = (Result.ok('  42  ')\n    .map(str.strip)\n    .map(debug('after strip'))   # prints for debugging\n    .map(parse_int)\n    .map(debug('after parse'))   # prints for debugging\n    .map(double))\nprint(result.value)  # 84",
+          "code_language": "python",
+          "key_points": [
+            "Collect errors during chain, raise at terminal (build/execute)",
+            "Result type propagates errors through the chain, skipping subsequent steps",
+            "Debug helpers (print intermediate values) help diagnose chain failures",
+            "try/except around the entire chain catches errors from any step"
+          ],
+          "gotchas": [
+            "Raising immediately in a chain gives poor error messages (no context about which step)",
+            "Collecting errors means invalid state may accumulate -- validate early for critical errors",
+            "Result type adds complexity -- use only when error propagation is genuinely needed",
+            "Long chains with no intermediate variables make stack traces harder to read"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Three strategies: (1) collect errors, fail at terminal; (2) Result type that propagates errors and skips subsequent steps; (3) debug helpers to log intermediate values.",
+          "pseudo_code": "",
+          "actual_code": "class Result:\n    def __init__(self, value=None, error=None):\n        self.value, self.error = value, error\n        self.is_ok = error is None\n    def map(self, func):\n        if not self.is_ok:\n            return self  # skip on error\n        try:\n            return Result(value=func(self.value))\n        except Exception as e:\n            return Result(error=str(e))\n\nresult = Result(value='42').map(int).map(lambda x: x*2)\nprint(result.value)  # 84",
+          "code_language": "python",
+          "key_points": [
+            "Result type skips remaining chain on error",
+            "Collect errors, fail at terminal for validation"
+          ],
+          "gotchas": [
+            "Long chains make stack traces harder to read"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are real-world examples of method chaining in Python libraries?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["method-chaining", "real-world", "libraries"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Method chaining is pervasive in Python's most popular libraries. Understanding these patterns helps you use them effectively and design your own APIs.\n\n### Popular examples:\n1. **Django QuerySets**: Immutable chaining for database queries\n2. **pandas DataFrames**: Data transformation pipelines\n3. **SQLAlchemy**: ORM query building\n4. **requests (PreparedRequest)**: HTTP request building\n5. **Python strings**: Built-in string methods\n6. **pathlib.Path**: File path manipulation\n7. **BeautifulSoup**: HTML/XML parsing\n8. **Matplotlib**: Plot configuration",
+          "pseudo_code": "Django:     User.objects.filter(...).exclude(...).order_by(...).values(...)\npandas:     df.dropna().groupby('col').mean().reset_index()\nSQLAlchemy: session.query(User).filter(...).order_by(...).limit(10)\npathlib:    Path('/home') / 'user' / 'docs'  (operator chaining)\nstrings:    '  hello  '.strip().upper().replace('H', 'J')",
+          "actual_code": "# 1. Python strings (immutable chaining)\nresult = '  Hello, World!  '.strip().lower().replace('world', 'python').title()\nprint(result)  # 'Hello, Python!'\n\n# 2. pathlib.Path (operator chaining with /)\nfrom pathlib import Path\n\nconfig = Path.home() / '.config' / 'myapp' / 'settings.json'\nprint(config)  # /home/user/.config/myapp/settings.json\n\n# Method chaining on Path\nresult = Path('/tmp/data.txt').with_suffix('.csv').with_name('output.csv')\nprint(result)  # /tmp/output.csv\n\n# 3. Django QuerySets (immutable chaining)\n# users = (User.objects\n#     .filter(is_active=True)\n#     .exclude(role='banned')\n#     .select_related('profile')\n#     .order_by('-date_joined')\n#     .values('username', 'email')\n#     [:20])\n\n# 4. requests library\nimport requests\n\n# Session with chained configuration\n# session = requests.Session()\n# response = (session\n#     .get('https://api.example.com/data',\n#          headers={'Authorization': 'Bearer token'},\n#          params={'page': 1})\n#     .json())\n\n# 5. Python's decimal module\nfrom decimal import Decimal\nresult = Decimal('3.14159').quantize(Decimal('0.01'))  # 3.14\n\n# 6. itertools chaining pattern\nfrom itertools import chain, islice\nresult = list(islice(chain([1,2], [3,4], [5,6]), 4))\nprint(result)  # [1, 2, 3, 4]\n\n# 7. Regular expressions\nimport re\n# Compile + chain operations\npattern = re.compile(r'\\d+')\nmatches = pattern.findall('abc 123 def 456')\nprint(matches)  # ['123', '456']\n\n# 8. Built-in functional tools\nnumbers = range(100)\nresult = list(\n    filter(lambda x: x % 3 == 0,\n    map(lambda x: x ** 2,\n    filter(lambda x: x % 2 == 0,\n    numbers)))\n)\n# Better with comprehension:\nresult = [x**2 for x in range(100) if x % 2 == 0 if x**2 % 3 == 0]\n\n# 9. datetime chaining\nfrom datetime import datetime, timedelta\nfuture = (datetime.now()\n    .replace(hour=0, minute=0, second=0, microsecond=0)\n    + timedelta(days=7))\nprint(future.strftime('%Y-%m-%d'))  # next week's date\n\n# 10. Custom chainable config\nclass AppConfig:\n    def __init__(self):\n        self._config = {}\n\n    def set(self, key, value):\n        self._config[key] = value\n        return self\n\n    def from_env(self, key, env_var, default=None):\n        import os\n        self._config[key] = os.environ.get(env_var, default)\n        return self\n\n    def build(self):\n        return dict(self._config)\n\nconfig = (AppConfig()\n    .set('debug', True)\n    .set('port', 8080)\n    .from_env('secret', 'SECRET_KEY', 'dev-secret')\n    .from_env('db_url', 'DATABASE_URL', 'sqlite:///app.db')\n    .build())\nprint(config)",
+          "code_language": "python",
+          "key_points": [
+            "Django QuerySets, pandas DataFrames, SQLAlchemy all use immutable chaining",
+            "Python strings and pathlib.Path are built-in examples of chaining",
+            "Most libraries return new objects (immutable style) for safety",
+            "Operator overloading (pathlib's /) is another form of chaining"
+          ],
+          "gotchas": [
+            "Not all methods are chainable -- list.sort(), dict.update() return None",
+            "Mixing chainable and non-chainable methods breaks the chain silently",
+            "Some library methods have inplace=True options that return None (pandas)",
+            "String methods create new strings each time -- O(n) per operation, can be slow in loops"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Real-world chaining: Django QuerySets, pandas DataFrames, SQLAlchemy queries, pathlib.Path, Python strings. Most use immutable style (return new objects). Check if a method returns `None` before chaining.",
+          "pseudo_code": "",
+          "actual_code": "# Strings\nresult = '  hello world  '.strip().title().replace(' ', '_')\n\n# pathlib\nfrom pathlib import Path\npath = Path.home() / 'docs' / 'file.txt'\n\n# Django-style\n# User.objects.filter(active=True).order_by('name')[:10]",
+          "code_language": "python",
+          "key_points": [
+            "Strings, pathlib, Django, pandas all support chaining",
+            "Most return new objects (immutable style)"
+          ],
+          "gotchas": [
+            "list.sort() returns None -- not chainable"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement command chaining for undo/redo functionality?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["command-pattern", "undo-redo", "chaining"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Command pattern** encapsulates operations as objects, enabling undo/redo, logging, and transaction-like behavior. Combined with chaining, you can build a history of operations that can be replayed, undone, or serialized.\n\n### Components:\n1. **Command**: Object with `execute()` and `undo()` methods\n2. **CommandHistory**: Stack of executed commands\n3. **Chainable API**: Returns the history object for method chaining\n\n### Use cases:\n- Text editors (undo/redo)\n- Database transactions\n- Drawing applications\n- Configuration systems with rollback",
+          "pseudo_code": "history = (CommandHistory(document)\n    .execute(InsertText('Hello'))\n    .execute(InsertText(' World'))\n    .execute(MakeBold())\n    .undo()      # undo MakeBold\n    .undo()      # undo InsertText(' World')\n    .redo())     # redo InsertText(' World')",
+          "actual_code": "from abc import ABC, abstractmethod\nfrom typing import Any\n\n# Command interface\nclass Command(ABC):\n    @abstractmethod\n    def execute(self) -> None:\n        pass\n\n    @abstractmethod\n    def undo(self) -> None:\n        pass\n\n    @abstractmethod\n    def description(self) -> str:\n        pass\n\n# Concrete commands\nclass SetValueCommand(Command):\n    def __init__(self, document: dict, key: str, value: Any):\n        self._doc = document\n        self._key = key\n        self._new_value = value\n        self._old_value = document.get(key)\n\n    def execute(self):\n        self._old_value = self._doc.get(self._key)\n        self._doc[self._key] = self._new_value\n\n    def undo(self):\n        if self._old_value is None:\n            self._doc.pop(self._key, None)\n        else:\n            self._doc[self._key] = self._old_value\n\n    def description(self):\n        return f\"Set {self._key} = {self._new_value!r}\"\n\nclass DeleteKeyCommand(Command):\n    def __init__(self, document: dict, key: str):\n        self._doc = document\n        self._key = key\n        self._old_value = None\n\n    def execute(self):\n        self._old_value = self._doc.pop(self._key, None)\n\n    def undo(self):\n        if self._old_value is not None:\n            self._doc[self._key] = self._old_value\n\n    def description(self):\n        return f\"Delete {self._key}\"\n\n# Command history with chainable API\nclass CommandHistory:\n    def __init__(self, target: dict):\n        self._target = target\n        self._history: list[Command] = []\n        self._redo_stack: list[Command] = []\n\n    def set(self, key: str, value: Any) -> 'CommandHistory':\n        cmd = SetValueCommand(self._target, key, value)\n        cmd.execute()\n        self._history.append(cmd)\n        self._redo_stack.clear()  # clear redo after new action\n        return self\n\n    def delete(self, key: str) -> 'CommandHistory':\n        cmd = DeleteKeyCommand(self._target, key)\n        cmd.execute()\n        self._history.append(cmd)\n        self._redo_stack.clear()\n        return self\n\n    def undo(self) -> 'CommandHistory':\n        if not self._history:\n            print(\"Nothing to undo\")\n            return self\n        cmd = self._history.pop()\n        cmd.undo()\n        self._redo_stack.append(cmd)\n        print(f\"Undo: {cmd.description()}\")\n        return self\n\n    def redo(self) -> 'CommandHistory':\n        if not self._redo_stack:\n            print(\"Nothing to redo\")\n            return self\n        cmd = self._redo_stack.pop()\n        cmd.execute()\n        self._history.append(cmd)\n        print(f\"Redo: {cmd.description()}\")\n        return self\n\n    def show_history(self) -> 'CommandHistory':\n        print(\"History:\")\n        for i, cmd in enumerate(self._history, 1):\n            print(f\"  {i}. {cmd.description()}\")\n        return self\n\n    @property\n    def state(self) -> dict:\n        return dict(self._target)\n\n# Usage with chaining\ndoc = {}\nresult = (CommandHistory(doc)\n    .set('name', 'Alice')\n    .set('email', 'alice@example.com')\n    .set('role', 'admin')\n    .show_history()\n    .undo()            # undo role=admin\n    .undo()            # undo email\n    .show_history()\n    .redo()            # redo email\n    .set('age', 30)\n    .show_history())\n\nprint(f\"Final state: {result.state}\")\n# {'name': 'Alice', 'email': 'alice@example.com', 'age': 30}\n\n# Batch operations\nprint(\"\\n--- Batch undo ---\")\n(CommandHistory({'x': 1})\n    .set('a', 10)\n    .set('b', 20)\n    .set('c', 30)\n    .undo()\n    .undo()\n    .undo())",
+          "code_language": "python",
+          "key_points": [
+            "Commands encapsulate execute() and undo() as objects",
+            "History stack enables unlimited undo; redo stack for redo",
+            "New actions clear the redo stack (standard undo/redo behavior)",
+            "Chainable API makes building and manipulating command sequences natural"
+          ],
+          "gotchas": [
+            "Commands must store enough state to fully reverse their operation",
+            "Redo stack must be cleared when a new command is executed after undoing",
+            "Complex undo (e.g., file operations) may need deep copies of state",
+            "Memory grows with history -- consider limiting history size for long-running apps"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Command pattern: encapsulate operations with `execute()` and `undo()`. History stack enables undo/redo. Chainable API: `.set(k,v).delete(k).undo().redo()` all return self.",
+          "pseudo_code": "",
+          "actual_code": "class History:\n    def __init__(self):\n        self._stack = []\n    def do(self, action, undo_action):\n        action()\n        self._stack.append(undo_action)\n        return self\n    def undo(self):\n        if self._stack:\n            self._stack.pop()()\n        return self",
+          "code_language": "python",
+          "key_points": [
+            "Commands store execute + undo logic",
+            "History stack enables chained undo/redo"
+          ],
+          "gotchas": [
+            "Commands must store enough state to reverse the operation"
+          ]
+        }
+      ]
+    }
+  ]
+}

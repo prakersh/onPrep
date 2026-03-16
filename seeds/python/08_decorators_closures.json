@@ -1,0 +1,611 @@
+{
+  "concept_slug": "decorators-closures",
+  "questions": [
+    {
+      "title": "What is a closure in Python, and how does it capture variables from its enclosing scope?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["closures", "scope", "functions"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A closure is a function object that remembers values in its enclosing lexical scope even when the scope has finished executing. In Python, when an inner function references a variable from an outer (enclosing) function, and the outer function returns the inner function, a closure is formed. The inner function 'closes over' the free variables from the enclosing scope.\n\nPython implements closures through the `__closure__` attribute, which holds `cell` objects that contain references to the captured variables. Importantly, closures capture **references** to variables, not their values at the time the closure is created. This means if the variable changes before the closure is called, the closure sees the updated value.\n\nThe `__code__.co_freevars` attribute lists the names of the free variables captured by the closure.",
+          "pseudo_code": "1. Define an outer function with a local variable\n2. Define an inner function that references the outer variable\n3. Return the inner function from the outer function\n4. The returned function retains access to the outer variable\n5. The outer function's local scope is preserved in __closure__",
+          "actual_code": "def make_multiplier(factor):\n    \"\"\"Outer function creates a closure over 'factor'.\"\"\"\n    def multiplier(x):\n        return x * factor\n    return multiplier\n\ndouble = make_multiplier(2)\ntriple = make_multiplier(3)\n\nprint(double(5))   # 10\nprint(triple(5))   # 15\n\n# Inspecting the closure\nprint(double.__closure__)              # (<cell at 0x...>,)\nprint(double.__closure__[0].cell_contents)  # 2\nprint(double.__code__.co_freevars)     # ('factor',)\n\n# Late binding demonstration\ndef make_functions():\n    funcs = []\n    for i in range(3):\n        def f():\n            return i  # captures reference to i, not its value\n        funcs.append(f)\n    return funcs\n\nresults = [f() for f in make_functions()]\nprint(results)  # [2, 2, 2] -- all see the final value of i\n\n# Fix with default argument to capture current value\ndef make_functions_fixed():\n    funcs = []\n    for i in range(3):\n        def f(i=i):  # default arg captures current value\n            return i\n        funcs.append(f)\n    return funcs\n\nresults = [f() for f in make_functions_fixed()]\nprint(results)  # [0, 1, 2]",
+          "code_language": "python",
+          "key_points": [
+            "A closure captures references to variables, not copies of their values",
+            "The __closure__ attribute holds cell objects with captured variable references",
+            "Closures allow data encapsulation without classes",
+            "co_freevars lists the names of captured free variables"
+          ],
+          "gotchas": [
+            "Late binding: closures in loops all share the same variable reference, so they all see the last value",
+            "Use default arguments (def f(i=i)) or functools.partial to capture current loop values",
+            "If the enclosing scope variable is reassigned, the closure sees the new value"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A closure is an inner function that remembers variables from its enclosing function's scope, even after the outer function has returned. It captures references to those variables, not their values.",
+          "pseudo_code": "",
+          "actual_code": "def make_greeter(greeting):\n    def greet(name):\n        return f\"{greeting}, {name}!\"\n    return greet\n\nhello = make_greeter(\"Hello\")\nprint(hello(\"Alice\"))  # Hello, Alice!\nprint(hello.__closure__[0].cell_contents)  # \"Hello\"",
+          "code_language": "python",
+          "key_points": [
+            "Inner function + reference to enclosing variable + returned from outer = closure",
+            "Captures references, not values (late binding)"
+          ],
+          "gotchas": [
+            "Closures in loops all share the same loop variable -- use default args to fix"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `nonlocal` keyword work, and when would you use it?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["nonlocal", "closures", "scope"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `nonlocal` keyword in Python allows an inner function to modify a variable in its enclosing (non-global) scope. Without `nonlocal`, assigning to a variable inside an inner function creates a new local variable that shadows the outer one. The `nonlocal` statement tells Python that the variable should refer to the one in the nearest enclosing scope that is not the global scope.\n\nThis is different from the `global` keyword, which refers to module-level variables. `nonlocal` specifically targets enclosing function scopes (the 'E' in the LEGB rule).\n\nCommon use cases include:\n- Creating stateful closures (counters, accumulators)\n- Implementing memoization without mutable default arguments\n- Building decorators that maintain internal state",
+          "pseudo_code": "1. Define outer function with a local variable\n2. Define inner function that needs to modify that variable\n3. Declare the variable as nonlocal inside the inner function\n4. Now assignments in the inner function modify the outer variable\n5. Without nonlocal, assignment would create a new local variable",
+          "actual_code": "# Without nonlocal -- this creates a local variable\ndef counter_broken():\n    count = 0\n    def increment():\n        count = count + 1  # UnboundLocalError!\n        return count\n    return increment\n\n# With nonlocal -- modifies the enclosing variable\ndef counter():\n    count = 0\n    def increment():\n        nonlocal count\n        count += 1\n        return count\n    return increment\n\nc = counter()\nprint(c())  # 1\nprint(c())  # 2\nprint(c())  # 3\n\n# Practical example: running average\ndef make_averager():\n    total = 0.0\n    count = 0\n    def averager(new_value):\n        nonlocal total, count\n        total += new_value\n        count += 1\n        return total / count\n    return averager\n\navg = make_averager()\nprint(avg(10))  # 10.0\nprint(avg(20))  # 15.0\nprint(avg(30))  # 20.0\n\n# nonlocal vs global\nx = 100  # global\ndef outer():\n    x = 10  # enclosing\n    def inner():\n        nonlocal x  # refers to outer's x (10), not global x (100)\n        x += 1\n        return x\n    return inner()\n\nprint(outer())  # 11\nprint(x)        # 100 -- global unchanged",
+          "code_language": "python",
+          "key_points": [
+            "nonlocal allows modification of enclosing scope variables (not global)",
+            "Without nonlocal, assignment creates a new local variable causing UnboundLocalError",
+            "nonlocal targets the nearest enclosing function scope",
+            "You can declare multiple variables: nonlocal a, b, c"
+          ],
+          "gotchas": [
+            "nonlocal only works with enclosing function scopes, not the global scope -- use global for that",
+            "The variable must already exist in an enclosing scope; nonlocal cannot create new variables",
+            "SyntaxError if used at module level or if variable is not found in any enclosing scope"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`nonlocal` lets an inner function modify a variable from its enclosing function scope. Without it, assigning to that variable creates a new local one instead.",
+          "pseudo_code": "",
+          "actual_code": "def counter():\n    count = 0\n    def increment():\n        nonlocal count\n        count += 1\n        return count\n    return increment\n\nc = counter()\nprint(c(), c(), c())  # 1 2 3",
+          "code_language": "python",
+          "key_points": [
+            "nonlocal modifies enclosing function variables, global modifies module-level",
+            "Without nonlocal, assignment creates a new local variable"
+          ],
+          "gotchas": [
+            "The variable must already exist in an enclosing scope -- nonlocal cannot create variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write a basic function decorator in Python?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "functions", "wrapper"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A decorator is a function that takes another function as an argument, adds some behavior, and returns a new function (the wrapper). The `@decorator` syntax is syntactic sugar for `func = decorator(func)`.\n\nA well-written decorator follows this pattern:\n1. Define a decorator function that accepts a function\n2. Inside it, define a wrapper function that calls the original\n3. The wrapper should accept `*args, **kwargs` to work with any function signature\n4. Use `@functools.wraps(func)` to preserve the original function's metadata\n5. Return the wrapper function\n\nDecorators are widely used for cross-cutting concerns: logging, timing, authentication, caching, input validation, and retry logic.",
+          "pseudo_code": "1. Import functools\n2. Define decorator(func):\n3.   Define wrapper(*args, **kwargs):\n4.     - Do something before calling func\n5.     - result = func(*args, **kwargs)\n6.     - Do something after calling func\n7.     - Return result\n8.   Decorate wrapper with @functools.wraps(func)\n9.   Return wrapper\n10. Apply with @decorator above function definition",
+          "actual_code": "import functools\nimport time\n\ndef timer(func):\n    \"\"\"Decorator that measures execution time.\"\"\"\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        elapsed = time.perf_counter() - start\n        print(f\"{func.__name__} took {elapsed:.4f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow_function(n):\n    \"\"\"Simulate a slow computation.\"\"\"\n    total = sum(range(n))\n    return total\n\nresult = slow_function(1_000_000)\nprint(result)  # 499999500000\n# Output: slow_function took 0.0312s\n\n# Without @ syntax, equivalent to:\n# slow_function = timer(slow_function)\n\n# Metadata is preserved thanks to @functools.wraps\nprint(slow_function.__name__)  # 'slow_function' (not 'wrapper')\nprint(slow_function.__doc__)   # 'Simulate a slow computation.'\n\n# Another example: logging decorator\ndef log_calls(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        args_repr = [repr(a) for a in args]\n        kwargs_repr = [f\"{k}={v!r}\" for k, v in kwargs.items()]\n        signature = \", \".join(args_repr + kwargs_repr)\n        print(f\"Calling {func.__name__}({signature})\")\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__} returned {result!r}\")\n        return result\n    return wrapper\n\n@log_calls\ndef add(a, b):\n    return a + b\n\nadd(3, 4)\n# Calling add(3, 4)\n# add returned 7",
+          "code_language": "python",
+          "key_points": [
+            "A decorator takes a function, wraps it, and returns the wrapper",
+            "@decorator syntax is sugar for func = decorator(func)",
+            "Use *args, **kwargs to handle any function signature",
+            "Always use @functools.wraps to preserve the original function's metadata"
+          ],
+          "gotchas": [
+            "Forgetting @functools.wraps causes __name__, __doc__, and other metadata to be lost",
+            "Forgetting to return the result of func(*args, **kwargs) will make the decorated function return None",
+            "The decorator is called once at definition time, the wrapper is called each time the function is invoked"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A decorator wraps a function to add behavior. Use `@functools.wraps` to preserve metadata, accept `*args, **kwargs` for flexibility, and always return the original function's result.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        import time\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__}: {time.perf_counter() - start:.4f}s\")\n        return result\n    return wrapper\n\n@timer\ndef compute(n):\n    return sum(range(n))\n\ncompute(1_000_000)",
+          "code_language": "python",
+          "key_points": [
+            "@decorator is sugar for func = decorator(func)",
+            "Always use @functools.wraps and return the result"
+          ],
+          "gotchas": [
+            "Without @functools.wraps, the original function's __name__ and __doc__ are lost"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a decorator that accepts arguments (parameterized decorator)?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "parameterized", "decorator-factory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A parameterized decorator (also called a decorator factory) requires an extra level of nesting. When you write `@decorator(arg)`, Python first calls `decorator(arg)` which must return the actual decorator function. This three-level pattern is:\n\n1. **Outer function**: takes the decorator's parameters\n2. **Middle function**: takes the function being decorated (this is the actual decorator)\n3. **Inner function**: the wrapper that replaces the original function\n\nThe key insight is that `@decorator(arg)` is evaluated in two steps:\n- First: `decorator(arg)` is called, returning a decorator\n- Second: that returned decorator is applied to the function\n\nThis pattern is essential for configurable decorators like `@retry(max_attempts=3)` or `@route('/path')`.",
+          "pseudo_code": "1. Define decorator_factory(param1, param2):\n2.   Define decorator(func):\n3.     Define wrapper(*args, **kwargs):\n4.       - Use param1, param2 to control behavior\n5.       - Call and return func(*args, **kwargs)\n6.     Apply @functools.wraps(func) to wrapper\n7.     Return wrapper\n8.   Return decorator\n9. Use as @decorator_factory(param1, param2)",
+          "actual_code": "import functools\nimport time\n\ndef retry(max_attempts=3, delay=1.0):\n    \"\"\"Decorator factory that retries a function on exception.\"\"\"\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            last_exception = None\n            for attempt in range(1, max_attempts + 1):\n                try:\n                    return func(*args, **kwargs)\n                except Exception as e:\n                    last_exception = e\n                    print(f\"Attempt {attempt}/{max_attempts} failed: {e}\")\n                    if attempt < max_attempts:\n                        time.sleep(delay)\n            raise last_exception\n        return wrapper\n    return decorator\n\n@retry(max_attempts=3, delay=0.1)\ndef flaky_api_call():\n    import random\n    if random.random() < 0.7:\n        raise ConnectionError(\"Network timeout\")\n    return {\"status\": \"ok\"}\n\n# Another example: repeat decorator\ndef repeat(n):\n    \"\"\"Run the decorated function n times.\"\"\"\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            result = None\n            for _ in range(n):\n                result = func(*args, **kwargs)\n            return result\n        return wrapper\n    return decorator\n\n@repeat(3)\ndef greet(name):\n    print(f\"Hello, {name}!\")\n\ngreet(\"Alice\")\n# Hello, Alice!\n# Hello, Alice!\n# Hello, Alice!\n\n# Under the hood, @repeat(3) does:\n# greet = repeat(3)(greet)\n# Step 1: repeat(3) returns decorator\n# Step 2: decorator(greet) returns wrapper",
+          "code_language": "python",
+          "key_points": [
+            "Three levels of nesting: factory -> decorator -> wrapper",
+            "@decorator(args) first calls the factory, then applies the returned decorator",
+            "The factory function captures the configuration parameters via closure",
+            "Equivalent to: func = decorator_factory(args)(func)"
+          ],
+          "gotchas": [
+            "Forgetting parentheses: @retry vs @retry() -- without () the function itself is passed as max_attempts",
+            "To make parentheses optional, you need special handling to detect if the first arg is a function",
+            "Each level of nesting serves a distinct purpose; mixing them up causes confusing errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A parameterized decorator uses three levels of nesting: the outer function takes parameters, returns a decorator, which returns a wrapper. `@deco(arg)` calls `deco(arg)` first, then applies the result to the function.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef repeat(n):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            for _ in range(n):\n                result = func(*args, **kwargs)\n            return result\n        return wrapper\n    return decorator\n\n@repeat(3)\ndef say_hi():\n    print(\"Hi!\")\n\nsay_hi()  # prints \"Hi!\" three times",
+          "code_language": "python",
+          "key_points": [
+            "Three levels: factory(params) -> decorator(func) -> wrapper(*args, **kwargs)",
+            "@repeat(3) means func = repeat(3)(func)"
+          ],
+          "gotchas": [
+            "@repeat vs @repeat() -- forgetting parentheses passes the function as the parameter"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does `functools.wraps` do and why is it important?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["functools", "wraps", "metadata", "decorators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.wraps` is a decorator that copies metadata from the original function to the wrapper function. When you create a decorator, the wrapper function replaces the original, and without `@functools.wraps`, the wrapper's own metadata (name, docstring, module, etc.) overwrites the original's.\n\nSpecifically, `functools.wraps` copies these attributes:\n- `__name__` -- the function name\n- `__qualname__` -- the qualified name\n- `__doc__` -- the docstring\n- `__module__` -- the module where the function was defined\n- `__annotations__` -- type annotations\n- `__dict__` -- the function's attribute dictionary\n- `__wrapped__` -- a reference to the original function (added, not copied)\n\nThe `__wrapped__` attribute is especially useful because it lets you access the original unwrapped function, which is helpful for testing and debugging.\n\n`functools.wraps` is itself a decorator that calls `functools.update_wrapper` under the hood.",
+          "pseudo_code": "1. Without @wraps: wrapper.__name__ == 'wrapper', wrapper.__doc__ == None\n2. With @wraps(func): wrapper.__name__ == func.__name__, etc.\n3. wraps copies __name__, __qualname__, __doc__, __module__, __annotations__\n4. wraps also sets __wrapped__ to point to the original function\n5. Enables help(), debugging, and introspection to work correctly",
+          "actual_code": "import functools\n\n# WITHOUT functools.wraps\ndef bad_decorator(func):\n    def wrapper(*args, **kwargs):\n        \"\"\"I am the wrapper.\"\"\"\n        return func(*args, **kwargs)\n    return wrapper\n\n@bad_decorator\ndef greet(name):\n    \"\"\"Greet someone by name.\"\"\"\n    return f\"Hello, {name}!\"\n\nprint(greet.__name__)   # 'wrapper' -- WRONG!\nprint(greet.__doc__)    # 'I am the wrapper.' -- WRONG!\n\n# WITH functools.wraps\ndef good_decorator(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        \"\"\"I am the wrapper.\"\"\"\n        return func(*args, **kwargs)\n    return wrapper\n\n@good_decorator\ndef greet(name):\n    \"\"\"Greet someone by name.\"\"\"\n    return f\"Hello, {name}!\"\n\nprint(greet.__name__)     # 'greet' -- correct\nprint(greet.__doc__)      # 'Greet someone by name.' -- correct\nprint(greet.__wrapped__)  # <function greet at 0x...> -- original function\n\n# Accessing the original unwrapped function\noriginal = greet.__wrapped__\nprint(original(\"Alice\"))  # \"Hello, Alice!\" -- bypasses decorator\n\n# This matters for tools like help(), inspect, and documentation generators\nimport inspect\nprint(inspect.signature(greet))  # (name) -- correct signature",
+          "code_language": "python",
+          "key_points": [
+            "Copies __name__, __qualname__, __doc__, __module__, __annotations__ from original to wrapper",
+            "Sets __wrapped__ attribute pointing to the original function",
+            "Essential for debugging, help(), and documentation tools",
+            "Uses functools.update_wrapper internally"
+          ],
+          "gotchas": [
+            "Without @wraps, tools like Sphinx, help(), and pytest may show incorrect function info",
+            "Some frameworks (Flask, Django) rely on __name__ for routing -- missing @wraps can break them",
+            "__wrapped__ allows bypassing the decorator, which can be a security concern in auth decorators"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`functools.wraps` copies the original function's metadata (`__name__`, `__doc__`, etc.) to the wrapper function. Without it, the decorated function loses its identity.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef my_decorator(func):\n    @functools.wraps(func)  # preserves func's metadata\n    def wrapper(*args, **kwargs):\n        return func(*args, **kwargs)\n    return wrapper\n\n@my_decorator\ndef hello():\n    \"\"\"Say hello.\"\"\"\n    pass\n\nprint(hello.__name__)  # 'hello' (not 'wrapper')\nprint(hello.__doc__)   # 'Say hello.'",
+          "code_language": "python",
+          "key_points": [
+            "Preserves __name__, __doc__, __module__, __annotations__",
+            "Also adds __wrapped__ pointing to the original function"
+          ],
+          "gotchas": [
+            "Flask route decorators depend on __name__ -- missing @wraps can cause routing errors"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you stack (chain) multiple decorators on a single function?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "stacking", "chaining"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "You can apply multiple decorators to a single function by stacking `@decorator` lines. The decorators are applied from bottom to top (innermost to outermost), but when the function is called, they execute from top to bottom (outermost to innermost).\n\nGiven:\n```\n@decorator_a\n@decorator_b\ndef func(): ...\n```\nThis is equivalent to: `func = decorator_a(decorator_b(func))`\n\nSo `decorator_b` wraps `func` first, then `decorator_a` wraps the result. When `func()` is called, `decorator_a`'s wrapper runs first, which calls `decorator_b`'s wrapper, which calls the original `func`.\n\nOrder matters when decorators depend on each other. For example, an authentication decorator should run before a logging decorator if you want to log only authenticated requests.",
+          "pseudo_code": "1. @A, @B, @C on func means: func = A(B(C(func)))\n2. Application order: C first, then B, then A (bottom to top)\n3. Execution order: A's wrapper -> B's wrapper -> C's wrapper -> func\n4. Return order: func -> C's wrapper -> B's wrapper -> A's wrapper",
+          "actual_code": "import functools\n\ndef bold(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return f\"<b>{func(*args, **kwargs)}</b>\"\n    return wrapper\n\ndef italic(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return f\"<i>{func(*args, **kwargs)}</i>\"\n    return wrapper\n\ndef underline(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return f\"<u>{func(*args, **kwargs)}</u>\"\n    return wrapper\n\n@bold\n@italic\n@underline\ndef greet(name):\n    return f\"Hello, {name}\"\n\n# Equivalent to: greet = bold(italic(underline(greet)))\nprint(greet(\"Alice\"))  # <b><i><u>Hello, Alice</u></i></b>\n\n# Demonstrating execution order with logging\ndef decorator(name):\n    def actual_decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            print(f\"Entering {name}\")\n            result = func(*args, **kwargs)\n            print(f\"Exiting {name}\")\n            return result\n        return wrapper\n    return actual_decorator\n\n@decorator(\"A\")\n@decorator(\"B\")\n@decorator(\"C\")\ndef my_func():\n    print(\"Running my_func\")\n    return \"done\"\n\nmy_func()\n# Entering A\n# Entering B\n# Entering C\n# Running my_func\n# Exiting C\n# Exiting B\n# Exiting A",
+          "code_language": "python",
+          "key_points": [
+            "Decorators are applied bottom-to-top but execute top-to-bottom",
+            "@A @B @C def f means f = A(B(C(f)))",
+            "The outermost decorator's wrapper runs first on each call",
+            "Order matters when decorators have dependencies"
+          ],
+          "gotchas": [
+            "Confusing application order (bottom-up) with execution order (top-down)",
+            "A decorator that does not call the wrapped function will break the chain",
+            "If one decorator changes the return type, subsequent decorators may fail"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stack decorators with multiple `@` lines. They apply bottom-to-top but execute top-to-bottom. `@A @B def f` equals `f = A(B(f))`.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef bold(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return f\"<b>{func(*args, **kwargs)}</b>\"\n    return wrapper\n\ndef italic(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return f\"<i>{func(*args, **kwargs)}</i>\"\n    return wrapper\n\n@bold\n@italic\ndef greet(name):\n    return f\"Hello, {name}\"\n\nprint(greet(\"Alice\"))  # <b><i>Hello, Alice</i></b>",
+          "code_language": "python",
+          "key_points": [
+            "@A @B def f means f = A(B(f))",
+            "Applied bottom-up, executed top-down"
+          ],
+          "gotchas": [
+            "Order matters: @auth @log is different from @log @auth"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the `@property` decorator work in Python?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["property", "decorators", "encapsulation", "descriptors"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `@property` decorator turns a method into a read-only attribute, providing a clean interface for getter/setter/deleter operations. It uses Python's descriptor protocol under the hood.\n\nThe `property` built-in is actually a class that implements the descriptor protocol (`__get__`, `__set__`, `__delete__`). When you use `@property`, it creates a property object with the decorated method as the getter. You can then add a setter with `@name.setter` and a deleter with `@name.deleter`.\n\nBenefits:\n- Provides attribute-style access while keeping control over getting/setting\n- Allows adding validation without changing the public API\n- Follows the uniform access principle (attribute access looks the same whether computed or stored)",
+          "pseudo_code": "1. Define the getter method with @property\n2. Optionally define setter with @name.setter\n3. Optionally define deleter with @name.deleter\n4. Access like a regular attribute: obj.name (calls getter)\n5. Assign like a regular attribute: obj.name = value (calls setter)\n6. Delete like: del obj.name (calls deleter)",
+          "actual_code": "class Temperature:\n    def __init__(self, celsius=0):\n        self._celsius = celsius  # internal storage\n\n    @property\n    def celsius(self):\n        \"\"\"Get temperature in Celsius.\"\"\"\n        return self._celsius\n\n    @celsius.setter\n    def celsius(self, value):\n        if value < -273.15:\n            raise ValueError(\"Temperature below absolute zero!\")\n        self._celsius = value\n\n    @celsius.deleter\n    def celsius(self):\n        print(\"Resetting temperature\")\n        self._celsius = 0\n\n    @property\n    def fahrenheit(self):\n        \"\"\"Computed property -- read-only.\"\"\"\n        return self._celsius * 9 / 5 + 32\n\nt = Temperature(100)\nprint(t.celsius)     # 100 (calls getter)\nprint(t.fahrenheit)  # 212.0 (computed property)\n\nt.celsius = 25       # calls setter with validation\nprint(t.celsius)     # 25\n\ntry:\n    t.celsius = -300  # raises ValueError\nexcept ValueError as e:\n    print(e)  # Temperature below absolute zero!\n\ntry:\n    t.fahrenheit = 100  # AttributeError: no setter defined\nexcept AttributeError as e:\n    print(e)  # property 'fahrenheit' of 'Temperature' object has no setter\n\ndel t.celsius  # calls deleter: \"Resetting temperature\"\nprint(t.celsius)  # 0\n\n# Equivalent without decorator syntax:\nclass Circle:\n    def __init__(self, radius):\n        self._radius = radius\n\n    def _get_radius(self):\n        return self._radius\n\n    def _set_radius(self, value):\n        if value < 0:\n            raise ValueError(\"Radius cannot be negative\")\n        self._radius = value\n\n    radius = property(_get_radius, _set_radius)",
+          "code_language": "python",
+          "key_points": [
+            "@property creates a read-only attribute from a method",
+            "@name.setter and @name.deleter add write and delete support",
+            "Provides validation while keeping attribute-style access",
+            "property is a descriptor class with __get__, __set__, __delete__"
+          ],
+          "gotchas": [
+            "Without a setter, assigning raises AttributeError -- the property is read-only by default",
+            "The internal attribute should use a different name (convention: prefix with _) to avoid infinite recursion",
+            "Properties add method call overhead -- avoid for performance-critical hot paths",
+            "Properties do not work on instances if defined in __init__ -- they must be class-level"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@property` turns a method into a read-only attribute. Add `@name.setter` for write access. It provides validation and computed attributes with clean syntax.",
+          "pseudo_code": "",
+          "actual_code": "class Circle:\n    def __init__(self, radius):\n        self._radius = radius\n\n    @property\n    def radius(self):\n        return self._radius\n\n    @radius.setter\n    def radius(self, value):\n        if value < 0:\n            raise ValueError(\"Negative radius\")\n        self._radius = value\n\n    @property\n    def area(self):\n        import math\n        return math.pi * self._radius ** 2\n\nc = Circle(5)\nprint(c.radius)  # 5\nprint(c.area)    # 78.539...\nc.radius = 10    # uses setter",
+          "code_language": "python",
+          "key_points": [
+            "@property for getter, @name.setter for setter",
+            "Use different name for internal storage (prefix with _)"
+          ],
+          "gotchas": [
+            "Setting a property without a setter raises AttributeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between `@staticmethod` and `@classmethod`?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["staticmethod", "classmethod", "decorators", "oop"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`@staticmethod` and `@classmethod` are built-in decorators that change how a method receives its first argument.\n\n**`@staticmethod`**: Does not receive any implicit first argument. It behaves like a regular function but lives in the class's namespace. Use it for utility functions logically related to the class but that don't need access to instance or class state.\n\n**`@classmethod`**: Receives the class (`cls`) as its first argument instead of an instance. The key advantage is that `cls` refers to the class the method was called on, which matters with inheritance. Use it for alternative constructors and factory methods.\n\n**Regular instance method**: Receives the instance (`self`) as its first argument.\n\nKey difference in inheritance: `@classmethod` respects the actual class at call time, so subclasses get their own class as `cls`. `@staticmethod` has no class awareness at all.",
+          "pseudo_code": "1. Regular method: def method(self) -- receives instance\n2. @classmethod: def method(cls) -- receives class\n3. @staticmethod: def method() -- receives nothing implicit\n4. classmethod is polymorphic (cls changes with inheritance)\n5. staticmethod is just a namespaced function",
+          "actual_code": "from datetime import datetime\n\nclass Employee:\n    raise_amount = 1.04  # class variable\n\n    def __init__(self, name, salary):\n        self.name = name\n        self.salary = salary\n\n    # Regular instance method\n    def apply_raise(self):\n        self.salary = int(self.salary * self.raise_amount)\n\n    # Class method -- alternative constructor\n    @classmethod\n    def from_string(cls, emp_str):\n        \"\"\"Create Employee from 'name-salary' string.\"\"\"\n        name, salary = emp_str.split(\"-\")\n        return cls(name, int(salary))  # uses cls, not Employee\n\n    @classmethod\n    def set_raise_amount(cls, amount):\n        \"\"\"Modify class variable through classmethod.\"\"\"\n        cls.raise_amount = amount\n\n    # Static method -- utility function\n    @staticmethod\n    def is_workday(day):\n        \"\"\"Check if a given day is a workday.\"\"\"\n        return day.weekday() < 5\n\n# Usage\nemp = Employee.from_string(\"Alice-75000\")  # classmethod as constructor\nprint(emp.name, emp.salary)  # Alice 75000\n\nprint(Employee.is_workday(datetime(2024, 1, 15)))  # True (Monday)\n\n# Inheritance behavior -- this is the key difference\nclass Manager(Employee):\n    raise_amount = 1.10\n\n# classmethod returns the correct subclass\nmgr = Manager.from_string(\"Bob-90000\")\nprint(type(mgr))  # <class 'Manager'> -- cls was Manager!\nprint(mgr.raise_amount)  # 1.10\n\n# staticmethod has no class awareness\nprint(Manager.is_workday(datetime(2024, 1, 15)))  # True -- same behavior",
+          "code_language": "python",
+          "key_points": [
+            "@classmethod receives cls (the class), @staticmethod receives nothing implicit",
+            "Use @classmethod for alternative constructors -- cls ensures correct subclass is created",
+            "Use @staticmethod for utility functions that belong logically to the class",
+            "@classmethod is polymorphic through inheritance; @staticmethod is not"
+          ],
+          "gotchas": [
+            "Using Employee() instead of cls() in a classmethod breaks inheritance -- subclasses would get Employee instances",
+            "@staticmethod cannot access or modify class state -- if you need cls, use @classmethod",
+            "Overusing @staticmethod may indicate the function should just be a module-level function"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@classmethod` receives `cls` (the class) and is used for alternative constructors. `@staticmethod` receives no implicit argument and is a utility function namespaced in the class.",
+          "pseudo_code": "",
+          "actual_code": "class Date:\n    def __init__(self, year, month, day):\n        self.year, self.month, self.day = year, month, day\n\n    @classmethod\n    def from_string(cls, date_str):\n        y, m, d = map(int, date_str.split(\"-\"))\n        return cls(y, m, d)  # works with subclasses too\n\n    @staticmethod\n    def is_valid(date_str):\n        parts = date_str.split(\"-\")\n        return len(parts) == 3 and all(p.isdigit() for p in parts)\n\nd = Date.from_string(\"2024-01-15\")\nprint(Date.is_valid(\"2024-01-15\"))  # True",
+          "code_language": "python",
+          "key_points": [
+            "@classmethod gets cls, @staticmethod gets nothing implicit",
+            "@classmethod for constructors, @staticmethod for utilities"
+          ],
+          "gotchas": [
+            "In @classmethod, use cls() not ClassName() to support inheritance"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a class-based decorator in Python?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "classes", "__call__"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A class-based decorator uses a class with a `__call__` method instead of nested functions. The class's `__init__` receives either the function being decorated (for simple decorators) or parameters (for parameterized decorators), and `__call__` acts as the wrapper.\n\nAdvantages of class-based decorators:\n- More readable for complex decorators with lots of state\n- Easier to test (you can inspect the decorator instance)\n- Can use inheritance to create decorator families\n- Natural place for instance state between calls\n\nThere are two patterns:\n1. **Simple**: `__init__` takes the function, `__call__` is the wrapper\n2. **Parameterized**: `__init__` takes parameters, `__call__` takes the function and returns a wrapper",
+          "pseudo_code": "Simple class decorator:\n1. __init__(self, func) -- store the function\n2. __call__(self, *args, **kwargs) -- wrap and call func\n\nParameterized class decorator:\n1. __init__(self, param1, param2) -- store parameters\n2. __call__(self, func) -- return a wrapper function",
+          "actual_code": "import functools\n\n# Simple class-based decorator\nclass CountCalls:\n    \"\"\"Track how many times a function is called.\"\"\"\n\n    def __init__(self, func):\n        functools.update_wrapper(self, func)\n        self.func = func\n        self.call_count = 0\n\n    def __call__(self, *args, **kwargs):\n        self.call_count += 1\n        print(f\"{self.func.__name__} called {self.call_count} times\")\n        return self.func(*args, **kwargs)\n\n@CountCalls\ndef say_hello(name):\n    return f\"Hello, {name}!\"\n\nprint(say_hello(\"Alice\"))  # say_hello called 1 times\\nHello, Alice!\nprint(say_hello(\"Bob\"))    # say_hello called 2 times\\nHello, Bob!\nprint(say_hello.call_count)  # 2 -- accessible state!\n\n# Parameterized class-based decorator\nclass Retry:\n    \"\"\"Retry a function on failure.\"\"\"\n\n    def __init__(self, max_attempts=3, exceptions=(Exception,)):\n        self.max_attempts = max_attempts\n        self.exceptions = exceptions\n\n    def __call__(self, func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            for attempt in range(1, self.max_attempts + 1):\n                try:\n                    return func(*args, **kwargs)\n                except self.exceptions as e:\n                    if attempt == self.max_attempts:\n                        raise\n                    print(f\"Attempt {attempt} failed: {e}\")\n        return wrapper\n\n@Retry(max_attempts=3, exceptions=(ValueError, ConnectionError))\ndef fetch_data():\n    import random\n    if random.random() < 0.5:\n        raise ConnectionError(\"Timeout\")\n    return {\"data\": \"ok\"}\n\n# Class decorator that decorates a class (not a function)\nclass Singleton:\n    \"\"\"Ensure a class only has one instance.\"\"\"\n\n    def __init__(self, cls):\n        self._cls = cls\n        self._instance = None\n\n    def __call__(self, *args, **kwargs):\n        if self._instance is None:\n            self._instance = self._cls(*args, **kwargs)\n        return self._instance\n\n@Singleton\nclass Database:\n    def __init__(self, url):\n        self.url = url\n\ndb1 = Database(\"sqlite:///test.db\")\ndb2 = Database(\"postgres://other\")\nprint(db1 is db2)  # True -- same instance",
+          "code_language": "python",
+          "key_points": [
+            "Simple: __init__ takes func, __call__ is the wrapper",
+            "Parameterized: __init__ takes params, __call__ takes func and returns wrapper",
+            "Use functools.update_wrapper(self, func) to preserve metadata",
+            "Class decorators can maintain state between calls naturally"
+          ],
+          "gotchas": [
+            "Simple class decorators don't work as instance methods (self is the decorator, not the object)",
+            "Use functools.update_wrapper instead of @functools.wraps for class decorators",
+            "For method decoration, you may need to implement __get__ for the descriptor protocol"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A class with `__call__` can be a decorator. `__init__` stores the function (or parameters), and `__call__` wraps invocations. Class decorators naturally hold state between calls.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\nclass CountCalls:\n    def __init__(self, func):\n        functools.update_wrapper(self, func)\n        self.func = func\n        self.count = 0\n\n    def __call__(self, *args, **kwargs):\n        self.count += 1\n        return self.func(*args, **kwargs)\n\n@CountCalls\ndef greet(name):\n    return f\"Hello, {name}\"\n\ngreet(\"Alice\")\ngreet(\"Bob\")\nprint(greet.count)  # 2",
+          "code_language": "python",
+          "key_points": [
+            "__init__ stores function, __call__ wraps it",
+            "State is naturally available as instance attributes"
+          ],
+          "gotchas": [
+            "Simple class decorators don't work well as instance methods without __get__"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does `functools.lru_cache` work, and when should you use it?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["lru_cache", "functools", "memoization", "caching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`functools.lru_cache` is a decorator that memoizes function results using a Least Recently Used (LRU) eviction strategy. It stores results keyed by the function's arguments, so repeated calls with the same arguments return cached results instantly.\n\n**How it works:**\n- First call with new arguments: function executes, result is cached\n- Subsequent calls with same arguments: cached result is returned\n- When cache reaches `maxsize`, the least recently used entry is evicted\n- `maxsize=None` means unlimited cache (simple memoization)\n\n**Cache info:** The decorated function gains a `cache_info()` method returning hits, misses, maxsize, and currsize. `cache_clear()` empties the cache.\n\n**Requirements:** All arguments must be hashable (since they're used as dictionary keys). Lists, dicts, and sets cannot be arguments.\n\nPython 3.9+ also provides `@functools.cache` as a shorthand for `@lru_cache(maxsize=None)`.",
+          "pseudo_code": "1. Apply @lru_cache(maxsize=128) to a pure function\n2. First call: compute result, store in cache dict\n3. Subsequent calls with same args: return cached result\n4. Cache full: evict least recently used entry\n5. Use cache_info() to monitor hit/miss ratio\n6. Use cache_clear() to reset the cache",
+          "actual_code": "from functools import lru_cache\nimport time\n\n# Basic usage -- Fibonacci without caching is exponential\n@lru_cache(maxsize=128)\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n - 1) + fibonacci(n - 2)\n\nstart = time.perf_counter()\nresult = fibonacci(100)\nelapsed = time.perf_counter() - start\nprint(f\"fib(100) = {result}\")  # 354224848179261915075\nprint(f\"Time: {elapsed:.6f}s\")  # nearly instant\nprint(fibonacci.cache_info())\n# CacheInfo(hits=98, misses=101, maxsize=128, currsize=101)\n\n# Unlimited cache (memoization)\n@lru_cache(maxsize=None)\ndef factorial(n):\n    return 1 if n < 2 else n * factorial(n - 1)\n\nprint(factorial(10))  # 3628800\n\n# Python 3.9+ shorthand\nfrom functools import cache  # same as lru_cache(maxsize=None)\n\n@cache\ndef expensive_compute(x, y):\n    time.sleep(0.1)  # simulate expensive work\n    return x ** y\n\nexpensive_compute(2, 10)  # slow (first call)\nexpensive_compute(2, 10)  # instant (cached)\n\n# Practical example: API call caching\n@lru_cache(maxsize=256)\ndef get_user_permissions(user_id: int, resource: str) -> tuple:\n    # In real code, this would query a database\n    print(f\"Fetching permissions for user {user_id}\")\n    return (\"read\", \"write\")\n\nget_user_permissions(1, \"doc\")  # Fetching permissions...\nget_user_permissions(1, \"doc\")  # cached, no print\n\n# Clearing and inspecting cache\nprint(get_user_permissions.cache_info())\nget_user_permissions.cache_clear()\nprint(get_user_permissions.cache_info())\n# CacheInfo(hits=0, misses=0, maxsize=256, currsize=0)",
+          "code_language": "python",
+          "key_points": [
+            "Caches results by arguments using LRU eviction strategy",
+            "maxsize=None for unlimited cache, maxsize=128 is default",
+            "cache_info() shows hits/misses, cache_clear() resets",
+            "Arguments must be hashable (no lists, dicts, sets)"
+          ],
+          "gotchas": [
+            "Arguments must be hashable -- passing a list or dict raises TypeError",
+            "Caching methods on instances can cause memory leaks (the instance is part of the cache key via self)",
+            "Not suitable for functions with side effects or time-dependent results",
+            "Cache persists for the lifetime of the process -- use cache_clear() or set appropriate maxsize"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`lru_cache` memoizes function results by arguments. Repeated calls with same args return cached results instantly. Uses LRU eviction when cache is full.",
+          "pseudo_code": "",
+          "actual_code": "from functools import lru_cache\n\n@lru_cache(maxsize=128)\ndef fibonacci(n):\n    if n < 2:\n        return n\n    return fibonacci(n - 1) + fibonacci(n - 2)\n\nprint(fibonacci(50))  # 12586269025 (instant)\nprint(fibonacci.cache_info())  # hits=48, misses=51",
+          "code_language": "python",
+          "key_points": [
+            "Memoizes results by hashable arguments",
+            "cache_info() for stats, cache_clear() to reset"
+          ],
+          "gotchas": [
+            "Arguments must be hashable -- no lists or dicts",
+            "Caching methods causes memory leaks because self is part of the key"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a decorator factory, and how does it differ from a regular decorator?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "factory", "patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A decorator factory is a function that returns a decorator. It adds one extra layer of nesting compared to a regular decorator, allowing you to pass configuration parameters.\n\n**Regular decorator**: Takes a function, returns a wrapper. Used as `@decorator`.\n**Decorator factory**: Takes parameters, returns a decorator that takes a function and returns a wrapper. Used as `@factory(params)`.\n\nA common advanced pattern is making the parentheses optional, so the decorator works both as `@decorator` and `@decorator(args)`. This is done by checking whether the first argument is callable (a function) or a parameter.",
+          "pseudo_code": "Regular decorator:\n  decorator(func) -> wrapper\n\nDecorator factory:\n  factory(params) -> decorator(func) -> wrapper\n\nOptional parentheses pattern:\n  Check if first argument is callable\n  If yes: it's used as @decorator (no parens)\n  If no: it's used as @decorator(args) (with parens)",
+          "actual_code": "import functools\n\n# Regular decorator -- no configuration\ndef simple_log(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        print(f\"Calling {func.__name__}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n@simple_log  # no parentheses\ndef add(a, b):\n    return a + b\n\n# Decorator factory -- configurable\ndef log(level=\"INFO\"):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            print(f\"[{level}] Calling {func.__name__}\")\n            return func(*args, **kwargs)\n        return wrapper\n    return decorator\n\n@log(level=\"DEBUG\")  # parentheses required\ndef subtract(a, b):\n    return a - b\n\n# Advanced: optional parentheses pattern\ndef smart_log(_func=None, *, level=\"INFO\"):\n    \"\"\"Works as both @smart_log and @smart_log(level='DEBUG').\"\"\"\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            print(f\"[{level}] Calling {func.__name__}\")\n            return func(*args, **kwargs)\n        return wrapper\n\n    if _func is not None:\n        # Called without parentheses: @smart_log\n        return decorator(_func)\n    else:\n        # Called with parentheses: @smart_log(level='DEBUG')\n        return decorator\n\n@smart_log\ndef multiply(a, b):\n    return a * b\n\n@smart_log(level=\"DEBUG\")\ndef divide(a, b):\n    return a / b\n\nmultiply(3, 4)  # [INFO] Calling multiply\ndivide(10, 2)   # [DEBUG] Calling divide",
+          "code_language": "python",
+          "key_points": [
+            "A decorator factory returns a decorator; a regular decorator returns a wrapper",
+            "Factories enable configurable, reusable decorator behavior",
+            "The optional-parentheses pattern uses _func=None with keyword-only args",
+            "factory(params)(func) vs decorator(func) is the structural difference"
+          ],
+          "gotchas": [
+            "Confusing @decorator with @decorator() -- the latter calls the factory with no args",
+            "The optional-parentheses pattern requires all config params to be keyword-only (after *)",
+            "Three levels of nesting can be hard to debug -- consider class-based decorators for complex cases"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A decorator factory is a function that takes parameters and returns a decorator. A regular decorator takes a function directly. Use factories when you need configurable decorators.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\n# Decorator factory\ndef repeat(n=2):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            for _ in range(n):\n                result = func(*args, **kwargs)\n            return result\n        return wrapper\n    return decorator\n\n@repeat(n=3)\ndef hello():\n    print(\"Hello!\")\n\nhello()  # prints Hello! three times",
+          "code_language": "python",
+          "key_points": [
+            "Factory returns a decorator; decorator returns a wrapper",
+            "Adds one extra nesting level for configuration"
+          ],
+          "gotchas": [
+            "@repeat vs @repeat() -- without parens, the function is passed as n"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write a decorator that works on both functions and methods?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "methods", "descriptor-protocol"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A decorator that uses `*args, **kwargs` and `@functools.wraps` generally works on both regular functions and methods without modification. When a decorated method is called on an instance, Python's descriptor protocol automatically passes the instance as the first argument (`self`), which gets captured by `*args`.\n\nHowever, class-based decorators (using `__call__`) do NOT work as method decorators by default because they are not descriptors. The instance (`self` of the class being decorated) is not automatically passed. To fix this, implement the `__get__` method on the decorator class to make it a descriptor.\n\nThe key insight is that function-based decorators work because functions are already descriptors (they have a `__get__` method), and `@functools.wraps` preserves this. Class-based decorators need `__get__` added explicitly.",
+          "pseudo_code": "Function-based decorator:\n1. Use *args, **kwargs -- self is captured automatically\n2. Use @functools.wraps -- preserves __get__ descriptor\n3. Works on both functions and methods out of the box\n\nClass-based decorator (needs fix):\n1. Implement __get__(self, obj, objtype) on the decorator\n2. __get__ returns a partial binding self.__call__ to the instance\n3. This makes the descriptor protocol work for methods",
+          "actual_code": "import functools\nfrom types import MethodType\n\n# Function-based decorator -- works on both automatically\ndef log_call(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        print(f\"Calling {func.__name__} with args={args}, kwargs={kwargs}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n# Works as a function decorator\n@log_call\ndef add(a, b):\n    return a + b\n\nadd(1, 2)  # Calling add with args=(1, 2), kwargs={}\n\n# Works as a method decorator too\nclass Calculator:\n    @log_call\n    def multiply(self, a, b):\n        return a * b\n\ncalc = Calculator()\ncalc.multiply(3, 4)  # Calling multiply with args=(<Calculator>, 3, 4), kwargs={}\n\n# Class-based decorator -- BROKEN as method decorator\nclass CountCallsBroken:\n    def __init__(self, func):\n        functools.update_wrapper(self, func)\n        self.func = func\n        self.count = 0\n\n    def __call__(self, *args, **kwargs):\n        self.count += 1\n        return self.func(*args, **kwargs)\n\n# Class-based decorator -- FIXED with __get__\nclass CountCalls:\n    def __init__(self, func):\n        functools.update_wrapper(self, func)\n        self.func = func\n        self.count = 0\n\n    def __call__(self, *args, **kwargs):\n        self.count += 1\n        return self.func(*args, **kwargs)\n\n    def __get__(self, obj, objtype=None):\n        if obj is None:\n            return self\n        # Bind self.__call__ to the instance\n        return MethodType(self, obj)\n\nclass MyClass:\n    @CountCalls\n    def greet(self, name):\n        return f\"Hello, {name}\"\n\nobj = MyClass()\nprint(obj.greet(\"Alice\"))  # Hello, Alice\nprint(obj.greet(\"Bob\"))    # Hello, Bob",
+          "code_language": "python",
+          "key_points": [
+            "Function-based decorators with *args, **kwargs work on methods automatically",
+            "@functools.wraps preserves the descriptor protocol (__get__)",
+            "Class-based decorators need __get__ to work as method decorators",
+            "__get__ should return MethodType(self, obj) to bind the instance"
+          ],
+          "gotchas": [
+            "Class-based decorators without __get__ silently fail -- self of the class is not passed",
+            "Be careful with instance state in class decorators shared across all instances of the decorated class",
+            "Using MethodType requires importing from types module"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Function-based decorators using `*args, **kwargs` and `@functools.wraps` work on both functions and methods automatically. Class-based decorators need a `__get__` method to work on methods.",
+          "pseudo_code": "",
+          "actual_code": "import functools\nfrom types import MethodType\n\nclass CountCalls:\n    def __init__(self, func):\n        functools.update_wrapper(self, func)\n        self.func = func\n        self.count = 0\n\n    def __call__(self, *args, **kwargs):\n        self.count += 1\n        return self.func(*args, **kwargs)\n\n    def __get__(self, obj, objtype=None):\n        if obj is None:\n            return self\n        return MethodType(self, obj)",
+          "code_language": "python",
+          "key_points": [
+            "Function-based decorators work on methods out of the box",
+            "Class-based decorators need __get__ for the descriptor protocol"
+          ],
+          "gotchas": [
+            "Without __get__, class-based decorators silently lose the instance (self)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are some common real-world decorator patterns in Python?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "patterns", "real-world"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Decorators are used extensively in Python for cross-cutting concerns. Here are the most common real-world patterns:\n\n1. **Authentication/Authorization**: Check user permissions before executing a view function (Flask, Django)\n2. **Logging**: Log function calls, arguments, and return values\n3. **Timing/Performance**: Measure execution time\n4. **Caching/Memoization**: Cache expensive function results\n5. **Retry with backoff**: Retry failed operations with exponential backoff\n6. **Rate limiting**: Throttle function calls\n7. **Input validation**: Validate function arguments\n8. **Singleton**: Ensure only one instance of a class\n9. **Deprecation warnings**: Warn when deprecated functions are called\n10. **Type checking**: Runtime type enforcement at function boundaries",
+          "pseudo_code": "Common patterns:\n1. Auth: check credentials -> allow/deny\n2. Retry: loop N times with backoff on exception\n3. Validate: check args before calling function\n4. Deprecate: emit warning, then call function\n5. Rate limit: track calls per time window",
+          "actual_code": "import functools\nimport time\nimport warnings\n\n# 1. Retry with exponential backoff\ndef retry(max_attempts=3, backoff_factor=2, exceptions=(Exception,)):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            delay = 1\n            for attempt in range(1, max_attempts + 1):\n                try:\n                    return func(*args, **kwargs)\n                except exceptions as e:\n                    if attempt == max_attempts:\n                        raise\n                    print(f\"Attempt {attempt} failed, retrying in {delay}s...\")\n                    time.sleep(delay)\n                    delay *= backoff_factor\n        return wrapper\n    return decorator\n\n# 2. Deprecation warning\ndef deprecated(reason=\"\"):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            msg = f\"{func.__name__} is deprecated.\"\n            if reason:\n                msg += f\" {reason}\"\n            warnings.warn(msg, DeprecationWarning, stacklevel=2)\n            return func(*args, **kwargs)\n        return wrapper\n    return decorator\n\n@deprecated(\"Use new_function() instead.\")\ndef old_function():\n    return \"old result\"\n\n# 3. Input validation\ndef validate_types(**expected_types):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            import inspect\n            sig = inspect.signature(func)\n            bound = sig.bind(*args, **kwargs)\n            bound.apply_defaults()\n            for param, expected_type in expected_types.items():\n                value = bound.arguments.get(param)\n                if value is not None and not isinstance(value, expected_type):\n                    raise TypeError(\n                        f\"{param} must be {expected_type.__name__}, \"\n                        f\"got {type(value).__name__}\"\n                    )\n            return func(*args, **kwargs)\n        return wrapper\n    return decorator\n\n@validate_types(name=str, age=int)\ndef create_user(name, age):\n    return {\"name\": name, \"age\": age}\n\nprint(create_user(\"Alice\", 30))  # {'name': 'Alice', 'age': 30}\ntry:\n    create_user(\"Alice\", \"thirty\")  # TypeError!\nexcept TypeError as e:\n    print(e)  # age must be int, got str\n\n# 4. Singleton pattern\ndef singleton(cls):\n    instances = {}\n    @functools.wraps(cls)\n    def get_instance(*args, **kwargs):\n        if cls not in instances:\n            instances[cls] = cls(*args, **kwargs)\n        return instances[cls]\n    return get_instance\n\n@singleton\nclass AppConfig:\n    def __init__(self):\n        self.settings = {}\n\nc1 = AppConfig()\nc2 = AppConfig()\nprint(c1 is c2)  # True\n\n# 5. Rate limiter\ndef rate_limit(calls_per_second=1):\n    min_interval = 1.0 / calls_per_second\n    def decorator(func):\n        last_called = [0.0]\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            elapsed = time.time() - last_called[0]\n            if elapsed < min_interval:\n                time.sleep(min_interval - elapsed)\n            last_called[0] = time.time()\n            return func(*args, **kwargs)\n        return wrapper\n    return decorator",
+          "code_language": "python",
+          "key_points": [
+            "Retry with backoff for unreliable operations (network, APIs)",
+            "Deprecation warnings guide users to updated interfaces",
+            "Input validation decorators enforce contracts at function boundaries",
+            "Singleton decorator ensures single instance per class"
+          ],
+          "gotchas": [
+            "Rate limiters using time.sleep block the thread -- use async-aware versions in async code",
+            "Singleton decorators replace the class with a function, breaking isinstance checks",
+            "Retry decorators should only catch specific exceptions, never bare except"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Common decorator patterns include retry with backoff, deprecation warnings, input validation, singleton, rate limiting, authentication, and caching. They handle cross-cutting concerns cleanly.",
+          "pseudo_code": "",
+          "actual_code": "import functools\nimport warnings\n\n# Deprecation warning decorator\ndef deprecated(reason):\n    def decorator(func):\n        @functools.wraps(func)\n        def wrapper(*args, **kwargs):\n            warnings.warn(f\"{func.__name__}: {reason}\",\n                          DeprecationWarning, stacklevel=2)\n            return func(*args, **kwargs)\n        return wrapper\n    return decorator\n\n@deprecated(\"Use new_api() instead\")\ndef old_api():\n    return \"result\"",
+          "code_language": "python",
+          "key_points": [
+            "Retry, deprecation, validation, singleton, rate limiting",
+            "Decorators separate cross-cutting concerns from business logic"
+          ],
+          "gotchas": [
+            "Singleton decorators break isinstance checks",
+            "Retry should only catch specific exceptions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you preserve the original function's signature in a decorator?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "signature", "inspect", "functools"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you wrap a function with `*args, **kwargs`, introspection tools like `inspect.signature()` and `help()` show the generic signature instead of the original. `@functools.wraps` partially addresses this by copying `__wrapped__`, which `inspect.signature()` follows to display the correct signature.\n\nHowever, there are cases where `@functools.wraps` alone is not enough:\n- When you need the actual parameters available in the wrapper\n- When frameworks inspect signatures directly (some validation frameworks)\n- When you need runtime enforcement of the original signature\n\nFor full signature preservation, you can use `inspect.signature().bind()` inside the wrapper to validate arguments against the original function's signature. The `makefun` or `decorator` third-party libraries can also create wrappers with exact matching signatures.",
+          "pseudo_code": "1. @functools.wraps copies __wrapped__ for inspect.signature()\n2. inspect.signature() follows __wrapped__ to show original params\n3. For runtime enforcement: use sig.bind(*args, **kwargs) in wrapper\n4. For IDE support: functools.wraps is usually sufficient\n5. For exact signature: use the 'decorator' or 'makefun' library",
+          "actual_code": "import functools\nimport inspect\n\n# functools.wraps preserves signature for inspection\ndef my_decorator(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return func(*args, **kwargs)\n    return wrapper\n\n@my_decorator\ndef greet(name: str, greeting: str = \"Hello\") -> str:\n    \"\"\"Greet someone.\"\"\"\n    return f\"{greeting}, {name}!\"\n\n# inspect.signature follows __wrapped__\nsig = inspect.signature(greet)\nprint(sig)  # (name: str, greeting: str = 'Hello') -> str\n\n# Validate arguments in the wrapper using bind()\ndef strict_decorator(func):\n    sig = inspect.signature(func)\n\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        # This will raise TypeError for invalid arguments\n        bound = sig.bind(*args, **kwargs)\n        bound.apply_defaults()\n        print(f\"Validated args: {dict(bound.arguments)}\")\n        return func(*args, **kwargs)\n    return wrapper\n\n@strict_decorator\ndef create_user(name: str, age: int, role: str = \"viewer\"):\n    return {\"name\": name, \"age\": age, \"role\": role}\n\nprint(create_user(\"Alice\", 30))\n# Validated args: {'name': 'Alice', 'age': 30, 'role': 'viewer'}\n# {'name': 'Alice', 'age': 30, 'role': 'viewer'}\n\ntry:\n    create_user(\"Alice\", 30, \"admin\", \"extra\")  # Too many args\nexcept TypeError as e:\n    print(e)  # too many positional arguments\n\n# Accessing parameters programmatically\nfor param_name, param in sig.parameters.items():\n    print(f\"{param_name}: default={param.default}, kind={param.kind.name}\")\n# name: default=<class 'inspect._empty'>, kind=POSITIONAL_OR_KEYWORD\n# age: default=<class 'inspect._empty'>, kind=POSITIONAL_OR_KEYWORD\n# role: default=viewer, kind=POSITIONAL_OR_KEYWORD",
+          "code_language": "python",
+          "key_points": [
+            "@functools.wraps sets __wrapped__ which inspect.signature() follows",
+            "Use sig.bind() in wrappers for runtime argument validation",
+            "inspect.signature() shows the original function's parameters, not *args/**kwargs",
+            "Type annotations are preserved through __annotations__ and __wrapped__"
+          ],
+          "gotchas": [
+            "Some older tools may not follow __wrapped__ and show *args, **kwargs instead",
+            "sig.bind() raises TypeError for invalid args -- good for validation, bad if you want flexibility",
+            "@functools.wraps does not create an actual function with the original signature -- it only copies metadata"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@functools.wraps` sets `__wrapped__`, which `inspect.signature()` follows to display the original signature. For runtime validation, use `inspect.signature(func).bind(*args, **kwargs)` in the wrapper.",
+          "pseudo_code": "",
+          "actual_code": "import functools\nimport inspect\n\ndef my_deco(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        return func(*args, **kwargs)\n    return wrapper\n\n@my_deco\ndef add(a: int, b: int) -> int:\n    return a + b\n\nprint(inspect.signature(add))  # (a: int, b: int) -> int",
+          "code_language": "python",
+          "key_points": [
+            "@functools.wraps preserves signature via __wrapped__",
+            "inspect.signature() follows __wrapped__ automatically"
+          ],
+          "gotchas": [
+            "The wrapper's actual signature is still *args, **kwargs -- only introspection is fixed"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use decorators to implement the Singleton pattern in Python?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["decorators", "singleton", "design-patterns"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A Singleton ensures only one instance of a class exists. A decorator-based Singleton is one of the cleanest approaches in Python. The decorator intercepts class instantiation and returns the cached instance on subsequent calls.\n\nThere are several approaches:\n\n1. **Function decorator with dict**: Store instances in a dictionary keyed by class\n2. **Class decorator**: Use a class with `__call__` and `__get__`\n3. **Thread-safe variant**: Use a lock to prevent race conditions\n\nEach has trade-offs. The function decorator is simplest but breaks `isinstance` checks (since the class is replaced by a function). The `__new__`-based approach preserves the class identity but is harder to test. The decorator approach is the most Pythonic for most use cases.",
+          "pseudo_code": "1. Create a decorator that takes a class\n2. Maintain a dictionary of instances\n3. On each call, check if an instance exists\n4. If not, create one and store it\n5. Return the stored instance\n6. For thread safety, add a threading.Lock",
+          "actual_code": "import functools\nimport threading\n\n# Simple function-based singleton decorator\ndef singleton(cls):\n    instances = {}\n\n    @functools.wraps(cls)\n    def get_instance(*args, **kwargs):\n        if cls not in instances:\n            instances[cls] = cls(*args, **kwargs)\n        return instances[cls]\n    return get_instance\n\n@singleton\nclass Database:\n    def __init__(self, url):\n        self.url = url\n        print(f\"Connecting to {url}\")\n\ndb1 = Database(\"sqlite:///app.db\")  # Connecting to sqlite:///app.db\ndb2 = Database(\"postgres://other\")  # No output -- returns cached\nprint(db1 is db2)  # True\nprint(db1.url)     # sqlite:///app.db\n\n# Thread-safe singleton decorator\ndef thread_safe_singleton(cls):\n    instances = {}\n    lock = threading.Lock()\n\n    @functools.wraps(cls)\n    def get_instance(*args, **kwargs):\n        if cls not in instances:\n            with lock:\n                # Double-check locking\n                if cls not in instances:\n                    instances[cls] = cls(*args, **kwargs)\n        return instances[cls]\n    return get_instance\n\n@thread_safe_singleton\nclass AppConfig:\n    def __init__(self):\n        self.settings = {}\n\n    def set(self, key, value):\n        self.settings[key] = value\n\n    def get(self, key, default=None):\n        return self.settings.get(key, default)\n\nconfig = AppConfig()\nconfig.set(\"debug\", True)\n\nconfig2 = AppConfig()\nprint(config2.get(\"debug\"))  # True -- same instance\n\n# Note: isinstance is broken with function-based approach\n# print(isinstance(config, AppConfig))  # TypeError\n\n# To preserve isinstance, use __new__ instead:\nclass SingletonMeta(type):\n    _instances = {}\n    def __call__(cls, *args, **kwargs):\n        if cls not in cls._instances:\n            cls._instances[cls] = super().__call__(*args, **kwargs)\n        return cls._instances[cls]\n\nclass Logger(metaclass=SingletonMeta):\n    def __init__(self):\n        self.messages = []\n\nlog1 = Logger()\nlog2 = Logger()\nprint(log1 is log2)  # True\nprint(isinstance(log1, Logger))  # True -- works!",
+          "code_language": "python",
+          "key_points": [
+            "Decorator stores instances in a dict and returns cached one on subsequent calls",
+            "Thread-safe version uses double-check locking with threading.Lock",
+            "Function decorator is simplest but breaks isinstance",
+            "Metaclass approach preserves isinstance compatibility"
+          ],
+          "gotchas": [
+            "Function-based singleton breaks isinstance(obj, ClassName)",
+            "Constructor arguments are ignored after the first call -- the first args win",
+            "Without thread safety, concurrent calls can create multiple instances",
+            "Singletons make testing harder -- consider dependency injection instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A singleton decorator caches the first instance of a class and returns it for all subsequent calls. Use a dict to store instances, and a lock for thread safety.",
+          "pseudo_code": "",
+          "actual_code": "import functools\n\ndef singleton(cls):\n    instances = {}\n    @functools.wraps(cls)\n    def get_instance(*args, **kwargs):\n        if cls not in instances:\n            instances[cls] = cls(*args, **kwargs)\n        return instances[cls]\n    return get_instance\n\n@singleton\nclass Config:\n    def __init__(self):\n        self.data = {}\n\nc1 = Config()\nc2 = Config()\nprint(c1 is c2)  # True",
+          "code_language": "python",
+          "key_points": [
+            "Cache first instance, return it for all subsequent calls",
+            "Add threading.Lock for thread safety"
+          ],
+          "gotchas": [
+            "Function-based singleton breaks isinstance checks",
+            "Constructor args are ignored after first instantiation"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,635 @@
+{
+  "concept_slug": "strings-string-methods",
+  "questions": [
+    {
+      "title": "How are strings created in Python and what are the different string literal types?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["strings", "literals", "creation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several ways to create strings:\n\n1. **Single quotes:** `'hello'`\n2. **Double quotes:** `\"hello\"` (functionally identical to single quotes)\n3. **Triple quotes:** `'''multi-line'''` or `\"\"\"multi-line\"\"\"` for multi-line strings and docstrings\n4. **Raw strings:** `r'no\\escape'` -- backslashes treated literally\n5. **F-strings:** `f'Hello, {name}'` -- inline expressions (Python 3.6+)\n6. **Byte strings:** `b'bytes'` -- bytes, not text\n7. **str() constructor:** `str(42)` converts other types to string\n\nStrings are **immutable** sequences of Unicode characters. You cannot modify a string in-place; all string methods return new strings.",
+          "pseudo_code": "Single: 'hello'\nDouble: \"hello\"\nTriple: '''multi-line''' or \"\"\"multi-line\"\"\"\nRaw: r'C:\\path\\to\\file' (no escape processing)\nF-string: f'Hello, {name}' (expression interpolation)\nBytes: b'hello' (bytes, not str)\nConstructor: str(42) -> '42'",
+          "actual_code": "# Single and double quotes are identical\ns1 = 'hello'\ns2 = \"hello\"\nprint(s1 == s2)  # True\n\n# Use one to contain the other\nprint(\"it's easy\")        # it's easy\nprint('He said \"hi\"')     # He said \"hi\"\n\n# Triple-quoted strings for multi-line\nmessage = \"\"\"This is\na multi-line\nstring.\"\"\"\nprint(message)\n\n# Raw strings -- backslashes are literal\npath = r'C:\\Users\\alice\\documents'\nprint(path)  # C:\\Users\\alice\\documents\n\n# Without raw: need to escape\npath2 = 'C:\\\\Users\\\\alice\\\\documents'\nprint(path == path2)  # True\n\n# F-strings (Python 3.6+)\nname = \"Alice\"\nage = 30\nprint(f\"Hello, {name}! You are {age} years old.\")\nprint(f\"Next year: {age + 1}\")           # expressions\nprint(f\"Name: {name!r}\")                 # repr: 'Alice'\nprint(f\"Pi: {3.14159:.2f}\")              # formatting: 3.14\nprint(f\"{'hello':>20}\")                  # right-align in 20 chars\n\n# String constructor\nprint(str(42))       # '42'\nprint(str(3.14))     # '3.14'\nprint(str([1, 2]))   # '[1, 2]'\nprint(str(True))     # 'True'\n\n# Byte strings\nb = b\"hello\"\nprint(type(b))       # <class 'bytes'>\nprint(b.decode('utf-8'))  # 'hello' (bytes -> str)\n\n# String immutability\ns = \"hello\"\ntry:\n    s[0] = \"H\"\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # 'str' object does not support item assignment\n\n# Create modified string instead\ns = \"H\" + s[1:]\nprint(s)  # Hello",
+          "code_language": "python",
+          "key_points": [
+            "Single and double quotes are identical in Python",
+            "Triple quotes for multi-line strings and docstrings",
+            "Raw strings (r'...') treat backslashes as literal characters",
+            "F-strings allow inline expressions with formatting",
+            "Strings are immutable -- all methods return new strings"
+          ],
+          "gotchas": [
+            "Raw strings cannot end with an odd number of backslashes: r'path\\' is a SyntaxError",
+            "b'hello' is bytes, not str -- they are different types",
+            "Triple-quoted strings include leading newlines and indentation",
+            "f'{value}' calls str() on the value, f'{value!r}' calls repr()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Strings: single/double quotes (identical), triple quotes (multi-line), raw strings (`r'...'`), f-strings (`f'...'`), bytes (`b'...'`). Strings are immutable Unicode sequences.",
+          "pseudo_code": "",
+          "actual_code": "s = 'hello'           # or \"hello\"\nmulti = \"\"\"line 1\nline 2\"\"\"\nraw = r'C:\\path'      # no escape\nf = f'Hello, {name}'  # interpolation\nb = b'bytes'           # bytes, not str",
+          "code_language": "python",
+          "key_points": [
+            "Single and double quotes are identical",
+            "Strings are immutable"
+          ],
+          "gotchas": [
+            "Raw strings cannot end with an odd number of backslashes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do f-strings work and what formatting options do they support?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["f-strings", "formatting", "interpolation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "F-strings (formatted string literals), introduced in Python 3.6, allow you to embed expressions inside string literals using `{expression}` syntax.\n\n**Syntax:** `f\"text {expression} text\"`\n\n**Features:**\n- Any valid Python expression inside `{}`\n- Format specifiers with `:` -- `{value:.2f}`\n- Conversion flags: `!s` (str), `!r` (repr), `!a` (ascii)\n- Nested f-strings (Python 3.12+: any quotes inside)\n- Self-documenting expressions with `=` (Python 3.8+): `f'{x=}'`\n\n**Format spec mini-language:**\n`{value:[[fill]align][sign][#][0][width][grouping][.precision][type]}`\n\nCommon format types: `d` (integer), `f` (float), `e` (scientific), `%` (percentage), `s` (string), `b` (binary), `x` (hex), `o` (octal).",
+          "pseudo_code": "f'{expr}'         -- basic interpolation\nf'{expr:.2f}'     -- 2 decimal places\nf'{expr:>10}'     -- right-align in 10 chars\nf'{expr:010d}'    -- zero-padded integer\nf'{expr:,}'       -- thousands separator\nf'{expr=}'        -- self-documenting (3.8+)\nf'{expr!r}'       -- repr() of expression",
+          "actual_code": "name = \"Alice\"\nage = 30\npi = 3.14159265\n\n# Basic interpolation\nprint(f\"Hello, {name}!\")           # Hello, Alice!\nprint(f\"Age: {age}, Next: {age+1}\")  # Age: 30, Next: 31\n\n# Number formatting\nprint(f\"Pi: {pi:.2f}\")             # Pi: 3.14\nprint(f\"Pi: {pi:.4f}\")             # Pi: 3.1416\nprint(f\"Integer: {42:05d}\")         # Integer: 00042\nprint(f\"Hex: {255:x}\")             # Hex: ff\nprint(f\"Hex: {255:#x}\")            # Hex: 0xff\nprint(f\"Binary: {10:b}\")           # Binary: 1010\nprint(f\"Binary: {10:#010b}\")       # Binary: 0b00001010\nprint(f\"Octal: {8:o}\")             # Octal: 10\nprint(f\"Scientific: {1234.5:e}\")   # Scientific: 1.2345e+03\nprint(f\"Percentage: {0.85:.1%}\")   # Percentage: 85.0%\n\n# Thousands separator\nbig_number = 1234567890\nprint(f\"{big_number:,}\")           # 1,234,567,890\nprint(f\"{big_number:_}\")           # 1_234_567_890\n\n# Alignment and padding\nprint(f\"{'left':<20}|\")     # left                |\nprint(f\"{'right':>20}|\")    #                right|\nprint(f\"{'center':^20}|\")   #       center       |\nprint(f\"{'padded':*^20}\")   # *******padded*******\n\n# Conversion flags\nprint(f\"str: {name!s}\")    # str: Alice\nprint(f\"repr: {name!r}\")   # repr: 'Alice'\n\n# Self-documenting expressions (Python 3.8+)\nx = 42\ny = 3.14\nprint(f\"{x=}\")              # x=42\nprint(f\"{x=}, {y=:.1f}\")   # x=42, y=3.1\nprint(f\"{x + y = }\")       # x + y = 45.14\n\n# Conditional in f-string\ncount = 5\nprint(f\"{count} item{'s' if count != 1 else ''}\")  # 5 items\n\n# Dictionary access in f-string\nuser = {\"name\": \"Alice\"}\nprint(f\"Name: {user['name']}\")  # Name: Alice\n\n# Calling methods\nprint(f\"Upper: {name.upper()}\")        # Upper: ALICE\nprint(f\"Length: {len(name)}\")           # Length: 5\n\n# Date formatting\nfrom datetime import datetime\nnow = datetime.now()\nprint(f\"{now:%Y-%m-%d %H:%M}\")  # e.g., 2026-03-16 14:30",
+          "code_language": "python",
+          "key_points": [
+            "Any Python expression can go inside {}",
+            "Format specifiers after : for alignment, width, precision",
+            "!r for repr, !s for str, !a for ascii",
+            "f'{x=}' for self-documenting debug output (Python 3.8+)",
+            "Supports date formatting with strftime codes"
+          ],
+          "gotchas": [
+            "Backslashes are not allowed inside f-string expressions before Python 3.12",
+            "Use different quotes inside {} than the f-string delimiter",
+            "f-strings are evaluated at runtime, not compile time",
+            "Empty braces f'{}' are a SyntaxError -- must contain an expression"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "F-strings (`f'...'`) embed expressions with `{expr}`. Support formatting (`{x:.2f}`), alignment (`{x:>10}`), conversion (`{x!r}`), and self-documenting (`{x=}` in 3.8+).",
+          "pseudo_code": "",
+          "actual_code": "name = \"Alice\"\nprint(f\"Hello, {name}!\")       # Hello, Alice!\nprint(f\"{3.14159:.2f}\")        # 3.14\nprint(f\"{42:05d}\")             # 00042\nprint(f\"{'center':^20}\")       #       center\nx = 42\nprint(f\"{x=}\")                 # x=42",
+          "code_language": "python",
+          "key_points": [
+            "Any expression inside {}",
+            "Format spec after : for precision, alignment"
+          ],
+          "gotchas": [
+            "No backslashes in expressions before Python 3.12"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does string slicing work in Python?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["slicing", "indexing", "substring"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "String slicing extracts a substring using the syntax `s[start:stop:step]`.\n\n**Index rules:**\n- Positive indices count from the left (0-based)\n- Negative indices count from the right (-1 is last character)\n- `start` is inclusive, `stop` is exclusive\n- Omitted `start` defaults to 0, omitted `stop` defaults to len(s)\n- Omitted `step` defaults to 1\n\n**Slicing NEVER raises IndexError** -- it silently returns what it can. Out-of-range indices are clamped.\n\n**Common patterns:**\n- `s[:n]` -- first n characters\n- `s[n:]` -- everything from index n\n- `s[-n:]` -- last n characters\n- `s[:-n]` -- everything except last n\n- `s[::-1]` -- reverse the string\n- `s[::2]` -- every other character",
+          "pseudo_code": "s[start:stop:step]\n  start: inclusive (default 0)\n  stop: exclusive (default len(s))\n  step: stride (default 1)\n\ns[:n]   first n chars\ns[n:]   from index n to end\ns[-n:]  last n chars\ns[::-1] reverse",
+          "actual_code": "s = \"Hello, World!\"\n\n# Single character access\nprint(s[0])    # H\nprint(s[-1])   # !\nprint(s[7])    # W\n\n# Basic slicing\nprint(s[0:5])    # Hello\nprint(s[:5])     # Hello (start defaults to 0)\nprint(s[7:])     # World!\nprint(s[7:12])   # World\n\n# Negative indices\nprint(s[-6:])    # World!\nprint(s[-6:-1])  # World\nprint(s[:-1])    # Hello, World\n\n# Step\nprint(s[::2])    # Hlo ol!\nprint(s[1::2])   # el,Wrd\nprint(s[::-1])   # !dlroW ,olleH (reverse)\n\n# First/last n characters\nn = 5\nprint(s[:n])     # Hello (first 5)\nprint(s[-n:])    # orld! (last 5)\nprint(s[:-n])    # Hello, W (all except last 5)\n\n# Slicing never raises IndexError\nprint(s[0:100])  # Hello, World! (clamped to string length)\nprint(s[100:])   # '' (empty string)\nprint(s[-100:5]) # Hello (clamped)\n\n# Slicing returns a new string\nsubstr = s[0:5]\nprint(substr)      # Hello\nprint(s)           # Hello, World! (original unchanged)\n\n# Practical examples\nurl = \"https://www.example.com/page\"\nprotocol = url[:url.index('://')]\nprint(protocol)  # https\n\n# Check palindrome\ndef is_palindrome(s):\n    s = s.lower().replace(\" \", \"\")\n    return s == s[::-1]\n\nprint(is_palindrome(\"racecar\"))     # True\nprint(is_palindrome(\"A man a plan a canal Panama\".replace(\" \", \"\")))  # True\n\n# Extract every nth character\ntext = \"abcdefghij\"\nprint(text[::3])  # adgj",
+          "code_language": "python",
+          "key_points": [
+            "s[start:stop:step] -- start inclusive, stop exclusive",
+            "Negative indices count from the end",
+            "Slicing never raises IndexError -- out-of-range is clamped",
+            "s[::-1] reverses a string",
+            "Slicing returns a new string (strings are immutable)"
+          ],
+          "gotchas": [
+            "s[0:5] includes index 0 but NOT index 5 (half-open interval)",
+            "Single index s[100] raises IndexError, but slicing s[100:] returns ''",
+            "s[::-1] reverses but creates a new string -- not memory-efficient for huge strings",
+            "Slicing creates a copy, not a view (unlike NumPy)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`s[start:stop:step]` extracts substrings. Start is inclusive, stop is exclusive. Negative indices count from end. `s[::-1]` reverses. Slicing never raises IndexError.",
+          "pseudo_code": "",
+          "actual_code": "s = \"Hello, World!\"\nprint(s[:5])     # Hello\nprint(s[7:])     # World!\nprint(s[-6:])    # World!\nprint(s[::-1])   # !dlroW ,olleH",
+          "code_language": "python",
+          "key_points": [
+            "start inclusive, stop exclusive",
+            "s[::-1] reverses"
+          ],
+          "gotchas": [
+            "Single index out of range raises IndexError, but slicing does not"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most commonly used string methods in Python?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["string-methods", "split", "join", "strip", "replace"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python strings have over 40 built-in methods. The most commonly used ones fall into categories:\n\n**Searching:**\n- `find(sub)` / `rfind(sub)` -- returns index or -1\n- `index(sub)` / `rindex(sub)` -- returns index or raises ValueError\n- `count(sub)` -- counts non-overlapping occurrences\n- `startswith(prefix)` / `endswith(suffix)` -- boolean checks\n\n**Modifying (returns new string):**\n- `replace(old, new)` -- replaces all occurrences\n- `strip()` / `lstrip()` / `rstrip()` -- removes whitespace\n- `upper()` / `lower()` / `title()` / `capitalize()` / `swapcase()`\n\n**Splitting and Joining:**\n- `split(sep)` -- splits into list\n- `rsplit(sep)` -- splits from right\n- `splitlines()` -- splits by line breaks\n- `'sep'.join(iterable)` -- joins with separator\n\n**Testing:**\n- `isdigit()`, `isalpha()`, `isalnum()`, `isspace()`, `isupper()`, `islower()`",
+          "pseudo_code": "Search: find, index, count, startswith, endswith\nModify: replace, strip, upper, lower, title\nSplit/Join: split, join, splitlines\nTest: isdigit, isalpha, isalnum, isspace\nFormat: center, ljust, rjust, zfill",
+          "actual_code": "s = \"  Hello, World! Hello, Python!  \"\n\n# strip -- remove leading/trailing whitespace\nprint(s.strip())         # 'Hello, World! Hello, Python!'\nprint(s.lstrip())        # 'Hello, World! Hello, Python!  '\nprint(s.rstrip())        # '  Hello, World! Hello, Python!'\nprint(\"###hello###\".strip(\"#\"))  # 'hello' (strip specific chars)\n\n# split -- split into list\nprint(\"a,b,c,d\".split(\",\"))       # ['a', 'b', 'c', 'd']\nprint(\"hello world\".split())       # ['hello', 'world'] (splits on whitespace)\nprint(\"a,b,c,d\".split(\",\", 2))    # ['a', 'b', 'c,d'] (max 2 splits)\nprint(\"a,,b\".split(\",\"))           # ['a', '', 'b'] (empty strings kept)\n\n# join -- join iterable with separator\nwords = [\"Hello\", \"World\"]\nprint(\" \".join(words))      # 'Hello World'\nprint(\", \".join(words))     # 'Hello, World'\nprint(\"\".join(words))        # 'HelloWorld'\nprint(\"-\".join(\"hello\"))    # 'h-e-l-l-o' (string is iterable)\n\n# replace\nprint(\"hello world\".replace(\"world\", \"Python\"))  # 'hello Python'\nprint(\"aabaa\".replace(\"a\", \"x\", 2))  # 'xxbaa' (max 2 replacements)\n\n# find / index\nprint(\"hello\".find(\"ll\"))    # 2\nprint(\"hello\".find(\"xyz\"))   # -1 (not found)\nprint(\"hello\".index(\"ll\"))   # 2\n# \"hello\".index(\"xyz\")  # raises ValueError\n\n# count\nprint(\"banana\".count(\"an\"))  # 2 (non-overlapping)\n\n# startswith / endswith\nprint(\"hello.py\".endswith(\".py\"))    # True\nprint(\"hello.py\".endswith((\".py\", \".js\")))  # True (tuple of suffixes)\nprint(\"hello\".startswith(\"he\"))      # True\n\n# upper / lower / title / capitalize\nprint(\"hello\".upper())       # 'HELLO'\nprint(\"HELLO\".lower())       # 'hello'\nprint(\"hello world\".title()) # 'Hello World'\nprint(\"hello world\".capitalize())  # 'Hello world'\n\n# Testing methods\nprint(\"123\".isdigit())       # True\nprint(\"abc\".isalpha())       # True\nprint(\"abc123\".isalnum())    # True\nprint(\"   \".isspace())       # True\nprint(\"HELLO\".isupper())     # True\nprint(\"hello\".islower())     # True\n\n# splitlines\nmultiline = \"line1\\nline2\\nline3\"\nprint(multiline.splitlines())  # ['line1', 'line2', 'line3']",
+          "code_language": "python",
+          "key_points": [
+            "All string methods return new strings (strings are immutable)",
+            "split() without args splits on any whitespace and removes empty strings",
+            "join() is called on the separator, not the list",
+            "find() returns -1 on failure, index() raises ValueError",
+            "startswith/endswith accept tuples for multiple checks"
+          ],
+          "gotchas": [
+            "split(',') keeps empty strings: 'a,,b'.split(',') = ['a', '', 'b']",
+            "split() (no args) vs split(' ') behave differently on multiple spaces",
+            "strip() removes characters, not substrings: 'abcba'.strip('ab') = 'c'",
+            "find() returning -1 can cause bugs if used as a boolean: -1 is truthy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key methods: `split()` (to list), `join()` (from list), `strip()` (trim whitespace), `replace()`, `find()`/`index()`, `upper()`/`lower()`, `startswith()`/`endswith()`. All return new strings.",
+          "pseudo_code": "",
+          "actual_code": "print(\"a,b,c\".split(\",\"))     # ['a', 'b', 'c']\nprint(\", \".join([\"a\", \"b\"]))  # 'a, b'\nprint(\"  hi  \".strip())       # 'hi'\nprint(\"hello\".replace(\"l\", \"r\"))  # 'herro'\nprint(\"file.py\".endswith(\".py\"))  # True",
+          "code_language": "python",
+          "key_points": [
+            "All string methods return new strings",
+            "join() is called on the separator"
+          ],
+          "gotchas": [
+            "split() (no args) and split(' ') behave differently"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why are Python strings immutable and what are the implications?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["immutability", "strings", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python strings are **immutable**: once created, they cannot be modified. Any operation that appears to modify a string actually creates a **new** string object.\n\n**Why immutable?**\n1. **Hashability:** Strings can be dict keys and set members\n2. **Thread safety:** No race conditions on shared strings\n3. **Interning:** Python can cache and reuse string objects\n4. **Security:** Strings passed to functions cannot be modified unexpectedly\n5. **Simplicity:** Easier to reason about\n\n**Performance implications:**\n- String concatenation with `+=` in a loop creates many temporary objects: O(n^2)\n- Use `''.join(list)` instead: O(n)\n- Use `io.StringIO` for building strings incrementally\n- Small modifications require creating an entirely new string",
+          "pseudo_code": "Immutable means:\n  s[0] = 'H'  -> TypeError\n  s.replace() returns NEW string, does not modify s\n  s + 'x' creates NEW string\n\nPerformance:\n  BAD: s += char in loop -> O(n^2)\n  GOOD: ''.join(parts) -> O(n)\n  GOOD: io.StringIO for incremental building",
+          "actual_code": "# Strings cannot be modified in-place\ns = \"hello\"\ntry:\n    s[0] = \"H\"\nexcept TypeError as e:\n    print(f\"Error: {e}\")  # 'str' object does not support item assignment\n\n# Methods return NEW strings\ns = \"hello\"\nupper_s = s.upper()\nprint(s)        # 'hello' (original unchanged)\nprint(upper_s)  # 'HELLO' (new string)\n\n# Concatenation creates new objects\na = \"hello\"\nprint(id(a))\na = a + \" world\"  # creates new string, rebinds 'a'\nprint(id(a))  # different id\n\n# BAD: String concatenation in loop - O(n^2)\nimport time\n\nparts = [\"word\"] * 10000\n\nstart = time.time()\nresult = \"\"\nfor word in parts:\n    result += word + \" \"  # creates new string each iteration\nbad_time = time.time() - start\n\n# GOOD: join - O(n)\nstart = time.time()\nresult = \" \".join(parts)\ngood_time = time.time() - start\n\nprint(f\"Concat: {bad_time:.4f}s, Join: {good_time:.4f}s\")\n\n# GOOD: io.StringIO for incremental building\nimport io\n\nbuffer = io.StringIO()\nfor i in range(5):\n    buffer.write(f\"Line {i}\\n\")\nresult = buffer.getvalue()\nprint(result)\n\n# Strings are hashable (can be dict keys)\nword_count = {}\nfor word in \"the cat sat on the mat\".split():\n    word_count[word] = word_count.get(word, 0) + 1\nprint(word_count)  # {'the': 2, 'cat': 1, 'sat': 1, 'on': 1, 'mat': 1}\n\n# String interning\na = \"hello\"\nb = \"hello\"\nprint(a is b)  # True (Python interns short strings)\n\n# Workaround: convert to list, modify, join back\ns = \"hello\"\nchars = list(s)    # ['h', 'e', 'l', 'l', 'o']\nchars[0] = 'H'\ns = ''.join(chars)\nprint(s)  # 'Hello'",
+          "code_language": "python",
+          "key_points": [
+            "Strings cannot be modified in-place -- all operations return new strings",
+            "Immutability enables hashing, interning, and thread safety",
+            "String concatenation in loops is O(n^2) -- use join() for O(n)",
+            "Use io.StringIO for incremental string building",
+            "Convert to list to perform character-level modifications"
+          ],
+          "gotchas": [
+            "s += 'x' looks like mutation but creates a new string",
+            "CPython has an optimization that makes += O(n) in some cases, but do not rely on it",
+            "join() only works on iterables of strings -- convert non-strings first",
+            "String interning is an implementation detail -- never rely on 'is' for string comparison"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Strings are immutable: `s[0] = 'H'` raises TypeError. All methods return new strings. Use `''.join(list)` instead of `+=` in loops (O(n) vs O(n^2)). Immutability enables hashing and interning.",
+          "pseudo_code": "",
+          "actual_code": "s = \"hello\"\n# s[0] = 'H'  # TypeError!\n\n# BAD: O(n^2)\nresult = \"\"\nfor w in words: result += w\n\n# GOOD: O(n)\nresult = \"\".join(words)",
+          "code_language": "python",
+          "key_points": [
+            "All string operations return new strings",
+            "Use join() not += in loops"
+          ],
+          "gotchas": [
+            "CPython sometimes optimizes += but do not rely on it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between str.format() and f-strings?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["format", "f-strings", "string-formatting"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python has had several string formatting approaches:\n\n1. **% formatting (old style):** `'Hello, %s' % name` -- C-style, limited\n2. **str.format():** `'Hello, {}'.format(name)` -- Python 2.6+, powerful\n3. **f-strings:** `f'Hello, {name}'` -- Python 3.6+, most readable and fastest\n\n**str.format() advantages:**\n- Works with format strings stored in variables\n- Can reuse arguments: `'{0} {0}'.format('hi')` -> `'hi hi'`\n- Works in older Python versions\n- Supports `__format__` protocol\n\n**f-string advantages:**\n- More readable (expression right where it's used)\n- Faster (compiled at parse time)\n- Supports any Python expression\n- Self-documenting with `=` (Python 3.8+)\n\n**When to use which:**\n- Default to f-strings for new code\n- Use `.format()` when the template is a variable or from external source\n- Avoid % formatting in new code",
+          "pseudo_code": "% style:    'Hello, %s! Age: %d' % (name, age)\nformat():   'Hello, {}! Age: {}'.format(name, age)\nf-string:   f'Hello, {name}! Age: {age}'\n\nf-strings are fastest and most readable\nformat() when template is a variable",
+          "actual_code": "name = \"Alice\"\nage = 30\n\n# % formatting (old style)\nprint(\"Hello, %s! Age: %d\" % (name, age))\nprint(\"Pi: %.2f\" % 3.14159)\n\n# str.format()\nprint(\"Hello, {}! Age: {}\".format(name, age))\nprint(\"Hello, {0}! {0} is {1}\".format(name, age))  # reuse args\nprint(\"Hello, {name}! Age: {age}\".format(name=name, age=age))\nprint(\"{:.2f}\".format(3.14159))\n\n# f-strings (preferred)\nprint(f\"Hello, {name}! Age: {age}\")\nprint(f\"Pi: {3.14159:.2f}\")\n\n# f-strings can contain any expression\nprint(f\"Upper: {name.upper()}\")\nprint(f\"Even: {[x for x in range(10) if x % 2 == 0]}\")\n\n# format() with templates from variables\ntemplate = \"Dear {name}, your order #{order_id} is ready.\"\nprint(template.format(name=\"Alice\", order_id=42))\n# f-strings can't do this (expression must be literal)\n\n# Reusing arguments with format()\nprint(\"{0} loves {1}. {1} loves {0}\".format(\"Alice\", \"Bob\"))\n# f-string equivalent is repetitive:\nprint(f\"{name} loves Bob. Bob loves {name}\")\n\n# Dictionary unpacking with format()\ndata = {\"name\": \"Alice\", \"city\": \"NYC\"}\nprint(\"{name} lives in {city}\".format(**data))\n\n# Performance comparison\nimport timeit\n\n# f-strings are fastest\nf_time = timeit.timeit(lambda: f\"Hello, {'Alice'}! Age: {30}\", number=100000)\nformat_time = timeit.timeit(lambda: \"Hello, {}! Age: {}\".format(\"Alice\", 30), number=100000)\npercent_time = timeit.timeit(lambda: \"Hello, %s! Age: %d\" % (\"Alice\", 30), number=100000)\n\nprint(f\"f-string: {f_time:.4f}s\")\nprint(f\"format(): {format_time:.4f}s\")\nprint(f\"% style:  {percent_time:.4f}s\")\n\n# format_map with defaultdict\nfrom collections import defaultdict\ntemplate = \"{name} from {city}\"\ndefaults = defaultdict(lambda: \"Unknown\", name=\"Alice\")\nprint(template.format_map(defaults))  # Alice from Unknown",
+          "code_language": "python",
+          "key_points": [
+            "f-strings are the most readable and fastest option",
+            "str.format() is needed when template is a variable",
+            "f-strings evaluate expressions inline",
+            "format() supports argument reuse with {0}, {1}",
+            "Avoid % formatting in new code"
+          ],
+          "gotchas": [
+            "f-strings require the expression to be in the source code -- cannot use dynamic templates",
+            "format() with user-supplied templates can be a security risk (format string attacks)",
+            "% formatting with a single tuple needs a trailing comma: '%s' % (value,)",
+            "f-strings evaluate at runtime, not compile time -- exceptions happen at runtime"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "F-strings (`f'...'`) are fastest and most readable. `str.format()` is needed when the template is a variable. Avoid `%` formatting in new code.",
+          "pseudo_code": "",
+          "actual_code": "name = \"Alice\"\n# f-string (preferred)\nprint(f\"Hello, {name}!\")\n\n# format() when template is a variable\ntemplate = \"Hello, {name}!\"\nprint(template.format(name=name))",
+          "code_language": "python",
+          "key_points": [
+            "Default to f-strings for new code",
+            "Use format() for dynamic templates"
+          ],
+          "gotchas": [
+            "User-supplied format strings can be a security risk"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do raw strings and escape sequences work in Python?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["raw-strings", "escape-sequences", "backslash"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Escape sequences** use backslash (`\\`) to represent special characters:\n\n| Escape | Meaning |\n|--------|---------|\n| `\\n` | Newline |\n| `\\t` | Tab |\n| `\\\\` | Literal backslash |\n| `\\'` | Single quote |\n| `\\\"` | Double quote |\n| `\\0` | Null character |\n| `\\xhh` | Hex character |\n| `\\uhhhh` | Unicode (16-bit) |\n| `\\Uhhhhhhhh` | Unicode (32-bit) |\n| `\\N{name}` | Unicode by name |\n\n**Raw strings** (`r'...'`) treat backslashes as literal characters. No escape sequences are processed (except that you still cannot end with an odd number of backslashes).\n\n**Use cases for raw strings:**\n- Windows file paths: `r'C:\\Users\\file.txt'`\n- Regular expressions: `r'\\d+\\.\\d+'`\n- Any string with many backslashes",
+          "pseudo_code": "Regular: '\\n' = newline, '\\t' = tab, '\\\\' = backslash\nRaw: r'\\n' = literal backslash + n\n\nUse raw strings for:\n  - File paths: r'C:\\path\\to\\file'\n  - Regex: r'\\d+\\.\\d+'\n  - Any string with many backslashes",
+          "actual_code": "# Common escape sequences\nprint(\"Hello\\nWorld\")     # newline between Hello and World\nprint(\"Tab\\there\")        # tab between Tab and here\nprint(\"Back\\\\slash\")      # literal backslash\nprint(\"She said \\\"hi\\\"\")  # escaped quotes\n\n# Unicode escapes\nprint(\"\\u00e9\")          # e with accent\nprint(\"\\N{SNOWMAN}\")     # Unicode by name\nprint(\"\\U0001F600\")      # emoji (32-bit Unicode)\n\n# Raw strings -- no escape processing\nprint(r\"Hello\\nWorld\")   # Hello\\nWorld (literal \\n)\nprint(r\"C:\\Users\\alice\")  # C:\\Users\\alice\n\n# Comparison\nprint(len(\"\\n\"))     # 1 (one newline character)\nprint(len(r\"\\n\"))    # 2 (backslash + n)\n\n# Raw strings for regex\nimport re\n\n# Without raw string: need double backslashes\npattern1 = \"\\\\d+\\\\.\\\\d+\"  # matches digits.digits\n\n# With raw string: single backslashes\npattern2 = r\"\\d+\\.\\d+\"    # same pattern, much cleaner\n\nprint(re.findall(pattern2, \"Pi is 3.14 and e is 2.72\"))\n# ['3.14', '2.72']\n\n# Raw string limitation: cannot end with odd number of backslashes\n# r\"path\\\" is a SyntaxError\n# Workaround:\npath = r\"C:\\path\" + \"\\\\\"\nprint(path)  # C:\\path\\\n\n# Or use os.path / pathlib\nfrom pathlib import Path\npath = Path(\"C:/Users/alice/documents\")\nprint(path)  # C:\\Users\\alice\\documents (on Windows)\n\n# Multiline raw string\nregex = r\"\"\"\n    ^           # start of string\n    (\\d{3})     # area code\n    [-.]        # separator\n    (\\d{3})     # exchange\n    [-.]        # separator\n    (\\d{4})     # number\n    $           # end of string\n\"\"\"\nprint(re.match(regex, \"555-123-4567\", re.VERBOSE))",
+          "code_language": "python",
+          "key_points": [
+            "Escape sequences: \\n (newline), \\t (tab), \\\\ (backslash)",
+            "Raw strings (r'...') treat backslashes as literal characters",
+            "Raw strings are essential for regex patterns",
+            "Use pathlib for file paths instead of raw strings",
+            "Unicode escapes: \\uXXXX (16-bit), \\UXXXXXXXX (32-bit), \\N{name}"
+          ],
+          "gotchas": [
+            "Raw strings cannot end with an odd number of backslashes",
+            "r'\\n' is 2 characters (backslash + n), not a newline",
+            "In Python 3.12+, unrecognized escape sequences generate DeprecationWarning",
+            "Raw strings still process quote escaping for the string delimiter"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Escape sequences use `\\` for special chars: `\\n` (newline), `\\t` (tab), `\\\\` (backslash). Raw strings (`r'...'`) disable escape processing. Essential for regex and file paths.",
+          "pseudo_code": "",
+          "actual_code": "print(\"Hello\\nWorld\")    # Hello (newline) World\nprint(r\"Hello\\nWorld\")   # Hello\\nWorld (literal)\n\nimport re\npattern = r\"\\d+\\.\\d+\"   # raw string for regex\nprint(re.findall(pattern, \"3.14\"))  # ['3.14']",
+          "code_language": "python",
+          "key_points": [
+            "r'...' disables escape sequence processing",
+            "Essential for regex patterns"
+          ],
+          "gotchas": [
+            "Raw strings cannot end with an odd number of backslashes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do encode() and decode() work for string encoding?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["encoding", "unicode", "bytes", "utf-8"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Python 3, `str` is Unicode text and `bytes` is raw binary data. Converting between them:\n\n- **`str.encode(encoding='utf-8')`** converts str -> bytes\n- **`bytes.decode(encoding='utf-8')`** converts bytes -> str\n\n**Common encodings:**\n- `utf-8` -- universal, variable-width (1-4 bytes), default in Python 3\n- `ascii` -- 7-bit, English only\n- `latin-1` (iso-8859-1) -- 8-bit, Western European\n- `utf-16` -- used by Windows internally\n\n**Error handling modes:**\n- `strict` (default) -- raises UnicodeEncodeError/UnicodeDecodeError\n- `ignore` -- silently drops problematic characters\n- `replace` -- replaces with `?` (encode) or `\\ufffd` (decode)\n- `xmlcharrefreplace` -- replaces with XML character references",
+          "pseudo_code": "str -> bytes: string.encode('utf-8')\nbytes -> str: bytestring.decode('utf-8')\n\nDefault encoding is utf-8\nErrors: strict (raise), ignore (drop), replace (? or replacement char)",
+          "actual_code": "# str to bytes (encode)\ntext = \"Hello, World!\"\nb = text.encode('utf-8')\nprint(b)           # b'Hello, World!'\nprint(type(b))     # <class 'bytes'>\n\n# bytes to str (decode)\ns = b.decode('utf-8')\nprint(s)           # 'Hello, World!'\nprint(type(s))     # <class 'str'>\n\n# Unicode encoding\ntext = \"cafe\\u0301\"  # cafe with accent\nprint(text)                           # cafe with accent\nprint(text.encode('utf-8'))           # b'caf\\xc3\\xa9' (multi-byte)\nprint(text.encode('ascii', 'ignore')) # b'caf' (drops non-ASCII)\nprint(text.encode('ascii', 'replace'))# b'caf?'\n\n# Different encodings produce different bytes\ntext = \"Hello\"\nprint(text.encode('utf-8'))    # b'Hello' (5 bytes)\nprint(text.encode('utf-16'))   # b'\\xff\\xfeH\\x00e\\x00l\\x00l\\x00o\\x00' (12 bytes)\nprint(text.encode('ascii'))    # b'Hello' (5 bytes)\n\n# Error handling\ntry:\n    \"cafe\\u0301\".encode('ascii')\nexcept UnicodeEncodeError as e:\n    print(f\"Error: {e}\")\n\n# Handling bytes from external sources\nraw_bytes = b'\\xc3\\xa9'  # UTF-8 encoded 'e with accent'\nprint(raw_bytes.decode('utf-8'))     # correct character\ntry:\n    raw_bytes.decode('ascii')\nexcept UnicodeDecodeError as e:\n    print(f\"Error: {e}\")\n\n# Practical: reading/writing files with encoding\nimport tempfile\nimport os\n\nwith tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', suffix='.txt', delete=False) as f:\n    f.write(\"Hello, Unicode! Emoji: \\U0001F600\")\n    fname = f.name\n\nwith open(fname, 'r', encoding='utf-8') as f:\n    content = f.read()\n    print(content)\n\nos.unlink(fname)\n\n# Byte length vs character length\nemoji = \"\\U0001F600\"  # grinning face\nprint(len(emoji))                    # 1 (one character)\nprint(len(emoji.encode('utf-8')))    # 4 (four bytes in UTF-8)\nprint(len(emoji.encode('utf-16')))   # 4 + 2 BOM = 6 bytes",
+          "code_language": "python",
+          "key_points": [
+            "str is Unicode text, bytes is raw binary data",
+            "encode() converts str -> bytes, decode() converts bytes -> str",
+            "Default encoding is UTF-8",
+            "Character length (len(str)) differs from byte length (len(bytes))",
+            "Always specify encoding explicitly when opening files"
+          ],
+          "gotchas": [
+            "str and bytes are different types: 'hello' != b'hello'",
+            "UTF-8 characters can be 1-4 bytes: len(s) != len(s.encode())",
+            "Opening files without specifying encoding uses the system default (may not be UTF-8)",
+            "b'...' literals can only contain ASCII characters"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`str.encode('utf-8')` converts text to bytes. `bytes.decode('utf-8')` converts bytes to text. Default is UTF-8. Character length and byte length differ for non-ASCII text.",
+          "pseudo_code": "",
+          "actual_code": "text = \"Hello\"\nb = text.encode('utf-8')    # b'Hello'\ns = b.decode('utf-8')       # 'Hello'\n\n# Character vs byte length\nemoji = \"\\U0001F600\"\nprint(len(emoji))                 # 1 character\nprint(len(emoji.encode('utf-8'))) # 4 bytes",
+          "code_language": "python",
+          "key_points": [
+            "encode: str -> bytes, decode: bytes -> str",
+            "Always specify encoding explicitly"
+          ],
+          "gotchas": [
+            "len(str) != len(str.encode()) for non-ASCII characters"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use regular expressions (regex) in Python?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["regex", "re-module", "pattern-matching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python's `re` module provides regular expression support.\n\n**Key functions:**\n- `re.search(pattern, string)` -- finds first match anywhere\n- `re.match(pattern, string)` -- matches at the beginning only\n- `re.findall(pattern, string)` -- returns all matches as list\n- `re.finditer(pattern, string)` -- returns match objects iterator\n- `re.sub(pattern, replacement, string)` -- replace matches\n- `re.split(pattern, string)` -- split by pattern\n- `re.compile(pattern)` -- pre-compile for reuse\n\n**Common patterns:**\n- `\\d` -- digit, `\\w` -- word char, `\\s` -- whitespace\n- `.` -- any char, `*` -- 0+, `+` -- 1+, `?` -- 0 or 1\n- `^` -- start, `$` -- end\n- `[abc]` -- character class, `(group)` -- capture group\n- `{n,m}` -- between n and m repetitions\n\nAlways use **raw strings** (`r'...'`) for regex patterns to avoid double-escaping.",
+          "pseudo_code": "re.search(pattern, string) -> first match or None\nre.match(pattern, string) -> match at start or None\nre.findall(pattern, string) -> list of all matches\nre.sub(pattern, repl, string) -> replaced string\n\nAlways use r'...' for patterns",
+          "actual_code": "import re\n\n# search -- find first match anywhere\nmatch = re.search(r'\\d+', 'abc 123 def 456')\nif match:\n    print(match.group())   # '123'\n    print(match.start())   # 4\n    print(match.end())     # 7\n\n# match -- match at beginning only\nprint(re.match(r'\\d+', '123abc'))   # match object\nprint(re.match(r'\\d+', 'abc123'))   # None (not at start)\n\n# findall -- all matches as list\nprint(re.findall(r'\\d+', 'abc 123 def 456'))  # ['123', '456']\n\n# Groups in findall return tuples\nprint(re.findall(r'(\\w+)=(\\w+)', 'a=1 b=2'))\n# [('a', '1'), ('b', '2')]\n\n# sub -- replace\nresult = re.sub(r'\\d+', 'NUM', 'abc 123 def 456')\nprint(result)  # 'abc NUM def NUM'\n\n# sub with function\ndef double_number(match):\n    return str(int(match.group()) * 2)\n\nresult = re.sub(r'\\d+', double_number, 'abc 10 def 20')\nprint(result)  # 'abc 20 def 40'\n\n# split\nprint(re.split(r'[,;\\s]+', 'a,b; c  d'))  # ['a', 'b', 'c', 'd']\n\n# Compile for reuse\nemail_pattern = re.compile(r'[\\w.]+@[\\w.]+\\.\\w+')\nemails = email_pattern.findall('Contact: alice@example.com or bob@test.org')\nprint(emails)  # ['alice@example.com', 'bob@test.org']\n\n# Named groups\nmatch = re.search(r'(?P<year>\\d{4})-(?P<month>\\d{2})-(?P<day>\\d{2})', '2026-03-16')\nif match:\n    print(match.group('year'))   # '2026'\n    print(match.group('month'))  # '03'\n    print(match.groupdict())     # {'year': '2026', 'month': '03', 'day': '16'}\n\n# Flags\nprint(re.findall(r'hello', 'Hello HELLO hello', re.IGNORECASE))\n# ['Hello', 'HELLO', 'hello']\n\n# VERBOSE mode for readable patterns\nphone = re.compile(r\"\"\"\n    ^(\\d{3})    # area code\n    [-.]         # separator\n    (\\d{3})     # exchange\n    [-.]         # separator\n    (\\d{4})$    # number\n\"\"\", re.VERBOSE)\n\nmatch = phone.match('555-123-4567')\nif match:\n    print(match.groups())  # ('555', '123', '4567')",
+          "code_language": "python",
+          "key_points": [
+            "Always use raw strings (r'...') for regex patterns",
+            "search() finds first match anywhere, match() only at the start",
+            "findall() returns list of strings, finditer() returns match objects",
+            "Compile patterns with re.compile() for reuse",
+            "Use named groups (?P<name>...) for readable extraction"
+          ],
+          "gotchas": [
+            "re.match() only matches at the beginning -- use re.search() for anywhere",
+            "findall() with groups returns tuples, not the full match",
+            "Forgetting raw strings: '\\bword\\b' vs r'\\bword\\b' -- \\b is a word boundary in regex but a backspace in Python",
+            "Regex is greedy by default: .* matches as much as possible -- use .*? for non-greedy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `re` module: `search()` for first match, `findall()` for all matches, `sub()` for replace. Always use raw strings (`r'...'`). `match()` only checks the start.",
+          "pseudo_code": "",
+          "actual_code": "import re\nprint(re.findall(r'\\d+', 'a1 b22 c333'))  # ['1', '22', '333']\nprint(re.sub(r'\\d+', 'X', 'a1 b22'))       # 'aX bX'\n\nmatch = re.search(r'(\\w+)@(\\w+)', 'user@host')\nprint(match.groups())  # ('user', 'host')",
+          "code_language": "python",
+          "key_points": [
+            "Use raw strings for patterns",
+            "search() anywhere, match() at start only"
+          ],
+          "gotchas": [
+            "match() only checks start of string, not full string"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does string comparison work in Python?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["string-comparison", "lexicographic", "ordering"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python compares strings **lexicographically** (character by character) using Unicode code points.\n\n**Comparison operators:** `==`, `!=`, `<`, `>`, `<=`, `>=`\n\n**Rules:**\n1. Characters are compared by their Unicode code point (ordinal value)\n2. Comparison proceeds character by character from left to right\n3. First difference determines the result\n4. If all characters match, the shorter string is \"less than\" the longer one\n5. Comparison is case-sensitive by default\n\n**Case-insensitive comparison:**\n- `str.lower()` or `str.upper()` for simple cases\n- `str.casefold()` for proper Unicode case-insensitive comparison\n\n**Note:** Lexicographic order is NOT the same as human alphabetical order for non-ASCII text. Use `locale.strxfrm()` or third-party libraries for locale-aware sorting.",
+          "pseudo_code": "Character-by-character comparison using Unicode code points:\n  'apple' < 'banana' (a < b)\n  'abc' < 'abd' (c < d at index 2)\n  'abc' < 'abcd' (shorter is less)\n\nCase matters: 'Z' < 'a' (uppercase < lowercase)\nCase-insensitive: use .casefold()",
+          "actual_code": "# Basic comparison\nprint(\"apple\" < \"banana\")    # True (a < b)\nprint(\"abc\" < \"abd\")         # True (c < d)\nprint(\"abc\" < \"abcd\")        # True (shorter < longer)\nprint(\"abc\" == \"abc\")        # True\n\n# Unicode code points\nprint(ord('A'))  # 65\nprint(ord('Z'))  # 90\nprint(ord('a'))  # 97\nprint(ord('z'))  # 122\n\n# Uppercase comes before lowercase\nprint('A' < 'a')     # True (65 < 97)\nprint('Z' < 'a')     # True (90 < 97)\nprint('Apple' < 'apple')  # True (A < a)\n\n# Case-insensitive comparison\na = \"Hello\"\nb = \"hello\"\nprint(a == b)                 # False\nprint(a.lower() == b.lower()) # True\nprint(a.casefold() == b.casefold())  # True (better for Unicode)\n\n# casefold vs lower for Unicode\ngerman = \"stra\\u00dfe\"   # strasse with sharp s\nprint(german.lower())     # 'strasse' (keeps sharp s)\nprint(german.casefold())  # 'strasse' (converts sharp s to ss)\n\n# Sorting strings\nwords = [\"banana\", \"Apple\", \"cherry\", \"apple\"]\nprint(sorted(words))                        # ['Apple', 'apple', 'banana', 'cherry']\nprint(sorted(words, key=str.casefold))       # ['apple', 'Apple', 'banana', 'cherry']\n\n# Numeric strings sort lexicographically, not numerically\nnums = [\"10\", \"9\", \"100\", \"2\"]\nprint(sorted(nums))           # ['10', '100', '2', '9'] (lexicographic!)\nprint(sorted(nums, key=int))  # ['2', '9', '10', '100'] (numeric)\n\n# startswith and endswith for prefix/suffix checks\nfilename = \"document.pdf\"\nprint(filename.endswith(\".pdf\"))              # True\nprint(filename.endswith((\".pdf\", \".doc\")))    # True (tuple)\nprint(filename.startswith(\"doc\"))             # True\n\n# Identity vs equality for strings\na = \"hello\"\nb = \"hello\"\nprint(a == b)   # True (value equality)\nprint(a is b)   # True (interning, but unreliable!)\n# Always use == for string comparison, never 'is'",
+          "code_language": "python",
+          "key_points": [
+            "Strings compare lexicographically by Unicode code point",
+            "Case-sensitive by default: 'A' < 'a'",
+            "Use casefold() for proper case-insensitive comparison",
+            "Numeric strings sort lexicographically: '10' < '9'",
+            "Always use == for string comparison, never 'is'"
+          ],
+          "gotchas": [
+            "'10' < '9' is True (lexicographic) -- sort numeric strings with key=int",
+            "'Z' < 'a' is True because uppercase has lower code points",
+            "casefold() is better than lower() for Unicode case-insensitive comparison",
+            "Never use 'is' for string comparison -- interning is unreliable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Strings compare lexicographically by Unicode code point. Case-sensitive by default (`'A' < 'a'`). Use `casefold()` for case-insensitive comparison. Numeric strings sort lexicographically, not numerically.",
+          "pseudo_code": "",
+          "actual_code": "print(\"apple\" < \"banana\")     # True\nprint(\"A\" < \"a\")              # True (65 < 97)\nprint(\"10\" < \"9\")             # True (lexicographic!)\n\n# Case-insensitive\nprint(\"Hello\".casefold() == \"hello\".casefold())  # True",
+          "code_language": "python",
+          "key_points": [
+            "Lexicographic comparison by Unicode code point",
+            "Use casefold() for case-insensitive"
+          ],
+          "gotchas": [
+            "'10' < '9' is True -- sort numeric strings with key=int"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do startswith() and endswith() work and what are their common use cases?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["startswith", "endswith", "string-methods"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`startswith(prefix)` and `endswith(suffix)` check if a string begins or ends with a specific substring. Both return `bool`.\n\n**Signature:**\n- `str.startswith(prefix[, start[, end]])`\n- `str.endswith(suffix[, start[, end]])`\n\n**Key feature:** Both accept a **tuple** of strings to check multiple prefixes/suffixes at once (acts as OR check).\n\n**Common use cases:**\n- File type checking: `filename.endswith('.py')`\n- URL protocol: `url.startswith('https://')`\n- Filtering lists: `[f for f in files if f.endswith('.py')]`\n- Input validation: checking for expected prefixes\n\nThese are preferred over slicing (`s[:3] == 'abc'`) or regex for simple prefix/suffix checks because they are more readable and efficient.",
+          "pseudo_code": "str.startswith(prefix) -> bool\nstr.endswith(suffix) -> bool\nstr.startswith((prefix1, prefix2)) -> bool (any match)\n\nOptional start/end to check a substring:\nstr.startswith(prefix, start, end)",
+          "actual_code": "# Basic usage\nprint(\"hello\".startswith(\"he\"))    # True\nprint(\"hello\".endswith(\"lo\"))      # True\nprint(\"hello\".startswith(\"lo\"))    # False\n\n# Tuple of options (OR check)\nfilename = \"report.pdf\"\nprint(filename.endswith((\".pdf\", \".doc\", \".txt\")))  # True\nprint(filename.endswith((\".jpg\", \".png\")))           # False\n\nurl = \"https://example.com\"\nprint(url.startswith((\"http://\", \"https://\")))  # True\n\n# With start/end parameters\ns = \"Hello, World!\"\nprint(s.startswith(\"World\", 7))     # True (check from index 7)\nprint(s.endswith(\"World\", 0, 12))   # True (check s[0:12])\n\n# Practical: filter files by extension\nfiles = [\"main.py\", \"utils.py\", \"style.css\", \"index.html\", \"test.py\"]\npython_files = [f for f in files if f.endswith(\".py\")]\nprint(python_files)  # ['main.py', 'utils.py', 'test.py']\n\n# Practical: categorize URLs\nurls = [\n    \"https://api.example.com/data\",\n    \"http://old.example.com/page\",\n    \"ftp://files.example.com/doc\"\n]\n\nfor url in urls:\n    if url.startswith(\"https://\"):\n        print(f\"Secure: {url}\")\n    elif url.startswith(\"http://\"):\n        print(f\"Insecure: {url}\")\n    else:\n        print(f\"Other: {url}\")\n\n# Prefer startswith/endswith over slicing\n# Good:\nif filename.endswith(\".py\"):\n    print(\"Python file\")\n\n# Less readable:\nif filename[-3:] == \".py\":\n    print(\"Python file\")\n\n# Stripping known prefix/suffix (Python 3.9+)\nprint(\"HelloWorld\".removeprefix(\"Hello\"))  # 'World'\nprint(\"test_file.py\".removesuffix(\".py\"))  # 'test_file'",
+          "code_language": "python",
+          "key_points": [
+            "Both accept a tuple for checking multiple options",
+            "More readable and efficient than slicing for prefix/suffix checks",
+            "Optional start/end parameters for checking substrings",
+            "Python 3.9+ adds removeprefix() and removesuffix()",
+            "Commonly used for file type and URL protocol checks"
+          ],
+          "gotchas": [
+            "The argument must be a tuple, not a list: endswith(['.py', '.js']) raises TypeError",
+            "startswith/endswith are case-sensitive -- use lower() first if needed",
+            "removeprefix/removesuffix (3.9+) are different from strip() -- strip removes characters, not substrings",
+            "These methods do NOT use regex -- for pattern matching, use re.match/re.search"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`startswith(prefix)` and `endswith(suffix)` check string beginnings/endings. Accept a tuple for multiple checks. Preferred over slicing for readability.",
+          "pseudo_code": "",
+          "actual_code": "print(\"file.py\".endswith(\".py\"))                    # True\nprint(\"file.py\".endswith((\".py\", \".js\", \".ts\")))    # True\nprint(\"https://x.com\".startswith((\"http\", \"https\"))) # True\n\n# Python 3.9+\nprint(\"HelloWorld\".removeprefix(\"Hello\"))  # 'World'",
+          "code_language": "python",
+          "key_points": [
+            "Accept tuples for multiple checks",
+            "More readable than slicing"
+          ],
+          "gotchas": [
+            "Argument must be a tuple, not a list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do translate() and maketrans() work for character-level replacements?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["translate", "maketrans", "character-replacement"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`str.translate(table)` replaces characters according to a translation table. `str.maketrans()` creates the translation table.\n\n**`str.maketrans(x, y, z)`** has three calling patterns:\n1. `maketrans({'a': 'x', 'b': None})` -- dict mapping (None deletes chars)\n2. `maketrans('abc', 'xyz')` -- 1-to-1 character mapping\n3. `maketrans('abc', 'xyz', 'del')` -- map + delete chars\n\n**Why use translate?**\n- Much faster than chained `.replace()` calls\n- Replaces all specified characters in a single pass\n- Can delete characters by mapping to `None`\n\n**Use cases:**\n- Remove punctuation\n- Caesar cipher / ROT13\n- Transliteration\n- Sanitizing input",
+          "pseudo_code": "table = str.maketrans('abc', 'xyz')  # a->x, b->y, c->z\nresult = 'abc'.translate(table)       # 'xyz'\n\ntable = str.maketrans('', '', 'aeiou')  # delete vowels\nresult = 'hello'.translate(table)        # 'hll'\n\ntable = str.maketrans({'a': 'x', 'b': None})  # a->x, delete b",
+          "actual_code": "# Basic character mapping\ntable = str.maketrans('aeiou', '12345')\nresult = \"hello world\".translate(table)\nprint(result)  # 'h2ll4 w4rld'\n\n# Delete characters (third argument)\ntable = str.maketrans('', '', 'aeiou')\nresult = \"hello world\".translate(table)\nprint(result)  # 'hll wrld' (vowels removed)\n\n# Using dict for mapping\ntable = str.maketrans({'a': '@', 'e': '3', 'o': '0'})\nresult = \"hello world\".translate(table)\nprint(result)  # 'h3ll0 w0rld'\n\n# Delete with dict (map to None)\ntable = str.maketrans({'.': None, ',': None, '!': None, '?': None})\nresult = \"Hello, World! How are you?\".translate(table)\nprint(result)  # 'Hello World How are you'\n\n# Remove all punctuation\nimport string\ntable = str.maketrans('', '', string.punctuation)\ntext = \"Hello, World! It's a test... right?\"\nclean = text.translate(table)\nprint(clean)  # 'Hello World Its a test right'\n\n# ROT13 cipher\nimport string\nrot13_table = str.maketrans(\n    string.ascii_lowercase + string.ascii_uppercase,\n    string.ascii_lowercase[13:] + string.ascii_lowercase[:13] +\n    string.ascii_uppercase[13:] + string.ascii_uppercase[:13]\n)\n\nmessage = \"Hello World\"\nencrypted = message.translate(rot13_table)\nprint(encrypted)  # 'Uryyb Jbeyq'\n\n# Decrypt (ROT13 is its own inverse)\ndecrypted = encrypted.translate(rot13_table)\nprint(decrypted)  # 'Hello World'\n\n# Performance: translate vs multiple replace\nimport timeit\n\ntext = \"Hello, World! This is a test.\" * 1000\n\ndef with_replace():\n    result = text\n    for char in '.,!?':\n        result = result.replace(char, '')\n    return result\n\ndef with_translate():\n    table = str.maketrans('', '', '.,!?')\n    return text.translate(table)\n\nreplace_time = timeit.timeit(with_replace, number=1000)\ntranslate_time = timeit.timeit(with_translate, number=1000)\nprint(f\"replace:   {replace_time:.4f}s\")\nprint(f\"translate: {translate_time:.4f}s\")  # significantly faster",
+          "code_language": "python",
+          "key_points": [
+            "translate() replaces characters in a single pass (very fast)",
+            "maketrans() creates the translation table",
+            "Map to None to delete characters",
+            "Much faster than chained replace() calls",
+            "Useful for removing punctuation, ciphers, and sanitization"
+          ],
+          "gotchas": [
+            "maketrans('abc', 'xyz') requires both strings to be the same length",
+            "translate() only works on single characters, not substrings",
+            "Dict-based maketrans uses ordinals: {ord('a'): 'x'} also works",
+            "translate() returns a new string (strings are immutable)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`str.maketrans()` creates a character mapping table, `str.translate()` applies it. Much faster than chained `replace()`. Map to `None` to delete characters.",
+          "pseudo_code": "",
+          "actual_code": "# Remove vowels\ntable = str.maketrans('', '', 'aeiou')\nprint(\"hello world\".translate(table))  # 'hll wrld'\n\n# Character substitution\ntable = str.maketrans('aeo', '@30')\nprint(\"hello\".translate(table))  # 'h3ll0'",
+          "code_language": "python",
+          "key_points": [
+            "Single-pass character replacement",
+            "Map to None to delete characters"
+          ],
+          "gotchas": [
+            "Only works on single characters, not substrings"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you work with multiline strings in Python?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["multiline", "triple-quotes", "textwrap"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several ways to create multiline strings:\n\n1. **Triple quotes:** `'''...'''` or `\"\"\"...\"\"\"`\n2. **Implicit concatenation:** adjacent string literals are joined\n3. **Explicit continuation:** `\\` at end of line\n4. **Parentheses:** strings inside `()` can span lines\n\n**Triple-quoted strings** preserve all whitespace and newlines exactly as written, which can cause indentation issues.\n\n**The `textwrap` module** helps manage indentation:\n- `textwrap.dedent()` removes common leading whitespace\n- `textwrap.indent()` adds indentation\n- `textwrap.fill()` wraps text to a specified width",
+          "pseudo_code": "Triple quotes: '''multi\\nline''' or \"\"\"multi\\nline\"\"\"\nImplicit concat: \"hello \" \"world\" -> \"hello world\"\nContinuation: \"hello \" \\\n              \"world\"\nParentheses: (\"hello \"\n              \"world\")\ntextwrap.dedent() removes common leading whitespace",
+          "actual_code": "# Triple-quoted strings\ntext = \"\"\"This is\na multi-line\nstring.\"\"\"\nprint(text)\n# This is\n# a multi-line\n# string.\n\n# Triple quotes preserve indentation\ndef example():\n    text = \"\"\"This is\n    indented\n    oddly.\"\"\"\n    print(repr(text))\n    # 'This is\\n    indented\\n    oddly.'\n\nexample()\n\n# Fix with textwrap.dedent()\nimport textwrap\n\ndef better_example():\n    text = textwrap.dedent(\"\"\"\\\n        This is\n        properly\n        dedented.\"\"\")\n    print(text)\n    # This is\n    # properly\n    # dedented.\n\nbetter_example()\n\n# Implicit string concatenation\nlong_string = (\"This is a very long string that \"\n               \"spans multiple lines in the source \"\n               \"but is one string at runtime.\")\nprint(long_string)\n\n# Line continuation with backslash\nlong_string = \"This is a very long string that \" \\\n              \"spans multiple lines.\"\nprint(long_string)\n\n# textwrap.fill for word wrapping\ntext = \"Python is a powerful programming language that is easy to learn and fun to use.\"\nprint(textwrap.fill(text, width=40))\n# Python is a powerful programming\n# language that is easy to learn and\n# fun to use.\n\n# textwrap.indent\ntext = \"Line 1\\nLine 2\\nLine 3\"\nprint(textwrap.indent(text, \"  > \"))\n#   > Line 1\n#   > Line 2\n#   > Line 3\n\n# Joining lines from a list\nlines = [\n    \"First line\",\n    \"Second line\",\n    \"Third line\"\n]\ntext = \"\\n\".join(lines)\nprint(text)\n\n# Multiline f-string\nname = \"Alice\"\nage = 30\ncard = f\"\"\"\n{'='*30}\n  Name: {name}\n  Age:  {age}\n{'='*30}\n\"\"\".strip()\nprint(card)",
+          "code_language": "python",
+          "key_points": [
+            "Triple quotes preserve all whitespace and newlines",
+            "Use textwrap.dedent() to fix indentation in triple-quoted strings",
+            "Implicit concatenation joins adjacent string literals at compile time",
+            "Parentheses allow spanning lines without backslash",
+            "textwrap.fill() wraps text to a specified width"
+          ],
+          "gotchas": [
+            "Triple-quoted strings include the first newline if it follows the quotes",
+            "Use a backslash after opening triple quotes to suppress the first newline",
+            "Indentation inside functions makes triple-quoted strings awkward without dedent",
+            "Implicit concatenation only works with literals, not variables: 'a' 'b' works, a b doesn't"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Triple quotes (`'''` or `\"\"\"`) for multiline strings. Use `textwrap.dedent()` to fix indentation. Parentheses `()` allow spanning lines. Implicit concatenation joins adjacent literals.",
+          "pseudo_code": "",
+          "actual_code": "import textwrap\ntext = textwrap.dedent(\"\"\"\\\n    Hello\n    World\"\"\")\nprint(text)  # 'Hello\\nWorld'\n\n# Implicit concatenation\ns = (\"hello \"\n     \"world\")  # 'hello world'",
+          "code_language": "python",
+          "key_points": [
+            "Triple quotes preserve whitespace and newlines",
+            "Use textwrap.dedent() for clean indentation"
+          ],
+          "gotchas": [
+            "Triple-quoted strings include leading newline without backslash escape"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common string interview coding problems and their solutions?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["coding-problems", "interview", "algorithms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Here are classic string coding problems frequently asked in interviews:\n\n1. **Reverse a string** -- use slicing `s[::-1]`\n2. **Check palindrome** -- compare with reverse\n3. **Count character frequency** -- use `collections.Counter`\n4. **Find first non-repeating character** -- use Counter + iteration\n5. **Check anagram** -- compare sorted or Counter\n6. **Remove duplicates preserving order** -- use `dict.fromkeys()`\n\nPython's built-in string methods and standard library make many of these problems much simpler than in other languages.",
+          "pseudo_code": "Reverse: s[::-1]\nPalindrome: s == s[::-1]\nAnagram: sorted(a) == sorted(b) or Counter(a) == Counter(b)\nFrequency: Counter(s)\nFirst unique: Counter + iterate to find count == 1\nRemove dupes: ''.join(dict.fromkeys(s))",
+          "actual_code": "from collections import Counter\n\n# 1. Reverse a string\ndef reverse_string(s):\n    return s[::-1]\n\nprint(reverse_string(\"hello\"))  # 'olleh'\n\n# 2. Check palindrome\ndef is_palindrome(s):\n    s = s.lower().replace(\" \", \"\")\n    return s == s[::-1]\n\nprint(is_palindrome(\"racecar\"))   # True\nprint(is_palindrome(\"A man a plan a canal Panama\".replace(\" \", \"\")))  # True\n\n# 3. Character frequency\ndef char_frequency(s):\n    return dict(Counter(s))\n\nprint(char_frequency(\"hello\"))  # {'h': 1, 'e': 1, 'l': 2, 'o': 1}\n\n# 4. First non-repeating character\ndef first_unique(s):\n    counts = Counter(s)\n    for char in s:\n        if counts[char] == 1:\n            return char\n    return None\n\nprint(first_unique(\"aabbcdd\"))  # 'c'\nprint(first_unique(\"aabb\"))     # None\n\n# 5. Check if two strings are anagrams\ndef is_anagram(a, b):\n    return Counter(a.lower()) == Counter(b.lower())\n\nprint(is_anagram(\"listen\", \"silent\"))  # True\nprint(is_anagram(\"hello\", \"world\"))   # False\n\n# 6. Remove duplicate characters preserving order\ndef remove_duplicates(s):\n    return ''.join(dict.fromkeys(s))\n\nprint(remove_duplicates(\"abracadabra\"))  # 'abrcd'\n\n# 7. Count vowels and consonants\ndef count_vowels_consonants(s):\n    s = s.lower()\n    vowels = sum(1 for c in s if c in 'aeiou')\n    consonants = sum(1 for c in s if c.isalpha() and c not in 'aeiou')\n    return vowels, consonants\n\nprint(count_vowels_consonants(\"Hello World\"))  # (3, 7)\n\n# 8. Check if string has all unique characters\ndef all_unique(s):\n    return len(s) == len(set(s))\n\nprint(all_unique(\"abcdef\"))  # True\nprint(all_unique(\"aabcde\"))  # False\n\n# 9. Longest common prefix\ndef longest_common_prefix(strs):\n    if not strs:\n        return \"\"\n    prefix = strs[0]\n    for s in strs[1:]:\n        while not s.startswith(prefix):\n            prefix = prefix[:-1]\n            if not prefix:\n                return \"\"\n    return prefix\n\nprint(longest_common_prefix([\"flower\", \"flow\", \"flight\"]))  # 'fl'\n\n# 10. Compress a string (run-length encoding)\ndef compress(s):\n    if not s:\n        return \"\"\n    result = []\n    count = 1\n    for i in range(1, len(s)):\n        if s[i] == s[i-1]:\n            count += 1\n        else:\n            result.append(f\"{s[i-1]}{count}\" if count > 1 else s[i-1])\n            count = 1\n    result.append(f\"{s[-1]}{count}\" if count > 1 else s[-1])\n    return ''.join(result)\n\nprint(compress(\"aabbbcccc\"))  # 'a2b3c4'",
+          "code_language": "python",
+          "key_points": [
+            "s[::-1] is the Pythonic way to reverse a string",
+            "Counter() makes frequency counting trivial",
+            "sorted() or Counter comparison for anagram check",
+            "dict.fromkeys() preserves order and removes duplicates",
+            "set(s) for unique character check"
+          ],
+          "gotchas": [
+            "Palindrome checks should normalize case and remove spaces first",
+            "Counter comparison is O(n), sorted comparison is O(n log n)",
+            "dict.fromkeys() preserves first occurrence order",
+            "Always clarify with interviewer: case-sensitive? spaces? unicode?"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Common patterns: reverse (`s[::-1]`), palindrome (`s == s[::-1]`), anagram (`Counter(a) == Counter(b)`), frequency (`Counter(s)`), unique chars (`len(s) == len(set(s))`).",
+          "pseudo_code": "",
+          "actual_code": "from collections import Counter\n\nprint(\"hello\"[::-1])                          # 'olleh'\nprint(Counter(\"listen\") == Counter(\"silent\"))  # True\nprint(len(\"abc\") == len(set(\"abc\")))           # True (unique)\n\n# First non-repeating character\ncounts = Counter(\"aabbcdd\")\nfirst = next(c for c in \"aabbcdd\" if counts[c] == 1)\nprint(first)  # 'c'",
+          "code_language": "python",
+          "key_points": [
+            "Use Python built-ins: slicing, Counter, set",
+            "These patterns cover most string interview questions"
+          ],
+          "gotchas": [
+            "Always normalize case and whitespace before comparing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a string contains only digits, letters, or whitespace?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["string-testing", "isdigit", "isalpha", "validation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python provides several `str.is*()` methods for character type testing:\n\n| Method | Returns True when |\n|--------|------------------|\n| `isdigit()` | All chars are digits (0-9, superscripts, etc.) |\n| `isdecimal()` | All chars are decimal digits (0-9 only) |\n| `isnumeric()` | All chars are numeric (includes fractions, etc.) |\n| `isalpha()` | All chars are alphabetic |\n| `isalnum()` | All chars are alphanumeric |\n| `isspace()` | All chars are whitespace |\n| `isupper()` | All cased chars are uppercase |\n| `islower()` | All cased chars are lowercase |\n| `istitle()` | String follows title case |\n| `isascii()` | All chars are ASCII (Python 3.7+) |\n| `isprintable()` | All chars are printable |\n| `isidentifier()` | Valid Python identifier |\n\n**Important:** All `is*()` methods return `False` for empty strings.",
+          "pseudo_code": "isdigit(): '123' -> True, '12.3' -> False\nisdecimal(): stricter than isdigit (only 0-9)\nisnumeric(): broadest (includes fractions, superscripts)\nisalpha(): 'hello' -> True, 'hi5' -> False\nisalnum(): 'hello5' -> True, 'hi!' -> False\nisspace(): '   ' -> True, ' hi' -> False\n\nAll return False for empty strings",
+          "actual_code": "# isdigit, isdecimal, isnumeric differences\nprint(\"123\".isdigit())      # True\nprint(\"123\".isdecimal())    # True\nprint(\"123\".isnumeric())    # True\n\nprint(\"12.3\".isdigit())     # False (dot is not a digit)\nprint(\"-42\".isdigit())      # False (minus is not a digit)\n\n# Unicode differences\nprint(\"\\u00b2\".isdigit())    # True (superscript 2)\nprint(\"\\u00b2\".isdecimal())  # False (not a decimal digit)\nprint(\"\\u00b2\".isnumeric())  # True\n\nprint(\"\\u00bd\".isnumeric())  # True (fraction 1/2)\nprint(\"\\u00bd\".isdigit())    # False\n\n# isalpha\nprint(\"hello\".isalpha())     # True\nprint(\"hello5\".isalpha())    # False\nprint(\"helLO\".isalpha())     # True (any case)\nprint(\"caf\\u00e9\".isalpha()) # True (accented chars are alpha)\n\n# isalnum\nprint(\"hello123\".isalnum())  # True\nprint(\"hello 123\".isalnum()) # False (space)\nprint(\"hello!\".isalnum())    # False (punctuation)\n\n# isspace\nprint(\"   \".isspace())       # True\nprint(\" \\t\\n\".isspace())     # True (tabs and newlines are whitespace)\nprint(\"  hi\".isspace())      # False\n\n# isupper / islower\nprint(\"HELLO\".isupper())     # True\nprint(\"Hello\".isupper())     # False\nprint(\"hello\".islower())     # True\nprint(\"hello123\".islower())  # True (no uppercase chars)\n\n# Empty string edge case\nprint(\"\".isdigit())    # False\nprint(\"\".isalpha())    # False\nprint(\"\".isspace())    # False\n\n# Practical: input validation\ndef validate_username(username):\n    if not username:\n        return \"Username cannot be empty\"\n    if not username[0].isalpha():\n        return \"Username must start with a letter\"\n    if not username.isalnum():\n        return \"Username can only contain letters and numbers\"\n    if len(username) < 3 or len(username) > 20:\n        return \"Username must be 3-20 characters\"\n    return \"Valid\"\n\nprint(validate_username(\"alice123\"))  # Valid\nprint(validate_username(\"123abc\"))   # Must start with a letter\nprint(validate_username(\"al ice\"))   # Only letters and numbers\n\n# isidentifier -- valid Python variable name\nprint(\"my_var\".isidentifier())   # True\nprint(\"2ndvar\".isidentifier())   # False (starts with digit)\nprint(\"class\".isidentifier())    # True (but it's a keyword!)\n\nimport keyword\nname = \"class\"\nprint(name.isidentifier() and not keyword.iskeyword(name))  # False",
+          "code_language": "python",
+          "key_points": [
+            "isdigit() for digit check, isalpha() for letters, isalnum() for both",
+            "isdecimal() < isdigit() < isnumeric() in strictness",
+            "All is*() methods return False for empty strings",
+            "These methods are Unicode-aware",
+            "isidentifier() checks valid Python names but not keywords"
+          ],
+          "gotchas": [
+            "isdigit() returns False for negative numbers ('-42') and floats ('3.14')",
+            "isdigit() returns True for Unicode superscripts -- use isdecimal() for strict 0-9 only",
+            "All methods return False for empty strings",
+            "isupper()/islower() only consider cased characters -- '123'.islower() returns False, not True"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`isdigit()` checks digits, `isalpha()` checks letters, `isalnum()` checks both, `isspace()` checks whitespace. All return False for empty strings. `isdecimal()` is stricter than `isdigit()` for Unicode.",
+          "pseudo_code": "",
+          "actual_code": "print(\"123\".isdigit())      # True\nprint(\"hello\".isalpha())    # True\nprint(\"hello123\".isalnum()) # True\nprint(\"   \".isspace())      # True\nprint(\"\".isdigit())         # False (empty!)\nprint(\"-42\".isdigit())      # False (minus sign)",
+          "code_language": "python",
+          "key_points": [
+            "isdigit for digits, isalpha for letters, isalnum for both",
+            "All return False for empty strings"
+          ],
+          "gotchas": [
+            "isdigit() returns False for negative numbers and floats"
+          ]
+        }
+      ]
+    }
+  ]
+}
