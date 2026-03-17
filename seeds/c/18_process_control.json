@@ -1,0 +1,761 @@
+{
+  "concept_slug": "process-control",
+  "questions": [
+    {
+      "title": "How does fork() work, and what are its return values?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["fork", "process-creation", "pid"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`fork()` creates a new process by duplicating the calling process. The new process (child) is an almost exact copy of the parent.\n\n**Prototype:**\n```c\n#include <unistd.h>\npid_t fork(void);\n```\n\n**Return values:**\n- **In the parent:** returns the child's PID (positive integer)\n- **In the child:** returns 0\n- **On failure:** returns -1 (no child created), sets errno\n\n**What the child inherits (copies of):**\n- Data segment, heap, stack (copy-on-write)\n- Open file descriptors (shared open file table entries)\n- Signal dispositions, environment, CWD, umask\n- Real/effective UID and GID\n\n**What differs:**\n- PID (child gets a new PID)\n- PPID (child's parent PID = original process PID)\n- Pending signals (cleared in child)\n- File locks (NOT inherited)\n- Return value of fork()\n\nAfter fork(), both parent and child continue executing from the instruction after the `fork()` call. The execution order is indeterminate.",
+          "pseudo_code": "1. pid = fork()\n2. If pid == -1: error, no child created\n3. If pid == 0: this is the child process\n4. If pid > 0: this is the parent, pid = child's PID\n5. Both processes continue from the line after fork()\n6. Child is a copy-on-write duplicate of parent\n7. Open file descriptors are shared (same open file table entries)",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    int x = 42;\n    printf(\"Before fork: pid=%d, x=%d\\n\", getpid(), x);\n\n    pid_t pid = fork();\n    if (pid == -1) {\n        perror(\"fork\");\n        return 1;\n    }\n\n    if (pid == 0) {\n        /* Child process */\n        x = 100;  /* modifies child's copy only (COW) */\n        printf(\"Child:  pid=%d, ppid=%d, x=%d\\n\", getpid(), getppid(), x);\n        _exit(0);\n    } else {\n        /* Parent process */\n        printf(\"Parent: pid=%d, child=%d, x=%d\\n\", getpid(), pid, x);\n        wait(NULL);  /* wait for child */\n        printf(\"Parent: x still %d (unaffected by child)\\n\", x);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fork() returns child PID to parent, 0 to child, -1 on error",
+            "Child is a copy-on-write duplicate of the parent",
+            "Open file descriptors are shared (same open file table entry)",
+            "Execution order after fork is indeterminate",
+            "Child gets new PID but inherits parent's data, heap, stack"
+          ],
+          "gotchas": [
+            "stdio buffers are duplicated -- flush before fork to avoid double output",
+            "Shared file descriptors mean shared file offsets -- writes can interleave",
+            "fork() can fail with EAGAIN if process limit (RLIMIT_NPROC) is reached",
+            "The child should call _exit(), not exit(), to avoid flushing parent's stdio buffers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fork()` creates a child process. Returns child PID to parent, 0 to child, -1 on error. Child is a copy-on-write copy of parent with shared file descriptors.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    pid_t pid = fork();\n    if (pid == 0) {\n        printf(\"Child: pid=%d\\n\", getpid());\n        _exit(0);\n    } else if (pid > 0) {\n        printf(\"Parent: child=%d\\n\", pid);\n        wait(NULL);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Returns child PID to parent, 0 to child",
+            "Child is copy-on-write duplicate"
+          ],
+          "gotchas": [
+            "Flush stdio buffers before fork to avoid double output"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is copy-on-write (COW) semantics in the context of fork()?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["copy-on-write", "COW", "fork", "virtual-memory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Copy-on-write (COW) is an optimization used by modern UNIX kernels to make `fork()` efficient.\n\n**Without COW (old behavior):**\nfork() would physically copy the entire address space of the parent (data, heap, stack) to the child. For a process using 1GB of memory, fork() would allocate and copy 1GB -- very slow.\n\n**With COW (modern behavior):**\n1. After fork(), parent and child share the same physical memory pages\n2. Pages are marked as read-only in both processes' page tables\n3. When either process writes to a shared page, a page fault occurs\n4. The kernel then copies just that one page and remaps it as read-write\n5. Only modified pages are ever copied\n\n**Benefits:**\n- `fork()` is nearly instantaneous regardless of process memory size\n- If the child immediately calls `exec()`, most pages are never copied\n- Memory-efficient: unmodified pages remain shared\n\n**The fork+exec pattern** (most common use of fork) benefits enormously:\n- fork() shares all pages with COW\n- exec() replaces the entire address space\n- Only the few pages touched between fork and exec are ever copied",
+          "pseudo_code": "Before fork:\n  Parent pages: [P1] [P2] [P3] (read-write)\n\nAfter fork (COW):\n  Parent page table: [P1*] [P2*] [P3*] (read-only)\n  Child page table:  [P1*] [P2*] [P3*] (read-only, same physical pages)\n\nChild writes to P2:\n  1. Page fault on P2\n  2. Kernel copies P2 -> P2'\n  3. Child page table: [P1*] [P2'] [P3*] (P2' is read-write)\n  4. Parent page table: [P1*] [P2*] [P3*] (P2* back to read-write, refcount=1)\n  \nOnly 1 page copied instead of 3!",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/wait.h>\n\nint main(void) {\n    /* Allocate a large buffer */\n    size_t size = 100 * 1024 * 1024;  /* 100 MB */\n    char *buf = malloc(size);\n    if (!buf) { perror(\"malloc\"); return 1; }\n    memset(buf, 'A', size);  /* touch all pages */\n\n    printf(\"Parent: allocated %zu MB, buf[0]='%c'\\n\", size / (1024*1024), buf[0]);\n\n    pid_t pid = fork();\n    /* fork() is fast despite 100MB -- COW shares pages */\n\n    if (pid == 0) {\n        /* Child: reading shared pages -- no copy needed */\n        printf(\"Child: buf[0]='%c' (shared page, no copy)\\n\", buf[0]);\n\n        /* Writing triggers COW for just this page (4KB) */\n        buf[0] = 'B';\n        printf(\"Child: buf[0]='%c' (COW: only this page copied)\\n\", buf[0]);\n\n        free(buf);\n        _exit(0);\n    } else {\n        wait(NULL);\n        printf(\"Parent: buf[0]='%c' (unchanged)\\n\", buf[0]);  /* still 'A' */\n        free(buf);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "COW makes fork() O(1) regardless of process memory size",
+            "Parent and child share physical pages until one writes",
+            "Only modified pages are physically copied (one page at a time)",
+            "The fork+exec pattern rarely copies any pages",
+            "Page tables are copied (small) but not the actual data pages"
+          ],
+          "gotchas": [
+            "A process that writes to all its memory after fork will eventually copy everything anyway",
+            "COW page faults have overhead -- massive writes after fork can be slower than expected",
+            "overcommit: fork may succeed even without enough memory for a full copy, but OOM killer may strike later",
+            "malloc does not actually allocate pages until they are written (demand paging + COW compound)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "COW means fork() shares physical memory pages between parent and child. Pages are marked read-only; when either writes, only that page is copied. Makes fork() fast even for large processes.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    int x = 42;\n    pid_t pid = fork();  /* fast: pages shared with COW */\n    if (pid == 0) {\n        x = 99;  /* triggers COW: only this page copied */\n        printf(\"Child: x=%d\\n\", x);  /* 99 */\n        _exit(0);\n    }\n    wait(NULL);\n    printf(\"Parent: x=%d\\n\", x);  /* still 42 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fork shares pages; copy on first write",
+            "fork+exec rarely copies any pages"
+          ],
+          "gotchas": [
+            "Overcommit may let fork succeed without enough memory for full copy"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the exec family of functions, and how do the variants differ?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["exec", "execv", "execl", "execve", "process-replacement"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `exec` family replaces the current process image with a new program. After exec, the calling process's code, data, heap, and stack are replaced.\n\n**Six variants (mnemonic: l=list, v=vector, e=environment, p=PATH):**\n\n| Function | Args | PATH search | Environment |\n|----------|------|-------------|-------------|\n| `execl`  | list | no | inherited |\n| `execlp` | list | yes | inherited |\n| `execle` | list | no | explicit |\n| `execv`  | array | no | inherited |\n| `execvp` | array | yes | inherited |\n| `execve` | array | no | explicit |\n\n- **l (list):** arguments passed as individual parameters, terminated by `(char *)NULL`\n- **v (vector):** arguments passed as a `char *argv[]` array\n- **p (path):** searches `PATH` environment variable for the executable\n- **e (environment):** takes an explicit `char *envp[]` array\n\n`execve()` is the actual system call; all others are library wrappers.\n\n**What is preserved across exec:**\n- PID, PPID, real UID/GID\n- File descriptors (unless `FD_CLOEXEC` is set)\n- Signal dispositions set to SIG_DFL or SIG_IGN (custom handlers reset to SIG_DFL)\n\n**What is NOT preserved:**\n- Memory mappings, code, data, heap, stack\n- Pending signals\n- Memory locks",
+          "pseudo_code": "exec variants naming:\n  l = list args:    execl(\"/bin/ls\", \"ls\", \"-l\", NULL)\n  v = vector args:  execv(\"/bin/ls\", argv)\n  p = PATH search:  execlp(\"ls\", \"ls\", \"-l\", NULL)\n  e = environment:  execle(\"/bin/env\", \"env\", NULL, envp)\n\nOnly execve() is a syscall; others are wrappers.\n\nexec does NOT return on success (the process image is replaced).\nIf exec returns, it failed (returns -1, sets errno).",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    pid_t pid;\n\n    /* execl: list of arguments */\n    pid = fork();\n    if (pid == 0) {\n        execl(\"/bin/echo\", \"echo\", \"hello\", \"from\", \"execl\", (char *)NULL);\n        perror(\"execl\");  /* only reached on failure */\n        _exit(127);\n    }\n    wait(NULL);\n\n    /* execlp: search PATH */\n    pid = fork();\n    if (pid == 0) {\n        execlp(\"echo\", \"echo\", \"hello\", \"from\", \"execlp\", (char *)NULL);\n        perror(\"execlp\");\n        _exit(127);\n    }\n    wait(NULL);\n\n    /* execv: argument vector */\n    pid = fork();\n    if (pid == 0) {\n        char *args[] = {\"ls\", \"-la\", \"/tmp\", NULL};\n        execv(\"/bin/ls\", args);\n        perror(\"execv\");\n        _exit(127);\n    }\n    wait(NULL);\n\n    /* execve: vector + explicit environment */\n    pid = fork();\n    if (pid == 0) {\n        char *args[] = {\"env\", NULL};\n        char *envp[] = {\"MY_VAR=hello\", \"PATH=/usr/bin\", NULL};\n        execve(\"/usr/bin/env\", args, envp);\n        perror(\"execve\");\n        _exit(127);\n    }\n    wait(NULL);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "exec replaces the process image -- does NOT return on success",
+            "Six variants: l/v (arg style), p (PATH search), e (environment)",
+            "execve() is the only actual system call; others are wrappers",
+            "argv[0] should be the program name by convention",
+            "FD_CLOEXEC fds are closed; others are inherited across exec"
+          ],
+          "gotchas": [
+            "The first argument (argv[0]) is the program name, not the first real argument",
+            "execl argument list must end with (char *)NULL -- not just NULL (variadic issue)",
+            "If exec fails, the process continues running the old code -- always call _exit() after",
+            "Custom signal handlers are reset to SIG_DFL across exec (but SIG_IGN is preserved)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "exec replaces the current process with a new program. 6 variants: `l`=list args, `v`=vector, `p`=PATH search, `e`=explicit env. `execve()` is the syscall. Does NOT return on success.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n\nint main(void) {\n    execlp(\"ls\", \"ls\", \"-la\", (char *)NULL);\n    perror(\"exec\");  /* only reached on failure */\n    return 127;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Does not return on success",
+            "execve is the syscall; others are wrappers"
+          ],
+          "gotchas": [
+            "argv[0] is the program name, not the first argument"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do wait() and waitpid() work, and what do the status macros tell you?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["wait", "waitpid", "WIFEXITED", "WEXITSTATUS", "zombie"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`wait()` and `waitpid()` allow a parent process to collect the termination status of a child process.\n\n**Prototypes:**\n```c\n#include <sys/wait.h>\npid_t wait(int *status);\npid_t waitpid(pid_t pid, int *status, int options);\n```\n\n**wait()** blocks until ANY child terminates. Returns the child's PID.\n\n**waitpid()** is more flexible:\n- `pid > 0`: wait for specific child\n- `pid == -1`: wait for any child (like wait)\n- `pid == 0`: wait for any child in the same process group\n- `options`: `WNOHANG` (non-blocking), `WUNTRACED` (also report stopped children)\n\n**Status macros:**\n- `WIFEXITED(status)` -- true if child exited normally\n- `WEXITSTATUS(status)` -- exit code (0-255), valid only if WIFEXITED\n- `WIFSIGNALED(status)` -- true if child killed by a signal\n- `WTERMSIG(status)` -- signal number that killed it\n- `WIFSTOPPED(status)` -- true if child is stopped\n- `WSTOPSIG(status)` -- signal that stopped it\n- `WCOREDUMP(status)` -- true if core dump generated (non-standard)\n\nIf a child terminates before the parent calls wait, it becomes a **zombie** until reaped.",
+          "pseudo_code": "1. Parent calls waitpid(child_pid, &status, 0) -- blocks\n2. Or waitpid(-1, &status, WNOHANG) -- non-blocking any child\n3. Check WIFEXITED(status): normal exit\n   a. WEXITSTATUS(status) gives exit code\n4. Check WIFSIGNALED(status): killed by signal\n   a. WTERMSIG(status) gives signal number\n5. Returns child PID on success, 0 if WNOHANG and no child exited, -1 on error",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/wait.h>\n\nint main(void) {\n    pid_t pid = fork();\n    if (pid == 0) {\n        /* Child: exit with code 42 */\n        exit(42);\n    }\n\n    int status;\n    pid_t w = waitpid(pid, &status, 0);\n    if (w == -1) { perror(\"waitpid\"); return 1; }\n\n    if (WIFEXITED(status)) {\n        printf(\"Child %d exited normally, code=%d\\n\",\n               w, WEXITSTATUS(status));  /* code=42 */\n    } else if (WIFSIGNALED(status)) {\n        printf(\"Child %d killed by signal %d\\n\",\n               w, WTERMSIG(status));\n    }\n\n    /* Non-blocking wait example */\n    pid = fork();\n    if (pid == 0) {\n        sleep(2);\n        _exit(0);\n    }\n\n    /* Poll for child (non-blocking) */\n    w = waitpid(pid, &status, WNOHANG);\n    if (w == 0)\n        printf(\"Child %d still running\\n\", pid);\n\n    /* Now block until done */\n    w = waitpid(pid, &status, 0);\n    printf(\"Child %d finished\\n\", w);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "wait() blocks for any child; waitpid() can target a specific child",
+            "WIFEXITED/WEXITSTATUS for normal exit; WIFSIGNALED/WTERMSIG for signal death",
+            "WNOHANG makes waitpid non-blocking (returns 0 if no child exited)",
+            "Zombie processes exist between child exit and parent wait",
+            "WEXITSTATUS returns only the low 8 bits (0-255)"
+          ],
+          "gotchas": [
+            "WEXITSTATUS is only valid if WIFEXITED is true -- always check WIFEXITED first",
+            "exit(256) wraps to 0 because only 8 bits are passed (WEXITSTATUS & 0xFF)",
+            "If you fork multiple children, you need a loop to wait for all of them",
+            "waitpid(-1, ...) returns children in no particular order"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`waitpid(pid, &status, opts)` waits for a child. Use `WIFEXITED`/`WEXITSTATUS` for normal exit, `WIFSIGNALED`/`WTERMSIG` for signal death. `WNOHANG` for non-blocking. Always check macros before extracting values.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/wait.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    pid_t pid = fork();\n    if (pid == 0) exit(42);\n    int st;\n    waitpid(pid, &st, 0);\n    if (WIFEXITED(st))\n        printf(\"exit code: %d\\n\", WEXITSTATUS(st));  /* 42 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Check WIFEXITED before WEXITSTATUS",
+            "WNOHANG for non-blocking wait"
+          ],
+          "gotchas": [
+            "Exit codes wrap at 256 (only 8 bits)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are zombie processes, and how do you prevent them?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["zombie", "wait", "SIGCHLD", "process-lifecycle"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **zombie** (defunct) process is a child that has terminated but whose parent has not yet called `wait()` to collect its exit status.\n\n**Why zombies exist:**\nThe kernel needs to keep the child's termination status (exit code, signal info, resource usage) available until the parent reads it. The zombie has no code, data, or stack -- just an entry in the process table.\n\n**Problem:** Zombies consume a process table slot. Too many zombies (e.g., from a server that forks but never waits) can exhaust the process table, preventing new processes.\n\n**Prevention strategies:**\n\n1. **Call wait()/waitpid():** The parent explicitly reaps each child.\n\n2. **SIGCHLD handler:** Install a signal handler that calls `waitpid(-1, ..., WNOHANG)` in a loop to reap all terminated children.\n\n3. **Ignore SIGCHLD:** `signal(SIGCHLD, SIG_IGN)` tells the kernel to auto-reap children (POSIX.1-2001). Children do not become zombies.\n\n4. **Double fork:** Fork twice; the middle process exits immediately (parent waits for it). The grandchild is orphaned and adopted by init, which will reap it.\n\n**Detection:** Zombies show as `Z` state in `ps` output, with `<defunct>` label.",
+          "pseudo_code": "Strategy 1: Explicit wait in loop\n  while ((pid = waitpid(-1, &status, WNOHANG)) > 0) { /* reap */ }\n\nStrategy 2: SIGCHLD handler\n  void handler(int sig) {\n    while (waitpid(-1, NULL, WNOHANG) > 0) {}\n  }\n  sigaction(SIGCHLD, ...handler...)\n\nStrategy 3: Ignore SIGCHLD\n  signal(SIGCHLD, SIG_IGN)  // auto-reap\n\nStrategy 4: Double fork\n  if (fork() == 0) {        // first child\n    if (fork() == 0) {      // grandchild\n      // do work (adopted by init)\n      _exit(0);\n    }\n    _exit(0);               // first child exits immediately\n  }\n  wait(NULL);               // reap first child",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <signal.h>\n#include <sys/wait.h>\n#include <string.h>\n\n/* Strategy 2: SIGCHLD handler to reap all children */\nvoid sigchld_handler(int sig) {\n    (void)sig;\n    int saved_errno = errno;\n    while (waitpid(-1, NULL, WNOHANG) > 0)\n        ;  /* reap all available zombies */\n    errno = saved_errno;\n}\n\n/* Strategy 4: Double fork */\nvoid run_detached(void) {\n    pid_t pid = fork();\n    if (pid == 0) {\n        /* First child */\n        pid_t pid2 = fork();\n        if (pid2 == 0) {\n            /* Grandchild: adopted by init when first child exits */\n            sleep(2);  /* simulate work */\n            printf(\"Grandchild done (ppid=%d, likely 1 or init)\\n\", getppid());\n            _exit(0);\n        }\n        _exit(0);  /* first child exits immediately */\n    }\n    wait(NULL);  /* reap first child (fast) */\n}\n\nint main(void) {\n    /* Install SIGCHLD handler */\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = sigchld_handler;\n    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;\n    sigaction(SIGCHLD, &sa, NULL);\n\n    /* Fork some children -- handler reaps them */\n    for (int i = 0; i < 3; i++) {\n        if (fork() == 0) {\n            printf(\"Child %d (pid=%d) working...\\n\", i, getpid());\n            _exit(0);\n        }\n    }\n\n    sleep(1);  /* let children finish; handler reaps them */\n    printf(\"No zombies!\\n\");\n\n    /* Double-fork example */\n    run_detached();\n    printf(\"Detached grandchild is running independently\\n\");\n\n    sleep(3);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Zombie = terminated child whose parent has not called wait()",
+            "Zombies consume process table entries but no memory",
+            "Prevent with: wait(), SIGCHLD handler, SIG_IGN, or double fork",
+            "SIGCHLD handler must loop with WNOHANG (multiple children may exit simultaneously)",
+            "signal(SIGCHLD, SIG_IGN) auto-reaps on POSIX systems"
+          ],
+          "gotchas": [
+            "SIGCHLD handler must save/restore errno (async-signal-safety)",
+            "Multiple children can exit before the handler runs -- must loop with WNOHANG",
+            "Double fork does not work if the first child fails to exit",
+            "On Linux, zombie entries in /proc consume memory for the task_struct"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Zombies are dead children not yet waited on by the parent. Prevent with: (1) `waitpid()` in a `SIGCHLD` handler, (2) `signal(SIGCHLD, SIG_IGN)`, or (3) double-fork trick. Handler must loop with `WNOHANG`.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <sys/wait.h>\n#include <unistd.h>\n\nvoid reap(int sig) {\n    (void)sig;\n    while (waitpid(-1, NULL, WNOHANG) > 0);\n}\n\nint main(void) {\n    signal(SIGCHLD, reap);\n    if (fork() == 0) _exit(0);  /* child exits */\n    sleep(1);  /* handler reaps -- no zombie */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Zombie = exited child not yet reaped",
+            "SIGCHLD handler with WNOHANG loop prevents zombies"
+          ],
+          "gotchas": [
+            "Must loop in handler -- multiple children can exit at once"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are orphan processes, and how does init adopt them?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["orphan", "init", "process-adoption", "ppid"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **orphan** process is a running process whose parent has terminated. When the parent dies:\n\n1. The kernel sets the orphan's PPID to 1 (the init/systemd process)\n2. init automatically calls `wait()` for any adopted children when they terminate\n3. This ensures orphans never become permanent zombies\n\n**Difference from zombies:**\n- A zombie is a **dead** child with a **live** parent that has not called wait()\n- An orphan is a **live** child whose parent has **died**\n\n**Orphan process groups (POSIX):**\nWhen a process group becomes orphaned (no process in the group has a parent in a different group in the same session), and if any member is stopped, the kernel sends `SIGHUP` then `SIGCONT` to every member of the group. This ensures stopped processes are notified.\n\n**Practical use:**\nThe double-fork technique intentionally creates an orphan to detach a long-running process from the original parent, relying on init for cleanup.",
+          "pseudo_code": "1. Parent creates child with fork()\n2. Parent exits (or is killed)\n3. Kernel sets child's PPID = 1 (init)\n4. Child is now an orphan\n5. When orphan eventually exits, init reaps it (no zombie)\n6. Orphan process groups: stopped members get SIGHUP + SIGCONT",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/wait.h>\n\nint main(void) {\n    pid_t pid = fork();\n    if (pid == -1) { perror(\"fork\"); return 1; }\n\n    if (pid == 0) {\n        /* Child: will become orphan when parent exits */\n        printf(\"Child: pid=%d, ppid=%d\\n\", getpid(), getppid());\n        sleep(2);  /* wait for parent to exit */\n        printf(\"Child (orphan): pid=%d, ppid=%d\\n\", getpid(), getppid());\n        /* ppid is now 1 (init) or the subreaper PID */\n        _exit(0);\n    }\n\n    /* Parent exits immediately */\n    printf(\"Parent (pid=%d) exiting, child=%d\\n\", getpid(), pid);\n    exit(0);  /* child becomes orphan */\n    /* init (pid 1) will adopt and eventually reap the child */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Orphan = running child whose parent has terminated",
+            "Kernel reparents orphans to init (PID 1)",
+            "init always reaps its adopted children (no permanent zombies)",
+            "Orphan process groups get SIGHUP + SIGCONT if any member is stopped",
+            "Double-fork creates intentional orphans for daemon processes"
+          ],
+          "gotchas": [
+            "On Linux with systemd, the subreaper (PR_SET_CHILD_SUBREAPER) may adopt instead of PID 1",
+            "Orphans continue running with their original UID/GID and environment",
+            "An orphaned process group with stopped members gets SIGHUP before SIGCONT",
+            "Orphans lose their controlling terminal if the parent was the session leader"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Orphan = child whose parent has died. Kernel reparents it to init (PID 1), which reaps it on exit. Unlike zombies, orphans are properly cleaned up automatically.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    if (fork() == 0) {\n        sleep(2);\n        printf(\"Orphan: ppid=%d\\n\", getppid());  /* 1 (init) */\n        _exit(0);\n    }\n    exit(0);  /* parent exits; child becomes orphan */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Reparented to init (PID 1)",
+            "init reaps them automatically"
+          ],
+          "gotchas": [
+            "systemd's subreaper may adopt instead of PID 1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between exit() and _exit(), and when should each be used?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["exit", "_exit", "atexit", "cleanup"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both `exit()` and `_exit()` terminate a process, but they differ in cleanup behavior.\n\n**exit() (stdlib.h):**\n1. Calls all functions registered with `atexit()` (in reverse order)\n2. Flushes all open stdio streams (`fflush` on all FILE*)\n3. Closes all stdio streams\n4. Calls `_exit()` to terminate\n\n**_exit() (unistd.h):**\n1. Immediately terminates the process\n2. Closes all file descriptors\n3. Does NOT call `atexit()` handlers\n4. Does NOT flush stdio buffers\n\n**When to use _exit():**\n- In the child process after `fork()` if NOT calling `exec()`\n- If `exit()` is called in the child, it flushes the parent's stdio buffers (which were copied by fork), causing duplicate output\n- In signal handlers (though you should use `_Exit()` for C99 compliance)\n\n**_Exit() vs _exit():**\n- `_Exit()` (C99, `<stdlib.h>`) is the standard C equivalent of POSIX `_exit()`. They are functionally identical.",
+          "pseudo_code": "exit(status):\n  1. Call atexit handlers (LIFO order)\n  2. Flush all FILE* streams\n  3. Close all FILE* streams\n  4. Call _exit(status)\n\n_exit(status):\n  1. Close all file descriptors\n  2. Send SIGCHLD to parent\n  3. If children exist, reparent to init\n  4. Process becomes zombie until parent waits\n\nRule: child after fork should use _exit(), not exit()",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n#include <sys/wait.h>\n\nvoid cleanup1(void) { printf(\"cleanup1 called\\n\"); }\nvoid cleanup2(void) { printf(\"cleanup2 called\\n\"); }\n\nint main(void) {\n    atexit(cleanup1);  /* registered first, called last */\n    atexit(cleanup2);  /* registered second, called first */\n\n    printf(\"Parent message (buffered)\");  /* no newline = stays in buffer */\n\n    pid_t pid = fork();\n    if (pid == 0) {\n        /* BAD: exit() would flush parent's buffer -> duplicate output\n         * and call atexit handlers meant for parent */\n        /* exit(0);  -- DO NOT DO THIS */\n\n        /* GOOD: _exit() skips all cleanup */\n        _exit(0);\n    }\n\n    wait(NULL);\n    printf(\"\\n\");  /* now flush */\n    /* exit() is called implicitly when main returns */\n    /* Output: cleanup2, then cleanup1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "exit() flushes buffers and calls atexit handlers; _exit() does not",
+            "Child after fork should use _exit() to avoid double-flushing",
+            "_Exit() (C99) is the portable equivalent of _exit()",
+            "atexit handlers are called in reverse registration order",
+            "_exit() still closes file descriptors and signals the parent"
+          ],
+          "gotchas": [
+            "Using exit() in a child after fork causes duplicate buffered output (e.g., printf without newline)",
+            "atexit handlers are inherited by the child across fork -- exit() in child runs them too",
+            "You can register up to 32 atexit handlers (at minimum; usually more)",
+            "After exec(), atexit handlers from the old program are gone"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`exit()` calls atexit handlers and flushes stdio buffers before terminating. `_exit()` terminates immediately (no cleanup). Use `_exit()` in child after fork to avoid duplicate output.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    printf(\"buffered\");  /* no newline */\n    if (fork() == 0)\n        _exit(0);  /* no flush; exit() would duplicate \"buffered\" */\n    wait(NULL);\n    printf(\"\\n\");  /* flush once */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "exit = cleanup + flush; _exit = immediate termination",
+            "Child after fork: always use _exit()"
+          ],
+          "gotchas": [
+            "exit() in forked child causes duplicate buffered output"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are process groups and sessions, and how do setpgid() and setsid() work?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["process-group", "session", "setpgid", "setsid", "job-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UNIX organizes processes into a hierarchy: sessions contain process groups, which contain processes.\n\n**Process group:**\n- A collection of related processes (e.g., `ls | sort | head` is one process group)\n- Identified by a process group ID (PGID) = PID of the group leader\n- Signals can be sent to the entire group: `kill(-pgid, signal)`\n- The shell uses process groups for job control (foreground/background jobs)\n\n**Session:**\n- A collection of process groups (typically one login session)\n- Created by `setsid()` -- the calling process becomes the session leader\n- Has at most one controlling terminal\n- The session leader is the only process that can acquire a controlling terminal\n\n**APIs:**\n- `getpgrp()` / `getpgid(pid)` -- get process group ID\n- `setpgid(pid, pgid)` -- set process group ID\n- `getsid(pid)` -- get session ID\n- `setsid()` -- create a new session (caller becomes session leader)\n\n**setsid() rules:**\n- The calling process must NOT be a process group leader\n- It becomes: session leader + process group leader + has no controlling terminal\n- Common pattern: `fork()` then `setsid()` in the child (child is not a group leader)",
+          "pseudo_code": "Process hierarchy:\n  Session (SID)\n    |- Foreground process group (PGID)\n    |    |- process 1\n    |    |- process 2\n    |- Background process group (PGID)\n         |- process 3\n\nsetsid():\n  1. Must not be a process group leader\n  2. Creates new session (caller = session leader)\n  3. Creates new process group (caller = group leader)\n  4. No controlling terminal\n\nsetpgid(pid, pgid):\n  - Move process pid into group pgid\n  - Can only move own children (before they exec)",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    printf(\"Parent: pid=%d, pgid=%d, sid=%d\\n\",\n           getpid(), getpgrp(), getsid(0));\n\n    pid_t pid = fork();\n    if (pid == 0) {\n        printf(\"Child before setsid: pid=%d, pgid=%d, sid=%d\\n\",\n               getpid(), getpgrp(), getsid(0));\n\n        /* Create new session */\n        pid_t newsid = setsid();\n        if (newsid == -1) {\n            perror(\"setsid\");\n        } else {\n            printf(\"Child after setsid:  pid=%d, pgid=%d, sid=%d\\n\",\n                   getpid(), getpgrp(), getsid(0));\n            /* pid == pgid == sid (session leader) */\n        }\n\n        _exit(0);\n    }\n\n    wait(NULL);\n\n    /* Process group example */\n    pid_t child1 = fork();\n    if (child1 == 0) { sleep(1); _exit(0); }\n\n    pid_t child2 = fork();\n    if (child2 == 0) { sleep(1); _exit(0); }\n\n    /* Put both children in the same process group */\n    setpgid(child1, child1);  /* child1 is group leader */\n    setpgid(child2, child1);  /* child2 joins child1's group */\n\n    printf(\"child1 pgid=%d, child2 pgid=%d\\n\",\n           getpgid(child1), getpgid(child2));  /* both = child1 */\n\n    wait(NULL); wait(NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Process group: related processes (e.g., a pipeline); PGID = leader's PID",
+            "Session: collection of process groups; created by setsid()",
+            "setsid() makes caller the session + group leader with no controlling terminal",
+            "kill(-pgid, sig) sends signal to entire process group",
+            "Shell uses process groups for job control (fg/bg)"
+          ],
+          "gotchas": [
+            "setsid() fails if the caller is already a process group leader -- fork first",
+            "setpgid() can only move a child before it calls exec()",
+            "A session leader that opens a terminal may acquire it as a controlling terminal",
+            "SIGHUP is sent to the foreground process group when the session leader (terminal) dies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Process group = related processes (pipeline). Session = collection of groups. `setsid()` creates a new session (no controlling terminal). `setpgid()` moves processes between groups. Used for job control and daemons.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    if (fork() == 0) {\n        setsid();  /* new session, no terminal */\n        printf(\"New session: pid=%d sid=%d\\n\", getpid(), getsid(0));\n        _exit(0);\n    }\n    wait(NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "setsid creates new session with no controlling terminal",
+            "kill(-pgid, sig) sends to entire group"
+          ],
+          "gotchas": [
+            "setsid fails if caller is already a process group leader"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a daemon process in C (the double-fork pattern)?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["daemon", "double-fork", "setsid", "background"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **daemon** is a long-running background process with no controlling terminal. The classic daemon creation pattern involves these steps:\n\n**1. First fork + parent exit:**\n- Creates a child that is NOT a process group leader\n- Allows the shell to regain the prompt\n\n**2. setsid():**\n- Creates a new session (child becomes session leader)\n- Creates a new process group\n- Detaches from the controlling terminal\n\n**3. Second fork + first child exit (optional but recommended):**\n- The grandchild is NOT a session leader\n- Therefore it can NEVER accidentally acquire a controlling terminal by opening a terminal device\n\n**4. chdir(\"/\"):**\n- Prevents the daemon from holding a mount point busy\n\n**5. umask(0):**\n- Clear the umask so file creation modes are fully controlled\n\n**6. Redirect stdin/stdout/stderr to /dev/null:**\n- Close inherited fds and redirect standard ones\n\nModern systems also have `daemon()` (BSD) and systemd integration, but understanding the manual method is essential for interviews.",
+          "pseudo_code": "1. fork() -- parent exits, child continues\n2. setsid() -- new session, no controlling terminal\n3. fork() again -- first child exits, grandchild continues\n4. chdir(\"/\") -- don't hold a mount point busy\n5. umask(0) -- full control over file permissions\n6. Close all fds; open /dev/null for stdin/stdout/stderr\n7. Run daemon main loop\n\nWhy double fork:\n- After setsid, process is session leader\n- Session leader CAN acquire a terminal by opening one\n- Second fork: grandchild is NOT session leader -> can NEVER acquire terminal",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/stat.h>\n#include <sys/resource.h>\n\nvoid daemonize(void) {\n    /* Step 1: First fork */\n    pid_t pid = fork();\n    if (pid < 0) { perror(\"fork\"); exit(1); }\n    if (pid > 0) exit(0);  /* parent exits */\n\n    /* Step 2: New session */\n    if (setsid() == -1) { perror(\"setsid\"); exit(1); }\n\n    /* Step 3: Second fork (prevent acquiring terminal) */\n    pid = fork();\n    if (pid < 0) { perror(\"fork\"); exit(1); }\n    if (pid > 0) _exit(0);  /* first child exits */\n\n    /* Step 4: Change working directory */\n    chdir(\"/\");\n\n    /* Step 5: Clear umask */\n    umask(0);\n\n    /* Step 6: Close all open file descriptors */\n    struct rlimit rl;\n    getrlimit(RLIMIT_NOFILE, &rl);\n    for (rlim_t i = 0; i < rl.rlim_cur; i++)\n        close((int)i);\n\n    /* Step 7: Redirect stdin/stdout/stderr to /dev/null */\n    int fd0 = open(\"/dev/null\", O_RDWR);  /* stdin = fd 0 */\n    dup2(fd0, STDOUT_FILENO);              /* stdout = fd 1 */\n    dup2(fd0, STDERR_FILENO);              /* stderr = fd 2 */\n}\n\nint main(void) {\n    daemonize();\n\n    /* Daemon main loop */\n    for (;;) {\n        /* Do daemon work here */\n        sleep(30);\n    }\n\n    return 0;  /* unreachable */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Double fork: ensures the daemon can never acquire a controlling terminal",
+            "setsid() creates a new session detached from the terminal",
+            "chdir(\"/\") prevents holding mount points busy",
+            "Redirect stdin/stdout/stderr to /dev/null",
+            "umask(0) gives full control over created file permissions"
+          ],
+          "gotchas": [
+            "Single fork without the second fork allows the session leader to accidentally acquire a terminal",
+            "Forgetting to close inherited fds can cause resource leaks and hold files open",
+            "BSD daemon() function exists but is not portable and may not do the second fork",
+            "On systemd, Type=forking services need a PID file; Type=simple is simpler"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Daemon pattern: (1) fork + parent exit, (2) setsid(), (3) fork again + exit, (4) chdir(\"/\"), (5) umask(0), (6) redirect std fds to /dev/null. Double fork prevents accidentally acquiring a terminal.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdlib.h>\n#include <sys/stat.h>\n\nvoid daemonize(void) {\n    if (fork() > 0) exit(0);   /* parent exits */\n    setsid();                   /* new session */\n    if (fork() > 0) _exit(0);  /* prevent terminal acquisition */\n    chdir(\"/\");\n    umask(0);\n    int fd = open(\"/dev/null\", O_RDWR);\n    dup2(fd, 0); dup2(fd, 1); dup2(fd, 2);\n    if (fd > 2) close(fd);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Double fork prevents terminal acquisition",
+            "setsid detaches from controlling terminal"
+          ],
+          "gotchas": [
+            "Single fork still allows session leader to acquire terminal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do atexit() handlers work, and in what order are they called?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["atexit", "exit-handlers", "cleanup"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`atexit()` registers a function to be called automatically when the process terminates normally (via `exit()` or returning from `main()`).\n\n**Prototype:**\n```c\n#include <stdlib.h>\nint atexit(void (*function)(void));\n```\n\n**Calling order:** Handlers are called in **reverse registration order** (LIFO -- last registered, first called).\n\n**When they are called:**\n- On `exit()` call\n- On return from `main()`\n- NOT on `_exit()` / `_Exit()`\n- NOT on abnormal termination (signal like SIGKILL, SIGSEGV without handler)\n\n**Use cases:**\n- Cleaning up temporary files\n- Releasing shared resources (shared memory, semaphores)\n- Flushing logs\n- Closing database connections\n\nPOSIX guarantees at least 32 atexit handlers can be registered. The function must take no arguments and return void.",
+          "pseudo_code": "1. atexit(cleanup_A)  -- registered first\n2. atexit(cleanup_B)  -- registered second\n3. atexit(cleanup_C)  -- registered third\n4. exit(0) or return from main\n5. cleanup_C called first (LIFO)\n6. cleanup_B called second\n7. cleanup_A called last\n8. After all handlers: stdio buffers flushed, then _exit()",
+          "actual_code": "#include <stdlib.h>\n#include <stdio.h>\n\nvoid cleanup_temp(void) {\n    printf(\"1. Removing temporary files\\n\");\n    /* unlink(\"/tmp/myapp.tmp\"); */\n}\n\nvoid flush_logs(void) {\n    printf(\"2. Flushing log buffers\\n\");\n}\n\nvoid close_db(void) {\n    printf(\"3. Closing database connection\\n\");\n}\n\nint main(void) {\n    /* Register in order: temp, logs, db */\n    atexit(cleanup_temp);  /* called LAST */\n    atexit(flush_logs);    /* called second */\n    atexit(close_db);      /* called FIRST (LIFO) */\n\n    printf(\"Doing work...\\n\");\n\n    /* exit(0) or returning from main triggers atexit handlers */\n    return 0;\n    /* Output order:\n       3. Closing database connection\n       2. Flushing log buffers\n       1. Removing temporary files */\n}",
+          "code_language": "c",
+          "key_points": [
+            "atexit registers cleanup functions called on normal termination",
+            "Called in reverse registration order (LIFO)",
+            "Called by exit() and return from main, NOT by _exit()",
+            "At least 32 handlers can be registered (POSIX minimum)",
+            "Handler functions take no args and return void"
+          ],
+          "gotchas": [
+            "_exit() and _Exit() skip atexit handlers entirely",
+            "Signal-caused termination (SIGKILL, SIGSEGV) does NOT call atexit handlers",
+            "Calling exit() inside an atexit handler is undefined behavior",
+            "After fork(), child inherits all registered atexit handlers -- use _exit() in child"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`atexit(fn)` registers a cleanup function called on `exit()` or `return` from `main()`. Called in reverse order (LIFO). NOT called by `_exit()` or signal termination.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdlib.h>\n#include <stdio.h>\n\nvoid cleanup(void) { printf(\"cleaning up\\n\"); }\n\nint main(void) {\n    atexit(cleanup);  /* called when main returns */\n    printf(\"working...\\n\");\n    return 0;  /* triggers cleanup() */\n}",
+          "code_language": "c",
+          "key_points": [
+            "LIFO order (last registered = first called)",
+            "Skipped by _exit() and signal kills"
+          ],
+          "gotchas": [
+            "Calling exit() inside an atexit handler is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do getenv(), setenv(), and putenv() manage environment variables?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["environment", "getenv", "setenv", "environ"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every process has an environment -- a list of `NAME=VALUE` strings accessible via the global `extern char **environ`.\n\n**APIs:**\n\n```c\n#include <stdlib.h>\nchar *getenv(const char *name);           /* returns value or NULL */\nint setenv(const char *name, const char *value, int overwrite);\nint unsetenv(const char *name);\nint putenv(char *string);  /* string format: \"NAME=VALUE\" */\n```\n\n**getenv():** Returns pointer to the value (not the `NAME=` part), or NULL if not found. The returned pointer should NOT be modified.\n\n**setenv():** Adds or modifies a variable. If `overwrite` is 0 and the variable exists, it is not changed. Always allocates a copy of the string.\n\n**putenv():** Takes a `NAME=VALUE` string and adds it directly (no copy). If you modify or free the string, the environment is corrupted.\n\n**unsetenv():** Removes a variable.\n\n**Inheritance:** Environment is inherited by child processes across `fork()` and `exec()`. `execle()`/`execve()` can pass an explicit environment.",
+          "pseudo_code": "1. getenv(\"HOME\") -> returns \"/home/user\" or NULL\n2. setenv(\"MY_VAR\", \"value\", 1) -> adds/overwrites\n3. putenv(\"MY_VAR=value\") -> adds directly (no copy)\n4. unsetenv(\"MY_VAR\") -> removes\n5. extern char **environ -> direct access to entire environment\n6. Environment inherited across fork and exec",
+          "actual_code": "#include <stdlib.h>\n#include <stdio.h>\n#include <unistd.h>\n\nint main(void) {\n    /* Read environment variable */\n    const char *home = getenv(\"HOME\");\n    printf(\"HOME = %s\\n\", home ? home : \"(not set)\");\n\n    /* Set a new variable */\n    if (setenv(\"MY_APP_MODE\", \"production\", 1) == -1)\n        perror(\"setenv\");\n    printf(\"MY_APP_MODE = %s\\n\", getenv(\"MY_APP_MODE\"));\n\n    /* Overwrite control */\n    setenv(\"MY_APP_MODE\", \"debug\", 0);  /* overwrite=0: no change */\n    printf(\"MY_APP_MODE (no overwrite) = %s\\n\", getenv(\"MY_APP_MODE\"));\n    /* Still \"production\" */\n\n    setenv(\"MY_APP_MODE\", \"debug\", 1);  /* overwrite=1: changed */\n    printf(\"MY_APP_MODE (overwrite) = %s\\n\", getenv(\"MY_APP_MODE\"));\n    /* Now \"debug\" */\n\n    /* Remove a variable */\n    unsetenv(\"MY_APP_MODE\");\n    printf(\"After unsetenv: %s\\n\",\n           getenv(\"MY_APP_MODE\") ? getenv(\"MY_APP_MODE\") : \"(not set)\");\n\n    /* Print all environment (via extern environ) */\n    extern char **environ;\n    printf(\"\\nFirst 3 env vars:\\n\");\n    for (int i = 0; i < 3 && environ[i]; i++)\n        printf(\"  %s\\n\", environ[i]);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "getenv returns a pointer to the value string (or NULL)",
+            "setenv copies the string; putenv uses the original (no copy)",
+            "Environment is inherited across fork and exec",
+            "extern char **environ gives direct access to the full environment",
+            "unsetenv removes a variable"
+          ],
+          "gotchas": [
+            "putenv does not copy the string -- modifying or freeing it corrupts the environment",
+            "getenv is not thread-safe on some systems (returns pointer to internal buffer)",
+            "setenv allocates memory that is never freed (small leak by design)",
+            "Modifying environ directly can cause memory corruption if not careful"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`getenv(name)` reads env vars. `setenv(name, value, overwrite)` sets them (copies string). `putenv(\"K=V\")` adds directly (no copy). `unsetenv(name)` removes. Inherited by child processes.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdlib.h>\n#include <stdio.h>\n\nint main(void) {\n    printf(\"HOME=%s\\n\", getenv(\"HOME\"));\n    setenv(\"MY_VAR\", \"hello\", 1);\n    printf(\"MY_VAR=%s\\n\", getenv(\"MY_VAR\"));\n    unsetenv(\"MY_VAR\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "setenv copies; putenv does not",
+            "Inherited across fork/exec"
+          ],
+          "gotchas": [
+            "putenv's string must not be freed or modified"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why is system() considered dangerous, and what are the alternatives?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["system", "shell", "security", "command-injection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`system()` executes a shell command by calling `/bin/sh -c command`.\n\n**Prototype:**\n```c\n#include <stdlib.h>\nint system(const char *command);\n```\n\n**How it works:** fork() + exec(\"/bin/sh\", \"-c\", command) + waitpid()\n\n**Why it is dangerous:**\n\n1. **Shell injection:** If the command string includes user input, an attacker can inject shell metacharacters:\n```c\nchar cmd[256];\nsprintf(cmd, \"ls %s\", user_input);  /* user_input = \"; rm -rf /\" */\nsystem(cmd);  /* executes: ls ; rm -rf / */\n```\n\n2. **Environment manipulation:** The shell inherits `PATH`, `IFS`, `LD_PRELOAD` etc. Attackers can manipulate these to execute arbitrary code.\n\n3. **Signal handling:** `system()` blocks SIGCHLD and ignores SIGINT/SIGQUIT, which can cause unexpected behavior.\n\n4. **Performance:** Spawns a shell process for every call.\n\n**Safer alternatives:**\n- `fork() + exec()` with explicit arguments (no shell parsing)\n- `posix_spawn()` for simpler process creation\n- Direct system calls instead of shelling out (e.g., `rename()` instead of `system(\"mv ...\")`)",
+          "pseudo_code": "DANGEROUS:\n  system(\"ls \" + user_input)  -- shell interprets metacharacters\n\nSAFE:\n  fork()\n  if child:\n    execl(\"/bin/ls\", \"ls\", user_input, NULL)  -- no shell, no injection\n  waitpid()\n\nOr use direct syscalls:\n  Instead of system(\"rm file\") -> unlink(\"file\")\n  Instead of system(\"mv a b\")  -> rename(\"a\", \"b\")\n  Instead of system(\"mkdir d\") -> mkdir(\"d\", 0755)",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/wait.h>\n\n/* DANGEROUS: shell injection possible */\nvoid unsafe_list(const char *dir) {\n    char cmd[256];\n    snprintf(cmd, sizeof(cmd), \"ls -la %s\", dir);\n    system(cmd);  /* if dir = \"; cat /etc/shadow\" -> BAD */\n}\n\n/* SAFE: fork+exec, no shell involvement */\nint safe_list(const char *dir) {\n    pid_t pid = fork();\n    if (pid == -1) { perror(\"fork\"); return -1; }\n\n    if (pid == 0) {\n        /* dir is passed as a single argument, no shell parsing */\n        execl(\"/bin/ls\", \"ls\", \"-la\", dir, (char *)NULL);\n        perror(\"exec\");\n        _exit(127);\n    }\n\n    int status;\n    waitpid(pid, &status, 0);\n    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;\n}\n\nint main(void) {\n    /* This is safe even with malicious input */\n    safe_list(\"/tmp\");\n\n    /* Prefer direct syscalls when possible */\n    /* Instead of system(\"mkdir /tmp/mydir\"): */\n    mkdir(\"/tmp/mydir\", 0755);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "system() invokes /bin/sh -c, which parses shell metacharacters",
+            "Shell injection is the primary security risk",
+            "fork+exec with explicit args avoids shell parsing entirely",
+            "Use direct syscalls (rename, unlink, mkdir) instead of shelling out",
+            "system() also has performance overhead (spawns a shell)"
+          ],
+          "gotchas": [
+            "system() in a setuid program is extremely dangerous -- shell inherits elevated privileges",
+            "Even quoting or escaping is fragile -- fork+exec is always safer",
+            "system() blocks SIGCHLD, which can interfere with other child management",
+            "system(NULL) returns non-zero if a shell is available (portability check)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`system()` runs a shell command -- dangerous due to shell injection with user input. Use `fork()` + `exec()` with explicit arguments instead. Or use direct syscalls (`rename()`, `unlink()`, `mkdir()`).",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <sys/wait.h>\n\n/* Safe: no shell, no injection */\nint safe_run(const char *prog, const char *arg) {\n    pid_t pid = fork();\n    if (pid == 0) {\n        execl(prog, prog, arg, (char *)NULL);\n        _exit(127);\n    }\n    int st;\n    waitpid(pid, &st, 0);\n    return WEXITSTATUS(st);\n}",
+          "code_language": "c",
+          "key_points": [
+            "system() = shell injection risk",
+            "fork+exec with explicit args is safe"
+          ],
+          "gotchas": [
+            "system() in setuid programs is extremely dangerous"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is vfork(), and why is it mostly obsolete?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["vfork", "fork", "exec", "historical"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`vfork()` was created as an optimization for the `fork() + exec()` pattern before copy-on-write was available.\n\n**How vfork() differs from fork():**\n1. The child **shares** the parent's address space (no copy, no COW)\n2. The parent is **suspended** until the child calls `exec()` or `_exit()`\n3. The child must NOT:\n   - Modify any variables (would corrupt parent's state)\n   - Call any functions that modify state\n   - Return from the function that called `vfork()`\n   - Call `exit()` (would run atexit handlers in shared space)\n\n**Historical motivation:**\nBefore COW, `fork()` physically copied the entire address space. For the common `fork() + exec()` pattern, this was wasteful since `exec()` immediately discards the copy. `vfork()` avoided the copy entirely.\n\n**Current status:**\n- With modern COW fork, `vfork()` provides minimal benefit\n- It is error-prone and hard to use correctly\n- POSIX.1-2008 marked `vfork()` as obsolescent\n- `posix_spawn()` is the modern replacement for the fork+exec pattern\n- Some embedded/real-time systems without MMU still use vfork",
+          "pseudo_code": "vfork():\n  1. Child shares parent's address space (no copy)\n  2. Parent is BLOCKED until child calls exec() or _exit()\n  3. Child MUST NOT modify variables, call functions, or return\n  4. Only two legal operations: exec() or _exit()\n\nfork() with COW:\n  1. Child gets COW copy (fast, safe)\n  2. Parent continues immediately\n  3. Child can do anything\n\nConclusion: use fork() (with COW) or posix_spawn()",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/wait.h>\n\nint main(void) {\n    /* vfork example -- extremely restricted child */\n    pid_t pid = vfork();\n    if (pid == -1) {\n        perror(\"vfork\");\n        return 1;\n    }\n\n    if (pid == 0) {\n        /* Child: ONLY exec() or _exit() is safe */\n        /* DO NOT modify variables, call printf, etc. */\n        execlp(\"echo\", \"echo\", \"hello from vfork child\", (char *)NULL);\n        _exit(127);  /* only if exec fails */\n    }\n\n    /* Parent resumes here after child execs or exits */\n    int status;\n    waitpid(pid, &status, 0);\n    printf(\"Child finished\\n\");\n\n    /* Modern alternative: posix_spawn */\n    /* posix_spawn() combines fork+exec safely and efficiently */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "vfork shares the parent's address space (no copy at all)",
+            "Parent is blocked until child calls exec() or _exit()",
+            "Child must NOT modify variables, call functions, or return",
+            "Created before COW made fork() efficient",
+            "posix_spawn() is the modern replacement"
+          ],
+          "gotchas": [
+            "Modifying ANY variable in vfork child corrupts the parent's state",
+            "Calling exit() (not _exit) in vfork child runs atexit handlers in shared space",
+            "Returning from the function that called vfork is undefined behavior",
+            "vfork is marked obsolescent in POSIX.1-2008"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`vfork()` shares parent's address space (no copy). Parent blocked until child calls `exec()` or `_exit()`. Mostly obsolete since COW makes `fork()` efficient. Use `fork()` or `posix_spawn()` instead.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <sys/wait.h>\n\nint main(void) {\n    pid_t pid = vfork();\n    if (pid == 0) {\n        /* ONLY exec or _exit is safe */\n        execlp(\"echo\", \"echo\", \"vfork child\", (char *)NULL);\n        _exit(127);\n    }\n    wait(NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Shares parent address space (dangerous)",
+            "Obsolete: use fork() with COW or posix_spawn()"
+          ],
+          "gotchas": [
+            "Modifying variables in vfork child corrupts parent"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does the process memory layout look like (text, data, BSS, heap, stack)?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["memory-layout", "text", "data", "bss", "heap", "stack"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A running C process has a well-defined memory layout (low to high addresses on most architectures):\n\n**1. Text segment (code):**\n- Contains the executable machine instructions\n- Read-only and sharable (multiple instances of the same program share it)\n- Attempting to write causes SIGSEGV\n\n**2. Initialized data segment (.data):**\n- Global and static variables with explicit initialization\n- e.g., `int x = 42;` at file scope, `static int y = 10;`\n\n**3. Uninitialized data segment (BSS -- Block Started by Symbol):**\n- Global and static variables without explicit initialization (or initialized to 0)\n- The kernel initializes this to zero before the program starts\n- Does not take space in the executable file (just the size is stored)\n- e.g., `int arr[1000];` at file scope\n\n**4. Heap:**\n- Dynamic memory allocated by `malloc()`, `calloc()`, `realloc()`\n- Grows upward (toward higher addresses)\n- Managed by the C library (using `brk()`/`sbrk()` or `mmap()`)\n\n**5. Stack:**\n- Local variables, function parameters, return addresses\n- Grows downward (toward lower addresses)\n- Each function call creates a stack frame\n- Limited size (typically 8MB default, controlled by `RLIMIT_STACK`)\n\n**6. Kernel space (above stack):**\n- Not accessible to user-mode code\n\nBetween heap and stack is unmapped memory. If they collide, stack overflow occurs.",
+          "pseudo_code": "High addresses:\n  +------------------+\n  | Kernel space     |  (not accessible)\n  +------------------+\n  | Stack            |  grows DOWN (local vars, frames)\n  |       |          |\n  |       v          |\n  |                  |\n  |       ^          |\n  |       |          |\n  | Heap             |  grows UP (malloc)\n  +------------------+\n  | BSS (.bss)       |  uninitialized globals (zeroed)\n  +------------------+\n  | Data (.data)     |  initialized globals\n  +------------------+\n  | Text (.text)     |  code (read-only)\n  +------------------+\nLow addresses",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Text segment: function code */\nvoid func(void) { printf(\"in func\\n\"); }\n\n/* Initialized data segment */\nint global_init = 42;\nstatic int static_init = 10;\n\n/* BSS segment (uninitialized, zeroed) */\nint global_uninit;\nstatic int static_uninit;\nint large_array[10000];  /* in BSS, does not bloat executable */\n\nint main(void) {\n    /* Stack */\n    int local_var = 99;\n    char local_arr[128];\n\n    /* Heap */\n    int *heap_ptr = malloc(sizeof(int) * 100);\n\n    printf(\"Text:   func    @ %p\\n\", (void *)func);\n    printf(\"Data:   global  @ %p (value=%d)\\n\",\n           (void *)&global_init, global_init);\n    printf(\"BSS:    uninit  @ %p (value=%d)\\n\",\n           (void *)&global_uninit, global_uninit);  /* 0 */\n    printf(\"Heap:   malloc  @ %p\\n\", (void *)heap_ptr);\n    printf(\"Stack:  local   @ %p\\n\", (void *)&local_var);\n\n    /* Typical address order: text < data < bss < heap <<< stack */\n    printf(\"\\nNote: heap grows up, stack grows down\\n\");\n\n    free(heap_ptr);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Five segments: text (code), data (initialized), BSS (uninitialized), heap, stack",
+            "Text is read-only and shareable between processes",
+            "BSS is zeroed by kernel and does not take space in the executable file",
+            "Heap grows up (malloc); stack grows down (function calls)",
+            "Stack overflow occurs when stack meets heap or exceeds RLIMIT_STACK"
+          ],
+          "gotchas": [
+            "BSS variables are guaranteed to be zero; local stack variables are NOT initialized",
+            "Stack size is limited (often 8MB) -- large local arrays can cause stack overflow",
+            "The heap may use mmap for large allocations, placing them outside the traditional heap area",
+            "ASLR randomizes the base addresses of stack, heap, and libraries for security"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Process layout (low to high): text (code, read-only) -> data (initialized globals) -> BSS (uninitialized globals, zeroed) -> heap (malloc, grows up) -> stack (locals, grows down). BSS does not take space in the executable.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint global = 42;      /* data segment */\nint uninit;           /* BSS (zeroed) */\n\nint main(void) {\n    int local = 1;                     /* stack */\n    int *p = malloc(sizeof(int));      /* heap */\n    printf(\"data=%p bss=%p heap=%p stack=%p\\n\",\n           (void*)&global, (void*)&uninit, (void*)p, (void*)&local);\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "text < data < BSS < heap ... stack",
+            "BSS zeroed; stack variables NOT initialized"
+          ],
+          "gotchas": [
+            "Large local arrays cause stack overflow"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What race conditions can occur with fork(), and how do you handle them?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["race-condition", "fork", "synchronization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "After `fork()`, the order of execution between parent and child is **indeterminate**. This creates several potential race conditions:\n\n**1. Output interleaving:**\nBoth parent and child writing to the same fd (inherited, shared offset) can produce interleaved output.\n\n**2. File operation races:**\nParent creates a file; child tries to read it. If child runs first, the file may not exist yet.\n\n**3. Variable state assumptions:**\nAssumming the child runs before the parent (or vice versa) is a bug. The scheduler decides.\n\n**4. Signal handling races:**\nParent installs signal handler after fork -- child may not have it. Or parent sends signal to child before child installs its handler.\n\n**Synchronization techniques:**\n\n1. **Pipes:** Parent/child communicate via a pipe. One blocks on `read()` until the other writes.\n\n2. **Signals:** Parent sends `SIGUSR1` to child (or vice versa) with `kill()`, child waits with `sigsuspend()`.\n\n3. **wait():** Parent calls `wait()` to synchronize after child completes.\n\n4. **Semaphores/shared memory:** For more complex synchronization.\n\nThe APUE book recommends a `TELL_WAIT/TELL_PARENT/TELL_CHILD/WAIT_PARENT/WAIT_CHILD` pattern using either signals or pipes.",
+          "pseudo_code": "RACE (broken):\n  fork()\n  parent: create file -> write data\n  child:  open file -> read data\n  Bug: child might run first, file does not exist yet\n\nFIX with pipe synchronization:\n  pipe(fd)\n  fork()\n  parent: create file -> write(fd[1], \"go\", 2)  // signal child\n  child:  read(fd[0], buf, 2) -> open file -> read data\n  Child blocks until parent signals readiness",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\n/* Pipe-based parent-child synchronization */\nstatic int pfd_parent[2];  /* parent signals child */\nstatic int pfd_child[2];   /* child signals parent */\n\nvoid tell_wait(void) {\n    pipe(pfd_parent);\n    pipe(pfd_child);\n}\n\nvoid tell_child(void) {\n    write(pfd_parent[1], \"c\", 1);\n}\n\nvoid wait_parent(void) {\n    char c;\n    read(pfd_parent[0], &c, 1);  /* blocks until parent signals */\n}\n\nvoid tell_parent(void) {\n    write(pfd_child[1], \"p\", 1);\n}\n\nvoid wait_child(void) {\n    char c;\n    read(pfd_child[0], &c, 1);  /* blocks until child signals */\n}\n\nint main(void) {\n    tell_wait();\n\n    pid_t pid = fork();\n    if (pid == 0) {\n        /* Child: wait for parent to be ready */\n        wait_parent();\n        printf(\"Child: parent is ready, proceeding\\n\");\n        tell_parent();  /* signal parent we are done */\n        _exit(0);\n    }\n\n    /* Parent: do setup work */\n    printf(\"Parent: doing setup...\\n\");\n    /* ... create files, initialize state ... */\n    tell_child();   /* signal child that setup is complete */\n    wait_child();   /* wait for child to finish */\n    printf(\"Parent: child is done\\n\");\n\n    wait(NULL);\n    close(pfd_parent[0]); close(pfd_parent[1]);\n    close(pfd_child[0]); close(pfd_child[1]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Execution order after fork() is indeterminate -- never assume an order",
+            "Shared file descriptors mean shared offsets -- writes can interleave",
+            "Pipes are the simplest synchronization mechanism between parent and child",
+            "APUE TELL_WAIT pattern provides clean parent-child coordination",
+            "Signals (SIGUSR1/SIGUSR2) can also synchronize but are trickier"
+          ],
+          "gotchas": [
+            "Assuming the child always runs first (or parent) is a portability bug",
+            "On Linux, the parent tends to run first (but this is not guaranteed)",
+            "Shared stdio buffers after fork can cause duplicate output if not flushed",
+            "Using sleep() for synchronization is a race condition (timing-dependent)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "After fork(), parent/child execution order is undefined. Synchronize with pipes (read blocks until write), signals, or wait(). Never assume an order. Never use sleep() for synchronization.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <sys/wait.h>\n#include <stdio.h>\n\nint main(void) {\n    int pfd[2];\n    pipe(pfd);\n    if (fork() == 0) {\n        char c;\n        read(pfd[0], &c, 1);  /* block until parent signals */\n        printf(\"Child: parent is ready\\n\");\n        _exit(0);\n    }\n    printf(\"Parent: setup done\\n\");\n    write(pfd[1], \"g\", 1);  /* signal child */\n    wait(NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Execution order is indeterminate after fork",
+            "Pipes provide blocking synchronization"
+          ],
+          "gotchas": [
+            "sleep() for synchronization is a race condition"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How would you implement a simple shell in C?",
+      "display_order": 16,
+      "difficulty": "advanced",
+      "tags": ["shell", "fork", "exec", "wait", "pipeline"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A basic shell follows a simple loop: **read, parse, fork, exec, wait** (RPFEW).\n\n**Core components:**\n\n1. **Read:** Get a command line from the user (`fgets()` or `readline()`)\n2. **Parse:** Tokenize the line into command and arguments\n3. **Fork:** Create a child process\n4. **Exec:** In the child, replace the process image with the command\n5. **Wait:** Parent waits for the child to complete\n\n**Additional features for a real shell:**\n- Built-in commands (`cd`, `exit`, `export`) -- these cannot be external\n- Background execution (`&`) -- do not wait for child\n- I/O redirection (`>`, `<`, `>>`) -- use `dup2()` before exec\n- Pipes (`|`) -- use `pipe()` + `dup2()` to connect commands\n- Signal handling -- ignore `SIGINT`/`SIGTSTP` in the shell, reset in children\n\n`cd` must be a builtin because `chdir()` in a child process does not affect the parent (the shell).",
+          "pseudo_code": "loop:\n  1. Print prompt\n  2. Read line (fgets or readline)\n  3. If line is empty or EOF, continue/exit\n  4. Parse into argv[] tokens\n  5. Check for builtins (cd, exit)\n  6. Fork\n  7. Child: exec(argv[0], argv)\n  8. Parent: waitpid(child)\n  9. Repeat\n\nFor pipes:  cmd1 | cmd2\n  pipe(pfd)\n  fork child1: dup2(pfd[1], STDOUT); exec(cmd1)\n  fork child2: dup2(pfd[0], STDIN);  exec(cmd2)\n  close pipe in parent\n  wait for both children",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <sys/wait.h>\n\n#define MAX_ARGS 64\n#define MAX_LINE 1024\n\nint parse_line(char *line, char **argv) {\n    int argc = 0;\n    char *token = strtok(line, \" \\t\\n\");\n    while (token != NULL && argc < MAX_ARGS - 1) {\n        argv[argc++] = token;\n        token = strtok(NULL, \" \\t\\n\");\n    }\n    argv[argc] = NULL;\n    return argc;\n}\n\nint main(void) {\n    char line[MAX_LINE];\n    char *argv[MAX_ARGS];\n\n    for (;;) {\n        printf(\"mysh> \");\n        fflush(stdout);\n\n        if (fgets(line, sizeof(line), stdin) == NULL)\n            break;  /* EOF */\n\n        int argc = parse_line(line, argv);\n        if (argc == 0) continue;\n\n        /* Builtin: cd */\n        if (strcmp(argv[0], \"cd\") == 0) {\n            if (argv[1] == NULL)\n                chdir(getenv(\"HOME\"));\n            else if (chdir(argv[1]) == -1)\n                perror(\"cd\");\n            continue;\n        }\n\n        /* Builtin: exit */\n        if (strcmp(argv[0], \"exit\") == 0)\n            break;\n\n        /* External command: fork + exec */\n        pid_t pid = fork();\n        if (pid == -1) {\n            perror(\"fork\");\n            continue;\n        }\n\n        if (pid == 0) {\n            /* Child: execute command */\n            execvp(argv[0], argv);\n            fprintf(stderr, \"mysh: %s: command not found\\n\", argv[0]);\n            _exit(127);\n        }\n\n        /* Parent: wait for child */\n        int status;\n        waitpid(pid, &status, 0);\n    }\n\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Shell loop: read -> parse -> fork -> exec -> wait",
+            "cd must be a builtin (chdir in child does not affect parent)",
+            "execvp searches PATH for the command",
+            "Child calls _exit(127) if exec fails (convention for command not found)",
+            "Pipes use pipe() + dup2() to connect stdout of one command to stdin of next"
+          ],
+          "gotchas": [
+            "strtok modifies the input string and is not reentrant -- use strtok_r for thread safety",
+            "The shell must handle SIGINT differently from children (ignore in shell, default in child)",
+            "Background processes need SIGCHLD handling to avoid zombies",
+            "I/O redirection must be done after fork but before exec"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Shell = loop of: read line, parse into argv, fork, child execs, parent waits. `cd` and `exit` must be builtins. Use `execvp()` for PATH search. Pipes: `pipe()` + `dup2()` between forked children.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <string.h>\n#include <sys/wait.h>\n#include <stdlib.h>\n\nint main(void) {\n    char line[256];\n    while (printf(\"$ \"), fgets(line, 256, stdin)) {\n        line[strcspn(line, \"\\n\")] = '\\0';\n        if (!*line) continue;\n        if (fork() == 0) {\n            execlp(line, line, (char *)NULL);\n            _exit(127);\n        }\n        wait(NULL);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Read-parse-fork-exec-wait loop",
+            "cd must be a builtin"
+          ],
+          "gotchas": [
+            "Shell must handle signals differently from children"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are getpid() and getppid(), and how does the process ID hierarchy work?",
+      "display_order": 17,
+      "difficulty": "advanced",
+      "tags": ["getpid", "getppid", "pid", "process-hierarchy"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every UNIX process has a unique process ID (PID) and knows its parent's PID.\n\n**Functions:**\n```c\n#include <unistd.h>\npid_t getpid(void);   /* always succeeds, returns current PID */\npid_t getppid(void);  /* always succeeds, returns parent PID */\n```\n\n**PID properties:**\n- PIDs are non-negative integers (typically 16-bit or 32-bit)\n- PID 0 = swapper/scheduler (kernel process)\n- PID 1 = init (or systemd) -- ancestor of all user processes\n- PIDs are assigned incrementally and wrap around\n- A PID is guaranteed unique while the process exists (reused after termination)\n\n**Process hierarchy:**\n- Every process (except PID 0) has a parent\n- When a parent dies, children are reparented to init (PID 1)\n- `getppid()` in the child of a dead parent returns 1\n- The process tree can be viewed with `pstree` command\n\n**pid_t type:**\n- Defined in `<sys/types.h>`\n- Signed integer (negative values used for process group IDs in some APIs)\n- `kill(-pgid, sig)` sends to a process group (negative PID)",
+          "pseudo_code": "1. getpid() returns the caller's PID (never fails)\n2. getppid() returns the parent's PID (never fails)\n3. After fork(): child getppid() == parent getpid()\n4. If parent dies: child getppid() returns 1 (init)\n5. PID 0 = kernel scheduler\n6. PID 1 = init (reaps orphans)",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    printf(\"Current process: pid=%d, ppid=%d\\n\", getpid(), getppid());\n\n    pid_t child = fork();\n    if (child == 0) {\n        printf(\"Child: pid=%d, ppid=%d\\n\", getpid(), getppid());\n        /* getppid() == parent's getpid() */\n        _exit(0);\n    }\n\n    printf(\"Parent: my pid=%d, child pid=%d\\n\", getpid(), child);\n    waitpid(child, NULL, 0);\n\n    /* Demonstrate orphan reparenting */\n    pid_t orphan = fork();\n    if (orphan == 0) {\n        sleep(1);  /* let parent exit */\n        printf(\"Orphan: pid=%d, ppid=%d (should be 1 or subreaper)\\n\",\n               getpid(), getppid());\n        _exit(0);\n    }\n    /* Parent does not wait -- orphan gets reparented to init */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "getpid() and getppid() always succeed (no error return)",
+            "PID 0 = kernel; PID 1 = init (ancestor of all user processes)",
+            "PIDs are reused after process termination",
+            "Orphaned processes have ppid = 1 (or subreaper PID)",
+            "pid_t is signed to support negative values in kill(-pgid, sig)"
+          ],
+          "gotchas": [
+            "getpid() in a multithreaded program returns the thread group leader's PID (TGID), not the thread's tid",
+            "PID wrap-around can cause a new process to get an old PID -- never cache PIDs long-term",
+            "Linux's pid_max is configurable (/proc/sys/kernel/pid_max, default 32768)",
+            "After fork, getppid() in the child may return a stale value if parent exits before child calls it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`getpid()` returns current PID, `getppid()` returns parent's PID. Both always succeed. PID 0 = kernel, PID 1 = init. Orphans get ppid=1.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <sys/wait.h>\n\nint main(void) {\n    printf(\"pid=%d ppid=%d\\n\", getpid(), getppid());\n    if (fork() == 0) {\n        printf(\"child: pid=%d ppid=%d\\n\", getpid(), getppid());\n        _exit(0);\n    }\n    wait(NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always succeed, no error return",
+            "PID 1 = init, adopts orphans"
+          ],
+          "gotchas": [
+            "In threads, getpid() returns TGID, not thread tid"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is posix_spawn(), and when should you use it instead of fork+exec?",
+      "display_order": 18,
+      "difficulty": "advanced",
+      "tags": ["posix_spawn", "fork", "exec", "process-creation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`posix_spawn()` provides a combined fork+exec operation designed to be efficient and safe, especially on systems without MMU (no virtual memory) or in multithreaded programs.\n\n**Prototype:**\n```c\n#include <spawn.h>\nint posix_spawn(pid_t *pid, const char *path,\n                const posix_spawn_file_actions_t *file_actions,\n                const posix_spawnattr_t *attrp,\n                char *const argv[], char *const envp[]);\n```\n\n**Why posix_spawn over fork+exec:**\n1. **Multithreaded safety:** `fork()` in a multithreaded program is problematic (only one thread survives, mutexes may be locked). `posix_spawn()` avoids this.\n2. **MMU-less systems:** No virtual memory means no COW, making `fork()` expensive or impossible. `posix_spawn()` can use `vfork` internally.\n3. **File actions:** Declaratively specify I/O redirections (open, close, dup2) to perform between fork and exec.\n4. **Attributes:** Set signal masks, process group, scheduling policy, etc.\n\n**posix_spawnp()** is the variant that searches PATH (like `execlp`).\n\nThe API is more verbose but avoids the unsafe window between fork and exec where async-signal-safety rules apply.",
+          "pseudo_code": "1. Initialize file_actions (optional redirection)\n2. Initialize attributes (optional signal/scheduling)\n3. Call posix_spawn(&pid, path, &file_actions, &attrs, argv, envp)\n4. On success: pid is set, new process is running\n5. waitpid(pid, &status, 0) to reap\n\nEquivalent to:\n  fork()\n  if child:\n    apply file_actions (close/open/dup2)\n    apply attributes (signal mask, pgid)\n    exec(path, argv, envp)",
+          "actual_code": "#include <spawn.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <sys/wait.h>\n#include <unistd.h>\n\nint main(void) {\n    pid_t pid;\n    int status;\n\n    /* Simple: run \"ls -la /tmp\" */\n    char *argv[] = {\"ls\", \"-la\", \"/tmp\", NULL};\n    extern char **environ;\n\n    int ret = posix_spawnp(&pid, \"ls\", NULL, NULL, argv, environ);\n    if (ret != 0) {\n        fprintf(stderr, \"posix_spawnp: %s\\n\", strerror(ret));\n        return 1;\n    }\n    waitpid(pid, &status, 0);\n    printf(\"ls exited with %d\\n\", WEXITSTATUS(status));\n\n    /* With file actions: redirect stdout to a file */\n    posix_spawn_file_actions_t actions;\n    posix_spawn_file_actions_init(&actions);\n    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO,\n        \"output.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n\n    char *argv2[] = {\"echo\", \"hello from posix_spawn\", NULL};\n    ret = posix_spawnp(&pid, \"echo\", &actions, NULL, argv2, environ);\n    posix_spawn_file_actions_destroy(&actions);\n\n    if (ret == 0) {\n        waitpid(pid, &status, 0);\n        printf(\"echo wrote to output.txt\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "posix_spawn combines fork+exec in one call",
+            "Safer in multithreaded programs than fork()",
+            "posix_spawnp searches PATH (like execlp)",
+            "File actions specify I/O redirections declaratively",
+            "Returns error code directly (not -1 + errno)"
+          ],
+          "gotchas": [
+            "posix_spawn returns the error code directly (not via errno) -- check ret != 0",
+            "Not as flexible as fork+exec for complex setup between fork and exec",
+            "File actions and attributes must be initialized and destroyed (memory management)",
+            "Not all systems support all posix_spawnattr flags (e.g., POSIX_SPAWN_SETSID is recent)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`posix_spawn()`/`posix_spawnp()` combine fork+exec in one call. Safer in multithreaded programs and on MMU-less systems. Use file actions for I/O redirection. Returns error code directly (not -1 + errno).",
+          "pseudo_code": "",
+          "actual_code": "#include <spawn.h>\n#include <sys/wait.h>\n#include <stdio.h>\n\nint main(void) {\n    pid_t pid;\n    extern char **environ;\n    char *argv[] = {\"echo\", \"hello\", NULL};\n    int ret = posix_spawnp(&pid, \"echo\", NULL, NULL, argv, environ);\n    if (ret == 0) {\n        int st;\n        waitpid(pid, &st, 0);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Combines fork+exec safely",
+            "posix_spawnp searches PATH"
+          ],
+          "gotchas": [
+            "Returns error code directly, not via errno"
+          ]
+        }
+      ]
+    }
+  ]
+}

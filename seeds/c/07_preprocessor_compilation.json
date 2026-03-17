@@ -1,0 +1,467 @@
+{
+  "concept_slug": "preprocessor-compilation",
+  "questions": [
+    {
+      "title": "How do #define macros work (object-like and function-like)?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["define", "macro", "preprocessor", "object-like", "function-like"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `#define` directive creates **macros** -- text substitutions performed by the preprocessor before compilation.\n\n**Object-like macros** (constants):\n```c\n#define PI 3.14159\n#define MAX_SIZE 100\n```\nEvery occurrence of `PI` is replaced with `3.14159`.\n\n**Function-like macros** (parameterized):\n```c\n#define SQUARE(x) ((x) * (x))\n#define MAX(a, b) ((a) > (b) ? (a) : (b))\n```\nThey look like functions but are text substitution. The parentheses around parameters and the entire expression are critical to avoid operator precedence bugs.\n\n**Key differences from functions:**\n- No type checking.\n- No function call overhead.\n- Arguments are substituted textually, not evaluated once.\n- Can work with any type (type-generic).\n- Side effects in arguments can be evaluated multiple times.",
+          "pseudo_code": "Object-like: #define NAME replacement_text\nFunction-like: #define NAME(params) replacement_text\n\n#define PI 3.14159        // constant\n#define SQUARE(x) ((x)*(x))  // function-like\n\nParenthesize:\n  - Each parameter: (x)\n  - Entire expression: ((x)*(x))\n\nText substitution, NOT function call\nNo type checking, no call overhead",
+          "actual_code": "#include <stdio.h>\n\n/* Object-like macros */\n#define PI 3.14159\n#define MAX_BUF 256\n#define DEBUG 1\n\n/* Function-like macros (with proper parenthesization) */\n#define SQUARE(x)   ((x) * (x))\n#define MAX(a, b)   ((a) > (b) ? (a) : (b))\n#define MIN(a, b)   ((a) < (b) ? (a) : (b))\n#define ABS(x)      ((x) >= 0 ? (x) : -(x))\n\n/* Multi-line macro */\n#define SWAP(a, b, type) do { \\\n    type _tmp = (a);           \\\n    (a) = (b);                 \\\n    (b) = _tmp;                \\\n} while (0)\n\nint main(void) {\n    printf(\"PI = %f\\n\", PI);  /* 3.141590 */\n    printf(\"SQUARE(5) = %d\\n\", SQUARE(5)); /* 25 */\n    printf(\"MAX(3, 7) = %d\\n\", MAX(3, 7)); /* 7 */\n\n    /* Works with any type */\n    printf(\"MAX(3.5, 2.1) = %f\\n\", MAX(3.5, 2.1)); /* 3.5 */\n\n    /* do-while(0) pattern for multi-statement macros */\n    int x = 10, y = 20;\n    SWAP(x, y, int);\n    printf(\"x=%d y=%d\\n\", x, y); /* x=20 y=10 */\n\n    #if DEBUG\n        printf(\"Debug mode is on\\n\");\n    #endif\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Object-like macros are constants; function-like macros are parameterized",
+            "Always parenthesize macro parameters AND the entire expression",
+            "Macros are text substitution -- no type checking, no call overhead",
+            "Use do { ... } while(0) for multi-statement macros",
+            "Backslash \\ continues a macro definition to the next line"
+          ],
+          "gotchas": [
+            "SQUARE(x+1) without parens becomes x+1*x+1 = 2x+1, not (x+1)^2",
+            "SQUARE(i++) evaluates i++ twice: ((i++)*(i++)) -- double increment!",
+            "Macros have no scope -- they persist until #undef or end of translation unit",
+            "#define MAX(a,b) has NO space between MAX and ( -- space makes it object-like"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Object-like: `#define PI 3.14`. Function-like: `#define SQ(x) ((x)*(x))`. Always parenthesize parameters and expression. Text substitution, no type checking. Use `do { } while(0)` for multi-statement macros.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#define MAX(a,b) ((a)>(b)?(a):(b))\n#define SQUARE(x) ((x)*(x))\nint main(void) {\n    printf(\"%d\\n\", MAX(3, 7));    /* 7 */\n    printf(\"%d\\n\", SQUARE(4));    /* 16 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Parenthesize everything in macros",
+            "Text substitution, not function call"
+          ],
+          "gotchas": [
+            "SQUARE(i++) evaluates i++ twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between #include with angle brackets and quotes?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["include", "header", "angle-brackets", "quotes"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`#include <header.h>`** (angle brackets):\n- Searches the **system include directories** (e.g., `/usr/include`).\n- Used for standard library headers and third-party libraries.\n- The search path is set by `-I` flags and compiler defaults.\n\n**`#include \"header.h\"`** (double quotes):\n- Searches the **current directory** first, then falls back to system directories.\n- Used for your own project headers.\n- The exact search behavior is implementation-defined, but \"current directory first\" is universal.\n\n**What #include does:**\n1. The preprocessor finds the file.\n2. The entire contents of the file are inserted at the #include location.\n3. This is pure text inclusion -- there is no special compilation.",
+          "pseudo_code": "#include <stdio.h>    // search system dirs only\n#include \"myfile.h\"   // search current dir first, then system dirs\n\nSystem dirs: /usr/include, /usr/local/include, etc.\nCustom dirs: gcc -I/path/to/headers\n\n#include literally inserts the file's text at that point",
+          "actual_code": "/* mymath.h -- our own header file */\n#ifndef MYMATH_H\n#define MYMATH_H\n\nint add(int a, int b);\nint multiply(int a, int b);\n\n#endif\n\n/* main.c */\n#include <stdio.h>      /* system header: angle brackets */\n#include <stdlib.h>     /* system header */\n/* #include \"mymath.h\" */  /* project header: quotes */\n\n/* For this example, define inline */\nint add(int a, int b) { return a + b; }\nint multiply(int a, int b) { return a * b; }\n\nint main(void) {\n    printf(\"%d\\n\", add(3, 4));       /* 7 */\n    printf(\"%d\\n\", multiply(3, 4)); /* 12 */\n    return 0;\n}\n\n/* Compile with custom include path:\n   gcc -I./include main.c -o main */",
+          "code_language": "c",
+          "key_points": [
+            "<header.h> searches system include paths",
+            "\"header.h\" searches current directory first, then system paths",
+            "Use <> for standard/system headers; \"\" for project headers",
+            "#include performs textual insertion of the file",
+            "Add custom paths with gcc -I flag"
+          ],
+          "gotchas": [
+            "Including the same header twice without guards causes redefinition errors",
+            "#include \"header.h\" fallback behavior is implementation-defined",
+            "Circular includes (A includes B, B includes A) cause issues without header guards",
+            "Never #include .c files -- include only .h headers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`<header.h>` searches system directories. `\"header.h\"` searches current directory first, then system. Use `<>` for stdlib, `\"\"` for your headers. #include is textual insertion.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>    /* system header */\n/* #include \"mylib.h\" */   /* project header */\nint main(void) {\n    printf(\"Hello\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "<> = system; \"\" = current dir first",
+            "#include is text insertion"
+          ],
+          "gotchas": [
+            "Never #include .c files"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does conditional compilation work (#ifdef, #ifndef, #if, #endif)?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["conditional-compilation", "ifdef", "ifndef", "preprocessor"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Conditional compilation directives include or exclude code based on preprocessor conditions.\n\n**Directives:**\n- `#ifdef NAME` -- true if NAME is defined (via #define or -D flag).\n- `#ifndef NAME` -- true if NAME is NOT defined.\n- `#if expression` -- true if expression is non-zero.\n- `#elif expression` -- else-if branch.\n- `#else` -- else branch.\n- `#endif` -- ends the conditional block.\n- `#if defined(NAME)` -- same as #ifdef but allows logical operators: `#if defined(A) && defined(B)`.\n\n**Common uses:**\n1. **Header guards:** Prevent double inclusion.\n2. **Debug code:** `#ifdef DEBUG printf(...); #endif`.\n3. **Platform-specific code:** `#ifdef _WIN32 ... #elif __linux__ ... #endif`.\n4. **Feature flags:** Enable/disable features at compile time.\n5. **Compiler detection:** `#ifdef __GNUC__` for GCC-specific code.",
+          "pseudo_code": "#ifdef NAME ... #endif         // if NAME is defined\n#ifndef NAME ... #endif        // if NAME is NOT defined\n#if expr ... #elif ... #else ... #endif\n#if defined(A) && !defined(B)  // complex conditions\n\nDefine from command line: gcc -DDEBUG -DVERSION=2\nDefine in code: #define DEBUG",
+          "actual_code": "#include <stdio.h>\n\n/* Define from command line: gcc -DDEBUG -DVERSION=2 */\n#define DEBUG\n#define VERSION 2\n\nint main(void) {\n    /* #ifdef: check if defined */\n    #ifdef DEBUG\n        printf(\"Debug mode enabled\\n\");\n    #endif\n\n    /* #if: check value */\n    #if VERSION >= 2\n        printf(\"Version 2+ features\\n\");\n    #elif VERSION == 1\n        printf(\"Version 1 features\\n\");\n    #else\n        printf(\"Unknown version\\n\");\n    #endif\n\n    /* Platform detection */\n    #if defined(__linux__)\n        printf(\"Running on Linux\\n\");\n    #elif defined(_WIN32)\n        printf(\"Running on Windows\\n\");\n    #elif defined(__APPLE__)\n        printf(\"Running on macOS\\n\");\n    #else\n        printf(\"Unknown platform\\n\");\n    #endif\n\n    /* Compiler detection */\n    #ifdef __GNUC__\n        printf(\"Compiled with GCC/Clang\\n\");\n    #endif\n\n    /* Complex conditions */\n    #if defined(DEBUG) && VERSION > 1\n        printf(\"Debug V2+\\n\");\n    #endif\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "#ifdef checks if a macro is defined; #if checks a value",
+            "#if allows complex expressions with &&, ||, defined()",
+            "Use -D flag to define macros from the command line",
+            "Common for debug code, platform detection, and feature flags",
+            "Every #if/#ifdef must have a matching #endif"
+          ],
+          "gotchas": [
+            "An undefined macro in #if evaluates to 0, not an error: #if UNDEFINED is #if 0",
+            "#ifdef checks existence only, not value: #define X 0 makes #ifdef X true",
+            "Forgetting #endif causes confusing compile errors far from the actual problem",
+            "#if can only evaluate integer constant expressions, not variables"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`#ifdef` = if defined. `#ifndef` = if NOT defined. `#if expr` = if expression is non-zero. `#endif` ends the block. Use for debug code, platform detection, and header guards.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#define DEBUG\nint main(void) {\n    #ifdef DEBUG\n        printf(\"debug on\\n\");\n    #endif\n    #if defined(__linux__) || defined(__APPLE__)\n        printf(\"Unix-like\\n\");\n    #endif\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "#ifdef checks existence; #if checks value",
+            "Define from command line with -DNAME"
+          ],
+          "gotchas": [
+            "Undefined macro in #if is 0, not an error"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are header guards and #pragma once?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["header-guard", "pragma-once", "include-guard", "double-inclusion"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Header guards** prevent a header file from being included more than once in the same translation unit, which would cause redefinition errors.\n\n**Traditional header guard pattern:**\n```c\n#ifndef HEADER_NAME_H\n#define HEADER_NAME_H\n/* header contents */\n#endif\n```\nOn first include, `HEADER_NAME_H` is not defined, so the contents are included and the macro is defined. On subsequent includes, the macro IS defined, so the contents are skipped.\n\n**`#pragma once`:**\n- A non-standard but widely supported alternative.\n- Simpler: just put `#pragma once` at the top of the header.\n- Supported by GCC, Clang, MSVC, and most compilers.\n- Faster: compiler can skip re-reading the file entirely.\n- Not standard C, but practically universal.",
+          "pseudo_code": "Traditional:\n  #ifndef MYHEADER_H\n  #define MYHEADER_H\n  /* declarations */\n  #endif\n\nModern:\n  #pragma once\n  /* declarations */\n\nBoth prevent double inclusion\nTraditional is standard C\n#pragma once is non-standard but universal",
+          "actual_code": "/* ===== Traditional header guard: mylib.h ===== */\n#ifndef MYLIB_H\n#define MYLIB_H\n\ntypedef struct {\n    int x;\n    int y;\n} Point;\n\nint add(int a, int b);\nPoint create_point(int x, int y);\n\n#endif /* MYLIB_H */\n\n/* ===== Modern alternative: utils.h ===== */\n/* #pragma once\n\nvoid util_func(void);\n*/\n\n/* ===== main.c ===== */\n#include <stdio.h>\n/* Including the header multiple times is safe with guards */\n/* #include \"mylib.h\"\n   #include \"mylib.h\"  // second inclusion is harmless */\n\ntypedef struct { int x; int y; } Point;\nint add(int a, int b) { return a + b; }\nPoint create_point(int x, int y) { return (Point){x, y}; }\n\nint main(void) {\n    Point p = create_point(3, 4);\n    printf(\"(%d, %d)\\n\", p.x, p.y);     /* (3, 4) */\n    printf(\"add(3,4) = %d\\n\", add(3, 4)); /* 7 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Header guards prevent double inclusion using #ifndef/#define/#endif",
+            "Use uppercase name based on filename: mylib.h -> MYLIB_H",
+            "#pragma once is simpler but non-standard (though universally supported)",
+            "Without guards, double inclusion causes redefinition errors",
+            "Every header file should have guards or #pragma once"
+          ],
+          "gotchas": [
+            "Choosing the same guard name in two different headers silently hides one of them",
+            "#pragma once can fail with symlinks or network drives (rare edge case)",
+            "Header guards protect against double inclusion in ONE translation unit, not across files",
+            "Convention: use PROJECT_DIR_FILENAME_H to make guard names unique"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Header guards: `#ifndef X_H / #define X_H / ... / #endif` prevent double inclusion. `#pragma once` is simpler but non-standard. Every header should use one or the other.",
+          "pseudo_code": "",
+          "actual_code": "/* mylib.h */\n#ifndef MYLIB_H\n#define MYLIB_H\nint add(int a, int b);\n#endif\n\n/* main.c */\n#include <stdio.h>\n/* #include \"mylib.h\" */\nint add(int a, int b) { return a + b; }\nint main(void) {\n    printf(\"%d\\n\", add(3, 4));\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "#ifndef/#define/#endif is the standard pattern",
+            "#pragma once is simpler but non-standard"
+          ],
+          "gotchas": [
+            "Same guard name in different headers = one header silently skipped"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common macro pitfalls (side effects and operator precedence)?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["macro-pitfalls", "side-effects", "precedence", "double-evaluation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Macros are text substitution, which creates several classes of bugs:\n\n**1. Missing parentheses (operator precedence):**\n```c\n#define SQUARE(x) x * x\nSQUARE(2+3)  // expands to: 2+3 * 2+3 = 2+6+3 = 11, not 25\n```\nFix: `#define SQUARE(x) ((x) * (x))`\n\n**2. Double evaluation (side effects):**\n```c\n#define MAX(a,b) ((a) > (b) ? (a) : (b))\nMAX(i++, j++)  // i++ or j++ evaluated TWICE\n```\nFix: Use inline functions or GCC's `typeof` extension.\n\n**3. Semicolon issues:**\n```c\n#define LOG(msg) printf(\"%s\\n\", msg);\nif (debug) LOG(\"error\"); else LOG(\"ok\");\n// Expands with extra semicolons, breaks else\n```\nFix: Use `do { ... } while(0)` for multi-statement macros.\n\n**4. Missing space between macro name and parameters:**\n`#define F (x) x*x` defines F as `(x) x*x`, not a function-like macro.",
+          "pseudo_code": "Bug 1: Missing parens\n  #define SQ(x) x*x -> SQ(2+3) = 2+3*2+3 = 11\n  Fix: #define SQ(x) ((x)*(x))\n\nBug 2: Double evaluation\n  #define MAX(a,b) ((a)>(b)?(a):(b))\n  MAX(i++, j++) -> i++ evaluated twice!\n  Fix: use inline function\n\nBug 3: Semicolons\n  Wrap multi-statement macros in do { } while(0)",
+          "actual_code": "#include <stdio.h>\n\n/* BAD: no parentheses */\n#define BAD_SQUARE(x) x * x\n/* GOOD: proper parentheses */\n#define GOOD_SQUARE(x) ((x) * (x))\n\n/* BAD: double evaluation */\n#define BAD_MAX(a, b) ((a) > (b) ? (a) : (b))\n\n/* GOOD: inline function avoids double evaluation */\nstatic inline int safe_max(int a, int b) {\n    return (a > b) ? a : b;\n}\n\n/* GOOD: multi-statement macro with do-while(0) */\n#define SAFE_SWAP(a, b, type) do { \\\n    type _tmp = (a);                \\\n    (a) = (b);                      \\\n    (b) = _tmp;                     \\\n} while (0)\n\nint main(void) {\n    /* Precedence bug */\n    printf(\"BAD:  SQUARE(2+3) = %d\\n\", BAD_SQUARE(2+3));  /* 11 (wrong!) */\n    printf(\"GOOD: SQUARE(2+3) = %d\\n\", GOOD_SQUARE(2+3)); /* 25 */\n\n    /* Double evaluation bug */\n    int i = 5, j = 3;\n    int m = BAD_MAX(i++, j++);\n    printf(\"BAD_MAX: m=%d i=%d j=%d\\n\", m, i, j);\n    /* i incremented TWICE: i=7, not 6 */\n\n    /* Safe version */\n    i = 5; j = 3;\n    m = safe_max(i++, j++);\n    printf(\"safe_max: m=%d i=%d j=%d\\n\", m, i, j);\n    /* i=6, j=4 (each incremented once) */\n\n    /* do-while(0) works in if-else */\n    int x = 10, y = 20;\n    if (1)\n        SAFE_SWAP(x, y, int);\n    else\n        printf(\"no swap\\n\");\n    printf(\"x=%d y=%d\\n\", x, y); /* x=20 y=10 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always parenthesize macro parameters and the full expression",
+            "Macro arguments with side effects can be evaluated multiple times",
+            "Use do { } while(0) for multi-statement macros",
+            "Prefer inline functions over function-like macros when possible",
+            "No space between macro name and opening parenthesis"
+          ],
+          "gotchas": [
+            "SQUARE(x+1) without parens gives wrong result due to operator precedence",
+            "MAX(i++, j++) increments the winner twice",
+            "A macro ending with ; breaks if-else: if(x) MACRO; else ... has extra ;",
+            "#define F (x) x*x defines F as (x) x*x (object-like), not function-like"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Parenthesize everything: `((x)*(x))`. Avoid side effects in macro args (double eval). Use `do { } while(0)` for multi-statement macros. Prefer `static inline` functions over macros.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n/* BAD */ #define SQ(x) x*x\n/* GOOD */ #define SQ2(x) ((x)*(x))\nint main(void) {\n    printf(\"%d\\n\", SQ(2+3));  /* 11 wrong */\n    printf(\"%d\\n\", SQ2(2+3)); /* 25 correct */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Parenthesize all macro parameters",
+            "Macros evaluate arguments multiple times"
+          ],
+          "gotchas": [
+            "SQ(i++) increments i twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the predefined macros in C (__FILE__, __LINE__, __DATE__)?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["predefined-macros", "__FILE__", "__LINE__", "__DATE__"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The C standard defines several predefined macros that are automatically available:\n\n**Standard predefined macros:**\n- `__FILE__` -- current source filename (string literal).\n- `__LINE__` -- current line number (integer constant).\n- `__DATE__` -- compilation date as \"Mmm dd yyyy\" (string).\n- `__TIME__` -- compilation time as \"hh:mm:ss\" (string).\n- `__STDC__` -- 1 if the compiler conforms to the C standard.\n- `__STDC_VERSION__` -- C standard version (e.g., 199901L for C99, 201112L for C11).\n- `__func__` (C99) -- current function name (not technically a macro but a predefined identifier).\n\n**Common uses:**\n1. Debug logging with file/line information.\n2. Assertions with location info.\n3. Build timestamps.\n4. Conditional compilation based on C standard version.",
+          "pseudo_code": "__FILE__         -> \"main.c\" (current file)\n__LINE__         -> 42 (current line number)\n__DATE__         -> \"Mar 15 2024\" (compile date)\n__TIME__         -> \"14:30:00\" (compile time)\n__STDC__         -> 1 (standard conforming)\n__STDC_VERSION__ -> 201112L (C11)\n__func__         -> \"main\" (current function, C99)",
+          "actual_code": "#include <stdio.h>\n\n/* Custom debug macro using predefined macros */\n#define LOG(fmt, ...) \\\n    fprintf(stderr, \"[%s:%d %s] \" fmt \"\\n\", \\\n            __FILE__, __LINE__, __func__, ##__VA_ARGS__)\n\n/* Custom assert */\n#define ASSERT(cond) do { \\\n    if (!(cond)) { \\\n        fprintf(stderr, \"Assertion failed: %s at %s:%d\\n\", \\\n                #cond, __FILE__, __LINE__); \\\n    } \\\n} while (0)\n\nvoid example_function(void) {\n    LOG(\"entering function\");\n    printf(\"Function: %s\\n\", __func__); /* example_function */\n}\n\nint main(void) {\n    printf(\"File: %s\\n\", __FILE__);\n    printf(\"Line: %d\\n\", __LINE__);\n    printf(\"Date: %s\\n\", __DATE__);\n    printf(\"Time: %s\\n\", __TIME__);\n\n    #ifdef __STDC__\n        printf(\"Standard C: yes\\n\");\n    #endif\n\n    #ifdef __STDC_VERSION__\n        printf(\"C standard: %ldL\\n\", __STDC_VERSION__);\n        #if __STDC_VERSION__ >= 201112L\n            printf(\"C11 or later\\n\");\n        #elif __STDC_VERSION__ >= 199901L\n            printf(\"C99 or later\\n\");\n        #endif\n    #endif\n\n    example_function();\n\n    ASSERT(1 == 1);  /* passes */\n    ASSERT(1 == 2);  /* prints assertion failure */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "__FILE__ and __LINE__ are essential for debug logging",
+            "__func__ (C99) gives the current function name",
+            "__DATE__ and __TIME__ provide compile-time timestamps",
+            "__STDC_VERSION__ enables version-specific code",
+            "Use these in custom LOG/ASSERT macros for useful diagnostics"
+          ],
+          "gotchas": [
+            "__DATE__ and __TIME__ make builds non-reproducible -- some projects ban them",
+            "__func__ is a predefined identifier (const char array), not a macro -- cannot concatenate it",
+            "__LINE__ is evaluated where the macro is used, not where it is defined",
+            "__VA_ARGS__ (C99) enables variadic macros for printf-style logging"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`__FILE__` = filename, `__LINE__` = line number, `__DATE__`/`__TIME__` = compile time, `__func__` = function name (C99). Use in debug logging and assertions.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#define LOG(msg) fprintf(stderr, \"%s:%d: %s\\n\", __FILE__, __LINE__, msg)\nint main(void) {\n    LOG(\"starting\");\n    printf(\"Built: %s %s\\n\", __DATE__, __TIME__);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "__FILE__ and __LINE__ for debug info",
+            "__func__ for current function name"
+          ],
+          "gotchas": [
+            "__DATE__/__TIME__ make builds non-reproducible"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the token pasting (##) and stringification (#) operators?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["token-pasting", "stringification", "preprocessor-operators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The preprocessor has two special operators for macro argument manipulation:\n\n**`#` (Stringification):** Converts a macro argument to a string literal.\n```c\n#define STR(x) #x\nSTR(hello)  // becomes \"hello\"\nSTR(1 + 2)  // becomes \"1 + 2\"\n```\n\n**`##` (Token pasting / concatenation):** Joins two tokens into one.\n```c\n#define CONCAT(a, b) a##b\nCONCAT(foo, bar)  // becomes foobar\nCONCAT(var, 1)    // becomes var1\n```\n\n**Common uses:**\n1. Debug macros that print variable names and values.\n2. Generating unique variable/function names.\n3. Creating enum-to-string mappings.\n4. X-macros pattern for code generation.",
+          "pseudo_code": "#x    -> \"x\" (stringification)\na##b  -> ab (token pasting)\n\n#define PRINT_VAR(v) printf(#v \" = %d\\n\", v)\nPRINT_VAR(x) -> printf(\"x\" \" = %d\\n\", x) -> printf(\"x = %d\\n\", x)\n\n#define MAKE_FUNC(name) void name##_init(void)\nMAKE_FUNC(timer) -> void timer_init(void)",
+          "actual_code": "#include <stdio.h>\n\n/* Stringification: # turns argument into string */\n#define TO_STRING(x) #x\n#define PRINT_VAR(var) printf(#var \" = %d\\n\", (var))\n\n/* Token pasting: ## concatenates tokens */\n#define MAKE_VAR(prefix, num) prefix##num\n#define MAKE_FUNC(name) name##_create\n\n/* Practical: debug print */\n#define DEBUG_INT(x) printf(\"%s = %d\\n\", #x, (x))\n#define DEBUG_STR(x) printf(\"%s = \\\"%s\\\"\\n\", #x, (x))\n\n/* Indirect stringification (for expanding macros) */\n#define STRINGIFY(x) #x\n#define EXPAND_STRINGIFY(x) STRINGIFY(x)\n#define VERSION 42\n\nint MAKE_FUNC(widget)(int n) {\n    printf(\"Creating widget %d\\n\", n);\n    return n;\n}\n\nint main(void) {\n    /* Stringification */\n    printf(\"%s\\n\", TO_STRING(hello world)); /* \"hello world\" */\n\n    int x = 42;\n    PRINT_VAR(x);   /* x = 42 */\n    PRINT_VAR(x*2); /* x*2 = 84 */\n\n    /* Token pasting */\n    int MAKE_VAR(count, 1) = 10;  /* creates count1 */\n    int MAKE_VAR(count, 2) = 20;  /* creates count2 */\n    printf(\"count1=%d count2=%d\\n\", count1, count2);\n\n    /* Function name generation */\n    widget_create(5); /* Creating widget 5 */\n\n    /* Debug macros */\n    DEBUG_INT(x + 10);  /* x + 10 = 52 */\n    DEBUG_STR(\"hello\"); /* \"hello\" = \"hello\" */\n\n    /* Indirect stringify expands macros first */\n    printf(\"VERSION = %s\\n\", EXPAND_STRINGIFY(VERSION)); /* 42 */\n    printf(\"VERSION = %s\\n\", STRINGIFY(VERSION));         /* VERSION */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "# converts macro argument to a string literal",
+            "## concatenates two tokens into one identifier",
+            "Use PRINT_VAR(x) pattern for debug printing variable names",
+            "Two-level stringification needed to expand macros: STRINGIFY(EXPAND(x))",
+            "Token pasting creates identifiers at compile time"
+          ],
+          "gotchas": [
+            "#VERSION gives \"VERSION\" not \"42\" -- need indirect stringify to expand macros",
+            "## can create invalid tokens: CONCAT(+, -) is not a valid C token",
+            "Stringification preserves spaces: #(a + b) gives \"a + b\"",
+            "Token pasting result must be a valid C token or the behavior is undefined"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`#x` turns argument into string `\"x\"`. `a##b` concatenates tokens into `ab`. Two-level stringify needed to expand macros. Used for debug printing, code generation.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#define PRINT(var) printf(#var \" = %d\\n\", (var))\n#define CONCAT(a,b) a##b\nint main(void) {\n    int x = 42;\n    PRINT(x);     /* x = 42 */\n    int CONCAT(my, Var) = 10;  /* creates myVar */\n    printf(\"%d\\n\", myVar); /* 10 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "# = stringify; ## = token paste",
+            "Two-level stringify to expand macros"
+          ],
+          "gotchas": [
+            "#MACRO gives \"MACRO\" not the expanded value"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the stages of C compilation (preprocessing, compilation, assembly, linking)?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["compilation", "stages", "preprocessing", "linking", "assembly"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C programs go through four stages to become executables:\n\n**1. Preprocessing** (`gcc -E`):\n- Expands `#include`, `#define`, `#ifdef`, etc.\n- Removes comments.\n- Output: expanded C source code (translation unit).\n\n**2. Compilation** (`gcc -S`):\n- Parses C code, checks syntax and types.\n- Performs optimizations.\n- Output: assembly language (.s file).\n\n**3. Assembly** (`gcc -c`):\n- Converts assembly to machine code.\n- Output: object file (.o file) with unresolved symbols.\n\n**4. Linking** (`gcc` or `ld`):\n- Combines object files and libraries.\n- Resolves external symbols (function calls across files).\n- Output: executable binary (or shared library).\n\n**GCC flags to stop at each stage:**\n- `-E` -- stop after preprocessing.\n- `-S` -- stop after compilation (produces .s).\n- `-c` -- stop after assembly (produces .o).\n- No flag -- full pipeline (produces executable).",
+          "pseudo_code": "Source (.c) -> Preprocessing -> Expanded source\n           -> Compilation  -> Assembly (.s)\n           -> Assembly     -> Object file (.o)\n           -> Linking       -> Executable\n\ngcc -E file.c            # preprocessor output\ngcc -S file.c            # assembly output (file.s)\ngcc -c file.c            # object file (file.o)\ngcc file.c -o program    # full build",
+          "actual_code": "/* example.c */\n#include <stdio.h>\n\n#define MSG \"Hello, World!\"\n\nint main(void) {\n    printf(\"%s\\n\", MSG);\n    return 0;\n}\n\n/* Build commands:\n\n   Step 1: Preprocessing only\n   gcc -E example.c -o example.i\n   # Shows expanded #include and #define\n\n   Step 2: Compile to assembly\n   gcc -S example.c -o example.s\n   # Shows x86/ARM assembly code\n\n   Step 3: Assemble to object file\n   gcc -c example.c -o example.o\n   # Binary object with unresolved symbols\n\n   Step 4: Link to executable\n   gcc example.o -o example\n   # Resolves printf from libc\n\n   All at once:\n   gcc example.c -o example\n\n   With optimization:\n   gcc -O2 example.c -o example\n\n   With warnings:\n   gcc -Wall -Wextra -Werror example.c -o example\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Four stages: preprocessing -> compilation -> assembly -> linking",
+            "gcc -E/-S/-c stop at different stages",
+            "Preprocessing: text substitution (#include, #define)",
+            "Compilation: C to assembly (type checking, optimization)",
+            "Linking: combines .o files, resolves symbols, produces executable"
+          ],
+          "gotchas": [
+            "Preprocessor errors (bad #include) happen before any C syntax checking",
+            "Compiler errors are syntax/type errors in your C code",
+            "Linker errors (undefined reference) mean a function is declared but not defined",
+            "Header files are processed during preprocessing, not linking"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Four stages: **preprocess** (#include, #define) -> **compile** (C to assembly) -> **assemble** (to .o) -> **link** (resolve symbols, create executable). Use `gcc -E/-S/-c` to stop at each stage.",
+          "pseudo_code": "",
+          "actual_code": "/* Compile: gcc -Wall -Wextra -o prog main.c utils.c -lm\n   -Wall: all warnings\n   -Wextra: extra warnings\n   -o prog: output name\n   -lm: link math library\n   -c: compile only (produce .o)\n   -S: produce assembly\n   -E: preprocess only */\n#include <stdio.h>\nint main(void) {\n    printf(\"Hello\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "preprocess -> compile -> assemble -> link",
+            "gcc -E/-S/-c to stop at each stage"
+          ],
+          "gotchas": [
+            "Linker errors (undefined reference) differ from compiler errors"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between static and dynamic linking?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["static-linking", "dynamic-linking", "shared-library"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Static linking:** Library code is copied INTO the executable at link time.\n- Produces a standalone executable (no runtime dependencies).\n- Larger executable size.\n- Faster startup (no runtime loading).\n- Library updates require recompilation.\n- Files: `.a` (archive) on Unix, `.lib` on Windows.\n\n**Dynamic linking:** Library code is loaded at runtime from shared libraries.\n- Smaller executable (library code shared among programs).\n- Library updates apply without recompiling the program.\n- Requires the shared library to be present at runtime.\n- Slight startup overhead (runtime symbol resolution).\n- Files: `.so` (shared object) on Linux, `.dylib` on macOS, `.dll` on Windows.\n\n**Choosing:**\n- Static: embedded systems, single-binary deployments, maximum portability.\n- Dynamic: desktop/server apps, system libraries, memory efficiency.",
+          "pseudo_code": "Static linking:\n  gcc -static prog.o -lmylib  -> large standalone binary\n  Library: libmylib.a (archive of .o files)\n\nDynamic linking:\n  gcc prog.o -lmylib  -> small binary + libmylib.so needed at runtime\n  Library: libmylib.so (shared object)\n\nStatic: standalone, large, no runtime deps\nDynamic: shared, small, needs .so at runtime",
+          "actual_code": "/* mathlib.h */\n#ifndef MATHLIB_H\n#define MATHLIB_H\nint square(int x);\n#endif\n\n/* mathlib.c */\n/* int square(int x) { return x * x; } */\n\n/* main.c */\n#include <stdio.h>\nint square(int x) { return x * x; }\n\nint main(void) {\n    printf(\"5^2 = %d\\n\", square(5)); /* 25 */\n    return 0;\n}\n\n/* Build commands:\n\n   === Static library ===\n   gcc -c mathlib.c -o mathlib.o\n   ar rcs libmathlib.a mathlib.o          # create static lib\n   gcc main.c -L. -lmathlib -o prog      # link statically\n\n   === Shared library ===\n   gcc -fPIC -c mathlib.c -o mathlib.o    # position-independent code\n   gcc -shared -o libmathlib.so mathlib.o # create shared lib\n   gcc main.c -L. -lmathlib -o prog      # link dynamically\n   LD_LIBRARY_PATH=. ./prog               # run with library path\n\n   === Force static linking ===\n   gcc -static main.c -L. -lmathlib -o prog_static\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Static: library code embedded in executable (.a files)",
+            "Dynamic: library loaded at runtime (.so/.dll files)",
+            "Static = larger binary, no runtime deps, no updates without recompile",
+            "Dynamic = smaller binary, shared memory, updateable, runtime deps",
+            "Use ar to create static libraries; gcc -shared for dynamic"
+          ],
+          "gotchas": [
+            "Missing shared library at runtime causes: error while loading shared libraries",
+            "-fPIC (position-independent code) is required for shared libraries",
+            "Static linking can include unused code; dynamic linking loads only what is needed",
+            "Mixing static and dynamic libraries in one build can cause symbol conflicts"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Static**: library code copied into executable (`.a`). Standalone, larger. **Dynamic**: library loaded at runtime (`.so`/`.dll`). Smaller, shared, needs runtime deps. Static for portability; dynamic for updates.",
+          "pseudo_code": "",
+          "actual_code": "/* Create static lib: ar rcs libfoo.a foo.o\n   Create shared lib: gcc -shared -o libfoo.so foo.o\n   Link static: gcc -static main.c -lfoo\n   Link dynamic: gcc main.c -lfoo */\n#include <stdio.h>\nint main(void) {\n    printf(\"Linked!\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Static = .a, embedded; Dynamic = .so, runtime loaded",
+            "Static for portability; dynamic for sharing"
+          ],
+          "gotchas": [
+            "Missing .so at runtime = program won't start"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Makefiles and how do they work?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["make", "makefile", "build-system"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Make** is a build automation tool. A **Makefile** describes how to compile a project using rules, targets, and dependencies.\n\n**Basic structure:**\n```makefile\ntarget: dependencies\n    command  (must be indented with TAB, not spaces)\n```\n\n**Key concepts:**\n- **Target:** What to build (file name or phony target like `clean`).\n- **Dependencies:** Files the target depends on. If any dependency is newer, the target is rebuilt.\n- **Recipe:** Shell commands to build the target.\n- **Variables:** `CC = gcc`, `CFLAGS = -Wall -O2`.\n- **Automatic variables:** `$@` (target), `$<` (first dep), `$^` (all deps).\n- **Pattern rules:** `%.o: %.c` compiles any .c to .o.\n\nMake only rebuilds what changed -- much faster than compiling everything.",
+          "pseudo_code": "target: dependencies\n    recipe (TAB-indented)\n\n$@ = target name\n$< = first dependency\n$^ = all dependencies\n\n%.o: %.c            # pattern rule: .c -> .o\n    $(CC) -c $< -o $@\n\n.PHONY: clean       # clean is not a file\nclean:\n    rm -f *.o prog",
+          "actual_code": "/* main.c */\n#include <stdio.h>\nint add(int a, int b);\nint main(void) {\n    printf(\"%d\\n\", add(3, 4));\n    return 0;\n}\n\n/* add.c */\n/* int add(int a, int b) { return a + b; } */\n\n/* Makefile (use TAB for indentation, not spaces!):\n\nCC = gcc\nCFLAGS = -Wall -Wextra -O2 -std=c99\n\n# Default target\nprog: main.o add.o\n\t$(CC) $(CFLAGS) -o $@ $^\n\n# Pattern rule: compile .c to .o\n%.o: %.c\n\t$(CC) $(CFLAGS) -c $< -o $@\n\n# Dependencies\nmain.o: main.c\nadd.o: add.c\n\n# Phony targets\n.PHONY: clean all\n\nclean:\n\trm -f *.o prog\n\nall: clean prog\n\n# Usage:\n#   make          -> builds prog\n#   make clean    -> removes build artifacts\n#   make all      -> clean + rebuild\n*/\n\n/* Simplified inline example */\nint add(int a, int b) { return a + b; }\n/* This compiles with: gcc -Wall -O2 -o prog main.c */",
+          "code_language": "c",
+          "key_points": [
+            "Makefiles automate builds with targets, dependencies, and recipes",
+            "TAB character required for recipe indentation (not spaces)",
+            "Make only rebuilds targets whose dependencies changed",
+            "$@ = target, $< = first dep, $^ = all deps",
+            ".PHONY for targets that are not files (clean, all)"
+          ],
+          "gotchas": [
+            "Using spaces instead of TAB in recipes causes: Makefile: *** missing separator",
+            "Forgetting .PHONY on clean means make won't run it if a file named 'clean' exists",
+            "Variables are expanded lazily with = but immediately with :=",
+            "Missing dependency declarations cause files to not be rebuilt when headers change"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Makefile: `target: deps` then TAB-indented recipe. Make rebuilds only what changed. Variables: `CC = gcc`. Auto-vars: `$@` = target, `$<` = first dep. `.PHONY: clean` for non-file targets.",
+          "pseudo_code": "",
+          "actual_code": "/* Minimal Makefile:\n\nCC = gcc\nCFLAGS = -Wall -std=c99\n\nprog: main.c\n\t$(CC) $(CFLAGS) -o $@ $<\n\n.PHONY: clean\nclean:\n\trm -f prog\n*/\n#include <stdio.h>\nint main(void) { printf(\"built with make\\n\"); return 0; }",
+          "code_language": "c",
+          "key_points": [
+            "TAB not spaces for recipe lines",
+            "Make rebuilds only changed files"
+          ],
+          "gotchas": [
+            "Spaces instead of TAB = cryptic error"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common compilation errors and warnings and how do you fix them?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["compilation-errors", "warnings", "debugging", "linker-errors"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Preprocessor errors:**\n- `fatal error: xyz.h: No such file or directory` -- missing header. Fix: install library or fix include path.\n\n**Compiler errors (syntax/type):**\n- `expected ';' before '}'` -- missing semicolon.\n- `implicit declaration of function` -- missing prototype/include. Fix: add the correct #include.\n- `incompatible pointer type` -- type mismatch. Fix: correct the types or cast.\n- `undeclared identifier` -- variable not declared. Fix: declare it.\n\n**Compiler warnings:**\n- `-Wunused-variable` -- declared but never used.\n- `-Wformat` -- printf format mismatch (`%d` with a `float`).\n- `-Wreturn-type` -- missing return in non-void function.\n- `-Wimplicit-function-declaration` -- calling undeclared function.\n\n**Linker errors:**\n- `undefined reference to 'xyz'` -- function declared but not defined. Fix: include the .c file or library in the build.\n- `multiple definition of 'xyz'` -- defined in more than one .o file. Fix: use static or move to one file.\n\n**Recommended flags:** `gcc -Wall -Wextra -Werror -pedantic -std=c99`",
+          "pseudo_code": "Preprocessor:  missing header -> install or fix path\nCompiler:      syntax error -> fix code\n               implicit declaration -> add #include\n               type mismatch -> fix types\nLinker:        undefined reference -> add .c file or -l library\n               multiple definition -> use static or fix duplication\n\nAlways compile with: -Wall -Wextra -Werror -std=c99",
+          "actual_code": "#include <stdio.h>\n#include <math.h>   /* needed for sqrt -- prevents \"undefined reference\" */\n\n/* Fix: always declare before use */\nint add(int a, int b);  /* prevents implicit declaration warning */\n\nint add(int a, int b) {\n    return a + b;\n}\n\nint main(void) {\n    /* Fix: correct format specifier */\n    int x = 42;\n    printf(\"%d\\n\", x);    /* correct: %d for int */\n    /* printf(\"%f\\n\", x); // WARNING: format %f expects double, not int */\n\n    /* Fix: use return value */\n    double root = sqrt(2.0);\n    printf(\"%f\\n\", root);  /* prevents unused variable warning */\n\n    /* Fix: initialize variables */\n    int y = 0;  /* not: int y; (uninitialized) */\n    printf(\"%d\\n\", y);\n\n    /* Fix: all paths return a value */\n    printf(\"%d\\n\", add(3, 4));\n\n    return 0;  /* explicit return in main */\n}\n\n/* Compile with:\n   gcc -Wall -Wextra -Werror -pedantic -std=c99 -lm prog.c -o prog\n\n   -Wall: most warnings\n   -Wextra: additional warnings\n   -Werror: treat warnings as errors\n   -pedantic: strict standard compliance\n   -std=c99: use C99 standard\n   -lm: link math library (for sqrt)\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Always compile with -Wall -Wextra -Werror",
+            "undefined reference = linker error (missing .c file or -l flag)",
+            "implicit declaration = missing #include or prototype",
+            "Format warnings: match printf specifiers to argument types",
+            "Treat warnings as errors with -Werror"
+          ],
+          "gotchas": [
+            "Linker errors look different from compiler errors -- they mention 'undefined reference'",
+            "Missing -lm causes undefined reference to sqrt, sin, cos, etc.",
+            "-Werror can be frustrating during development -- some teams use it only in CI",
+            "A single missing semicolon can generate dozens of confusing error messages"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Preprocessor: missing header. Compiler: syntax, types, undeclared. Linker: undefined reference (add .c or -l). Always use `-Wall -Wextra -Werror`. `-lm` for math functions.",
+          "pseudo_code": "",
+          "actual_code": "/* Compile with full warnings:\n   gcc -Wall -Wextra -Werror -std=c99 -lm prog.c -o prog */\n#include <stdio.h>\n#include <math.h>  /* needed for sqrt */\nint main(void) {\n    printf(\"%f\\n\", sqrt(2.0)); /* -lm needed */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "-Wall -Wextra -Werror for catching bugs early",
+            "-lm for math library functions"
+          ],
+          "gotchas": [
+            "undefined reference = linker error, not compiler error"
+          ]
+        }
+      ]
+    }
+  ]
+}

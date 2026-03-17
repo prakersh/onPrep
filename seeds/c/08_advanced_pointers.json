@@ -1,0 +1,635 @@
+{
+  "concept_slug": "advanced-pointers",
+  "questions": [
+    {
+      "title": "What is a double pointer (pointer to pointer) and when do you use it?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["double-pointer", "pointer-to-pointer", "indirection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **double pointer** (pointer to pointer) is a variable that stores the address of another pointer. Declared with two asterisks `**`, it adds a second level of indirection.\n\n**Common use cases:**\n1. **Modifying a pointer inside a function** -- if you want a function to change where a pointer points (not just the value it points to), you pass a pointer to that pointer.\n2. **Dynamic 2D arrays** -- an array of pointers, where each pointer points to a row.\n3. **Pointer arrays** -- `char **argv` in `main()` is a pointer to an array of `char *`.\n\n**How dereferencing works:**\n- `pp` is the address of the pointer\n- `*pp` is the pointer itself (the address of the final value)\n- `**pp` is the actual value\n\nThe classic interview pattern is a function that allocates memory and returns it through a parameter rather than a return value.",
+          "pseudo_code": "1. Declare pointer: int *p = &value\n2. Declare double pointer: int **pp = &p\n3. *pp gives you p (the pointer)\n4. **pp gives you value (the pointed-to data)\n5. To modify a pointer in a function, pass &p to a function accepting int **",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Function that allocates memory and returns it via double pointer */\nvoid allocate(int **pp, int value) {\n    *pp = (int *)malloc(sizeof(int));\n    if (*pp != NULL) {\n        **pp = value;\n    }\n}\n\nint main(void) {\n    int x = 10;\n    int *p = &x;\n    int **pp = &p;\n\n    printf(\"x   = %d\\n\", x);     /* 10 */\n    printf(\"*p  = %d\\n\", *p);    /* 10 */\n    printf(\"**pp = %d\\n\", **pp); /* 10 */\n\n    /* Modify x through double pointer */\n    **pp = 42;\n    printf(\"x after **pp = 42: %d\\n\", x); /* 42 */\n\n    /* Allocate memory through a function */\n    int *dynamic = NULL;\n    allocate(&dynamic, 99);\n    printf(\"dynamic value: %d\\n\", *dynamic); /* 99 */\n    free(dynamic);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "A double pointer stores the address of a pointer variable",
+            "Dereferencing once (*pp) gives the pointer, twice (**pp) gives the value",
+            "Essential for functions that need to modify the caller's pointer (e.g., allocate memory)",
+            "char **argv is the most common real-world double pointer",
+            "Each level of indirection adds one * to the declaration"
+          ],
+          "gotchas": [
+            "Forgetting to pass the address of the pointer (&p) instead of the pointer itself (p) when calling a function that expects int **",
+            "Dereferencing a double pointer that points to a NULL pointer causes a segfault",
+            "Memory allocated inside a function via double pointer must still be freed by the caller",
+            "Triple pointers (int ***) are almost always a design smell -- refactor with structs instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A double pointer (`int **pp`) holds the address of another pointer. Use it when a function needs to modify the caller's pointer (e.g., allocate memory and return it through a parameter). Dereference once for the pointer, twice for the value.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nvoid alloc(int **pp) {\n    *pp = (int *)malloc(sizeof(int));\n    **pp = 42;\n}\n\nint main(void) {\n    int *p = NULL;\n    alloc(&p);           /* p now points to heap memory */\n    printf(\"%d\\n\", *p); /* 42 */\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int **pp stores address of a pointer; **pp accesses the final value",
+            "Required when a function must change where the caller's pointer points"
+          ],
+          "gotchas": [
+            "Pass &p (not p) to a function expecting int ** -- otherwise you only modify a local copy"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you declare and use function pointers in C?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["function-pointer", "declaration", "typedef"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **function pointer** is a variable that stores the address of a function. The declaration syntax mirrors the function signature but wraps the pointer name in parentheses.\n\n**Declaration syntax:**\n```\nreturn_type (*pointer_name)(param_types);\n```\n\nThe parentheses around `*pointer_name` are critical -- without them, you declare a function returning a pointer instead.\n\n**Using typedef for clarity:**\n```\ntypedef int (*comparator)(const void *, const void *);\n```\nThis creates a type alias `comparator` for pointers to functions matching that signature.\n\n**Calling through a function pointer:**\nYou can use either `(*fp)(args)` or simply `fp(args)` -- both are valid in C.\n\n**Assigning:**\nUse either `fp = func` or `fp = &func` -- the function name decays to a pointer automatically.",
+          "pseudo_code": "1. Declare: return_type (*name)(param_types)\n2. Assign: name = function_name  (or &function_name)\n3. Call: name(args) or (*name)(args)\n4. typedef return_type (*TypeName)(param_types) for cleaner code",
+          "actual_code": "#include <stdio.h>\n\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\n\n/* Using typedef for cleaner declarations */\ntypedef int (*operation)(int, int);\n\nvoid apply(operation op, int x, int y) {\n    printf(\"Result: %d\\n\", op(x, y));\n}\n\nint main(void) {\n    /* Direct function pointer declaration */\n    int (*fp)(int, int) = add;\n    printf(\"%d\\n\", fp(3, 4));     /* 7 */\n    printf(\"%d\\n\", (*fp)(3, 4));  /* 7 -- alternate call syntax */\n\n    /* Reassign to different function */\n    fp = sub;\n    printf(\"%d\\n\", fp(10, 3));    /* 7 */\n\n    /* Pass function pointer to another function */\n    apply(add, 5, 2); /* Result: 7 */\n    apply(sub, 5, 2); /* Result: 3 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Syntax: return_type (*name)(param_types) -- parentheses around *name are mandatory",
+            "Function names decay to pointers automatically: fp = func and fp = &func are equivalent",
+            "Calling via fp(args) and (*fp)(args) are both valid",
+            "typedef makes function pointer types far more readable",
+            "qsort() in stdlib.h is the classic real-world function pointer example"
+          ],
+          "gotchas": [
+            "int *fp(int) declares a function returning int*, not a function pointer -- you need int (*fp)(int)",
+            "Function pointer signature must exactly match the target function's signature",
+            "Calling a NULL function pointer is undefined behavior (usually a crash)",
+            "Cannot perform arithmetic on function pointers (unlike data pointers)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A function pointer stores a function's address. Syntax: `int (*fp)(int, int) = add;`. Call with `fp(3, 4)`. Use `typedef` to simplify: `typedef int (*Op)(int, int);`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint add(int a, int b) { return a + b; }\n\ntypedef int (*Op)(int, int);\n\nint main(void) {\n    Op fp = add;\n    printf(\"%d\\n\", fp(3, 4)); /* 7 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Syntax: return_type (*name)(params) -- parens around *name are essential",
+            "Use typedef for readable function pointer types"
+          ],
+          "gotchas": [
+            "int *f(int) is a function returning int*, not a function pointer -- need int (*f)(int)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are callback functions in C and how do you implement the callback pattern?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["callback", "function-pointer", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **callback** is a function passed as an argument to another function, which then invokes it at the appropriate time. In C, callbacks are implemented using function pointers.\n\n**The callback pattern:**\n1. Define a callback signature (usually via typedef)\n2. Write a function that accepts a function pointer parameter\n3. The caller provides a concrete function matching the signature\n4. The called function invokes the callback at the right moment\n\n**Real-world examples in the C standard library:**\n- `qsort()` takes a comparison callback\n- `bsearch()` takes a comparison callback\n- `atexit()` registers a cleanup callback\n- Signal handlers via `signal()`\n\nCallbacks enable **separation of concerns**: the sorting algorithm does not need to know what it is sorting -- the comparison callback provides that knowledge.",
+          "pseudo_code": "1. Define callback type: typedef void (*Callback)(int)\n2. Write processor function: void process(int *arr, int n, Callback cb)\n3. Inside process, call cb(arr[i]) for each element\n4. Caller passes a concrete function: process(arr, n, my_handler)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Callback type for event handling */\ntypedef void (*EventHandler)(const char *event);\n\nvoid on_click(const char *event) {\n    printf(\"Click handled: %s\\n\", event);\n}\n\nvoid on_hover(const char *event) {\n    printf(\"Hover handled: %s\\n\", event);\n}\n\n/* Function that accepts a callback */\nvoid register_handler(EventHandler handler, const char *event) {\n    printf(\"Dispatching event...\\n\");\n    handler(event); /* invoke the callback */\n}\n\n/* Classic example: qsort comparison callback */\nint compare_int(const void *a, const void *b) {\n    return (*(const int *)a - *(const int *)b);\n}\n\nint main(void) {\n    register_handler(on_click, \"button_press\");\n    register_handler(on_hover, \"mouse_move\");\n\n    /* qsort uses a callback for comparison */\n    int arr[] = {5, 2, 8, 1, 9};\n    qsort(arr, 5, sizeof(int), compare_int);\n\n    for (int i = 0; i < 5; i++) {\n        printf(\"%d \", arr[i]); /* 1 2 5 8 9 */\n    }\n    printf(\"\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Callbacks are function pointers passed as arguments to other functions",
+            "They enable decoupling: the caller decides behavior, the callee decides timing",
+            "qsort() is the canonical C standard library callback example",
+            "typedef makes callback signatures readable and reusable",
+            "Callbacks often come with a void* context parameter for user data"
+          ],
+          "gotchas": [
+            "Passing a function with the wrong signature as a callback is undefined behavior",
+            "Callbacks cannot capture local variables like closures in higher-level languages",
+            "A common pattern is to pair a callback with a void *user_data parameter for context",
+            "qsort comparison must return negative, zero, or positive -- not just 0 or 1"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A callback is a function pointer passed as an argument. The receiving function invokes it when needed. `qsort()` is the classic example -- you provide a comparison function and qsort calls it to compare elements.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint cmp(const void *a, const void *b) {\n    return *(const int *)a - *(const int *)b;\n}\n\nint main(void) {\n    int arr[] = {5, 2, 8, 1};\n    qsort(arr, 4, sizeof(int), cmp); /* cmp is the callback */\n    for (int i = 0; i < 4; i++)\n        printf(\"%d \", arr[i]); /* 1 2 5 8 */\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Callbacks decouple the algorithm from the data-specific logic",
+            "Always pair callbacks with a void* user_data parameter in real code"
+          ],
+          "gotchas": [
+            "Callback signature must exactly match what the caller expects -- no implicit conversions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between a pointer to an array and an array of pointers?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["pointer-to-array", "array-of-pointers", "declaration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "These two constructs look similar but are fundamentally different:\n\n**Pointer to an array:** `int (*p)[N]`\n- `p` is a single pointer that points to an entire array of N integers\n- `sizeof(*p)` is `N * sizeof(int)`\n- Dereferencing: `(*p)[i]` accesses element i\n- Used with 2D arrays passed to functions: `void func(int (*matrix)[COLS], int rows)`\n\n**Array of pointers:** `int *p[N]`\n- `p` is an array containing N pointer-to-int values\n- Each element `p[i]` can point to a different int or array\n- Common for ragged arrays (rows of different lengths)\n- `char *argv[]` is the canonical example\n\n**Precedence rule:** `[]` binds tighter than `*`. So `int *p[N]` is an array of pointers because `[]` applies first. Parentheses in `int (*p)[N]` force `*` to apply first, making it a pointer to an array.",
+          "pseudo_code": "Pointer to array: int (*p)[5]\n  - p points to one block of 5 ints\n  - (*p)[i] accesses element i\n  - p+1 advances by sizeof(int)*5 bytes\n\nArray of pointers: int *p[5]\n  - p is 5 separate int* values\n  - p[i] is a pointer; *p[i] accesses the value\n  - Each p[i] can point to different memory",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[5] = {10, 20, 30, 40, 50};\n\n    /* Pointer to an array of 5 ints */\n    int (*ptr_to_arr)[5] = &arr;\n    printf(\"(*ptr_to_arr)[2] = %d\\n\", (*ptr_to_arr)[2]); /* 30 */\n    printf(\"sizeof(*ptr_to_arr) = %zu\\n\", sizeof(*ptr_to_arr)); /* 20 (5*4) */\n\n    /* Array of 5 pointers to int */\n    int a = 1, b = 2, c = 3, d = 4, e = 5;\n    int *arr_of_ptrs[5] = {&a, &b, &c, &d, &e};\n    printf(\"*arr_of_ptrs[2] = %d\\n\", *arr_of_ptrs[2]); /* 3 */\n    printf(\"sizeof(arr_of_ptrs) = %zu\\n\", sizeof(arr_of_ptrs)); /* 40 (5*8 on 64-bit) */\n\n    /* 2D array with pointer to array */\n    int matrix[3][4] = {{1,2,3,4}, {5,6,7,8}, {9,10,11,12}};\n    int (*row)[4] = matrix; /* points to first row */\n    printf(\"row[1][2] = %d\\n\", row[1][2]); /* 7 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int (*p)[N] is a pointer to an array -- one pointer, points to N elements as a unit",
+            "int *p[N] is an array of pointers -- N separate pointer variables",
+            "[] binds tighter than * in declarations, so parentheses change the meaning",
+            "Pointer to array is the correct type for 2D array function parameters",
+            "Array of pointers is used for ragged arrays and argv"
+          ],
+          "gotchas": [
+            "int *p[5] vs int (*p)[5] -- forgetting parentheses completely changes the type",
+            "Pointer arithmetic on int (*p)[N] advances by N*sizeof(int) bytes, not sizeof(int)",
+            "Passing a 2D array to a function requires int (*param)[COLS], not int **param",
+            "sizeof gives different results: pointer to array gives the array size, array of pointers gives N * pointer size"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`int (*p)[5]` is a pointer to an array of 5 ints (one pointer, one block). `int *p[5]` is an array of 5 int pointers (five separate pointers). The `[]` operator binds tighter than `*`, so parentheses change meaning.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[5] = {10, 20, 30, 40, 50};\n\n    int (*p1)[5] = &arr;       /* pointer to array */\n    printf(\"%d\\n\", (*p1)[2]);  /* 30 */\n\n    int a = 1, b = 2;\n    int *p2[2] = {&a, &b};     /* array of pointers */\n    printf(\"%d\\n\", *p2[1]);    /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int (*p)[N] -- pointer to array; int *p[N] -- array of pointers",
+            "[] binds tighter than *, parentheses change meaning"
+          ],
+          "gotchas": [
+            "A 2D array parameter must be int (*p)[COLS], not int **p -- they are different types"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Explain all const pointer variations: const int*, int* const, and const int* const.",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["const", "pointer", "const-correctness"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `const` keyword with pointers creates three distinct variations depending on placement:\n\n**1. `const int *p` (pointer to const int)**\n- The data pointed to is read-only through this pointer\n- The pointer itself can be reassigned to point elsewhere\n- Also written as `int const *p` (equivalent)\n- Use case: function parameters that promise not to modify data\n\n**2. `int *const p` (const pointer to int)**\n- The pointer is fixed -- it always points to the same address\n- The data can be modified through the pointer\n- Must be initialized at declaration\n- Behaves like an array name (fixed address, mutable data)\n\n**3. `const int *const p` (const pointer to const int)**\n- Neither the pointer nor the data can be modified\n- The most restrictive form\n- Use case: truly immutable reference to immutable data\n\n**The \"clockwise/spiral\" rule:** Read the declaration from right to left. `const` applies to whatever is immediately to its left (or to its right if nothing is to its left).",
+          "pseudo_code": "const int *p      -- can change p, cannot change *p\nint *const p      -- cannot change p, can change *p\nconst int *const p -- cannot change p, cannot change *p\n\nRule: read right to left\n  const int *p     -> p is a pointer to int that is const\n  int *const p     -> p is a const pointer to int\n  const int *const p -> p is a const pointer to const int",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int x = 10, y = 20;\n\n    /* 1. Pointer to const int: can reassign pointer, cannot modify data */\n    const int *p1 = &x;\n    /* *p1 = 50; */  /* ERROR: cannot modify data */\n    p1 = &y;        /* OK: can reassign pointer */\n    printf(\"p1 -> %d\\n\", *p1); /* 20 */\n\n    /* 2. Const pointer to int: cannot reassign pointer, can modify data */\n    int *const p2 = &x;\n    *p2 = 50;       /* OK: can modify data */\n    /* p2 = &y; */  /* ERROR: cannot reassign pointer */\n    printf(\"x = %d\\n\", x); /* 50 */\n\n    /* 3. Const pointer to const int: cannot do either */\n    const int *const p3 = &x;\n    /* *p3 = 99; */  /* ERROR: cannot modify data */\n    /* p3 = &y; */   /* ERROR: cannot reassign pointer */\n    printf(\"p3 -> %d\\n\", *p3); /* 50 */\n\n    /* Practical use: function that promises not to modify data */\n    /* void print_array(const int *arr, int n); */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const int *p -- data is read-only, pointer can change (most common in APIs)",
+            "int *const p -- pointer is fixed, data is writable (like an array name)",
+            "const int *const p -- both are immutable",
+            "const int * and int const * are identical (const binds leftward)",
+            "Use const int * for function parameters to signal no modification"
+          ],
+          "gotchas": [
+            "Casting away const and then modifying is undefined behavior if the original was truly const",
+            "const int *p does NOT mean the underlying data is immutable -- only that you cannot modify it through p",
+            "Forgetting const in function parameters prevents passing const arrays to the function",
+            "int const * and const int * are the same, but int *const is different -- position of const relative to * matters"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`const int *p` -- data is read-only, pointer reassignable. `int *const p` -- pointer is fixed, data writable. `const int *const p` -- both locked. Read right-to-left: const applies to what is on its left.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int x = 10, y = 20;\n    const int *p1 = &x;       /* can't modify *p1, can reassign p1 */\n    int *const p2 = &x;       /* can modify *p2, can't reassign p2 */\n    const int *const p3 = &x; /* can't do either */\n\n    p1 = &y;  /* OK */\n    *p2 = 50; /* OK */\n    printf(\"%d %d %d\\n\", *p1, *p2, *p3); /* 20 50 50 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const before * protects data; const after * protects the pointer",
+            "const int * is the most common -- used in function parameters"
+          ],
+          "gotchas": [
+            "Casting away const and modifying is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you declare a pointer to a function that returns a pointer?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["function-pointer", "complex-declaration", "return-pointer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "This is a common interview question testing your ability to read complex C declarations.\n\n**A pointer to a function returning int*:**\n```c\nint *(*fp)(int, int);\n```\nBreaking it down:\n- `(*fp)` -- fp is a pointer\n- `(*fp)(int, int)` -- to a function taking two ints\n- `int *(*fp)(int, int)` -- that returns int*\n\n**Without the inner parentheses:**\n```c\nint **fp(int, int);\n```\nThis declares a **function** (not a pointer) that returns `int **`.\n\n**Using typedef for clarity:**\n```c\ntypedef int *(*FuncPtr)(int, int);\nFuncPtr fp = my_function;\n```\n\n**Even more complex -- a function returning a function pointer:**\n```c\nint (*(*fp)(int))(double);\n```\nfp is a pointer to a function taking int, returning a pointer to a function taking double and returning int.\n\nAlways use typedef for anything beyond one level of function pointer nesting.",
+          "pseudo_code": "1. Start with the variable name: fp\n2. Add pointer: (*fp)\n3. Add function parameters: (*fp)(int, int)\n4. Add return type: int *(*fp)(int, int)\n\nWith typedef:\n  typedef int *(*FuncPtr)(int, int);\n  FuncPtr fp = my_function;",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* A function that returns a pointer to int */\nint *find_max(int *a, int *b) {\n    return (*a > *b) ? a : b;\n}\n\nint *create_int(int value) {\n    int *p = (int *)malloc(sizeof(int));\n    if (p) *p = value;\n    return p;\n}\n\nint main(void) {\n    int x = 10, y = 20;\n\n    /* Pointer to function returning int* */\n    int *(*fp)(int *, int *) = find_max;\n    int *result = fp(&x, &y);\n    printf(\"max = %d\\n\", *result); /* 20 */\n\n    /* Using typedef */\n    typedef int *(*Creator)(int);\n    Creator make = create_int;\n    int *p = make(42);\n    printf(\"created = %d\\n\", *p); /* 42 */\n    free(p);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int *(*fp)(params) -- pointer to function returning int*",
+            "int **fp(params) -- function (not pointer) returning int** -- completely different",
+            "The inner parentheses around *fp are what make it a pointer to a function",
+            "Always use typedef for complex function pointer types",
+            "signal() from <signal.h> is a real-world example of a function returning a function pointer"
+          ],
+          "gotchas": [
+            "Missing the inner parentheses changes the meaning entirely",
+            "signal() has one of the most confusing declarations in C -- always use typedef",
+            "Memory returned by such functions may need to be freed by the caller",
+            "Read complex declarations inside-out, not left-to-right"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`int *(*fp)(int, int)` is a pointer to a function returning `int*`. The parentheses around `*fp` are essential. Without them, `int **fp(int, int)` is a function returning `int**`. Use `typedef` for readability.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint *bigger(int *a, int *b) {\n    return (*a > *b) ? a : b;\n}\n\nint main(void) {\n    int x = 5, y = 9;\n    int *(*fp)(int *, int *) = bigger;\n    printf(\"%d\\n\", *fp(&x, &y)); /* 9 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int *(*fp)(params) -- pointer to function returning int*",
+            "Use typedef to avoid declaration confusion"
+          ],
+          "gotchas": [
+            "Without parentheses around *fp, it becomes a function declaration, not a function pointer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the rules for void pointer arithmetic in C?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["void-pointer", "pointer-arithmetic", "gcc-extension"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Standard C (C99/C11):** Arithmetic on `void *` is **not allowed**. The standard requires the compiler to know the pointed-to type's size to perform pointer arithmetic, and `void` has no size.\n\n**GCC extension:** GCC (and Clang in GCC-compatibility mode) allows arithmetic on `void *` by treating it as if `sizeof(void) == 1` (byte-level arithmetic). This is a non-standard extension enabled by default.\n\n**The standard-compliant approach:**\nCast to `char *` before performing arithmetic, then cast back:\n```c\nvoid *ptr = some_address;\nvoid *next = (char *)ptr + offset_in_bytes;\n```\n\n**Why this matters:**\n- `void *` is used extensively in generic functions (malloc, memcpy, qsort)\n- Writing portable code requires casting to `char *` for byte arithmetic\n- Compiling with `-pedantic` or MSVC will reject void pointer arithmetic",
+          "pseudo_code": "Standard C:\n  void *p = ...;\n  p + 1;  /* ILLEGAL -- compiler error with -pedantic */\n  ((char *)p) + 1;  /* LEGAL -- advances by 1 byte */\n\nGCC extension:\n  void *p = ...;\n  p + 1;  /* Allowed by GCC, treated as +1 byte */\n\nPortable pattern:\n  void *advance(void *ptr, size_t elem_size, size_t index) {\n      return (char *)ptr + (elem_size * index);\n  }",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n/* Portable generic element access using char* arithmetic */\nvoid *generic_element(void *base, size_t elem_size, size_t index) {\n    return (char *)base + (elem_size * index);\n}\n\nvoid generic_swap(void *a, void *b, size_t size) {\n    char temp[size]; /* VLA -- C99 */\n    memcpy(temp, a, size);\n    memcpy(a, b, size);\n    memcpy(b, temp, size);\n}\n\nint main(void) {\n    int arr[] = {10, 20, 30, 40, 50};\n\n    /* Portable: cast to char* for byte-level arithmetic */\n    void *base = arr;\n    int *third = (int *)((char *)base + 2 * sizeof(int));\n    printf(\"third element: %d\\n\", *third); /* 30 */\n\n    /* Using our generic function */\n    int *elem = (int *)generic_element(arr, sizeof(int), 3);\n    printf(\"fourth element: %d\\n\", *elem); /* 40 */\n\n    /* Generic swap */\n    int x = 5, y = 10;\n    generic_swap(&x, &y, sizeof(int));\n    printf(\"x=%d y=%d\\n\", x, y); /* x=10 y=5 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Standard C forbids arithmetic on void* -- the compiler does not know the element size",
+            "GCC/Clang allow it as an extension, treating sizeof(void) as 1",
+            "Portable code casts to char* for byte-level arithmetic, then casts back",
+            "memcpy and memmove work with void* because they take a size parameter",
+            "Always use -pedantic flag to catch non-portable void pointer arithmetic"
+          ],
+          "gotchas": [
+            "Code using void pointer arithmetic compiles with GCC but fails with MSVC or strict mode",
+            "You cannot dereference a void pointer -- must cast to a concrete type first",
+            "sizeof(void) is 1 in GCC but undefined in standard C",
+            "Alignment issues can arise when casting void* to stricter types"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Standard C forbids `void *` arithmetic (unknown element size). GCC allows it as an extension (treats `sizeof(void)` as 1). For portable code, cast to `char *` first: `(char *)vp + offset`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[] = {10, 20, 30};\n    void *vp = arr;\n\n    /* Portable: cast to char* for byte arithmetic */\n    int *p = (int *)((char *)vp + sizeof(int));\n    printf(\"%d\\n\", *p); /* 20 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Standard C: no void* arithmetic; cast to char* first",
+            "GCC extension allows it but code becomes non-portable"
+          ],
+          "gotchas": [
+            "Compiling with -pedantic will warn about void pointer arithmetic even on GCC"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are near and far pointers in C, and are they still relevant?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["near-pointer", "far-pointer", "segmented-memory", "historical"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Near and far pointers** are a historical concept from the 16-bit x86 segmented memory model (MS-DOS era, Intel 8086/80286).\n\n**Near pointer:**\n- Stores only a 16-bit offset within the current segment\n- 2 bytes, faster access\n- Limited to 64 KB (one segment)\n\n**Far pointer:**\n- Stores both a 16-bit segment and a 16-bit offset (segment:offset)\n- 4 bytes, can address up to 1 MB of memory\n- Slower due to segment register loading\n\n**Huge pointer:**\n- Like far but normalized so that two huge pointers to the same address will be equal\n- Far pointers can have different segment:offset pairs that map to the same physical address\n\n**Modern relevance:**\n- On modern 32/64-bit flat memory model systems, all pointers are effectively \"near\" (flat address space)\n- The keywords `near`, `far`, `huge` are not part of standard C -- they were compiler extensions (Turbo C, Borland, early Microsoft C)\n- Still relevant in embedded systems with segmented architectures (some microcontrollers, DSPs)\n- Understanding them is important for legacy code maintenance and interview knowledge",
+          "pseudo_code": "16-bit segmented model:\n  Physical address = (segment << 4) + offset\n\nNear pointer: 16-bit offset only\n  Range: 0 to 65535 within current segment\n\nFar pointer: segment:offset pair\n  Range: 0 to 1MB (20-bit address space)\n  Example: 0x1234:0x5678 -> physical 0x179B8\n\nModern (32/64-bit): flat address space\n  All pointers use full address, no segments\n  near/far distinction does not apply",
+          "actual_code": "#include <stdio.h>\n\n/*\n * Near/far pointers are NOT standard C.\n * They were extensions in DOS-era compilers.\n *\n * Turbo C / Borland C syntax (historical, will not compile on modern systems):\n *   int near *np;    -- 16-bit offset only\n *   int far *fp;     -- segment:offset\n *   int huge *hp;    -- normalized far pointer\n *\n * Modern equivalent: all pointers are flat addresses.\n */\n\nint main(void) {\n    int x = 42;\n    int *p = &x; /* On modern systems, this is a flat address */\n\n    printf(\"sizeof(int *) = %zu bytes\\n\", sizeof(int *));\n    /* 4 on 32-bit, 8 on 64-bit -- flat address space */\n\n    printf(\"Pointer value: %p\\n\", (void *)p);\n    printf(\"Value: %d\\n\", *p);\n\n    /*\n     * On a hypothetical segmented system:\n     * int far *fp = (int far *)MK_FP(segment, offset);\n     * Physical addr = (segment << 4) + offset\n     *\n     * Far pointer gotcha:\n     * 0x1000:0x0010 and 0x1001:0x0000 both map to\n     * physical address 0x10010, but far pointer ==\n     * comparison would say they are different.\n     * Huge pointers normalize to fix this.\n     */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Near pointers: 16-bit offset within one 64KB segment (fast, limited range)",
+            "Far pointers: segment:offset pair addressing up to 1MB (slower, wider range)",
+            "Huge pointers: normalized far pointers that compare correctly",
+            "Not part of standard C -- they were DOS-era compiler extensions",
+            "Modern 32/64-bit systems use flat addressing; all pointers are equivalent to 'near'"
+          ],
+          "gotchas": [
+            "Two far pointers with different segment:offset values can point to the same physical address",
+            "near/far/huge keywords will not compile on modern standard C compilers",
+            "Some embedded systems still use segmented memory models where this distinction matters",
+            "Interview question is testing historical knowledge -- clarify that it is not relevant on modern desktop/server systems"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Near pointers (16-bit offset, 64KB range) and far pointers (segment:offset, 1MB range) are from the 16-bit x86 segmented memory era. Not standard C -- they were compiler extensions. Modern systems use flat addressing; all pointers are effectively the same.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Modern systems: all pointers are flat addresses */\n    int x = 42;\n    int *p = &x;\n    printf(\"sizeof(int *) = %zu\\n\", sizeof(int *)); /* 4 or 8 */\n    printf(\"address: %p, value: %d\\n\", (void *)p, *p);\n\n    /* Historical DOS:\n     * int near *np;  -- 16-bit offset\n     * int far *fp;   -- segment:offset (4 bytes)\n     * int huge *hp;  -- normalized far pointer\n     */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Historical DOS concept: near (2 bytes), far (4 bytes), huge (normalized far)",
+            "Not standard C; modern systems use flat addressing"
+          ],
+          "gotchas": [
+            "Two different far pointers can map to the same physical address -- huge pointers fix this"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are opaque pointers and how do they enable data hiding in C?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["opaque-pointer", "data-hiding", "encapsulation", "api-design"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **opaque pointer** is a pointer to a struct whose definition is hidden from the user. The header file declares the struct name (forward declaration) but does not reveal its members. Only the implementation file (.c) has the full definition.\n\nThis is C's primary mechanism for **encapsulation** and **information hiding**, mimicking private members in OOP languages.\n\n**The pattern:**\n1. **Header (.h):** Forward-declare the struct and provide function prototypes\n2. **Implementation (.c):** Define the struct and implement the functions\n3. **Client code:** Can only use the pointer through the API functions\n\n**Benefits:**\n- Users cannot access internal fields (compile-time enforcement)\n- Internal representation can change without breaking the API\n- Reduces compilation dependencies (changes to the struct do not force recompilation of client code)\n\n**Real-world examples:**\n- `FILE *` from `<stdio.h>` is an opaque pointer\n- `DIR *` from `<dirent.h>`\n- `sqlite3 *` in SQLite\n- Many OS handles (Windows HANDLE)",
+          "pseudo_code": "Header (stack.h):\n  typedef struct Stack Stack;   /* forward declaration only */\n  Stack *stack_create(void);\n  void stack_push(Stack *s, int value);\n  int stack_pop(Stack *s);\n  void stack_destroy(Stack *s);\n\nImplementation (stack.c):\n  struct Stack {               /* full definition hidden here */\n      int *data;\n      int top;\n      int capacity;\n  };\n  /* implement all functions */\n\nClient:\n  Stack *s = stack_create();   /* cannot access s->data */\n  stack_push(s, 42);           /* must use API */",
+          "actual_code": "/* === stack.h (header -- public API) === */\n#ifndef STACK_H\n#define STACK_H\n\n/* Opaque type: clients see only a pointer, not the internals */\ntypedef struct Stack Stack;\n\nStack *stack_create(int capacity);\nvoid stack_push(Stack *s, int value);\nint stack_pop(Stack *s);\nint stack_is_empty(const Stack *s);\nvoid stack_destroy(Stack *s);\n\n#endif\n\n/* === stack.c (implementation -- struct defined here) === */\n/* #include \"stack.h\" */\n#include <stdio.h>\n#include <stdlib.h>\n\nstruct Stack {\n    int *data;\n    int top;\n    int capacity;\n};\n\nStack *stack_create(int capacity) {\n    Stack *s = (Stack *)malloc(sizeof(Stack));\n    if (!s) return NULL;\n    s->data = (int *)malloc(sizeof(int) * capacity);\n    s->top = -1;\n    s->capacity = capacity;\n    return s;\n}\n\nvoid stack_push(Stack *s, int value) {\n    if (s->top < s->capacity - 1) {\n        s->data[++s->top] = value;\n    }\n}\n\nint stack_pop(Stack *s) {\n    if (s->top >= 0) return s->data[s->top--];\n    return -1; /* error value */\n}\n\nint stack_is_empty(const Stack *s) {\n    return s->top == -1;\n}\n\nvoid stack_destroy(Stack *s) {\n    if (s) {\n        free(s->data);\n        free(s);\n    }\n}\n\n/* === main.c (client code) === */\nint main(void) {\n    Stack *s = stack_create(10);\n    stack_push(s, 10);\n    stack_push(s, 20);\n    stack_push(s, 30);\n\n    while (!stack_is_empty(s)) {\n        printf(\"%d \", stack_pop(s)); /* 30 20 10 */\n    }\n    printf(\"\\n\");\n\n    /* s->data = NULL; */  /* ERROR: struct Stack is incomplete */\n    stack_destroy(s);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Forward-declare the struct in the header; define it only in the .c file",
+            "Clients can only hold pointers, never stack-allocate or access members",
+            "FILE * is the most well-known opaque pointer in C",
+            "Enables ABI stability -- internal changes do not break client code",
+            "All allocation/deallocation must go through API functions (constructor/destructor pattern)"
+          ],
+          "gotchas": [
+            "Clients cannot use sizeof() on the opaque type -- must heap-allocate through the API",
+            "Forgetting to provide a destroy/free function causes memory leaks since clients cannot free internals",
+            "If the struct definition leaks into the header, encapsulation is broken",
+            "Every operation requires a function call -- no direct member access, slight performance cost"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "An opaque pointer is a pointer to a forward-declared struct whose members are hidden from clients. The struct is defined only in the .c file. Clients must use API functions to interact with it. `FILE *` is the classic example.",
+          "pseudo_code": "",
+          "actual_code": "/* header: */\ntypedef struct Widget Widget; /* forward declaration only */\nWidget *widget_create(void);\nvoid widget_set_value(Widget *w, int val);\nvoid widget_destroy(Widget *w);\n\n/* source file: */\n#include <stdlib.h>\nstruct Widget { int value; }; /* hidden from clients */\n\nWidget *widget_create(void) {\n    return (Widget *)calloc(1, sizeof(Widget));\n}\nvoid widget_set_value(Widget *w, int val) { w->value = val; }\nvoid widget_destroy(Widget *w) { free(w); }\n\n/* client: w->value is inaccessible */",
+          "code_language": "c",
+          "key_points": [
+            "Forward declare struct in header, define in .c file only",
+            "FILE * is the canonical opaque pointer in C"
+          ],
+          "gotchas": [
+            "Clients cannot stack-allocate or sizeof() an opaque type -- must use create/destroy API"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does the restrict keyword do in C?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["restrict", "aliasing", "optimization", "c99"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `restrict` keyword (C99) is a type qualifier for pointers. It tells the compiler that the pointer is the **only way to access the memory it points to** during its lifetime. No other pointer will alias (point to) the same memory.\n\nThis is a **promise from the programmer to the compiler**, enabling aggressive optimizations:\n- The compiler can keep values in registers instead of re-reading from memory\n- Loop iterations can be reordered or vectorized\n- Writes through one pointer do not invalidate reads through another\n\n**Standard library usage:**\n`memcpy` has restrict parameters (no overlap allowed), while `memmove` does not (overlap is safe):\n```c\nvoid *memcpy(void *restrict dest, const void *restrict src, size_t n);\nvoid *memmove(void *dest, const void *src, size_t n);\n```\n\n**If the promise is broken (aliasing occurs), behavior is undefined.**\n\n**Note:** `restrict` exists only in C (C99+), not in C++. Some compilers offer `__restrict` or `__restrict__` as extensions in C++.",
+          "pseudo_code": "Without restrict:\n  void add(int *a, int *b, int *out, int n)\n  Compiler must reload *a and *b after every write to *out\n  because a, b, out might alias\n\nWith restrict:\n  void add(int *restrict a, int *restrict b, int *restrict out, int n)\n  Compiler knows a, b, out point to separate memory\n  Can vectorize and keep values in registers",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n/*\n * With restrict, the compiler can optimize this loop\n * because it knows a, b, and result do not overlap.\n */\nvoid vector_add(int *restrict result,\n                const int *restrict a,\n                const int *restrict b,\n                int n) {\n    for (int i = 0; i < n; i++) {\n        result[i] = a[i] + b[i];\n    }\n}\n\n/*\n * Without restrict, the compiler must be conservative:\n * writing to out[i] could change a[i] or b[i].\n */\nvoid vector_add_no_restrict(int *out, const int *a, const int *b, int n) {\n    for (int i = 0; i < n; i++) {\n        out[i] = a[i] + b[i];\n    }\n}\n\nint main(void) {\n    int a[] = {1, 2, 3, 4};\n    int b[] = {10, 20, 30, 40};\n    int result[4];\n\n    vector_add(result, a, b, 4);\n    for (int i = 0; i < 4; i++) {\n        printf(\"%d \", result[i]); /* 11 22 33 44 */\n    }\n    printf(\"\\n\");\n\n    /* memcpy uses restrict: source and dest must not overlap */\n    char src[] = \"Hello\";\n    char dst[6];\n    memcpy(dst, src, 6); /* OK: different buffers */\n    printf(\"%s\\n\", dst); /* Hello */\n\n    /* For overlapping memory, use memmove (no restrict) */\n    char buf[] = \"Hello World\";\n    memmove(buf + 2, buf, 5); /* OK: overlap handled */\n    printf(\"%s\\n\", buf); /* HeHello orld */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "restrict tells the compiler this pointer is the only way to access its memory",
+            "Enables optimizations: register caching, loop vectorization, instruction reordering",
+            "It is a promise from the programmer -- violating it is undefined behavior",
+            "memcpy uses restrict (no overlap); memmove does not (overlap allowed)",
+            "C99 feature; not available in C++ (use __restrict as compiler extension)"
+          ],
+          "gotchas": [
+            "Breaking the restrict contract (aliasing) causes undefined behavior -- not a compile error",
+            "restrict only applies to pointers, not to the data itself",
+            "Compilers cannot verify restrict at compile time -- it is entirely the programmer's responsibility",
+            "Not part of C++ -- use __restrict__ (GCC/Clang) or __restrict (MSVC) as non-portable extensions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`restrict` (C99) tells the compiler that a pointer is the sole accessor of its memory, enabling optimizations. Violating this promise is undefined behavior. `memcpy` uses restrict (no overlap); `memmove` does not.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\n/* restrict allows the compiler to optimize aggressively */\nvoid add(int *restrict out, const int *restrict a,\n         const int *restrict b, int n) {\n    for (int i = 0; i < n; i++)\n        out[i] = a[i] + b[i];\n}\n\nint main(void) {\n    int a[] = {1, 2}, b[] = {3, 4}, r[2];\n    add(r, a, b, 2);\n    printf(\"%d %d\\n\", r[0], r[1]); /* 4 6 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Promises no aliasing, enabling compiler optimizations",
+            "C99 only -- not part of C++"
+          ],
+          "gotchas": [
+            "Breaking the restrict promise is undefined behavior, not a compile error"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is pointer aliasing and why does it matter for optimization?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["aliasing", "strict-aliasing", "optimization", "undefined-behavior"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Pointer aliasing** occurs when two or more pointers refer to the same memory location. This is a critical concern for compiler optimizations.\n\n**Why aliasing matters:**\nWhen the compiler sees a write through one pointer, it must assume that any other pointer could be pointing to the same location and therefore reload values. This prevents many optimizations.\n\n**The strict aliasing rule (C99, section 6.5):**\nAn object shall have its stored value accessed only through an lvalue of:\n1. A compatible type\n2. A qualified version of a compatible type\n3. A signed/unsigned version of a compatible type\n4. A type that includes the above as a member (struct/union)\n5. A `char` type (char can alias anything)\n\nAccessing memory through an incompatible pointer type (e.g., casting `int *` to `float *` and dereferencing) is **undefined behavior** under strict aliasing.\n\n**GCC flag:** `-fstrict-aliasing` is enabled by default at `-O2` and above. Use `-fno-strict-aliasing` to disable or `-Wstrict-aliasing` for warnings.",
+          "pseudo_code": "Aliasing problem:\n  void foo(int *a, int *b) {\n      *a = 10;\n      *b = 20;     /* compiler cannot assume a != b */\n      return *a;   /* must reload *a (might be 20 if a == b) */\n  }\n\nStrict aliasing rule:\n  int x = 42;\n  float *fp = (float *)&x;\n  float f = *fp;  /* UNDEFINED BEHAVIOR: int accessed as float */\n\nSafe exception: char can alias anything\n  char *cp = (char *)&x; /* always safe */",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n/* Aliasing prevents optimization */\nvoid copy_with_aliasing(int *a, int *b) {\n    *a = 5;\n    *b = 10;\n    /* Compiler must reload *a because a and b might overlap */\n    printf(\"a = %d\\n\", *a); /* Could be 5 or 10 */\n}\n\n/* WRONG: violates strict aliasing rule */\nfloat int_bits_to_float_BAD(int i) {\n    /* Accessing int memory as float is undefined behavior */\n    /* return *(float *)&i; */  /* DO NOT DO THIS */\n    return 0.0f; /* placeholder */\n}\n\n/* CORRECT: use memcpy for type punning (always safe) */\nfloat int_bits_to_float_GOOD(int i) {\n    float f;\n    memcpy(&f, &i, sizeof(f)); /* safe type punning */\n    return f;\n}\n\n/* CORRECT: use union for type punning (C99 allows this) */\nfloat int_bits_to_float_union(int i) {\n    union { int i; float f; } u;\n    u.i = i;\n    return u.f;\n}\n\nint main(void) {\n    int x = 42;\n\n    /* Demonstrating aliasing */\n    copy_with_aliasing(&x, &x); /* a and b alias! a = 10 */\n\n    /* char* can alias anything (exception to strict aliasing) */\n    char *bytes = (char *)&x;\n    printf(\"First byte of x: 0x%02x\\n\", (unsigned char)bytes[0]);\n\n    /* Safe type punning with memcpy */\n    int bits = 0x40490FDB; /* IEEE 754 for approx pi */\n    float pi = int_bits_to_float_GOOD(bits);\n    printf(\"pi approx: %f\\n\", pi); /* ~3.141593 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Aliasing: two pointers pointing to the same memory location",
+            "Compilers must be conservative with aliased pointers, preventing optimizations",
+            "Strict aliasing rule: accessing memory through an incompatible pointer type is UB",
+            "char* can alias any type -- the one universal exception",
+            "Use memcpy for safe type punning, not pointer casts"
+          ],
+          "gotchas": [
+            "Casting int* to float* and dereferencing violates strict aliasing -- use memcpy or union instead",
+            "-fstrict-aliasing at -O2 can cause code that 'worked at -O0' to break",
+            "Type-punning through pointer casts is the number one source of strict aliasing bugs",
+            "union type punning is well-defined in C99 but technically UB in C++ (though compilers allow it)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pointer aliasing means two pointers access the same memory. The strict aliasing rule says you can only access memory through a compatible type (or `char *`). Violating it is UB. Use `memcpy` for safe type punning, not pointer casts.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    int x = 0x40490FDB;\n\n    /* WRONG: strict aliasing violation */\n    /* float f = *(float *)&x; */\n\n    /* CORRECT: memcpy is always safe */\n    float f;\n    memcpy(&f, &x, sizeof(f));\n    printf(\"%f\\n\", f); /* ~3.141593 */\n\n    /* char* can alias anything */\n    char *bytes = (char *)&x;\n    printf(\"0x%02x\\n\", (unsigned char)bytes[0]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Strict aliasing: access memory only through compatible types or char*",
+            "Use memcpy for type punning, not pointer casts"
+          ],
+          "gotchas": [
+            "Code may work at -O0 but break at -O2 due to strict aliasing optimizations"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you read complex C declarations using the cdecl (clockwise/spiral) rule?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["cdecl", "spiral-rule", "declaration", "complex-declarations"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Complex C declarations can be read using the **right-left rule** (also called clockwise/spiral rule):\n\n**Steps:**\n1. Start at the variable name (or innermost identifier)\n2. Move **right** until you hit `)` or end of declaration\n3. Move **left** until you hit `(` or reach the beginning\n4. Repeat until the entire declaration is consumed\n\n**Examples:**\n\n`int *p` -- p is a pointer to int\n\n`int *p[10]` -- p is an array of 10 pointers to int\n\n`int (*p)[10]` -- p is a pointer to an array of 10 ints\n\n`int *(*p)(int)` -- p is a pointer to a function taking int, returning int*\n\n`int (*(*fp)(int, int))(double)` -- fp is a pointer to a function (taking int, int) returning a pointer to a function (taking double) returning int\n\n**The `cdecl` tool:** A command-line utility that translates between C declarations and English:\n```\ncdecl> explain int (*(*fp)(int))(double)\ndeclare fp as pointer to function (int) returning pointer to function (double) returning int\n```",
+          "pseudo_code": "Right-Left Rule:\n1. Find the identifier\n2. Look right: [] means 'array of', () means 'function taking'\n3. Look left: * means 'pointer to', type means 'returning/of type'\n4. Alternate right-left, respecting parentheses\n\nExample: int *(*fp[5])(int)\n  fp -> array of 5 -> pointer to -> function(int) -> returning int*\n  'fp is an array of 5 pointers to functions taking int, returning int*'",
+          "actual_code": "#include <stdio.h>\n\n/* Example 1: int *p[5] */\n/* p is an array of 5 pointers to int */\n\n/* Example 2: int (*p)[5] */\n/* p is a pointer to an array of 5 ints */\n\n/* Example 3: int (*fp)(int, int) */\n/* fp is a pointer to a function taking (int,int) returning int */\n\n/* Example 4: int *(*fp)(int) */\n/* fp is a pointer to a function taking int, returning int* */\n\n/* Example 5: Complex -- array of function pointers */\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\n\nint main(void) {\n    /* int (*ops[2])(int, int):\n     * ops is an array of 2 pointers to functions\n     * taking (int,int) returning int */\n    int (*ops[2])(int, int) = {add, sub};\n\n    for (int i = 0; i < 2; i++) {\n        printf(\"result: %d\\n\", ops[i](10, 3));\n    }\n    /* Output: result: 13 \\n result: 7 */\n\n    /* Equivalent with typedef (much clearer) */\n    typedef int (*BinOp)(int, int);\n    BinOp ops2[2] = {add, sub};\n    printf(\"typedef version: %d\\n\", ops2[0](5, 3)); /* 8 */\n\n    /* signal() declaration decoded:\n     * void (*signal(int sig, void (*handler)(int)))(int);\n     * signal is a function taking (int, pointer-to-function(int)->void)\n     * returning pointer-to-function(int)->void */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Right-left rule: start at identifier, go right, then left, alternating",
+            "[] and () bind tighter than * -- parentheses override this",
+            "The cdecl command-line tool converts between C declarations and English",
+            "signal() has one of the most infamous complex declarations in C",
+            "Always use typedef to simplify complex declarations in real code"
+          ],
+          "gotchas": [
+            "Forgetting operator precedence: int *p[5] is array of pointers, int (*p)[5] is pointer to array",
+            "Nested function pointers become unreadable fast -- always use typedef",
+            "The spiral/clockwise rule is a simplification; the standard defines it via declarator grammar",
+            "cdecl may not handle all GCC extensions like __attribute__"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use the **right-left rule**: start at the identifier, read right (arrays `[]`, functions `()`), then left (`*` pointer, type), alternating and respecting parentheses. Example: `int *(*fp)(int)` -- fp is a pointer to a function(int) returning int*.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\n\nint main(void) {\n    /* int (*ops[2])(int, int):\n     * ops: array of 2 pointers to function(int,int)->int */\n    int (*ops[2])(int, int) = {add, sub};\n    printf(\"%d %d\\n\", ops[0](3, 4), ops[1](10, 3)); /* 7 7 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Right-left rule: alternate right then left from the identifier",
+            "Use typedef to make complex declarations readable"
+          ],
+          "gotchas": [
+            "[] and () bind tighter than * -- parentheses are essential for changing meaning"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are arrays of function pointers (dispatch tables / jump tables) and when do you use them?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["function-pointer-array", "dispatch-table", "jump-table", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **array of function pointers** (dispatch table or jump table) stores pointers to functions with the same signature in an array, allowing you to call functions by index.\n\n**Why use them:**\n1. **Replace long if-else/switch chains** with O(1) dispatch\n2. **State machines** -- each state is a function, transitions are index changes\n3. **Command interpreters** -- map command codes to handler functions\n4. **Virtual method tables (vtables)** -- how C++ implements polymorphism under the hood\n5. **Plugin systems** -- dynamically loaded function tables\n\n**Declaration:**\n```c\nreturn_type (*array_name[SIZE])(param_types) = {func1, func2, ...};\n```\nOr with typedef:\n```c\ntypedef return_type (*Handler)(param_types);\nHandler table[SIZE] = {func1, func2, ...};\n```",
+          "pseudo_code": "1. Define functions with the same signature\n2. Create array: typedef ret (*Handler)(params);\n3. Populate: Handler table[] = {f1, f2, f3, ...};\n4. Dispatch: table[index](args);\n\nReplaces:\n  switch(op) {\n    case 0: f1(args); break;\n    case 1: f2(args); break;\n    ...\n  }\nWith:\n  table[op](args);",
+          "actual_code": "#include <stdio.h>\n\n/* Calculator with dispatch table */\ndouble calc_add(double a, double b) { return a + b; }\ndouble calc_sub(double a, double b) { return a - b; }\ndouble calc_mul(double a, double b) { return a * b; }\ndouble calc_div(double a, double b) {\n    if (b == 0.0) { printf(\"Error: division by zero\\n\"); return 0.0; }\n    return a / b;\n}\n\ntypedef double (*CalcOp)(double, double);\n\nint main(void) {\n    /* Dispatch table: index maps to operation */\n    CalcOp ops[] = {calc_add, calc_sub, calc_mul, calc_div};\n    const char *names[] = {\"+\", \"-\", \"*\", \"/\"};\n    int num_ops = sizeof(ops) / sizeof(ops[0]);\n\n    double a = 10.0, b = 3.0;\n    for (int i = 0; i < num_ops; i++) {\n        printf(\"%.1f %s %.1f = %.2f\\n\", a, names[i], b, ops[i](a, b));\n    }\n    /* Output:\n     * 10.0 + 3.0 = 13.00\n     * 10.0 - 3.0 = 7.00\n     * 10.0 * 3.0 = 30.00\n     * 10.0 / 3.0 = 3.33\n     */\n\n    /* Direct dispatch by index (O(1) instead of switch) */\n    int operation = 2; /* multiply */\n    printf(\"Result: %.2f\\n\", ops[operation](5.0, 4.0)); /* 20.00 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array of function pointers enables O(1) dispatch by index",
+            "Replaces long switch/if-else chains with cleaner, extensible code",
+            "Used in state machines, command dispatchers, calculators, and vtable implementations",
+            "typedef makes the declaration much more readable",
+            "All functions in the table must share the same signature"
+          ],
+          "gotchas": [
+            "Out-of-bounds index leads to calling a garbage address -- always validate the index",
+            "All functions must have the exact same signature -- no implicit conversions",
+            "NULL entries in the table should be checked before calling",
+            "If the table is const, declare it as: const CalcOp ops[] or CalcOp const ops[]"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "An array of function pointers stores functions by index for O(1) dispatch. Use `typedef` for the function type, then create an array. Call with `table[index](args)`. Replaces switch/if-else chains.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\n\ntypedef int (*Op)(int, int);\n\nint main(void) {\n    Op table[] = {add, sub};\n    printf(\"%d\\n\", table[0](10, 3)); /* 13 */\n    printf(\"%d\\n\", table[1](10, 3)); /* 7  */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(1) function dispatch by index instead of switch/if-else",
+            "All functions must share the same signature"
+          ],
+          "gotchas": [
+            "Always bounds-check the index before calling through the table"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement generic programming in C using void pointers and callbacks?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["generic-programming", "void-pointer", "callback", "type-erasure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C does not have templates or generics like C++ or Java. Instead, **generic programming** in C is achieved through:\n\n1. **void pointers (`void *`)** for type-erased data\n2. **Function pointer callbacks** for type-specific operations\n3. **size_t parameters** for element sizes\n\nThis is the pattern used throughout the C standard library:\n- `qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *))`\n- `bsearch()` with the same pattern\n- `memcpy()`, `memmove()`, `memset()` operate on raw bytes\n\n**The pattern:**\n```c\nvoid generic_function(void *data, size_t elem_size, size_t count,\n                      ReturnType (*operation)(const void *, const void *));\n```\n\nThe caller provides:\n- Data as `void *`\n- Element size so the function can navigate the array\n- A callback that knows the actual type and performs type-specific logic",
+          "pseudo_code": "1. Accept data as void* with size_t element size\n2. Navigate array: (char*)base + i * elem_size\n3. Accept callback for type-specific operations\n4. Callback casts void* to actual type internally\n5. The generic function never knows the actual type",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Generic swap: works for any type */\nvoid generic_swap(void *a, void *b, size_t size) {\n    char temp[256]; /* or use malloc for safety */\n    memcpy(temp, a, size);\n    memcpy(a, b, size);\n    memcpy(b, temp, size);\n}\n\n/* Generic find: linear search for any type */\nvoid *generic_find(void *base, size_t count, size_t elem_size,\n                   const void *target,\n                   int (*compare)(const void *, const void *)) {\n    for (size_t i = 0; i < count; i++) {\n        void *elem = (char *)base + i * elem_size;\n        if (compare(elem, target) == 0) {\n            return elem;\n        }\n    }\n    return NULL;\n}\n\n/* Generic foreach: apply a function to every element */\nvoid generic_foreach(void *base, size_t count, size_t elem_size,\n                     void (*action)(void *elem)) {\n    for (size_t i = 0; i < count; i++) {\n        action((char *)base + i * elem_size);\n    }\n}\n\n/* Type-specific callbacks */\nint compare_int(const void *a, const void *b) {\n    return *(const int *)a - *(const int *)b;\n}\n\nvoid print_int(void *elem) {\n    printf(\"%d \", *(int *)elem);\n}\n\nint compare_double(const void *a, const void *b) {\n    double da = *(const double *)a, db = *(const double *)b;\n    return (da > db) - (da < db);\n}\n\nint main(void) {\n    /* Generic swap with ints */\n    int a = 5, b = 10;\n    generic_swap(&a, &b, sizeof(int));\n    printf(\"a=%d b=%d\\n\", a, b); /* a=10 b=5 */\n\n    /* Generic swap with doubles */\n    double x = 1.1, y = 2.2;\n    generic_swap(&x, &y, sizeof(double));\n    printf(\"x=%.1f y=%.1f\\n\", x, y); /* x=2.2 y=1.1 */\n\n    /* Generic find */\n    int arr[] = {10, 20, 30, 40, 50};\n    int target = 30;\n    int *found = (int *)generic_find(arr, 5, sizeof(int), &target, compare_int);\n    if (found) printf(\"Found: %d\\n\", *found); /* Found: 30 */\n\n    /* Generic foreach */\n    printf(\"Elements: \");\n    generic_foreach(arr, 5, sizeof(int), print_int);\n    printf(\"\\n\"); /* Elements: 10 20 30 40 50 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void* for type-erased data + size_t for element size + callbacks for type-specific logic",
+            "Navigate generic arrays with (char*)base + i * elem_size",
+            "qsort/bsearch are the canonical examples of this pattern",
+            "The generic function never knows the actual type; callbacks handle casting",
+            "memcpy is the safe way to copy void* data of known size"
+          ],
+          "gotchas": [
+            "No type safety: passing the wrong size or callback is a silent bug that corrupts memory",
+            "Performance overhead from function pointer calls (no inlining possible)",
+            "Stack-allocated temp buffer in swap has size limits; use malloc for large elements",
+            "Comparing doubles by subtraction and casting to int loses precision -- use the (a > b) - (a < b) pattern"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `void *` for data, `size_t` for element size, and function pointer callbacks for type-specific operations. Navigate arrays with `(char *)base + i * elem_size`. This is how `qsort` and `bsearch` work.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nvoid generic_swap(void *a, void *b, size_t size) {\n    char tmp[size];\n    memcpy(tmp, a, size);\n    memcpy(a, b, size);\n    memcpy(b, tmp, size);\n}\n\nint main(void) {\n    int x = 5, y = 10;\n    generic_swap(&x, &y, sizeof(int));\n    printf(\"%d %d\\n\", x, y); /* 10 5 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void* + size_t + callbacks = generic programming in C",
+            "qsort is the canonical example of this pattern"
+          ],
+          "gotchas": [
+            "No compile-time type safety -- wrong size parameter silently corrupts memory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are dangling pointers and how can you detect and prevent them?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["dangling-pointer", "memory-safety", "debugging", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **dangling pointer** is a pointer that references memory that has been freed, deallocated, or has gone out of scope. Dereferencing a dangling pointer is **undefined behavior** -- it may crash, return garbage, or silently corrupt data.\n\n**Common causes:**\n1. **Use after free:** Accessing memory after `free()` is called\n2. **Returning address of local variable:** The variable is destroyed when the function returns\n3. **Scope exit:** A pointer to a block-scoped variable used after the block ends\n4. **Stale pointers in data structures:** Linked list node freed but other nodes still point to it\n\n**Prevention strategies:**\n1. **Set pointer to NULL after free:** `free(p); p = NULL;`\n2. **Use a macro:** `#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)`\n3. **Ownership semantics:** Document who owns (and frees) each allocation\n4. **Scope discipline:** Never return addresses of local variables\n5. **Static analysis tools:** Clang analyzer, Coverity, cppcheck\n6. **Runtime tools:** Valgrind, AddressSanitizer (ASan)\n\n**Detection tools:**\n- **Valgrind:** Reports \"use after free\" errors\n- **ASan (AddressSanitizer):** Compile with `-fsanitize=address` for instant detection\n- **Static analyzers:** Catch many patterns at compile time",
+          "pseudo_code": "Common dangling pointer patterns:\n\n1. Use after free:\n   free(p);\n   *p = 10;  /* DANGLING: p still holds the old address */\n\n2. Returning local address:\n   int *bad() {\n     int x = 42;\n     return &x;  /* DANGLING: x destroyed on return */\n   }\n\n3. Stale reference:\n   int *p;\n   { int x = 10; p = &x; }\n   *p = 20;  /* DANGLING: x out of scope */\n\nPrevention:\n   free(p); p = NULL;  /* NULL dereference is easier to debug */",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Safe free macro: frees and NULLs the pointer */\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\n/* BAD: returns address of local variable */\n/*\nint *dangling_example(void) {\n    int x = 42;\n    return &x;   // WARNING: address of local variable\n}\n*/\n\n/* GOOD: allocate on heap to return */\nint *safe_example(void) {\n    int *p = (int *)malloc(sizeof(int));\n    if (p) *p = 42;\n    return p; /* Caller must free this */\n}\n\nint main(void) {\n    /* Scenario 1: Use after free */\n    int *p = (int *)malloc(sizeof(int));\n    *p = 100;\n    printf(\"Before free: %d\\n\", *p); /* 100 */\n    free(p);\n    /* printf(\"%d\\n\", *p); */  /* DANGLING: undefined behavior! */\n    p = NULL; /* Best practice: NULL after free */\n\n    /* Scenario 2: Using SAFE_FREE macro */\n    int *q = (int *)malloc(sizeof(int));\n    *q = 200;\n    SAFE_FREE(q);\n    /* q is now NULL -- dereferencing will crash predictably */\n    if (q == NULL) {\n        printf(\"q is safely NULL\\n\");\n    }\n\n    /* Scenario 3: Safe return from function */\n    int *r = safe_example();\n    printf(\"Safe value: %d\\n\", *r); /* 42 */\n    SAFE_FREE(r);\n\n    return 0;\n}\n\n/*\n * Compile with AddressSanitizer to detect dangling pointers:\n *   gcc -fsanitize=address -g program.c -o program\n *\n * Run with Valgrind:\n *   valgrind --leak-check=full ./program\n */",
+          "code_language": "c",
+          "key_points": [
+            "A dangling pointer references freed/out-of-scope memory",
+            "Dereferencing one is undefined behavior: crash, corruption, or silent success",
+            "Always set pointers to NULL after free (NULL deref is easier to debug than random corruption)",
+            "Never return the address of a local variable -- use heap allocation instead",
+            "AddressSanitizer (-fsanitize=address) catches use-after-free at runtime"
+          ],
+          "gotchas": [
+            "Use-after-free may appear to work because freed memory is not immediately reclaimed by the OS",
+            "Setting p = NULL only NULLs that one pointer -- other copies of the pointer remain dangling",
+            "Dangling pointers to stack memory are especially dangerous: the stack gets reused immediately",
+            "Double free is a special case: freeing a dangling pointer that was already freed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A dangling pointer references freed or out-of-scope memory. Prevent by setting pointers to NULL after free, never returning addresses of locals, and using tools like ASan or Valgrind to detect.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\nint main(void) {\n    int *p = (int *)malloc(sizeof(int));\n    *p = 42;\n    SAFE_FREE(p);          /* free and set to NULL */\n    if (p == NULL)\n        printf(\"safely nulled\\n\");\n    /* Compile with: gcc -fsanitize=address to detect use-after-free */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always NULL pointers after free",
+            "Use AddressSanitizer or Valgrind to detect dangling pointer use"
+          ],
+          "gotchas": [
+            "Other copies of the pointer remain dangling even after you NULL one copy"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,249 @@
+{
+  "name": "C",
+  "icon": "c",
+  "is_active": true,
+  "display_order": 2,
+  "concepts": [
+    {
+      "title": "Data Types, Variables & Storage Classes",
+      "slug": "data-types-variables-storage",
+      "description": "int/float/char/void, sizeof, signed/unsigned, auto/static/extern/register, const, typedef",
+      "display_order": 1,
+      "estimated_minutes": 35,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Operators & Expressions",
+      "slug": "operators-expressions",
+      "description": "Arithmetic, relational, logical, bitwise, ternary, comma, operator precedence, type promotion",
+      "display_order": 2,
+      "estimated_minutes": 25,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Control Flow",
+      "slug": "control-flow",
+      "description": "if/else, switch, for/while/do-while, break/continue/goto, nested loops",
+      "display_order": 3,
+      "estimated_minutes": 25,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Functions & Recursion",
+      "slug": "functions-recursion",
+      "description": "Declaration/definition, pass by value, variadic functions (stdarg.h), recursion, inline functions",
+      "display_order": 4,
+      "estimated_minutes": 35,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Arrays & Strings",
+      "slug": "arrays-strings",
+      "description": "1D/2D arrays, string.h functions, string manipulation, character arrays vs pointers, buffer overflow",
+      "display_order": 5,
+      "estimated_minutes": 35,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Pointers Fundamentals",
+      "slug": "pointers-fundamentals",
+      "description": "Declaration, dereferencing, NULL, pointer arithmetic, array-pointer duality, void pointers",
+      "display_order": 6,
+      "estimated_minutes": 35,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Preprocessor & Compilation",
+      "slug": "preprocessor-compilation",
+      "description": "#define, #include, #ifdef, macros with args, header guards, compilation stages, linking",
+      "display_order": 7,
+      "estimated_minutes": 25,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Advanced Pointers",
+      "slug": "advanced-pointers",
+      "description": "Double pointers, function pointers, callbacks, pointer to array, array of pointers, const pointers",
+      "display_order": 8,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Dynamic Memory Management",
+      "slug": "dynamic-memory",
+      "description": "malloc/calloc/realloc/free, memory leaks, dangling pointers, heap vs stack, fragmentation",
+      "display_order": 9,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Structures, Unions & Enums",
+      "slug": "structures-unions-enums",
+      "description": "Struct definition, nested structs, unions, bit fields, padding/alignment, self-referential structs",
+      "display_order": 10,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "File I/O (ANSI C)",
+      "slug": "file-io-ansi",
+      "description": "fopen/fclose/fread/fwrite, fprintf/fscanf, fseek/ftell, binary vs text mode, EOF handling",
+      "display_order": 11,
+      "estimated_minutes": 25,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Linked Lists",
+      "slug": "linked-lists",
+      "description": "Singly/doubly linked, insertion/deletion, reversal, cycle detection, merge two sorted lists",
+      "display_order": 12,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Stacks, Queues & Trees",
+      "slug": "stacks-queues-trees",
+      "description": "Array/linked-list implementation, infix-to-postfix, BFS/DFS, binary search tree operations",
+      "display_order": 13,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Sorting & Searching",
+      "slug": "sorting-searching",
+      "description": "Bubble/selection/insertion/merge/quick sort, binary search, time complexity, qsort() stdlib",
+      "display_order": 14,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Bitwise Operations & Tricks",
+      "slug": "bitwise-operations",
+      "description": "Set/clear/toggle bits, bit masks, counting set bits, power of 2 check, swap without temp, bit fields",
+      "display_order": 15,
+      "estimated_minutes": 40,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "UNIX File I/O & Descriptors (APUE)",
+      "slug": "unix-file-io",
+      "description": "open/close/read/write, file descriptors, dup/dup2, fcntl, lseek, O_NONBLOCK",
+      "display_order": 16,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Files & Directories (APUE)",
+      "slug": "files-directories",
+      "description": "stat/fstat/lstat, permissions, chmod, inodes, hard/soft links, directory traversal, opendir/readdir",
+      "display_order": 17,
+      "estimated_minutes": 30,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Process Control (APUE)",
+      "slug": "process-control",
+      "description": "fork, exec family, wait/waitpid, zombie/orphan processes, process groups, sessions, daemon creation",
+      "display_order": 18,
+      "estimated_minutes": 45,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Signals (APUE)",
+      "slug": "signals",
+      "description": "signal(), sigaction(), signal masks, SIGCHLD, async-signal-safe, kill/raise, alarm/pause",
+      "display_order": 19,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Inter-Process Communication (APUE)",
+      "slug": "ipc",
+      "description": "Pipes, FIFOs, System V message queues, shared memory, semaphores, deadlock prevention",
+      "display_order": 20,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Threads & Synchronization (APUE)",
+      "slug": "threads-synchronization",
+      "description": "pthread_create/join/detach, mutexes, condition variables, rwlocks, thread safety, race conditions",
+      "display_order": 21,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Socket Programming",
+      "slug": "socket-programming",
+      "description": "TCP/UDP, socket/bind/listen/accept/connect, client-server model, select/poll, SO_REUSEADDR",
+      "display_order": 22,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Memory Internals & Debugging",
+      "slug": "memory-internals",
+      "description": "Virtual memory, mmap, stack overflow, valgrind, gdb basics, address sanitizer, memory barriers",
+      "display_order": 23,
+      "estimated_minutes": 30,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Embedded C & Hardware",
+      "slug": "embedded-c",
+      "description": "volatile, memory-mapped I/O, ISRs, bit manipulation for registers, endianness, packed structs",
+      "display_order": 24,
+      "estimated_minutes": 25,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "C Standards & Best Practices",
+      "slug": "c-standards",
+      "description": "C99/C11 features, VLAs, _Generic, _Static_assert, restrict, undefined behavior, CERT C guidelines",
+      "display_order": 25,
+      "estimated_minutes": 20,
+      "difficulty": "advanced"
+    }
+  ],
+  "relationships": [
+    {"from": "data-types-variables-storage", "to": "operators-expressions", "type": "prerequisite"},
+    {"from": "operators-expressions", "to": "control-flow", "type": "prerequisite"},
+    {"from": "control-flow", "to": "functions-recursion", "type": "prerequisite"},
+    {"from": "data-types-variables-storage", "to": "arrays-strings", "type": "prerequisite"},
+    {"from": "data-types-variables-storage", "to": "pointers-fundamentals", "type": "prerequisite"},
+    {"from": "arrays-strings", "to": "pointers-fundamentals", "type": "prerequisite"},
+    {"from": "data-types-variables-storage", "to": "preprocessor-compilation", "type": "prerequisite"},
+    {"from": "pointers-fundamentals", "to": "advanced-pointers", "type": "prerequisite"},
+    {"from": "functions-recursion", "to": "advanced-pointers", "type": "prerequisite"},
+    {"from": "pointers-fundamentals", "to": "dynamic-memory", "type": "prerequisite"},
+    {"from": "data-types-variables-storage", "to": "structures-unions-enums", "type": "prerequisite"},
+    {"from": "pointers-fundamentals", "to": "structures-unions-enums", "type": "prerequisite"},
+    {"from": "functions-recursion", "to": "file-io-ansi", "type": "prerequisite"},
+    {"from": "pointers-fundamentals", "to": "file-io-ansi", "type": "prerequisite"},
+    {"from": "dynamic-memory", "to": "linked-lists", "type": "prerequisite"},
+    {"from": "structures-unions-enums", "to": "linked-lists", "type": "prerequisite"},
+    {"from": "linked-lists", "to": "stacks-queues-trees", "type": "prerequisite"},
+    {"from": "arrays-strings", "to": "sorting-searching", "type": "prerequisite"},
+    {"from": "functions-recursion", "to": "sorting-searching", "type": "prerequisite"},
+    {"from": "operators-expressions", "to": "bitwise-operations", "type": "prerequisite"},
+    {"from": "file-io-ansi", "to": "unix-file-io", "type": "prerequisite"},
+    {"from": "unix-file-io", "to": "files-directories", "type": "prerequisite"},
+    {"from": "functions-recursion", "to": "process-control", "type": "prerequisite"},
+    {"from": "unix-file-io", "to": "process-control", "type": "prerequisite"},
+    {"from": "process-control", "to": "signals", "type": "prerequisite"},
+    {"from": "unix-file-io", "to": "ipc", "type": "prerequisite"},
+    {"from": "process-control", "to": "ipc", "type": "prerequisite"},
+    {"from": "process-control", "to": "threads-synchronization", "type": "prerequisite"},
+    {"from": "dynamic-memory", "to": "threads-synchronization", "type": "prerequisite"},
+    {"from": "unix-file-io", "to": "socket-programming", "type": "prerequisite"},
+    {"from": "threads-synchronization", "to": "socket-programming", "type": "related"},
+    {"from": "dynamic-memory", "to": "memory-internals", "type": "prerequisite"},
+    {"from": "unix-file-io", "to": "memory-internals", "type": "related"},
+    {"from": "bitwise-operations", "to": "embedded-c", "type": "prerequisite"},
+    {"from": "pointers-fundamentals", "to": "embedded-c", "type": "prerequisite"},
+    {"from": "preprocessor-compilation", "to": "embedded-c", "type": "related"},
+    {"from": "data-types-variables-storage", "to": "c-standards", "type": "related"},
+    {"from": "preprocessor-compilation", "to": "c-standards", "type": "related"},
+    {"from": "dynamic-memory", "to": "c-standards", "type": "related"}
+  ]
+}

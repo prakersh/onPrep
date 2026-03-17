@@ -1,0 +1,635 @@
+{
+  "concept_slug": "structures-unions-enums",
+  "questions": [
+    {
+      "title": "How do you declare and initialize structs in C, including C99 designated initializers?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["struct", "initialization", "designated-initializer", "c99"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Structs in C group related variables under one name. There are several ways to declare and initialize them:\n\n**Declaration:**\n```c\nstruct Point { int x; int y; };\n```\n\n**Initialization methods:**\n\n1. **Positional initialization:**\n```c\nstruct Point p = {10, 20};\n```\nFields are assigned in declaration order.\n\n2. **C99 designated initializers:**\n```c\nstruct Point p = {.x = 10, .y = 20};\n```\nFields are named explicitly -- order does not matter, unspecified fields are zero-initialized.\n\n3. **Partial initialization:**\n```c\nstruct Point p = {10}; /* x=10, y=0 */\n```\nUnspecified fields are zero-initialized.\n\n4. **Zero initialization:**\n```c\nstruct Point p = {0}; /* all fields zero */\n```\n\n5. **Compound literal (C99):**\n```c\nstruct Point p = (struct Point){.x = 5, .y = 10};\n```\n\n**Designated initializers** are a C99 feature and are especially useful for:\n- Structs with many fields (only initialize what you need)\n- Self-documenting code (field names visible at initialization)\n- Forward-compatible code (adding new fields does not break existing initializers)",
+          "pseudo_code": "Positional: struct S s = {val1, val2, val3};\n  Fields assigned in order; unspecified = 0\n\nDesignated (C99): struct S s = {.field2 = val2, .field1 = val1};\n  Order doesn't matter; unspecified = 0\n\nZero init: struct S s = {0};\n  All fields zero-initialized\n\nCompound literal: func((struct S){.x = 1, .y = 2});",
+          "actual_code": "#include <stdio.h>\n\nstruct Point {\n    int x;\n    int y;\n};\n\nstruct Config {\n    int width;\n    int height;\n    int fullscreen;\n    int vsync;\n    int fps_limit;\n};\n\nvoid print_point(struct Point p) {\n    printf(\"(%d, %d)\\n\", p.x, p.y);\n}\n\nint main(void) {\n    /* Positional initialization */\n    struct Point p1 = {10, 20};\n    print_point(p1); /* (10, 20) */\n\n    /* C99 designated initializers */\n    struct Point p2 = {.y = 50, .x = 30}; /* order doesn't matter */\n    print_point(p2); /* (30, 50) */\n\n    /* Partial initialization: unspecified fields = 0 */\n    struct Point p3 = {.x = 7};\n    print_point(p3); /* (7, 0) */\n\n    /* Zero initialization */\n    struct Point p4 = {0};\n    print_point(p4); /* (0, 0) */\n\n    /* Designated initializers shine with large structs */\n    struct Config cfg = {\n        .width = 1920,\n        .height = 1080,\n        .fullscreen = 1,\n        /* vsync and fps_limit default to 0 */\n    };\n    printf(\"Config: %dx%d fullscreen=%d vsync=%d\\n\",\n           cfg.width, cfg.height, cfg.fullscreen, cfg.vsync);\n\n    /* Compound literal (C99) -- useful for passing to functions */\n    print_point((struct Point){.x = 100, .y = 200}); /* (100, 200) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Positional init assigns fields in declaration order",
+            "C99 designated initializers use .field = value syntax -- order does not matter",
+            "Unspecified fields are always zero-initialized in both styles",
+            "{0} zero-initializes the entire struct",
+            "Compound literals create temporary struct values inline"
+          ],
+          "gotchas": [
+            "Designated initializers are C99 -- not available in strict C89 mode",
+            "In C (unlike C++), designated initializer order can differ from declaration order",
+            "Positional init breaks silently if fields are reordered in the struct definition",
+            "struct S s; without = {0} leaves fields uninitialized (garbage) -- unlike global structs which are zero-initialized"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Declare: `struct Point { int x; int y; };`. Initialize positionally `{10, 20}` or with C99 designated initializers `{.x = 10, .y = 20}`. Unspecified fields default to 0. Use `{0}` for full zero-init.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Point { int x; int y; };\n\nint main(void) {\n    struct Point p1 = {10, 20};            /* positional */\n    struct Point p2 = {.y = 5, .x = 3};   /* designated (C99) */\n    struct Point p3 = {0};                 /* all zeros */\n    printf(\"(%d,%d) (%d,%d) (%d,%d)\\n\",\n           p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);\n    /* (10,20) (3,5) (0,0) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Designated initializers: .field = value, order-independent, unset = 0",
+            "{0} zero-initializes the entire struct"
+          ],
+          "gotchas": [
+            "Local struct variables without initializer contain garbage -- always initialize"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do nested structures work in C?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["nested-struct", "composition", "struct"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Nested structures** are structs that contain other structs as members. This is C's mechanism for composition (building complex types from simpler ones).\n\n**Access:** Use the dot operator chained: `outer.inner.field`.\nWith pointers: `ptr->inner.field` or `(*ptr).inner.field`.\n\n**Initialization:** Can use nested braces or C99 designated initializers for clarity.\n\n**Common patterns:**\n- Geographic data: `struct Location { struct GPS coords; struct Address addr; };`\n- UI elements: `struct Button { struct Rect bounds; struct Color color; };`\n- Database records: `struct Employee { struct Name name; struct Department dept; };`\n\n**Nested structs are stored contiguously** in memory (with possible padding for alignment). This means accessing nested fields is efficient -- no pointer dereferencing, just offset calculation.",
+          "pseudo_code": "struct Inner { int a; int b; };\nstruct Outer {\n    struct Inner inner;  /* embedded, not a pointer */\n    int c;\n};\n\nAccess: outer.inner.a\nInit:   struct Outer o = {{1, 2}, 3};\nInit:   struct Outer o = {.inner = {.a = 1, .b = 2}, .c = 3};\nPtr:    ptr->inner.a",
+          "actual_code": "#include <stdio.h>\n\nstruct Address {\n    char street[50];\n    char city[30];\n    int zip;\n};\n\nstruct Person {\n    char name[50];\n    int age;\n    struct Address addr; /* nested struct */\n};\n\nvoid print_person(const struct Person *p) {\n    printf(\"%s (age %d)\\n\", p->name, p->age);\n    printf(\"  %s, %s %d\\n\", p->addr.street, p->addr.city, p->addr.zip);\n}\n\nint main(void) {\n    /* Positional initialization with nested braces */\n    struct Person p1 = {\n        \"Alice\", 30,\n        {\"123 Main St\", \"Springfield\", 62701}\n    };\n    print_person(&p1);\n\n    /* C99 designated initializers (much clearer) */\n    struct Person p2 = {\n        .name = \"Bob\",\n        .age = 25,\n        .addr = {\n            .street = \"456 Oak Ave\",\n            .city = \"Portland\",\n            .zip = 97201\n        }\n    };\n    print_person(&p2);\n\n    /* Modify nested field */\n    p2.addr.zip = 97202;\n    printf(\"Updated zip: %d\\n\", p2.addr.zip);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Nested structs are embedded by value, not by pointer -- stored contiguously",
+            "Access with chained dot: outer.inner.field; with pointer: ptr->inner.field",
+            "C99 designated initializers make nested initialization much more readable",
+            "Nested struct assignment copies all fields (shallow copy by value)",
+            "No limit on nesting depth, but deep nesting hurts readability"
+          ],
+          "gotchas": [
+            "Nested struct copy is shallow: if inner struct has pointers, only the pointer is copied, not the pointed-to data",
+            "Adding fields to an inner struct changes the outer struct's size and layout",
+            "Padding between nested struct members can waste memory",
+            "Cannot forward-reference: inner struct must be defined before the outer struct"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A struct can contain other structs as members. Access with chained dot: `outer.inner.field`. With pointers: `ptr->inner.field`. Nested structs are stored contiguously (by value, not by pointer).",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Point { int x, y; };\nstruct Rect { struct Point origin; int w, h; };\n\nint main(void) {\n    struct Rect r = {.origin = {.x = 10, .y = 20}, .w = 100, .h = 50};\n    printf(\"origin=(%d,%d) size=%dx%d\\n\",\n           r.origin.x, r.origin.y, r.w, r.h);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Nested structs are embedded by value, accessed with chained dot operator",
+            "Designated initializers make nested init readable"
+          ],
+          "gotchas": [
+            "Shallow copy: nested pointer members are not deep-copied"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use struct pointers and the arrow operator?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["struct-pointer", "arrow-operator", "dereference"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you have a pointer to a struct, you access members using the **arrow operator (`->`)** instead of the dot operator.\n\n**Equivalence:** `ptr->member` is syntactic sugar for `(*ptr).member`. The parentheses in `(*ptr).member` are necessary because `.` binds tighter than `*`.\n\n**Why use pointers to structs:**\n1. **Efficiency:** Passing large structs by pointer avoids copying\n2. **Modification:** Functions can modify the caller's struct\n3. **Dynamic allocation:** `malloc` returns a pointer\n4. **Linked data structures:** Nodes contain pointers to other nodes\n\n**The arrow operator chains:** For nested struct pointers, chain arrows: `list->head->next->data`.",
+          "pseudo_code": "struct S { int x; };\nstruct S s = {42};\nstruct S *p = &s;\n\nDot operator (on struct):    s.x\nArrow operator (on pointer): p->x\nEquivalent:                  (*p).x\n\nWhy -> exists:\n  (*p).x is cumbersome and error-prone\n  p->x is cleaner and chains well: p->inner->field",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nstruct Student {\n    char name[50];\n    int grade;\n};\n\n/* Pass by pointer: efficient, can modify */\nvoid promote(struct Student *s) {\n    s->grade += 1; /* arrow operator */\n}\n\n/* Pass by const pointer: efficient, read-only */\nvoid print_student(const struct Student *s) {\n    printf(\"%s: grade %d\\n\", s->name, s->grade);\n}\n\nint main(void) {\n    /* Stack-allocated struct with pointer */\n    struct Student alice = {\"Alice\", 10};\n    struct Student *p = &alice;\n\n    printf(\"%s grade: %d\\n\", p->name, p->grade); /* Alice grade: 10 */\n    printf(\"Same: %d\\n\", (*p).grade);             /* 10 -- equivalent */\n\n    promote(p);\n    print_student(p); /* Alice: grade 11 */\n\n    /* Heap-allocated struct */\n    struct Student *bob = malloc(sizeof(*bob));\n    if (bob) {\n        strcpy(bob->name, \"Bob\");\n        bob->grade = 8;\n        print_student(bob); /* Bob: grade 8 */\n        free(bob);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "ptr->member is equivalent to (*ptr).member",
+            "Arrow operator is necessary because . binds tighter than *",
+            "Pass structs by pointer for efficiency (avoids copying) and mutability",
+            "Use const pointer (const struct S *p) for read-only access",
+            "Heap-allocated structs are always accessed through pointers"
+          ],
+          "gotchas": [
+            "*p.member is wrong: it parses as *(p.member) -- use (*p).member or p->member",
+            "Dereferencing a NULL struct pointer is undefined behavior (common crash source)",
+            "Arrow operator only works on pointers, not on struct values",
+            "Returning a pointer to a local struct is a dangling pointer bug"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`ptr->member` accesses a struct member through a pointer. Equivalent to `(*ptr).member`. Use for efficiency (avoid copying), mutability, and heap-allocated structs.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Point { int x, y; };\n\nvoid move(struct Point *p, int dx, int dy) {\n    p->x += dx;\n    p->y += dy;\n}\n\nint main(void) {\n    struct Point pt = {10, 20};\n    move(&pt, 5, -3);\n    printf(\"(%d, %d)\\n\", pt.x, pt.y); /* (15, 17) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "ptr->member is syntactic sugar for (*ptr).member",
+            "Pass structs by pointer for efficiency and mutability"
+          ],
+          "gotchas": [
+            "*p.member parses as *(p.member), not (*p).member -- always use -> with pointers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are self-referential structures and how are they used for linked lists?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["self-referential", "linked-list", "node", "data-structure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **self-referential structure** is a struct that contains a pointer to its own type. This is the foundation of dynamic data structures: linked lists, trees, graphs.\n\n**Why a pointer, not an embedded struct:**\nA struct cannot contain an instance of itself (infinite recursion in size calculation), but it **can** contain a **pointer** to itself because all pointers have a fixed size.\n\n**Key syntax note:** You must use the struct tag (not typedef) inside the definition because the typedef is not yet complete:\n```c\nstruct Node {\n    int data;\n    struct Node *next; /* OK: pointer to same struct type */\n};\n```\n\n**Common self-referential patterns:**\n- Singly linked list: `struct Node { int data; struct Node *next; };`\n- Doubly linked list: `struct Node { int data; struct Node *prev; struct Node *next; };`\n- Binary tree: `struct TreeNode { int data; struct TreeNode *left, *right; };`",
+          "pseudo_code": "struct Node {\n    data_type data;\n    struct Node *next;  /* pointer to same type */\n};\n\nLinked list operations:\n  Create: node = malloc(sizeof(struct Node))\n  Link:   node->next = existing_node\n  Traverse: while (current != NULL) current = current->next\n  Delete: save = current->next; free(current); current = save",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Self-referential structure for singly linked list */\nstruct Node {\n    int data;\n    struct Node *next;\n};\n\nstruct Node *create_node(int data) {\n    struct Node *n = malloc(sizeof(*n));\n    if (n) {\n        n->data = data;\n        n->next = NULL;\n    }\n    return n;\n}\n\nvoid push_front(struct Node **head, int data) {\n    struct Node *new_node = create_node(data);\n    if (new_node) {\n        new_node->next = *head;\n        *head = new_node;\n    }\n}\n\nvoid print_list(const struct Node *head) {\n    const struct Node *curr = head;\n    while (curr) {\n        printf(\"%d -> \", curr->data);\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nvoid free_list(struct Node *head) {\n    while (head) {\n        struct Node *tmp = head;\n        head = head->next;\n        free(tmp);\n    }\n}\n\nint main(void) {\n    struct Node *list = NULL;\n    push_front(&list, 30);\n    push_front(&list, 20);\n    push_front(&list, 10);\n\n    print_list(list); /* 10 -> 20 -> 30 -> NULL */\n\n    free_list(list);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "A struct can contain a pointer to its own type (self-referential)",
+            "Cannot contain an instance of itself -- only a pointer (fixed size)",
+            "Foundation of linked lists, trees, and graphs",
+            "Must use struct tag inside the definition: struct Node *next, not Node *next",
+            "push_front requires double pointer (struct Node **) to modify the head"
+          ],
+          "gotchas": [
+            "Forgetting to set next to NULL in new nodes causes garbage pointer traversal",
+            "Memory leaks if you lose the head pointer without freeing all nodes",
+            "Cannot use typedef name inside the struct definition -- use the struct tag",
+            "Circular references (cycles) require careful traversal to avoid infinite loops"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A self-referential struct has a pointer to its own type: `struct Node { int data; struct Node *next; };`. This enables linked lists, trees, and graphs. Must use `struct Node *`, not an embedded `struct Node`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nstruct Node { int data; struct Node *next; };\n\nint main(void) {\n    struct Node *a = malloc(sizeof(*a));\n    struct Node *b = malloc(sizeof(*b));\n    a->data = 10; a->next = b;\n    b->data = 20; b->next = NULL;\n\n    struct Node *p = a;\n    while (p) { printf(\"%d \", p->data); p = p->next; }\n    /* 10 20 */\n    printf(\"\\n\");\n    free(a); free(b);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pointer to own type enables linked data structures",
+            "Must use struct tag inside the definition, not typedef alias"
+          ],
+          "gotchas": [
+            "Always set next to NULL for terminal nodes to avoid garbage traversal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is structure padding and alignment, and why does sizeof(struct) differ from the sum of field sizes?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["padding", "alignment", "sizeof", "memory-layout"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Structure padding** is extra bytes inserted by the compiler between struct members to align each member to its natural alignment boundary. This is needed because most CPUs access memory more efficiently (or require) data to be aligned to addresses that are multiples of the data size.\n\n**Alignment rules (typical):**\n- `char`: 1-byte aligned (any address)\n- `short`: 2-byte aligned\n- `int`, `float`: 4-byte aligned\n- `double`, `long long`, pointers (64-bit): 8-byte aligned\n\n**The struct's overall alignment** is the alignment of its most strictly-aligned member. The struct's total size is padded to be a multiple of this alignment (trailing padding).\n\n**Example:**\n```c\nstruct Bad {  char a; double b; char c; };\n// Layout: a(1) + pad(7) + b(8) + c(1) + pad(7) = 24 bytes\n\nstruct Good { double b; char a; char c; };\n// Layout: b(8) + a(1) + c(1) + pad(6) = 16 bytes\n```\n\n**Optimizing struct size:** Order fields from largest alignment to smallest to minimize padding.",
+          "pseudo_code": "Alignment rule:\n  Each member aligned to multiple of its own size (or max alignment)\n  Struct total size = multiple of largest member alignment\n\nstruct Example { char a; int b; char c; };\n  Offset 0: a (1 byte)\n  Offset 1-3: PADDING (3 bytes) -- align b to 4\n  Offset 4-7: b (4 bytes)\n  Offset 8: c (1 byte)\n  Offset 9-11: PADDING (3 bytes) -- struct size multiple of 4\n  Total: 12 bytes (not 6!)\n\nOptimized: struct Example { int b; char a; char c; };\n  Offset 0-3: b (4 bytes)\n  Offset 4: a (1 byte)\n  Offset 5: c (1 byte)\n  Offset 6-7: PADDING (2 bytes)\n  Total: 8 bytes",
+          "actual_code": "#include <stdio.h>\n#include <stddef.h> /* for offsetof */\n\nstruct Padded {\n    char a;    /* 1 byte */\n    /* 3 bytes padding */\n    int b;     /* 4 bytes */\n    char c;    /* 1 byte */\n    /* 3 bytes padding */\n};\n/* Total: 12 bytes */\n\nstruct Optimized {\n    int b;     /* 4 bytes */\n    char a;    /* 1 byte */\n    char c;    /* 1 byte */\n    /* 2 bytes padding */\n};\n/* Total: 8 bytes */\n\nstruct WithDouble {\n    char a;     /* 1 byte */\n    /* 7 bytes padding */\n    double b;   /* 8 bytes */\n    char c;     /* 1 byte */\n    /* 7 bytes padding */\n};\n/* Total: 24 bytes */\n\nint main(void) {\n    printf(\"struct Padded:    %zu bytes\\n\", sizeof(struct Padded));    /* 12 */\n    printf(\"struct Optimized: %zu bytes\\n\", sizeof(struct Optimized)); /* 8 */\n    printf(\"struct WithDouble:%zu bytes\\n\", sizeof(struct WithDouble));/* 24 */\n\n    /* Use offsetof to see exact field positions */\n    printf(\"\\nPadded layout:\\n\");\n    printf(\"  a at offset %zu\\n\", offsetof(struct Padded, a)); /* 0 */\n    printf(\"  b at offset %zu\\n\", offsetof(struct Padded, b)); /* 4 */\n    printf(\"  c at offset %zu\\n\", offsetof(struct Padded, c)); /* 8 */\n\n    printf(\"\\nOptimized layout:\\n\");\n    printf(\"  b at offset %zu\\n\", offsetof(struct Optimized, b)); /* 0 */\n    printf(\"  a at offset %zu\\n\", offsetof(struct Optimized, a)); /* 4 */\n    printf(\"  c at offset %zu\\n\", offsetof(struct Optimized, c)); /* 5 */\n\n    /* Sum of fields vs sizeof */\n    printf(\"\\nSum of Padded fields: %zu\\n\",\n           sizeof(char) + sizeof(int) + sizeof(char)); /* 6 */\n    printf(\"sizeof(struct Padded): %zu\\n\", sizeof(struct Padded)); /* 12 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Compilers insert padding bytes to align each member to its natural boundary",
+            "Struct total size is rounded up to a multiple of the largest member's alignment",
+            "offsetof() macro reveals exact field positions within a struct",
+            "Order fields largest-to-smallest to minimize padding",
+            "sizeof(struct) includes all padding bytes"
+          ],
+          "gotchas": [
+            "sizeof(struct) is almost never equal to the sum of sizeof(each member)",
+            "Reordering fields changes sizeof -- this matters for binary protocols and file formats",
+            "Different compilers or architectures may use different alignment/padding rules",
+            "Comparing structs with memcmp can give wrong results because padding bytes are indeterminate"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compilers add padding bytes to align struct members to their natural boundaries. `sizeof(struct)` includes padding and is usually larger than the sum of member sizes. Order fields largest-to-smallest to minimize waste.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stddef.h>\n\nstruct Bad  { char a; int b; char c; }; /* 12 bytes */\nstruct Good { int b; char a; char c; }; /* 8 bytes */\n\nint main(void) {\n    printf(\"Bad: %zu, Good: %zu\\n\",\n           sizeof(struct Bad), sizeof(struct Good)); /* 12, 8 */\n    printf(\"b at offset %zu\\n\", offsetof(struct Bad, b)); /* 4 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Padding aligns members; total size rounded to largest alignment",
+            "Order fields largest-to-smallest to minimize padding"
+          ],
+          "gotchas": [
+            "memcmp on structs can fail because padding bytes contain garbage"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you pack structures to remove padding using #pragma pack or __attribute__((packed))?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["pragma-pack", "packed", "struct-packing", "binary-protocol"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Packing** removes padding from structs, making `sizeof` equal to the sum of member sizes. This is needed for binary file formats, network protocols, and hardware register mappings where exact byte layout matters.\n\n**Method 1: `#pragma pack`** (portable across MSVC, GCC, Clang)\n```c\n#pragma pack(push, 1)  /* save current packing, set to 1-byte alignment */\nstruct Header { ... };\n#pragma pack(pop)       /* restore previous packing */\n```\n\n**Method 2: `__attribute__((packed))`** (GCC/Clang only)\n```c\nstruct Header {\n    char type;\n    int length;\n} __attribute__((packed));\n```\n\n**Performance impact:**\n- Packed structs may cause **misaligned access**, which is:\n  - Slower on x86 (hardware handles it, but with a penalty)\n  - A **hardware fault (bus error)** on ARM, SPARC, and some embedded architectures\n- Taking the address of a packed member and passing it to a function expecting aligned data is undefined behavior",
+          "pseudo_code": "Without packing:\n  struct S { char a; int b; };  /* 8 bytes (3 padding) */\n\nWith packing:\n  #pragma pack(push, 1)\n  struct S { char a; int b; };  /* 5 bytes (no padding) */\n  #pragma pack(pop)\n\nOr:\n  struct S { char a; int b; } __attribute__((packed)); /* 5 bytes */",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Normal struct with padding */\nstruct Normal {\n    char type;     /* 1 byte */\n    /* 3 bytes padding */\n    int length;    /* 4 bytes */\n    char flags;    /* 1 byte */\n    /* 3 bytes padding */\n};\n/* Total: 12 bytes */\n\n/* Packed struct -- no padding */\n#pragma pack(push, 1)\nstruct PacketHeader {\n    uint8_t type;     /* 1 byte */\n    uint32_t length;  /* 4 bytes */\n    uint8_t flags;    /* 1 byte */\n};\n#pragma pack(pop)\n/* Total: 6 bytes */\n\n/* Alternative GCC/Clang syntax */\nstruct __attribute__((packed)) GCCPacked {\n    uint8_t type;\n    uint32_t length;\n    uint8_t flags;\n};\n/* Total: 6 bytes */\n\nint main(void) {\n    printf(\"Normal size:       %zu\\n\", sizeof(struct Normal));       /* 12 */\n    printf(\"PacketHeader size: %zu\\n\", sizeof(struct PacketHeader)); /* 6 */\n    printf(\"GCCPacked size:    %zu\\n\", sizeof(struct GCCPacked));    /* 6 */\n\n    /* Use packed struct for binary protocol */\n    struct PacketHeader pkt = {.type = 0x01, .length = 1024, .flags = 0x80};\n    printf(\"Packet: type=0x%02x length=%u flags=0x%02x\\n\",\n           pkt.type, pkt.length, pkt.flags);\n\n    /* Accessing packed members is safe through the struct itself */\n    /* But taking address of misaligned member is dangerous: */\n    /* uint32_t *p = &pkt.length; */  /* WARNING: misaligned pointer! */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "#pragma pack(push, 1) ... #pragma pack(pop) removes all padding",
+            "__attribute__((packed)) is GCC/Clang-specific alternative",
+            "Use packed structs for binary protocols, file formats, hardware registers",
+            "Always restore packing with #pragma pack(pop) to avoid affecting other structs",
+            "Packed struct sizeof equals the exact sum of member sizes"
+          ],
+          "gotchas": [
+            "Misaligned access from packed structs is a hardware fault on ARM/SPARC (not just slow)",
+            "Taking the address of a packed member creates a misaligned pointer -- UB when dereferenced as the aligned type",
+            "Packed structs should not be used for general-purpose data -- only for I/O boundaries",
+            "-Waddress-of-packed-member (GCC 9+) warns about misaligned pointer creation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`#pragma pack(push, 1)` or `__attribute__((packed))` removes struct padding. Used for binary protocols and hardware registers. Causes misaligned access -- slow on x86, crashes on ARM.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n#pragma pack(push, 1)\nstruct Header {\n    uint8_t type;\n    uint32_t length;\n};\n#pragma pack(pop)\n\nint main(void) {\n    printf(\"%zu\\n\", sizeof(struct Header)); /* 5 (no padding) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "#pragma pack(push,1) removes padding; #pragma pack(pop) restores",
+            "Only use for binary I/O, not general data"
+          ],
+          "gotchas": [
+            "Misaligned access crashes on ARM/SPARC; never take address of packed member"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are unions in C and what are their practical use cases?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["union", "type-punning", "variant", "memory-sharing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **union** is like a struct where all members **share the same memory location**. The union's size equals the size of its largest member. Only one member can hold a valid value at a time.\n\n**Key difference from struct:**\n- Struct: members are laid out sequentially (total size = sum + padding)\n- Union: members overlap (total size = largest member + padding)\n\n**Practical use cases:**\n\n1. **Type punning:** Reinterpret the bits of one type as another (reading float bits as int). This is well-defined in C99 but technically UB in C++.\n\n2. **Variant/tagged union:** Store different types in the same space, with a tag field indicating which type is active (discriminated union).\n\n3. **Memory efficiency:** When you know only one of several fields will be used at a time.\n\n4. **Hardware register access:** Map different bitfield views onto the same register.\n\n5. **Network protocol parsing:** Overlay different header formats on the same buffer.",
+          "pseudo_code": "union Data {\n    int i;      /* 4 bytes */\n    float f;    /* 4 bytes */\n    char c;     /* 1 byte */\n};\nsizeof(union Data) == 4  /* size of largest member */\n\nWriting to one member and reading from another:\n  union Data d;\n  d.i = 42;     /* i is active */\n  d.f = 3.14;   /* now f is active, i is invalid */\n  /* d.i is now undefined (type punning exception aside) */",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Basic union */\nunion Number {\n    int i;\n    float f;\n    char bytes[4];\n};\n\n/* Type punning: view float bits as integer */\nvoid show_float_bits(float f) {\n    union { float f; uint32_t i; } u;\n    u.f = f;\n    printf(\"float %.2f = bits 0x%08X\\n\", f, u.i);\n}\n\n/* Practical: network byte order conversion helper */\nunion IPv4 {\n    uint32_t addr;\n    uint8_t octets[4];\n};\n\nint main(void) {\n    /* Union basics */\n    union Number n;\n    printf(\"sizeof(union Number) = %zu\\n\", sizeof(n)); /* 4 */\n\n    n.i = 42;\n    printf(\"As int: %d\\n\", n.i);     /* 42 */\n\n    n.f = 3.14f;\n    printf(\"As float: %.2f\\n\", n.f); /* 3.14 */\n    /* n.i is now invalid (overwritten by f) */\n\n    /* Type punning (well-defined in C99) */\n    show_float_bits(3.14f);   /* float 3.14 = bits 0x4048F5C3 */\n    show_float_bits(0.0f);    /* float 0.00 = bits 0x00000000 */\n    show_float_bits(-1.0f);   /* float -1.00 = bits 0xBF800000 */\n\n    /* IP address manipulation */\n    union IPv4 ip;\n    ip.octets[0] = 192;\n    ip.octets[1] = 168;\n    ip.octets[2] = 1;\n    ip.octets[3] = 100;\n    printf(\"IP: %u.%u.%u.%u (raw: 0x%08X)\\n\",\n           ip.octets[0], ip.octets[1], ip.octets[2], ip.octets[3],\n           ip.addr);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "All union members share the same memory; size = largest member",
+            "Only one member is valid at a time -- writing to one invalidates others",
+            "Type punning through unions is well-defined in C99 (but UB in C++)",
+            "Used for variant types, hardware registers, and memory efficiency",
+            "sizeof(union) equals sizeof(largest member) plus any trailing padding"
+          ],
+          "gotchas": [
+            "Reading an inactive union member is UB in C89 and C++ -- but allowed in C99 for type punning",
+            "Unions do not track which member is active -- programmer must manage this",
+            "Union assignment copies the entire size of the union, not just the active member",
+            "Padding rules still apply: union size may be larger than the largest member due to alignment"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A union shares memory among all members -- only one is valid at a time. Size equals largest member. Use for type punning (C99), variant types, IP address manipulation, and memory-mapped registers.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\nunion FloatBits {\n    float f;\n    uint32_t bits;\n};\n\nint main(void) {\n    union FloatBits u;\n    u.f = 3.14f;\n    printf(\"%.2f as hex: 0x%08X\\n\", u.f, u.bits);\n    printf(\"sizeof: %zu\\n\", sizeof(u)); /* 4 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "All members share same memory; size = largest member",
+            "Type punning via union is well-defined in C99"
+          ],
+          "gotchas": [
+            "No tracking of active member -- programmer must manage this explicitly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do enums work in C and what is their underlying type?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["enum", "enumeration", "constants", "underlying-type"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **enum** (enumeration) defines a set of named integer constants. It improves readability over raw `#define` constants.\n\n**Declaration and values:**\n```c\nenum Color { RED, GREEN, BLUE };\n// RED=0, GREEN=1, BLUE=2 (auto-incremented from 0)\n\nenum Status { OK = 200, NOT_FOUND = 404, ERROR = 500 };\n// Explicit values\n```\n\n**Underlying type:**\n- In C, enum constants are always `int` (guaranteed by the standard)\n- The enum variable type is implementation-defined but compatible with `int`\n- The compiler may use a smaller type for the variable (char, short) if all values fit, but constants remain `int`\n- In C23, you can specify the underlying type: `enum Color : unsigned char { ... }`\n\n**Key properties:**\n- Enum values are just integers -- no type safety (unlike C++ enum class)\n- Can be used in switch statements, array indexing, arithmetic\n- Duplicate values are allowed\n- Cannot iterate over enum values (no reflection)",
+          "pseudo_code": "enum Direction { NORTH, EAST, SOUTH, WEST };\n  NORTH=0, EAST=1, SOUTH=2, WEST=3\n\nenum Flags { A=1, B=2, C=4, D=8 };\n  Can be used as bit flags\n\nEnum constants are always int:\n  printf(\"%zu\\n\", sizeof(NORTH)); /* sizeof(int) */\n\nEnum variable may be smaller:\n  enum Direction d;\n  sizeof(d) may be < sizeof(int) on some compilers",
+          "actual_code": "#include <stdio.h>\n\nenum Direction { NORTH, EAST, SOUTH, WEST, NUM_DIRECTIONS };\n\nenum HttpStatus {\n    HTTP_OK = 200,\n    HTTP_NOT_FOUND = 404,\n    HTTP_INTERNAL_ERROR = 500\n};\n\n/* Enum as bit flags */\nenum Permissions {\n    PERM_READ = 1,    /* 001 */\n    PERM_WRITE = 2,   /* 010 */\n    PERM_EXEC = 4     /* 100 */\n};\n\nconst char *direction_name(enum Direction d) {\n    static const char *names[] = {\"North\", \"East\", \"South\", \"West\"};\n    if (d >= 0 && d < NUM_DIRECTIONS) return names[d];\n    return \"Unknown\";\n}\n\nint main(void) {\n    /* Basic enum usage */\n    enum Direction d = EAST;\n    printf(\"%s (value=%d)\\n\", direction_name(d), d); /* East (value=1) */\n\n    /* Enum in switch */\n    enum HttpStatus status = HTTP_OK;\n    switch (status) {\n        case HTTP_OK:             printf(\"200 OK\\n\"); break;\n        case HTTP_NOT_FOUND:      printf(\"404 Not Found\\n\"); break;\n        case HTTP_INTERNAL_ERROR: printf(\"500 Error\\n\"); break;\n    }\n\n    /* Enum as bit flags */\n    int perms = PERM_READ | PERM_WRITE;\n    if (perms & PERM_READ)  printf(\"Can read\\n\");\n    if (perms & PERM_WRITE) printf(\"Can write\\n\");\n    if (perms & PERM_EXEC)  printf(\"Can execute\\n\");\n\n    /* Enum constants are int */\n    printf(\"sizeof(NORTH) = %zu\\n\", sizeof(NORTH));     /* sizeof(int) */\n    printf(\"sizeof(enum Direction) = %zu\\n\", sizeof(enum Direction));\n\n    /* NUM_DIRECTIONS trick for array sizing */\n    const char *labels[NUM_DIRECTIONS] = {\"N\", \"E\", \"S\", \"W\"};\n    for (int i = 0; i < NUM_DIRECTIONS; i++)\n        printf(\"%s \", labels[i]);\n    printf(\"\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Enum constants auto-increment from 0 unless explicitly set",
+            "Enum constants are always type int in C",
+            "No type safety: can assign any int to an enum variable without warning",
+            "NUM_ELEMENTS sentinel pattern provides count for arrays and loops",
+            "Enums can be used as bit flags with powers-of-two values"
+          ],
+          "gotchas": [
+            "No type safety: enum Direction d = 999; compiles without error in C",
+            "Cannot iterate over enum values -- no reflection in C",
+            "Enum variable size may differ from int -- do not assume sizeof(enum) == sizeof(int)",
+            "Negative enum values are allowed: enum Sign { NEG = -1, ZERO = 0, POS = 1 };"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Enums define named integer constants. Auto-increment from 0 unless specified. Constants are always `int` in C. No type safety -- any int can be assigned. Use `NUM_X` sentinel for array sizing.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nenum Color { RED, GREEN, BLUE, NUM_COLORS };\n\nint main(void) {\n    enum Color c = GREEN;\n    printf(\"GREEN=%d, NUM_COLORS=%d\\n\", c, NUM_COLORS); /* 1, 3 */\n    const char *names[NUM_COLORS] = {\"Red\", \"Green\", \"Blue\"};\n    printf(\"%s\\n\", names[c]); /* Green */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Auto-increment from 0; constants are int type",
+            "No type safety in C; use NUM_X sentinel pattern"
+          ],
+          "gotchas": [
+            "Any integer can be assigned to enum variable -- no compiler error"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are bit fields in C and what are their use cases and pitfalls?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["bit-field", "packed-bits", "flags", "struct"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Bit fields** allow you to specify the exact number of bits a struct member occupies. They pack multiple small values into fewer bytes.\n\n**Syntax:**\n```c\nstruct Flags {\n    unsigned int read  : 1;  /* 1 bit */\n    unsigned int write : 1;  /* 1 bit */\n    unsigned int exec  : 1;  /* 1 bit */\n};\n```\n\n**Use cases:**\n1. **Hardware registers:** Map to exact bit positions in a register\n2. **Compact flags:** Store many boolean flags in minimal space\n3. **Protocol headers:** Match bit-level specifications (though packing issues apply)\n4. **Memory-constrained embedded systems:** Save RAM\n\n**Rules:**\n- Bit field types: `unsigned int`, `signed int`, `_Bool` (C99), implementation-defined for other types\n- Width 0 (`int : 0;`) forces alignment to next storage unit boundary\n- Unnamed bit fields (padding): `int : 3;` adds 3 bits of padding\n- Cannot take the address of a bit field (`&flags.read` is illegal)\n- Cannot create an array of bit fields\n\n**Portability concerns:**\n- Bit order (MSB first vs LSB first) is implementation-defined\n- Packing across storage unit boundaries is implementation-defined\n- Not suitable for cross-platform binary formats",
+          "pseudo_code": "struct Flags {\n    unsigned int a : 1;  /* 1 bit: 0 or 1 */\n    unsigned int b : 3;  /* 3 bits: 0 to 7 */\n    unsigned int c : 4;  /* 4 bits: 0 to 15 */\n};\n/* All 8 bits may fit in a single byte (implementation-dependent) */\n\nAccess like normal members: flags.a = 1; flags.b = 5;\nCannot: &flags.a (no address of bit fields)\nCannot: sizeof(flags.a) (no sizeof bit fields)",
+          "actual_code": "#include <stdio.h>\n\n/* Compact flags using bit fields */\nstruct Permissions {\n    unsigned int read  : 1;\n    unsigned int write : 1;\n    unsigned int exec  : 1;\n};\n\n/* Bit field for compact data storage */\nstruct Date {\n    unsigned int year  : 12; /* 0-4095 */\n    unsigned int month : 4;  /* 0-15 */\n    unsigned int day   : 5;  /* 0-31 */\n};\n\n/* Hardware register example */\nstruct StatusRegister {\n    unsigned int busy      : 1;\n    unsigned int error     : 1;\n    unsigned int mode      : 3;\n    unsigned int reserved  : 3;\n};\n\nint main(void) {\n    /* Permissions */\n    struct Permissions p = {.read = 1, .write = 1, .exec = 0};\n    printf(\"sizeof(Permissions) = %zu\\n\", sizeof(p)); /* typically 4 */\n    printf(\"read=%u write=%u exec=%u\\n\", p.read, p.write, p.exec);\n\n    /* Compact date */\n    struct Date d = {.year = 2024, .month = 12, .day = 25};\n    printf(\"sizeof(Date) = %zu\\n\", sizeof(d)); /* typically 4 */\n    printf(\"Date: %u-%02u-%02u\\n\", d.year, d.month, d.day);\n\n    /* Overflow: value exceeds bit width */\n    struct Date d2 = {.year = 2024, .month = 15, .day = 32};\n    printf(\"Overflow day (32 in 5 bits): %u\\n\", d2.day); /* 0 (wraps) */\n\n    /* Cannot take address of bit field */\n    /* int *ptr = &p.read; */  /* ERROR: cannot take address */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Bit fields specify exact bit widths for struct members",
+            "Use unsigned int for bit fields to avoid sign-extension surprises",
+            "Cannot take the address of a bit field (&bf is illegal)",
+            "Bit order and packing are implementation-defined -- not portable",
+            "Width 0 (int : 0;) forces alignment to next storage unit"
+          ],
+          "gotchas": [
+            "Signed bit fields with width 1 can only be 0 or -1 (not 0 or 1) -- always use unsigned",
+            "Bit field layout is implementation-defined: not suitable for portable binary formats",
+            "Assigning a value larger than the bit width silently truncates (no warning in some compilers)",
+            "Cannot use sizeof or & on individual bit fields"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Bit fields let you specify exact bit widths in a struct: `unsigned int flag : 1;`. Used for compact flags, hardware registers, and memory-constrained systems. Layout is implementation-defined -- not portable across platforms.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Flags {\n    unsigned int read  : 1;\n    unsigned int write : 1;\n    unsigned int exec  : 1;\n};\n\nint main(void) {\n    struct Flags f = {.read = 1, .write = 0, .exec = 1};\n    printf(\"r=%u w=%u x=%u, size=%zu\\n\",\n           f.read, f.write, f.exec, sizeof(f));\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Specify bit widths with : N after member name",
+            "Always use unsigned; layout is implementation-defined"
+          ],
+          "gotchas": [
+            "Signed 1-bit field holds 0 or -1, not 0 or 1 -- use unsigned"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does struct assignment work in C (shallow copy)?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["struct-copy", "shallow-copy", "assignment", "memcpy"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In C, structs can be assigned with `=`, which performs a **shallow (member-wise) copy**. This copies every byte of the struct, including padding.\n\n**What gets copied:**\n- All primitive members (int, float, char, etc.) -- values are duplicated\n- Arrays inside the struct -- entire array is copied\n- Pointers -- the **pointer value** is copied (both structs point to the same data)\n- Nested structs -- recursively copied by value\n\n**What does NOT happen:**\n- No deep copy of pointed-to data\n- Both original and copy share the same dynamically allocated memory\n- Modifying one pointer's target affects both structs\n- Double-free risk if both structs try to free the same pointer\n\n**Equivalent to memcpy:**\n```c\nstruct S a = b; /* same as memcpy(&a, &b, sizeof(a)); */\n```\n\n**When you need deep copy:** Write a custom clone/copy function that allocates new memory for pointer members.",
+          "pseudo_code": "struct S { int x; char *name; };\n\nstruct S a = {42, malloc(10)};\nstruct S b = a;  /* shallow copy */\n\nResult:\n  b.x == 42           (independent copy)\n  b.name == a.name    (SAME pointer! shared memory)\n\nDangers:\n  free(a.name);\n  printf(\"%s\", b.name);  /* dangling pointer! */\n\nDeep copy:\n  b.name = malloc(strlen(a.name) + 1);\n  strcpy(b.name, a.name);  /* independent copy */",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nstruct Person {\n    char name[50];  /* array: copied by value */\n    int age;        /* primitive: copied by value */\n    char *email;    /* pointer: only address copied (shallow!) */\n};\n\n/* Deep copy function */\nstruct Person person_clone(const struct Person *src) {\n    struct Person copy = *src; /* start with shallow copy */\n    if (src->email) {\n        copy.email = malloc(strlen(src->email) + 1);\n        if (copy.email) {\n            strcpy(copy.email, src->email);\n        }\n    }\n    return copy;\n}\n\nvoid person_free(struct Person *p) {\n    free(p->email);\n    p->email = NULL;\n}\n\nint main(void) {\n    struct Person alice = {\n        .name = \"Alice\",\n        .age = 30,\n        .email = malloc(20)\n    };\n    strcpy(alice.email, \"alice@example.com\");\n\n    /* Shallow copy: name array copied, but email pointer shared! */\n    struct Person shallow = alice;\n    printf(\"Shallow: %s, %s\\n\", shallow.name, shallow.email);\n    printf(\"Same pointer? %s\\n\",\n           (alice.email == shallow.email) ? \"YES (danger!)\" : \"no\");\n\n    /* Deep copy: email has its own memory */\n    struct Person deep = person_clone(&alice);\n    printf(\"Deep: %s, %s\\n\", deep.name, deep.email);\n    printf(\"Same pointer? %s\\n\",\n           (alice.email == deep.email) ? \"yes\" : \"NO (safe)\");\n\n    /* Clean up -- only free once for shared pointer! */\n    person_free(&alice);\n    /* shallow.email is now dangling! */\n    person_free(&deep); /* safe: independent copy */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Struct assignment (=) performs a shallow/member-wise byte copy",
+            "Primitive members and arrays are fully copied (independent)",
+            "Pointer members: only the address is copied -- both structs share the same data",
+            "Write a custom clone function for deep copies of pointer members",
+            "Struct assignment also copies padding bytes"
+          ],
+          "gotchas": [
+            "Double-free: both original and copy own the same pointer -- only one should free it",
+            "Modifying data through one copy's pointer affects the other copy",
+            "Arrays in structs ARE fully copied (unlike standalone arrays which decay to pointers)",
+            "No operator overloading in C -- cannot make = do a deep copy automatically"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Struct `=` does a shallow byte copy. Primitives and embedded arrays are independent. Pointers are shared (same address). Write a custom clone function for deep copies. Watch for double-free with shared pointers.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nstruct S { int x; char *p; };\n\nint main(void) {\n    struct S a = {42, malloc(10)};\n    strcpy(a.p, \"hello\");\n\n    struct S b = a; /* shallow copy */\n    printf(\"Same pointer: %s\\n\",\n           a.p == b.p ? \"yes (shared!)\" : \"no\");\n    /* Only free ONCE -- a.p and b.p are the same */\n    free(a.p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "= copies bytes, sharing pointers; write clone() for deep copy",
+            "Arrays in structs are fully copied, but pointers are shared"
+          ],
+          "gotchas": [
+            "Double-free risk when two structs share the same pointer after assignment"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between passing structs by value versus by pointer to functions?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["pass-by-value", "pass-by-pointer", "function-parameter", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C functions can receive structs in two ways:\n\n**By value:**\n```c\nvoid func(struct S s) { ... }\nfunc(my_struct);\n```\n- A complete copy of the struct is made on the stack\n- Changes inside the function do not affect the original\n- Expensive for large structs (copying overhead)\n- Simple and safe (no aliasing concerns)\n\n**By pointer:**\n```c\nvoid func(struct S *s) { ... }\nfunc(&my_struct);\n```\n- Only a pointer (8 bytes on 64-bit) is passed\n- Changes via `s->member` modify the original\n- Efficient for any struct size\n- Use `const struct S *` for read-only access\n\n**Guidelines:**\n- Small structs (1-2 members, <= 16 bytes): pass by value (fits in registers)\n- Large structs: always pass by pointer\n- Need to modify the original: pass by pointer\n- Need read-only access: pass by `const` pointer\n- Return values: small structs can be returned by value; large ones via output pointer",
+          "pseudo_code": "By value:\n  void f(struct S s);\n  f(my_s);              /* entire struct copied */\n  s.x = 10;            /* does NOT affect my_s */\n\nBy pointer:\n  void f(struct S *s);\n  f(&my_s);             /* only pointer copied (8 bytes) */\n  s->x = 10;           /* DOES affect my_s */\n\nRead-only pointer:\n  void f(const struct S *s);\n  f(&my_s);             /* efficient, cannot modify */",
+          "actual_code": "#include <stdio.h>\n\nstruct Matrix {\n    double data[100]; /* 800 bytes -- expensive to copy */\n};\n\nstruct Point {\n    int x, y; /* 8 bytes -- cheap to copy */\n};\n\n/* Pass small struct by value -- simple and safe */\nstruct Point offset_point(struct Point p, int dx, int dy) {\n    p.x += dx; /* modifies local copy only */\n    p.y += dy;\n    return p;  /* return by value is fine for small structs */\n}\n\n/* Pass large struct by const pointer -- efficient, read-only */\ndouble matrix_trace(const struct Matrix *m) {\n    double sum = 0;\n    for (int i = 0; i < 10; i++) {\n        sum += m->data[i * 10 + i]; /* diagonal elements */\n    }\n    return sum;\n}\n\n/* Pass by pointer -- can modify the original */\nvoid matrix_zero(struct Matrix *m) {\n    for (int i = 0; i < 100; i++) {\n        m->data[i] = 0.0;\n    }\n}\n\nint main(void) {\n    /* Small struct: pass by value */\n    struct Point p = {10, 20};\n    struct Point p2 = offset_point(p, 5, -3);\n    printf(\"original: (%d,%d)\\n\", p.x, p.y);   /* (10,20) unchanged */\n    printf(\"offset:   (%d,%d)\\n\", p2.x, p2.y); /* (15,17) */\n\n    /* Large struct: pass by pointer */\n    struct Matrix m;\n    matrix_zero(&m);\n    m.data[0] = 1.0; m.data[11] = 2.0; m.data[22] = 3.0;\n    printf(\"trace: %.1f\\n\", matrix_trace(&m)); /* 6.0 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "By value: copies entire struct, changes do not affect original, expensive for large structs",
+            "By pointer: passes address only, changes affect original, always efficient",
+            "Use const pointer for read-only access: const struct S *",
+            "Small structs (<= 16 bytes) can be efficiently passed and returned by value",
+            "Large structs should always be passed by pointer"
+          ],
+          "gotchas": [
+            "Passing a large struct by value copies it onto the stack -- can cause stack overflow",
+            "Forgetting const on a read-only pointer parameter is a missed optimization and documentation opportunity",
+            "Returning a pointer to a local struct is a dangling pointer bug -- return by value or use output parameter",
+            "Some ABIs pass small structs in registers, making by-value actually faster than by-pointer"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "By value: copies the whole struct (safe, expensive for large structs). By pointer: passes address (efficient, can modify original). Use `const struct S *` for read-only. Small structs (<=16 bytes) are fine by value.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Point { int x, y; };\n\nvoid move(struct Point *p, int dx, int dy) { /* by pointer: modifies original */\n    p->x += dx;\n    p->y += dy;\n}\n\nstruct Point shifted(struct Point p, int dx, int dy) { /* by value: copy */\n    p.x += dx;\n    p.y += dy;\n    return p;\n}\n\nint main(void) {\n    struct Point pt = {10, 20};\n    move(&pt, 5, -3);\n    printf(\"(%d,%d)\\n\", pt.x, pt.y); /* (15,17) -- modified */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Large structs: by pointer; small structs: by value is fine",
+            "Use const pointer for read-only efficiency"
+          ],
+          "gotchas": [
+            "Never return a pointer to a local struct -- it is a dangling pointer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does typedef work with structs in C?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["typedef", "struct", "naming", "style"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**typedef** creates an alias (alternative name) for a type. With structs, it eliminates the need to write `struct` keyword every time.\n\n**Without typedef:**\n```c\nstruct Point { int x; int y; };\nstruct Point p = {10, 20}; /* must say 'struct Point' */\n```\n\n**With typedef:**\n```c\ntypedef struct { int x; int y; } Point;\nPoint p = {10, 20}; /* just 'Point' */\n```\n\n**Three common patterns:**\n\n1. **Anonymous struct with typedef:**\n```c\ntypedef struct { int x; int y; } Point;\n```\nClean but cannot be forward-declared.\n\n2. **Named struct with typedef:**\n```c\ntypedef struct Point { int x; int y; } Point;\n```\nCan use either `struct Point` or `Point`.\n\n3. **Forward declaration pattern:**\n```c\ntypedef struct Point Point; /* forward declare */\nstruct Point { int x; int y; };\n```\nRequired for opaque pointers and self-referential structs.\n\n**Style debate:** Linux kernel style guide discourages typedef for structs (prefers explicit `struct` keyword). Many C projects prefer typedef for brevity.",
+          "pseudo_code": "Without typedef:\n  struct Point p;         /* must use 'struct' keyword */\n  void func(struct Point *p);\n\nWith typedef:\n  Point p;               /* cleaner */\n  void func(Point *p);\n\nSelf-referential with typedef:\n  typedef struct Node {\n      int data;\n      struct Node *next;  /* must use 'struct Node' here */\n  } Node;",
+          "actual_code": "#include <stdio.h>\n\n/* Pattern 1: Anonymous struct with typedef */\ntypedef struct {\n    double x, y;\n} Vec2;\n\n/* Pattern 2: Named struct with typedef */\ntypedef struct Color {\n    unsigned char r, g, b, a;\n} Color;\n\n/* Pattern 3: Self-referential struct */\ntypedef struct Node {\n    int data;\n    struct Node *next; /* must use 'struct Node', not 'Node' here */\n} Node;\n\n/* Pattern 4: Forward declaration for opaque pointer */\ntypedef struct Engine Engine; /* forward declaration */\n/* struct Engine is defined in the .c file */\n\nvoid print_vec(Vec2 v) {\n    printf(\"(%.1f, %.1f)\\n\", v.x, v.y);\n}\n\nint main(void) {\n    /* Using typedef -- no 'struct' keyword needed */\n    Vec2 pos = {3.0, 4.0};\n    print_vec(pos); /* (3.0, 4.0) */\n\n    Color red = {255, 0, 0, 255};\n    printf(\"Red: (%u, %u, %u)\\n\", red.r, red.g, red.b);\n\n    /* Named struct can use either form */\n    struct Color blue = {0, 0, 255, 255}; /* also valid */\n    Color green = {0, 255, 0, 255};\n    printf(\"Blue: (%u, %u, %u)\\n\", blue.r, blue.g, blue.b);\n    printf(\"Green: (%u, %u, %u)\\n\", green.r, green.g, green.b);\n\n    /* Self-referential */\n    Node a = {10, NULL};\n    Node b = {20, &a};\n    printf(\"%d -> %d\\n\", b.data, b.next->data); /* 20 -> 10 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "typedef creates a type alias, eliminating the 'struct' keyword in usage",
+            "Anonymous typedef structs cannot be forward-declared",
+            "Named struct + typedef allows both struct Tag and Alias usage",
+            "Self-referential structs must use struct Tag *next inside the definition",
+            "Linux kernel style avoids typedef for structs; many C projects prefer it"
+          ],
+          "gotchas": [
+            "Inside a self-referential struct, you must write struct Node *next, not Node *next -- the typedef is not complete yet",
+            "Anonymous typedef structs cannot use forward declarations (needed for opaque pointers)",
+            "typedef hides whether a type is a struct, which some argue reduces readability",
+            "In C++, struct names are already types without typedef -- but C requires it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`typedef struct { ... } Name;` creates a type alias so you can write `Name` instead of `struct Name`. For self-referential structs, use `typedef struct Node { int data; struct Node *next; } Node;`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next; /* must use 'struct Node' inside */\n} Node;\n\nint main(void) {\n    Node a = {10, NULL};\n    Node b = {20, &a};\n    printf(\"%d -> %d\\n\", b.data, b.next->data); /* 20 -> 10 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "typedef lets you omit 'struct' keyword in variable declarations",
+            "Self-referential: use struct Tag inside, typedef alias outside"
+          ],
+          "gotchas": [
+            "Cannot forward-declare anonymous typedef structs -- name the struct for opaque pointers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are anonymous structs and unions in C11?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["anonymous-struct", "anonymous-union", "c11", "nested"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Anonymous structs and unions** (C11) are struct/union members without a name. Their members are accessed directly from the enclosing struct, as if they were direct members.\n\n**Without anonymous union:**\n```c\nstruct S { union { int i; float f; } u; };\ns.u.i = 42; /* must use 'u' prefix */\n```\n\n**With anonymous union (C11):**\n```c\nstruct S { union { int i; float f; }; };\ns.i = 42; /* direct access, no prefix */\n```\n\n**Rules:**\n- Anonymous structs/unions must be inside another struct or union\n- They cannot have a tag name\n- Their members are promoted to the enclosing scope\n- Member names must not conflict with other members of the enclosing struct\n\n**Use cases:**\n1. Cleaner tagged unions (discriminated unions)\n2. Accessing parts of a larger value (e.g., vector components)\n3. Overlaying different views of the same data\n\n**Note:** This was a GCC/MSVC extension before C11 standardized it.",
+          "pseudo_code": "Without anonymous union:\n  struct S { union { int i; float f; } u; };\n  s.u.i = 42;  /* need prefix 'u' */\n\nWith anonymous union (C11):\n  struct S { union { int i; float f; }; };\n  s.i = 42;    /* direct access */\n\nAnonymous struct in union:\n  union Vec3 {\n    struct { float x, y, z; };  /* access as v.x, v.y, v.z */\n    float data[3];               /* access as v.data[0..2] */\n  };",
+          "actual_code": "#include <stdio.h>\n\n/* Tagged union with anonymous union -- clean access */\ntypedef struct {\n    enum { TYPE_INT, TYPE_FLOAT, TYPE_STRING } type;\n    union {\n        int i;\n        float f;\n        const char *s;\n    }; /* anonymous union: access i/f/s directly */\n} Value;\n\nvoid print_value(const Value *v) {\n    switch (v->type) {\n        case TYPE_INT:    printf(\"int: %d\\n\", v->i); break;\n        case TYPE_FLOAT:  printf(\"float: %.2f\\n\", v->f); break;\n        case TYPE_STRING: printf(\"string: %s\\n\", v->s); break;\n    }\n}\n\n/* Vector with dual access patterns */\ntypedef union {\n    struct { float x, y, z; }; /* anonymous struct */\n    float data[3];              /* array access */\n} Vec3;\n\nint main(void) {\n    /* Tagged union with anonymous union */\n    Value v1 = {.type = TYPE_INT, .i = 42};\n    Value v2 = {.type = TYPE_FLOAT, .f = 3.14f};\n    Value v3 = {.type = TYPE_STRING, .s = \"hello\"};\n\n    print_value(&v1); /* int: 42 */\n    print_value(&v2); /* float: 3.14 */\n    print_value(&v3); /* string: hello */\n\n    /* No 'u.' prefix needed -- direct access */\n    printf(\"Direct access: %d\\n\", v1.i); /* 42 */\n\n    /* Vector with anonymous struct */\n    Vec3 v = {.x = 1.0f, .y = 2.0f, .z = 3.0f};\n    printf(\"Named: (%.0f, %.0f, %.0f)\\n\", v.x, v.y, v.z);\n    printf(\"Array: (%.0f, %.0f, %.0f)\\n\", v.data[0], v.data[1], v.data[2]);\n\n    /* Both access the same memory */\n    v.data[1] = 99.0f;\n    printf(\"y after data[1]=99: %.0f\\n\", v.y); /* 99 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Anonymous structs/unions promote their members to the enclosing scope",
+            "No intermediate name needed: s.i instead of s.u.i",
+            "C11 feature (was a GCC/MSVC extension before standardization)",
+            "Perfect for tagged unions and dual-access patterns (named + array)",
+            "Member names must not conflict with enclosing struct members"
+          ],
+          "gotchas": [
+            "Not available in strict C99 mode -- requires -std=c11 or compiler extension flag",
+            "Anonymous struct/union members cannot have their own tag name",
+            "Name collisions between anonymous and outer members cause compile errors",
+            "Some older compilers may not support anonymous structs (only anonymous unions)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C11 anonymous structs/unions have no name -- their members are accessed directly from the enclosing struct. `struct S { union { int i; float f; }; };` allows `s.i` instead of `s.u.i`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\ntypedef struct {\n    int type;\n    union { int i; float f; }; /* anonymous union */\n} Value;\n\nint main(void) {\n    Value v = {.type = 0, .i = 42};\n    printf(\"%d\\n\", v.i); /* 42 -- direct access, no prefix */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Members promoted to enclosing scope for direct access",
+            "C11 feature; eliminates intermediate name prefix"
+          ],
+          "gotchas": [
+            "Requires -std=c11 or later; member names must not conflict with outer struct"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why can't you compare structs with == in C, and how do you compare them?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["struct-comparison", "equality", "memcmp", "limitation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**C does not allow `==` or `!=` on structs.** This is a deliberate language design decision because:\n\n1. **Padding bytes:** Structs may contain padding with indeterminate values. Two structs with identical member values can have different padding bytes, making byte-wise comparison unreliable.\n\n2. **Pointer members:** Should `==` compare pointer addresses or the pointed-to data? There is no single correct answer.\n\n3. **No operator overloading:** C cannot define custom `==` behavior per type.\n\n**How to compare structs:**\n\n1. **Member-by-member comparison (recommended):**\n```c\nint equal = (a.x == b.x && a.y == b.y);\n```\nSafe, explicit, handles all cases correctly.\n\n2. **memcmp (dangerous):**\n```c\nint equal = (memcmp(&a, &b, sizeof(a)) == 0);\n```\nOnly safe if there is NO padding and NO pointer members. Usually NOT recommended.\n\n3. **Custom comparison function:**\n```c\nint point_equal(const struct Point *a, const struct Point *b);\n```\nBest practice for complex structs.",
+          "pseudo_code": "Why == fails:\n  struct S { char a; int b; };\n  struct S x = {1, 2};\n  struct S y = {1, 2};\n  /* x == y;  COMPILE ERROR */\n  /* memcmp(&x, &y, sizeof(x)) may fail due to padding */\n\nCorrect approach:\n  int equal = (x.a == y.a && x.b == y.b);  /* member by member */\n\nCustom function:\n  int s_equal(const struct S *a, const struct S *b) {\n      return a->a == b->a && a->b == b->b;\n  }",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nstruct Point {\n    int x;\n    int y;\n};\n\nstruct Person {\n    char name[50];\n    int age;\n    char *email; /* pointer member */\n};\n\n/* Member-by-member comparison (correct) */\nint point_equal(const struct Point *a, const struct Point *b) {\n    return a->x == b->x && a->y == b->y;\n}\n\n/* For structs with strings and pointers */\nint person_equal(const struct Person *a, const struct Person *b) {\n    return strcmp(a->name, b->name) == 0\n        && a->age == b->age\n        && (a->email == b->email || /* both NULL or same ptr */\n            (a->email && b->email && strcmp(a->email, b->email) == 0));\n}\n\nint main(void) {\n    /* struct Point: no padding (same-sized members), memcmp OK here */\n    struct Point p1 = {10, 20};\n    struct Point p2 = {10, 20};\n    struct Point p3 = {10, 30};\n\n    /* This would NOT compile: */\n    /* if (p1 == p2) printf(\"equal\\n\"); */\n\n    /* Member-by-member (recommended) */\n    printf(\"p1 == p2: %s\\n\", point_equal(&p1, &p2) ? \"yes\" : \"no\"); /* yes */\n    printf(\"p1 == p3: %s\\n\", point_equal(&p1, &p3) ? \"yes\" : \"no\"); /* no */\n\n    /* memcmp -- works here because struct Point has no padding */\n    printf(\"memcmp p1==p2: %s\\n\",\n           memcmp(&p1, &p2, sizeof(p1)) == 0 ? \"yes\" : \"no\"); /* yes */\n\n    /* Danger: struct with padding */\n    struct { char a; int b; } x, y;\n    x.a = 1; x.b = 2;\n    y.a = 1; y.b = 2;\n    /* memcmp may fail because padding bytes differ! */\n    printf(\"memcmp with padding: %s\\n\",\n           memcmp(&x, &y, sizeof(x)) == 0 ? \"equal\" : \"may differ\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C does not support == or != for structs -- compile error",
+            "Padding bytes make memcmp unreliable for struct comparison",
+            "Always use member-by-member comparison or a custom function",
+            "memcmp is only safe when there is guaranteed no padding and no pointers",
+            "For strings, use strcmp; for pointers, compare pointed-to data"
+          ],
+          "gotchas": [
+            "memcmp fails on structs with padding -- padding bytes are indeterminate",
+            "memcmp compares pointer addresses, not pointed-to content",
+            "Even memset(&s, 0, sizeof(s)) before initialization may not guarantee equal padding on all platforms",
+            "Floating-point comparison via memcmp cannot handle NaN or -0.0 vs +0.0 correctly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C forbids `==` on structs. `memcmp` fails due to padding. Use member-by-member comparison or a custom equality function.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nstruct Point { int x, y; };\n\nint point_eq(const struct Point *a, const struct Point *b) {\n    return a->x == b->x && a->y == b->y;\n}\n\nint main(void) {\n    struct Point p1 = {10, 20}, p2 = {10, 20};\n    /* if (p1 == p2) -- COMPILE ERROR */\n    printf(\"%s\\n\", point_eq(&p1, &p2) ? \"equal\" : \"not equal\"); /* equal */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "No == for structs in C; use member-by-member comparison",
+            "memcmp is unreliable due to padding"
+          ],
+          "gotchas": [
+            "memcmp on structs with padding gives unpredictable results"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a tagged union (discriminated union) in C?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["tagged-union", "discriminated-union", "variant", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **tagged union** (discriminated union) combines a union with an enum tag that identifies which union member is currently active. This is C's equivalent of sum types / variant types found in other languages.\n\n**Pattern:**\n```c\ntypedef struct {\n    enum { TYPE_A, TYPE_B, TYPE_C } tag;\n    union {\n        TypeA a;\n        TypeB b;\n        TypeC c;\n    };\n} Variant;\n```\n\nThe tag field tracks which union member is valid. All operations must check the tag before accessing union members.\n\n**Real-world uses:**\n- JSON values (null, bool, number, string, array, object)\n- Abstract syntax tree (AST) nodes\n- Event systems (different event types with different data)\n- Configuration values (int, float, string settings)\n- Interpreter values (different runtime types)\n\n**Safety:** The programmer must ensure the tag matches the active union member. Accessing the wrong member is undefined behavior (or at least a logic bug).",
+          "pseudo_code": "1. Define enum for possible types\n2. Define union with one member per type\n3. Combine in a struct: tag + union\n4. Every access must switch on the tag\n\nstruct Value {\n    enum { INT, FLOAT, STRING } type;  /* tag */\n    union { int i; float f; char *s; }; /* data */\n};\n\nConstruct: v.type = INT; v.i = 42;\nAccess:    if (v.type == INT) use(v.i);\n           else if (v.type == STRING) use(v.s);",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* JSON-like value using tagged union */\ntypedef enum {\n    VAL_NULL,\n    VAL_BOOL,\n    VAL_INT,\n    VAL_FLOAT,\n    VAL_STRING\n} ValueType;\n\ntypedef struct {\n    ValueType type; /* discriminant / tag */\n    union {\n        int boolean;\n        long integer;\n        double floating;\n        char *string;\n    }; /* anonymous union (C11) */\n} Value;\n\n/* Constructor functions */\nValue val_null(void) {\n    return (Value){.type = VAL_NULL};\n}\n\nValue val_int(long v) {\n    return (Value){.type = VAL_INT, .integer = v};\n}\n\nValue val_float(double v) {\n    return (Value){.type = VAL_FLOAT, .floating = v};\n}\n\nValue val_string(const char *s) {\n    Value v = {.type = VAL_STRING};\n    v.string = malloc(strlen(s) + 1);\n    if (v.string) strcpy(v.string, s);\n    return v;\n}\n\nValue val_bool(int b) {\n    return (Value){.type = VAL_BOOL, .boolean = b != 0};\n}\n\n/* Safe access: always check the tag */\nvoid print_value(const Value *v) {\n    switch (v->type) {\n        case VAL_NULL:   printf(\"null\"); break;\n        case VAL_BOOL:   printf(\"%s\", v->boolean ? \"true\" : \"false\"); break;\n        case VAL_INT:    printf(\"%ld\", v->integer); break;\n        case VAL_FLOAT:  printf(\"%.2f\", v->floating); break;\n        case VAL_STRING: printf(\"\\\"%s\\\"\", v->string); break;\n    }\n    printf(\"\\n\");\n}\n\nvoid free_value(Value *v) {\n    if (v->type == VAL_STRING) {\n        free(v->string);\n        v->string = NULL;\n    }\n    v->type = VAL_NULL;\n}\n\nint main(void) {\n    Value values[] = {\n        val_null(),\n        val_bool(1),\n        val_int(42),\n        val_float(3.14),\n        val_string(\"hello\")\n    };\n    int n = sizeof(values) / sizeof(values[0]);\n\n    for (int i = 0; i < n; i++) {\n        printf(\"[%d] \", i);\n        print_value(&values[i]);\n    }\n\n    /* Cleanup: only strings need freeing */\n    for (int i = 0; i < n; i++) {\n        free_value(&values[i]);\n    }\n\n    /* sizeof: union uses space of largest member */\n    printf(\"sizeof(Value) = %zu\\n\", sizeof(Value));\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Tagged union = enum tag + union data in a struct",
+            "Tag tracks which union member is active; always check before access",
+            "Use constructor functions to ensure tag and data are consistent",
+            "Only the active union member's resources need cleanup (e.g., free for strings)",
+            "C's equivalent of Rust's enum, Haskell's data types, TypeScript's discriminated unions"
+          ],
+          "gotchas": [
+            "No compiler enforcement: accessing the wrong union member is a silent bug",
+            "Memory management depends on the active type -- must check tag before free",
+            "Adding a new type requires updating ALL switch statements -- easy to miss one",
+            "sizeof(Value) includes space for the largest union member even when holding a smaller type"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A tagged union pairs an enum (tag) with a union (data). The tag tracks which member is active. Always switch on the tag before accessing. This is C's way to handle variant/sum types.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\ntypedef struct {\n    enum { T_INT, T_FLOAT, T_STR } type;\n    union { int i; float f; const char *s; };\n} Value;\n\nvoid print(const Value *v) {\n    switch (v->type) {\n        case T_INT:   printf(\"%d\\n\", v->i); break;\n        case T_FLOAT: printf(\"%.2f\\n\", v->f); break;\n        case T_STR:   printf(\"%s\\n\", v->s); break;\n    }\n}\n\nint main(void) {\n    Value v1 = {.type = T_INT, .i = 42};\n    Value v2 = {.type = T_STR, .s = \"hello\"};\n    print(&v1); /* 42 */\n    print(&v2); /* hello */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "enum tag + union data = tagged union",
+            "Always check tag before accessing union members"
+          ],
+          "gotchas": [
+            "No compiler check: accessing wrong member is a silent logic bug"
+          ]
+        }
+      ]
+    }
+  ]
+}

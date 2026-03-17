@@ -1,0 +1,509 @@
+{
+  "concept_slug": "operators-expressions",
+  "questions": [
+    {
+      "title": "How do the / and % operators work with integers in C?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["arithmetic", "division", "modulo", "integer-division"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Integer division (`/`)** truncates toward zero in C99+. The fractional part is discarded.\n\n**Modulo (`%`)** returns the remainder after integer division. The sign of the result follows the dividend (numerator) in C99+.\n\n**Key rules (C99/C11):**\n- `(a/b)*b + a%b == a` always holds.\n- Truncation toward zero: `7/2 == 3`, `-7/2 == -3`.\n- Modulo sign follows dividend: `7%2 == 1`, `-7%2 == -1`, `7%-2 == 1`.\n- Division by zero is **undefined behavior** (not just a runtime error -- the compiler can assume it never happens).\n\n**Pre-C99:** The direction of truncation for negative operands was implementation-defined. C99 standardized truncation toward zero.",
+          "pseudo_code": "1. Integer division truncates toward zero: 7/2 = 3, -7/2 = -3\n2. Modulo: (a/b)*b + a%b == a (always holds)\n3. Modulo sign follows the dividend: -7%2 = -1\n4. Division by zero is undefined behavior\n5. Both operands must be integers for %",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Integer division truncates toward zero */\n    printf(\" 7 / 2  = %d\\n\",  7 / 2);   /*  3 */\n    printf(\"-7 / 2  = %d\\n\", -7 / 2);   /* -3 (toward zero, not -4) */\n    printf(\" 7 / -2 = %d\\n\",  7 / -2);   /* -3 */\n    printf(\"-7 / -2 = %d\\n\", -7 / -2);   /*  3 */\n\n    /* Modulo: sign follows dividend */\n    printf(\" 7 %% 2  = %d\\n\",  7 % 2);   /*  1 */\n    printf(\"-7 %% 2  = %d\\n\", -7 % 2);   /* -1 */\n    printf(\" 7 %% -2 = %d\\n\",  7 % -2);  /*  1 */\n    printf(\"-7 %% -2 = %d\\n\", -7 % -2);  /* -1 */\n\n    /* Verify: (a/b)*b + a%b == a */\n    int a = -7, b = 2;\n    printf(\"(%d/%d)*%d + %d%%%d = %d + %d = %d\\n\",\n           a, b, b, a, b, (a/b)*b, a%b, (a/b)*b + a%b); /* -7 */\n\n    /* % only works with integers */\n    /* printf(\"%f\", 7.5 % 2.0); // ERROR: invalid operands to % */\n    /* Use fmod() for floating-point remainder */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Integer division truncates toward zero (C99+)",
+            "Modulo sign follows the dividend (numerator)",
+            "(a/b)*b + a%b == a always holds",
+            "% operator only works on integer types",
+            "Use fmod() from <math.h> for floating-point remainder"
+          ],
+          "gotchas": [
+            "Division by zero is undefined behavior, not just a crash -- the compiler can assume it never happens",
+            "INT_MIN / -1 is undefined behavior on two's complement systems (result overflows)",
+            "Pre-C99, truncation direction for negative numbers was implementation-defined",
+            "-7 % 2 is -1 in C99+ but could be 1 in older compilers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Integer division truncates toward zero: `-7/2 == -3`. Modulo sign follows the dividend: `-7%2 == -1`. Division by zero is UB. `%` only works on integers; use `fmod()` for floats.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    printf(\"-7/2 = %d\\n\", -7/2);   /* -3 */\n    printf(\"-7%%2 = %d\\n\", -7%2);  /* -1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Truncation toward zero; modulo sign follows dividend",
+            "Division by zero is undefined behavior"
+          ],
+          "gotchas": [
+            "INT_MIN / -1 overflows and is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does short-circuit evaluation work with logical operators?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["logical-operators", "short-circuit", "and", "or"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Short-circuit evaluation** means the second operand is NOT evaluated if the first operand determines the result.\n\n**`&&` (logical AND):**\n- If the left operand is 0 (false), the right operand is NOT evaluated (result is guaranteed 0).\n\n**`||` (logical OR):**\n- If the left operand is non-zero (true), the right operand is NOT evaluated (result is guaranteed 1).\n\n**Why it matters:**\n1. **Safety:** `if (ptr != NULL && ptr->value > 0)` -- the dereference only happens if ptr is not NULL.\n2. **Performance:** Expensive checks can be placed second.\n3. **Side effects:** If the second operand has side effects (like `i++`), they may or may not execute.\n\n**Key distinction:**\n- `&&` and `||` short-circuit (left-to-right, with a sequence point).\n- `&` and `|` (bitwise) do NOT short-circuit -- both sides are always evaluated.",
+          "pseudo_code": "1. a && b: if a is false, b is NOT evaluated, result is 0\n2. a || b: if a is true, b is NOT evaluated, result is 1\n3. Short-circuit creates a sequence point between operands\n4. Bitwise & and | do NOT short-circuit\n5. Use for null pointer checks: ptr && ptr->field",
+          "actual_code": "#include <stdio.h>\n\nint check(int x) {\n    printf(\"  check(%d) called\\n\", x);\n    return x;\n}\n\nint main(void) {\n    printf(\"AND short-circuit:\\n\");\n    if (check(0) && check(1)) { /* check(1) never called */ }\n    /* Output: check(0) called */\n\n    printf(\"OR short-circuit:\\n\");\n    if (check(1) || check(0)) { /* check(0) never called */ }\n    /* Output: check(1) called */\n\n    printf(\"No short-circuit:\\n\");\n    if (check(1) && check(1)) { /* both called */ }\n    /* Output: check(1) called, check(1) called */\n\n    /* Practical: safe null check */\n    int *ptr = NULL;\n    if (ptr != NULL && *ptr > 0) {\n        printf(\"value = %d\\n\", *ptr);\n    } else {\n        printf(\"ptr is NULL (safe!)\\n\");\n    }\n\n    /* Side effect gotcha */\n    int i = 0;\n    if (0 && (i = 42)) { /* i = 42 is NOT executed */ }\n    printf(\"i = %d\\n\", i); /* 0, not 42 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "&& stops if left is false; || stops if left is true",
+            "Short-circuit introduces a sequence point between operands",
+            "Essential for safe null pointer checks: ptr && ptr->field",
+            "Bitwise & and | do NOT short-circuit",
+            "Result of && and || is always 0 or 1"
+          ],
+          "gotchas": [
+            "Side effects in the second operand may not execute: 0 && (x = 5) does NOT set x",
+            "Do not confuse && with & -- they have different evaluation rules",
+            "Short-circuit can hide bugs: if the second condition has important side effects",
+            "The result of && and || is int (0 or 1), not the operand value (unlike Python/JS)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`&&` stops if left is false (0). `||` stops if left is true (non-zero). The right operand is skipped entirely. Use for safe null checks: `ptr && ptr->field`. Bitwise `&`/`|` do NOT short-circuit.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int *p = NULL;\n    if (p != NULL && *p > 0) { /* safe: *p not evaluated */ }\n    int x = 0;\n    0 && (x = 5); /* x stays 0 */\n    printf(\"%d\\n\", x); /* 0 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "&& short-circuits on false; || on true",
+            "Bitwise & and | always evaluate both sides"
+          ],
+          "gotchas": [
+            "Side effects in the skipped operand do NOT execute"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do bitwise operators work in C (&, |, ^, ~, <<, >>)?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["bitwise", "and", "or", "xor", "shift", "complement"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Bitwise operators work on individual bits of integer values:\n\n**`&` (AND):** Both bits must be 1 -> 1. Used for masking (extracting specific bits).\n**`|` (OR):** Either bit is 1 -> 1. Used for setting bits.\n**`^` (XOR):** Bits differ -> 1. Used for toggling bits, swap without temp.\n**`~` (NOT):** Flips all bits (one's complement).\n**`<<` (left shift):** Shifts bits left, fills with 0. Equivalent to multiplying by 2^n.\n**`>>` (right shift):** Shifts bits right. For unsigned: fills with 0. For signed: implementation-defined (usually arithmetic shift, fills with sign bit).\n\nBitwise operators only work on integer types (char, short, int, long, etc.), not floating-point.",
+          "pseudo_code": "& (AND):  1010 & 1100 = 1000  (mask bits)\n| (OR):   1010 | 1100 = 1110  (set bits)\n^ (XOR):  1010 ^ 1100 = 0110  (toggle bits)\n~ (NOT):  ~1010 = 0101         (flip all bits)\n<< (LSH): 0001 << 2 = 0100    (multiply by 2^n)\n>> (RSH): 1000 >> 2 = 0010    (divide by 2^n)",
+          "actual_code": "#include <stdio.h>\n\nvoid print_bits(unsigned int n) {\n    for (int i = 7; i >= 0; i--) {\n        printf(\"%d\", (n >> i) & 1);\n    }\n    printf(\"\\n\");\n}\n\nint main(void) {\n    unsigned int a = 0b10101010; /* 170 */\n    unsigned int b = 0b11001100; /* 204 */\n\n    printf(\"a     = \"); print_bits(a);     /* 10101010 */\n    printf(\"b     = \"); print_bits(b);     /* 11001100 */\n    printf(\"a & b = \"); print_bits(a & b); /* 10001000 (AND) */\n    printf(\"a | b = \"); print_bits(a | b); /* 11101110 (OR) */\n    printf(\"a ^ b = \"); print_bits(a ^ b); /* 01100110 (XOR) */\n    printf(\"~a    = \"); print_bits(~a);    /* 01010101 (NOT, low 8 bits) */\n\n    /* Shift operators */\n    unsigned int x = 1;\n    printf(\"1 << 3 = %u\\n\", x << 3);  /* 8 (multiply by 2^3) */\n    printf(\"8 >> 2 = %u\\n\", 8u >> 2);  /* 2 (divide by 2^2) */\n\n    /* Practical: extract a bit */\n    unsigned int val = 0xA5; /* 10100101 */\n    int bit3 = (val >> 3) & 1;\n    printf(\"bit 3 of 0xA5 = %d\\n\", bit3); /* 0 */\n\n    /* Practical: set a bit */\n    val = val | (1 << 3); /* set bit 3 */\n    printf(\"after set bit 3: 0x%X\\n\", val); /* 0xAD */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "& masks bits; | sets bits; ^ toggles bits; ~ flips all bits",
+            "<< multiplies by 2^n; >> divides by 2^n (for unsigned)",
+            "Bitwise operators work only on integer types, not floats",
+            "Right shift of signed negative values is implementation-defined",
+            "Use unsigned types for predictable bitwise behavior"
+          ],
+          "gotchas": [
+            "Right-shifting a negative signed integer is implementation-defined (arithmetic vs logical shift)",
+            "Left-shifting into or past the sign bit is undefined behavior for signed types",
+            "~0 is -1 on two's complement systems (all bits set), not 0",
+            "Shifting by negative amount or by >= width of type is undefined behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`&` = AND (mask), `|` = OR (set), `^` = XOR (toggle), `~` = NOT (flip), `<<` = left shift, `>>` = right shift. Use unsigned types for predictable behavior. Shifting by >= type width is UB.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    unsigned int x = 0xA5; /* 10100101 */\n    printf(\"x & 0x0F = 0x%X\\n\", x & 0x0F); /* 0x05 (mask) */\n    printf(\"x | 0x10 = 0x%X\\n\", x | 0x10); /* 0xB5 (set) */\n    printf(\"x ^ 0xFF = 0x%X\\n\", x ^ 0xFF); /* 0x5A (toggle) */\n    printf(\"x << 4   = 0x%X\\n\", x << 4);   /* 0xA50 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "& masks, | sets, ^ toggles, ~ flips all",
+            "Always use unsigned for bit manipulation"
+          ],
+          "gotchas": [
+            "Shifting by >= type width is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do assignment operators and compound assignment work?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["assignment", "compound-assignment", "operators"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Simple assignment (`=`):** Assigns the right-hand side value to the left-hand side variable. The assignment expression itself has a value (the assigned value), which enables chaining.\n\n**Compound assignment operators:** Combine an operation with assignment.\n- `+=`, `-=`, `*=`, `/=`, `%=` (arithmetic)\n- `&=`, `|=`, `^=` (bitwise)\n- `<<=`, `>>=` (shift)\n\n`x op= y` is equivalent to `x = x op (y)` **except** that `x` is evaluated only once. This matters when `x` has side effects (e.g., `arr[i++] += 5`).\n\n**Assignment chaining:** `a = b = c = 0` works because `=` is right-associative and returns the assigned value. It evaluates as `a = (b = (c = 0))`.",
+          "pseudo_code": "1. x = value;     // simple assignment\n2. x += y;        // equivalent to x = x + (y)\n3. x <<= n;       // equivalent to x = x << (n)\n4. a = b = c = 0; // right-associative chaining\n5. x is evaluated only once in compound assignment",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int x = 10;\n\n    x += 5;   printf(\"x += 5:  %d\\n\", x);  /* 15 */\n    x -= 3;   printf(\"x -= 3:  %d\\n\", x);  /* 12 */\n    x *= 2;   printf(\"x *= 2:  %d\\n\", x);  /* 24 */\n    x /= 4;   printf(\"x /= 4:  %d\\n\", x);  /* 6  */\n    x %= 4;   printf(\"x %%= 4:  %d\\n\", x); /* 2  */\n\n    /* Bitwise compound */\n    unsigned int flags = 0x00;\n    flags |= 0x01;  /* set bit 0 */\n    flags |= 0x04;  /* set bit 2 */\n    printf(\"flags = 0x%02X\\n\", flags); /* 0x05 */\n    flags &= ~0x01; /* clear bit 0 */\n    printf(\"flags = 0x%02X\\n\", flags); /* 0x04 */\n\n    /* Assignment chaining */\n    int a, b, c;\n    a = b = c = 42;\n    printf(\"a=%d b=%d c=%d\\n\", a, b, c); /* 42 42 42 */\n\n    /* Assignment as expression value */\n    int n;\n    if ((n = 5) > 0) {\n        printf(\"n = %d\\n\", n); /* 5 */\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Compound assignment: x op= y means x = x op (y) with x evaluated once",
+            "Assignment is right-associative: a = b = c = 0",
+            "The assignment expression itself has a value (the assigned value)",
+            "Single evaluation matters: arr[i++] += 1 increments i only once",
+            "Bitwise compound operators are common for flag manipulation"
+          ],
+          "gotchas": [
+            "= is assignment, == is comparison -- classic C bug source",
+            "if (x = 5) is valid C (assigns 5 to x, evaluates to 5 which is true) -- usually a bug",
+            "Compound assignment may involve implicit type conversion: char c = 200; c += 100; wraps",
+            "x = x + y may differ from x += y if x has side effects (evaluated twice vs once)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`x += y` is `x = x + (y)` with x evaluated once. Chaining: `a = b = c = 0` (right-to-left). Assignment expressions have a value. Bitwise compounds (`|=`, `&=`) are common for flags.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 10;\n    x += 5; /* 15 */\n    x *= 2; /* 30 */\n    unsigned int flags = 0;\n    flags |= 0x03; /* set bits 0,1 */\n    flags &= ~0x01; /* clear bit 0 */\n    printf(\"x=%d flags=0x%X\\n\", x, flags);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "x op= y evaluates x only once",
+            "= is right-associative; expression value is the assigned value"
+          ],
+          "gotchas": [
+            "= vs == is the most common C bug"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the ternary (conditional) operator work?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["ternary", "conditional", "operator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **ternary operator** `condition ? expr1 : expr2` is C's only operator that takes three operands.\n\n**How it works:**\n1. `condition` is evaluated.\n2. If true (non-zero): `expr1` is evaluated and is the result.\n3. If false (zero): `expr2` is evaluated and is the result.\n4. Only ONE of expr1 or expr2 is evaluated (like short-circuit).\n\n**Type rules:** The result type follows the usual arithmetic conversions applied to expr1 and expr2.\n\n**Common uses:**\n- Inline min/max: `int min = (a < b) ? a : b;`\n- Conditional assignment: `char *s = (n == 1) ? \"item\" : \"items\";`\n- Return values: `return (x > 0) ? x : -x;`\n\nThe ternary operator can be nested, but deeply nested ternaries are hard to read and should be avoided.",
+          "pseudo_code": "1. condition ? value_if_true : value_if_false\n2. Only one branch is evaluated\n3. Result type follows usual arithmetic conversions\n4. Parenthesize when used in larger expressions\n5. Can be nested but avoid deep nesting",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int a = 10, b = 20;\n\n    /* Basic usage */\n    int min = (a < b) ? a : b;\n    printf(\"min(%d, %d) = %d\\n\", a, b, min); /* 10 */\n\n    /* Absolute value */\n    int x = -5;\n    int abs_x = (x >= 0) ? x : -x;\n    printf(\"|%d| = %d\\n\", x, abs_x); /* 5 */\n\n    /* Conditional string */\n    int count = 1;\n    printf(\"%d %s\\n\", count, (count == 1) ? \"item\" : \"items\");\n    /* 1 item */\n\n    /* Only one branch is evaluated */\n    int n = 0;\n    int result = (1) ? (n = 10) : (n = 20);\n    printf(\"n = %d\\n\", n); /* 10, not 20 */\n\n    /* Nested (avoid in practice) */\n    int score = 85;\n    char grade = (score >= 90) ? 'A' :\n                 (score >= 80) ? 'B' :\n                 (score >= 70) ? 'C' : 'F';\n    printf(\"grade = %c\\n\", grade); /* B */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "condition ? expr_true : expr_false -- only one branch evaluated",
+            "Result type follows usual arithmetic conversions",
+            "Use parentheses for clarity in complex expressions",
+            "Good for simple inline conditions (min, max, abs)",
+            "Nested ternaries reduce readability -- prefer if/else"
+          ],
+          "gotchas": [
+            "Ternary has very low precedence: printf(\"%d\", x > 0 ? x : -x) needs parens around the ternary",
+            "The two branches can have different types, causing implicit conversion",
+            "Cannot use statements (like return) inside ternary -- only expressions",
+            "Nested ternaries without parentheses are a readability nightmare"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`cond ? a : b` evaluates to `a` if cond is true, `b` otherwise. Only one branch is evaluated. Use for simple inline conditions. Parenthesize in larger expressions.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int a = 10, b = 20;\n    int min = (a < b) ? a : b;\n    printf(\"min = %d\\n\", min); /* 10 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Only one branch is evaluated",
+            "Parenthesize when embedding in larger expressions"
+          ],
+          "gotchas": [
+            "Very low precedence -- always parenthesize in printf or assignments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the comma operator and how does it work?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["comma-operator", "sequence-point", "expressions"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **comma operator** evaluates two expressions from left to right and returns the value of the right expression. The left expression is evaluated only for its side effects.\n\n**Syntax:** `(expr1, expr2)` -- evaluates `expr1`, discards its value, evaluates `expr2`, returns its value.\n\n**Important:** The comma in function arguments `f(a, b)` and variable declarations `int a, b;` is NOT the comma operator -- it is a separator.\n\n**The comma operator introduces a sequence point**, meaning all side effects of expr1 are complete before expr2 begins.\n\n**Common uses:**\n- Multiple expressions in for-loop init/update: `for (i = 0, j = n; i < j; i++, j--)`\n- Macro tricks (evaluating multiple statements as one expression).\n- Rarely used elsewhere -- overusing it hurts readability.",
+          "pseudo_code": "1. (expr1, expr2) -> evaluate expr1, discard, evaluate expr2, return\n2. Introduces a sequence point between expr1 and expr2\n3. Comma in f(a, b) is a separator, NOT the comma operator\n4. Common in for-loop: for (i=0, j=n; ...; i++, j--)\n5. Has the lowest precedence of all C operators",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Comma operator: left evaluated, right returned */\n    int x = (1, 2, 3);\n    printf(\"x = %d\\n\", x); /* 3 (last value) */\n\n    /* Side effects in left operand */\n    int a = 0;\n    int b = (a = 5, a + 10);\n    printf(\"a=%d b=%d\\n\", a, b); /* a=5 b=15 */\n\n    /* Common use: multiple updates in for-loop */\n    for (int i = 0, j = 5; i < j; i++, j--) {\n        printf(\"i=%d j=%d\\n\", i, j);\n    }\n    /* Output: i=0 j=5, i=1 j=4, i=2 j=3 */\n\n    /* NOT the comma operator (function argument separator) */\n    printf(\"%d %d\\n\", 10, 20); /* comma here is a separator */\n\n    /* Lowest precedence */\n    int y;\n    y = 1, 2;  /* y = 1 (assignment binds tighter than comma) */\n    printf(\"y = %d\\n\", y); /* 1, not 2 */\n\n    y = (1, 2); /* now y = 2 (parentheses force comma operator) */\n    printf(\"y = %d\\n\", y); /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Evaluates left to right, returns the rightmost value",
+            "Introduces a sequence point between operands",
+            "Has the lowest precedence of all operators",
+            "Most commonly used in for-loop init and update expressions",
+            "Comma in function calls and declarations is a separator, not an operator"
+          ],
+          "gotchas": [
+            "y = 1, 2; assigns 1 to y (= binds tighter), not 2",
+            "Overusing comma operator makes code hard to read",
+            "The comma in int a, b; is NOT the comma operator",
+            "The comma in f(a, b) is NOT the comma operator -- but f((a, b)) uses it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Comma operator `(expr1, expr2)` evaluates both left-to-right, returns the right value. Has the lowest precedence. Most common use: `for (i=0, j=n; ...; i++, j--)`. The comma in function calls is a separator, not this operator.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = (1, 2, 3);   /* x = 3 */\n    int y;\n    y = 1, 2;            /* y = 1 (= binds tighter) */\n    printf(\"x=%d y=%d\\n\", x, y);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Returns the rightmost value",
+            "Lowest precedence of all operators"
+          ],
+          "gotchas": [
+            "y = 1, 2; assigns 1, not 2 -- = has higher precedence than comma"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is operator precedence and associativity in C?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["precedence", "associativity", "operator-priority"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Precedence** determines which operator is evaluated first when multiple operators are in one expression. Higher precedence operators bind tighter.\n\n**Associativity** determines the order when operators of the same precedence appear. It can be left-to-right or right-to-left.\n\n**Key precedence levels (highest to lowest):**\n1. `()` `[]` `->` `.` (postfix `++`/`--`) -- left-to-right\n2. Unary: prefix `++`/`--`, `*` `&` `~` `!` `sizeof` `(type)` -- right-to-left\n3. `*` `/` `%` -- left-to-right\n4. `+` `-` -- left-to-right\n5. `<<` `>>` -- left-to-right\n6. `<` `<=` `>` `>=` -- left-to-right\n7. `==` `!=` -- left-to-right\n8. `&` (bitwise AND)\n9. `^` (bitwise XOR)\n10. `|` (bitwise OR)\n11. `&&` (logical AND)\n12. `||` (logical OR)\n13. `?:` (ternary) -- right-to-left\n14. `=` `+=` etc. -- right-to-left\n15. `,` (comma) -- left-to-right\n\n**Common pitfall:** Bitwise operators have LOWER precedence than comparison operators. `x & 0xFF == 0` is parsed as `x & (0xFF == 0)`, not `(x & 0xFF) == 0`.",
+          "pseudo_code": "Highest to lowest precedence:\n1. Postfix: () [] -> . ++ --\n2. Unary: ++ -- * & ~ ! sizeof (type)\n3. Multiplicative: * / %\n4. Additive: + -\n5. Shift: << >>\n6. Relational: < <= > >=\n7. Equality: == !=\n8. Bitwise AND: &\n9. Bitwise XOR: ^\n10. Bitwise OR: |\n11. Logical AND: &&\n12. Logical OR: ||\n13. Ternary: ?:\n14. Assignment: = += etc.\n15. Comma: ,",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Precedence: * before + */\n    int a = 2 + 3 * 4;   /* 2 + 12 = 14, not 20 */\n    printf(\"%d\\n\", a);    /* 14 */\n\n    /* CLASSIC BUG: bitwise & has lower precedence than == */\n    int x = 5;  /* binary: 0101 */\n    /* if (x & 1 == 0)   // WRONG: parsed as x & (1 == 0) = x & 0 = 0 */\n    if ((x & 1) == 0) {  /* CORRECT: test if x is even */\n        printf(\"even\\n\");\n    } else {\n        printf(\"odd\\n\"); /* This prints */\n    }\n\n    /* Associativity: right-to-left for assignment */\n    int p, q, r;\n    p = q = r = 10;  /* r=10, then q=10, then p=10 */\n    printf(\"p=%d q=%d r=%d\\n\", p, q, r);\n\n    /* Associativity: left-to-right for arithmetic */\n    int result = 10 - 5 - 2;  /* (10-5)-2 = 3, not 10-(5-2)=7 */\n    printf(\"%d\\n\", result);    /* 3 */\n\n    /* When in doubt, use parentheses! */\n    int y = ((2 + 3) * 4);  /* clearly 20 */\n    printf(\"%d\\n\", y);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Precedence determines which operator binds first",
+            "Associativity resolves ties between same-precedence operators",
+            "Bitwise operators have lower precedence than comparisons -- always parenthesize",
+            "Assignment is right-to-left associative: a = b = c = 0",
+            "When in doubt, use parentheses for clarity"
+          ],
+          "gotchas": [
+            "x & 1 == 0 is x & (1 == 0), not (x & 1) == 0 -- always parenthesize bitwise with comparisons",
+            "x = y == z is x = (y == z), not (x = y) == z",
+            "Precedence does NOT define evaluation order -- a + b * c evaluates * first but a or b could be computed in either order",
+            "Ternary operator has very low precedence: a + b ? c : d is (a + b) ? c : d"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Precedence determines binding order (`*` before `+`). Associativity resolves ties (left-to-right or right-to-left). The biggest trap: bitwise `&` `|` `^` have lower precedence than `==` `!=`. Always parenthesize bitwise expressions.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 5;\n    /* BUG: x & 1 == 0 means x & (1 == 0) */\n    /* FIX: (x & 1) == 0 */\n    printf(\"%d\\n\", (x & 1) == 0); /* 0 (odd) */\n    printf(\"%d\\n\", 2 + 3 * 4);    /* 14 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Bitwise ops have lower precedence than comparisons",
+            "When in doubt, parenthesize"
+          ],
+          "gotchas": [
+            "x & 1 == 0 is parsed as x & (1 == 0), almost always a bug"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do implicit type conversions (promotions) work in expressions?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["implicit-conversion", "type-promotion", "coercion"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When operands in an expression have different types, C automatically converts them using a set of rules called the **usual arithmetic conversions**.\n\n**Step 1: Integer promotion**\nTypes smaller than `int` (`char`, `short`, bit-fields) are promoted to `int` (or `unsigned int`).\n\n**Step 2: Usual arithmetic conversions**\nIf operands still differ after promotion:\n1. If either is `long double`, the other converts to `long double`.\n2. If either is `double`, the other converts to `double`.\n3. If either is `float`, the other converts to `float`.\n4. Otherwise (both integer types): the \"narrower\" type converts to the \"wider\" type, with complex signed/unsigned rules.\n\n**Signed/unsigned conversion rule:** If the unsigned type has the same or greater rank, the signed value converts to unsigned. This can produce surprising results with negative values.",
+          "pseudo_code": "1. Integer promotion: char/short -> int\n2. If either is long double -> both long double\n3. If either is double -> both double\n4. If either is float -> both float\n5. Otherwise: narrower integer -> wider integer\n6. signed + unsigned (same rank) -> unsigned",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* int + double -> double */\n    int i = 5;\n    double d = 2.5;\n    printf(\"5 + 2.5 = %f\\n\", i + d); /* 7.500000 (double) */\n\n    /* int + float -> float */\n    float f = 3.0f;\n    printf(\"5 + 3.0f = %f\\n\", i + f); /* 8.000000 */\n\n    /* int + unsigned int -> unsigned int */\n    int neg = -1;\n    unsigned int pos = 1;\n    printf(\"-1 + 1u = %u\\n\", neg + pos); /* 0 (correct by luck) */\n    printf(\"-1 > 1u? %d\\n\", neg > pos);  /* 1 (true! -1 -> UINT_MAX) */\n\n    /* char arithmetic -> promoted to int */\n    char a = 100, b = 50;\n    printf(\"sizeof(a+b) = %zu\\n\", sizeof(a + b)); /* sizeof(int) */\n\n    /* Integer division vs float division */\n    printf(\"5/2   = %d\\n\", 5 / 2);          /* 2 (int division) */\n    printf(\"5/2.0 = %f\\n\", 5 / 2.0);        /* 2.500000 (promoted) */\n    printf(\"(double)5/2 = %f\\n\", (double)5 / 2); /* 2.500000 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Smaller types are promoted to int before arithmetic",
+            "Mixed int/float operations promote to the wider floating type",
+            "Integer division stays integer unless one operand is float/double",
+            "signed + unsigned = unsigned (same rank): signed converts to unsigned",
+            "Cast one operand to force the desired conversion"
+          ],
+          "gotchas": [
+            "-1 > 1u is TRUE because -1 is converted to UINT_MAX",
+            "5/2 is 2 (integer division); 5/2.0 is 2.5 (float promotion)",
+            "char + char yields int, not char",
+            "Assigning a double to an int silently truncates: int x = 3.9; gives x=3"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C promotes smaller types to `int`, then converts to the wider type in mixed expressions. `int + double -> double`. `signed + unsigned (same rank) -> unsigned`. `5/2` is int division (2); `5/2.0` is float division (2.5).",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    printf(\"%f\\n\", 5 / 2.0);  /* 2.500000 (promoted) */\n    printf(\"%d\\n\", 5 / 2);    /* 2 (int division) */\n    printf(\"%d\\n\", -1 > 1u);  /* 1 (true! surprise) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Mixed types promote to the wider type",
+            "Integer division stays integer unless one operand is float"
+          ],
+          "gotchas": [
+            "-1 > 1u is true because -1 becomes UINT_MAX"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does explicit casting work in C?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["casting", "type-conversion", "explicit-cast"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Explicit casting** forces a type conversion using the cast operator: `(type)expression`.\n\n**Common uses:**\n1. **Force float division:** `(double)a / b` instead of `a / b` (integer division).\n2. **Truncate float to int:** `(int)3.7` gives 3 (truncation toward zero).\n3. **Pointer casting:** `(int *)void_ptr` to convert void pointers.\n4. **Suppress warnings:** `(void)unused_variable;` tells the compiler you intentionally ignore it.\n5. **Narrow conversions:** `(char)256` wraps to 0 (for unsigned char).\n\n**Cast vs conversion:**\n- Cast is explicit syntax: `(type)expr`.\n- Conversion can be implicit (automatic) or explicit (cast).\n- Explicit casts suppress compiler warnings, which can hide real bugs.",
+          "pseudo_code": "1. (type)expression -- force conversion to type\n2. (double)a / b -- force float division\n3. (int)3.7 -> 3 (truncate toward zero)\n4. (void)x -- suppress unused variable warning\n5. Casts suppress warnings -- use carefully",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    /* Force float division */\n    int a = 5, b = 2;\n    printf(\"5/2 = %d\\n\", a / b);             /* 2 */\n    printf(\"5/2 = %f\\n\", (double)a / b);     /* 2.500000 */\n\n    /* Truncate float to int */\n    double pi = 3.14159;\n    int truncated = (int)pi;\n    printf(\"(int)3.14159 = %d\\n\", truncated); /* 3 */\n    printf(\"(int)-3.7 = %d\\n\", (int)-3.7);   /* -3 (toward zero) */\n\n    /* Pointer casting */\n    void *ptr = malloc(sizeof(int));\n    if (ptr) {\n        int *ip = (int *)ptr; /* explicit cast (optional in C, required in C++) */\n        *ip = 42;\n        printf(\"*ip = %d\\n\", *ip);\n        free(ptr);\n    }\n\n    /* Suppress unused warning */\n    int unused = 0;\n    (void)unused; /* tell compiler: intentionally unused */\n\n    /* Dangerous: narrow cast with data loss */\n    int big = 300;\n    char small = (char)big; /* truncated! */\n    printf(\"(char)300 = %d\\n\", small); /* platform-dependent, likely 44 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "(type)expr forces explicit type conversion",
+            "Common for forcing float division and truncating to int",
+            "Casts suppress compiler warnings -- can hide bugs",
+            "(void)x is idiomatic for suppressing unused variable warnings",
+            "In C, void* to typed pointer needs no cast (unlike C++)"
+          ],
+          "gotchas": [
+            "Casting does NOT change the original variable -- it creates a temporary converted value",
+            "Casting a float to int truncates toward zero, does NOT round",
+            "Casting between unrelated pointer types (except void*) can violate strict aliasing rules",
+            "Casting can hide bugs: casting away const and writing through the pointer is UB"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`(type)expr` forces a conversion. `(double)5/2` gives 2.5. `(int)3.7` gives 3 (truncation). `(void)x` suppresses unused warnings. Casts hide compiler warnings, so use carefully.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    printf(\"%f\\n\", (double)5 / 2); /* 2.500000 */\n    printf(\"%d\\n\", (int)3.7);      /* 3 */\n    printf(\"%d\\n\", (int)-3.7);     /* -3 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "(double)a / b forces float division",
+            "(int)float truncates toward zero"
+          ],
+          "gotchas": [
+            "Casting hides warnings -- may mask real type errors"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are sequence points in C and why do they matter?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["sequence-points", "undefined-behavior", "evaluation-order"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **sequence point** is a point in the program's execution at which all previous side effects are guaranteed to be complete, and no subsequent side effects have started.\n\n**Where sequence points occur:**\n1. End of a full expression (the `;` in a statement).\n2. Between the left and right operands of `&&`, `||`, and `,`.\n3. Between the condition and the selected branch of `?:`.\n4. At a function call (after argument evaluation, before the call).\n5. At the end of an initializer.\n\n**Why they matter:**\nBetween two sequence points, a variable may be modified **at most once**. Violating this is **undefined behavior**.\n\n`i = i++` modifies `i` twice between sequence points -- this is UB. The result could be anything.\n\n**Not sequence points:** `+`, `-`, `*`, function argument separators (`,`). The order of evaluation of function arguments is unspecified.",
+          "pseudo_code": "1. Sequence point = all prior side effects complete\n2. Rule: each variable modified at most once between sequence points\n3. Violation = undefined behavior\n4. i = i++ is UB (double modification)\n5. Sequence points: ; && || , ?: function call\n6. NOT sequence points: + - * / function argument commas",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* UNDEFINED BEHAVIOR: i modified twice between sequence points */\n    /* int i = 1;\n       i = i++;  // UB: could be 1, 2, or anything */\n\n    /* UNDEFINED BEHAVIOR: using and modifying same variable */\n    /* int a = 1;\n       int b = a + a++;  // UB: order of + operands is unspecified */\n\n    /* SAFE: sequence point between && operands */\n    int i = 0;\n    if (i == 0 && ++i == 1) {\n        printf(\"i = %d\\n\", i); /* 1 -- safe, && is a sequence point */\n    }\n\n    /* SAFE: separate statements have sequence points */\n    int x = 5;\n    x = x + 1;  /* OK: only one modification between ; */\n    printf(\"x = %d\\n\", x); /* 6 */\n\n    /* UNSPECIFIED: order of function argument evaluation */\n    int n = 0;\n    /* printf(\"%d %d\\n\", n++, n++); // UB: n modified twice */\n    /* Instead, do: */\n    int a_val = n++;\n    int b_val = n++;\n    printf(\"%d %d\\n\", a_val, b_val); /* 0 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "A sequence point guarantees all prior side effects are complete",
+            "Between two sequence points, modify each variable at most once",
+            "&&, ||, ?:, comma operator, and ; are sequence points",
+            "Function argument evaluation order is unspecified",
+            "Violating sequence point rules is undefined behavior"
+          ],
+          "gotchas": [
+            "i = i++ is undefined behavior -- result is unpredictable",
+            "printf(\"%d %d\", i++, i++) is UB -- commas in function calls are NOT sequence points",
+            "a[i] = i++ is UB -- i is read and modified between the same sequence points",
+            "The compiler can do ANYTHING with UB code -- it might work today and fail tomorrow"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A sequence point guarantees all prior side effects are complete. Between two sequence points, modify each variable at most once. `i = i++` is UB. Sequence points: `;`, `&&`, `||`, `?:`, comma operator, function calls.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    /* SAFE */\n    int i = 0;\n    i++;       /* ; is a sequence point */\n    printf(\"%d\\n\", i); /* 1 */\n\n    /* UB: i = i++;  -- do NOT write this */\n    /* UB: printf(\"%d %d\", i++, i++); */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Modify each variable at most once between sequence points",
+            "i = i++ is undefined behavior"
+          ],
+          "gotchas": [
+            "Function argument commas are NOT sequence points"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is undefined behavior in expressions and how do you avoid it?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["undefined-behavior", "UB", "safety", "expressions"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Undefined behavior (UB)** means the C standard imposes no requirements -- the program can do anything: crash, produce wrong results, appear to work, or format your hard drive.\n\n**Common UB in expressions:**\n1. **Signed integer overflow:** `INT_MAX + 1`\n2. **Division by zero:** `x / 0`\n3. **Shift by negative or >= width:** `1 << 32` (if int is 32-bit)\n4. **Double modification between sequence points:** `i = i++`\n5. **Accessing uninitialized variables:** `int x; printf(\"%d\", x);`\n6. **Dereferencing NULL pointer:** `*((int *)NULL)`\n7. **Buffer overflow:** `arr[10]` when array has 5 elements\n\n**Why UB is dangerous:**\nCompilers **assume UB never happens** and optimize accordingly. This can remove safety checks, reorder code, or produce completely unexpected behavior. UB is not just \"implementation-defined\" -- it is truly anything goes.\n\n**How to avoid:**\n- Enable warnings: `gcc -Wall -Wextra -Werror`\n- Use sanitizers: `-fsanitize=undefined`\n- Static analyzers: clang-tidy, cppcheck\n- Code reviews and defensive coding",
+          "pseudo_code": "Common UB sources:\n1. Signed overflow: INT_MAX + 1\n2. Division by zero: x / 0\n3. Bad shifts: 1 << 32 (32-bit int)\n4. Sequence point violation: i = i++\n5. Uninitialized reads: int x; use x;\n6. Null dereference: *NULL\n7. Buffer overflow: arr[out_of_bounds]\n\nDefense:\n- gcc -Wall -Wextra -Werror\n- -fsanitize=undefined\n- Always initialize variables",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\n\nint main(void) {\n    /* SAFE: check before dividing */\n    int a = 10, b = 0;\n    if (b != 0) {\n        printf(\"%d\\n\", a / b);\n    } else {\n        printf(\"Division by zero avoided\\n\");\n    }\n\n    /* SAFE: check before signed arithmetic */\n    int x = INT_MAX;\n    int y = 1;\n    if (y > 0 && x > INT_MAX - y) {\n        printf(\"Overflow would occur\\n\");\n    } else if (y > 0) {\n        printf(\"%d\\n\", x + y);\n    }\n\n    /* SAFE: check shift amount */\n    int shift = 31;\n    if (shift >= 0 && shift < (int)(sizeof(int) * 8)) {\n        printf(\"1 << %d = %d\\n\", shift, 1 << shift);\n    }\n\n    /* SAFE: always initialize variables */\n    int initialized = 0; /* not garbage */\n    printf(\"%d\\n\", initialized);\n\n    /* Compile with: gcc -Wall -Wextra -fsanitize=undefined prog.c */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "UB means the program can do literally anything",
+            "Compilers assume UB never happens and optimize based on that assumption",
+            "Always validate inputs before operations that can cause UB",
+            "Enable compiler warnings: -Wall -Wextra -Werror",
+            "Use sanitizers: -fsanitize=undefined catches UB at runtime"
+          ],
+          "gotchas": [
+            "UB code that works today may break with a compiler update or different optimization level",
+            "The compiler can REMOVE your overflow check if it assumes signed overflow is UB",
+            "UB can have retroactive effects: code BEFORE the UB can behave unexpectedly",
+            "Implementation-defined behavior (like right-shifting signed values) is NOT the same as UB"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Undefined behavior means anything can happen. Common sources: signed overflow, division by zero, bad shifts, sequence point violations, uninitialized reads. The compiler assumes UB never happens and optimizes aggressively. Use `-Wall -Wextra -fsanitize=undefined`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\nint main(void) {\n    /* Always check before risky operations */\n    int x = INT_MAX, y = 1;\n    if (y > 0 && x <= INT_MAX - y) {\n        printf(\"%d\\n\", x + y); /* safe */\n    } else {\n        printf(\"overflow prevented\\n\");\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "UB = anything can happen; compiler assumes it never occurs",
+            "Use -Wall -Wextra -fsanitize=undefined"
+          ],
+          "gotchas": [
+            "Compilers can remove your safety checks if they assume UB cannot happen"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the sizeof operator behave with different expressions?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["sizeof", "expressions", "compile-time"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `sizeof` operator behaves differently depending on what it is applied to:\n\n**1. Types:** `sizeof(int)` -- parentheses required for type names.\n**2. Variables:** `sizeof x` or `sizeof(x)` -- parentheses optional for expressions.\n**3. Arrays:** `sizeof(arr)` -- gives the total size in bytes.\n**4. Pointers:** `sizeof(ptr)` -- gives pointer size (4 or 8 bytes), NOT the size of pointed-to data.\n**5. Strings:** `sizeof(\"hello\")` -- includes the null terminator (6, not 5).\n**6. Struct:** `sizeof(struct S)` -- may include padding bytes.\n**7. Expressions:** `sizeof(a + b)` -- uses the result type; does NOT evaluate the expression.\n\n**VLA exception (C99):** For variable-length arrays, `sizeof` is evaluated at runtime, not compile time.\n\n**Compile-time nature:** `sizeof(arr)` is determined at compile time (except VLAs). The expression inside sizeof is NOT evaluated -- only its type matters.",
+          "pseudo_code": "sizeof(type)    -> size of that type\nsizeof(variable) -> size of variable's type\nsizeof(array)   -> total bytes (count * element_size)\nsizeof(pointer) -> pointer size (4 or 8)\nsizeof(\"str\")   -> includes null terminator\nsizeof(expr)    -> size of result type (expr not evaluated)\nsizeof(struct)  -> may include padding",
+          "actual_code": "#include <stdio.h>\n\nstruct Padded {\n    char c;   /* 1 byte + 3 padding */\n    int x;    /* 4 bytes */\n};             /* total: likely 8, not 5 */\n\nint main(void) {\n    /* Type */\n    printf(\"sizeof(int)   = %zu\\n\", sizeof(int));    /* 4 */\n    printf(\"sizeof(char)  = %zu\\n\", sizeof(char));   /* 1 (always) */\n\n    /* Array */\n    int arr[10];\n    printf(\"sizeof(arr)   = %zu\\n\", sizeof(arr));    /* 40 */\n    printf(\"elements      = %zu\\n\", sizeof(arr)/sizeof(arr[0])); /* 10 */\n\n    /* Pointer */\n    int *p = arr;\n    printf(\"sizeof(p)     = %zu\\n\", sizeof(p));      /* 8 on 64-bit */\n\n    /* String literal (includes '\\0') */\n    printf(\"sizeof(\\\"hello\\\") = %zu\\n\", sizeof(\"hello\")); /* 6 */\n\n    /* Struct with padding */\n    printf(\"sizeof(Padded)= %zu\\n\", sizeof(struct Padded)); /* likely 8 */\n\n    /* Expression not evaluated */\n    int x = 5;\n    printf(\"sizeof(x++)   = %zu\\n\", sizeof(x++)); /* sizeof(int) */\n    printf(\"x = %d\\n\", x); /* still 5! */\n\n    /* Result type of expression */\n    char a = 1;\n    short b = 2;\n    printf(\"sizeof(a+b)   = %zu\\n\", sizeof(a + b)); /* sizeof(int) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof returns size_t; print with %zu",
+            "Expression inside sizeof is NOT evaluated (except VLAs)",
+            "sizeof(string_literal) includes the null terminator",
+            "sizeof(struct) may include padding bytes",
+            "sizeof(char + short) is sizeof(int) due to integer promotion"
+          ],
+          "gotchas": [
+            "sizeof(\"hello\") is 6 (5 chars + null), not 5",
+            "sizeof(struct) may be larger than the sum of member sizes due to padding",
+            "sizeof applied to a function parameter that was an array gives pointer size",
+            "sizeof(x++) does not increment x"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sizeof` gives byte size at compile time. Arrays give total size, pointers give pointer size, strings include `\\0`, structs may include padding, and expressions are NOT evaluated.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int arr[5];\n    printf(\"%zu %zu %zu\\n\",\n        sizeof(arr),       /* 20 */\n        sizeof(\"hello\"),   /* 6 (includes \\0) */\n        sizeof(arr[0]));   /* 4 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof(string) includes null terminator",
+            "sizeof(arr) gives total bytes, not element count"
+          ],
+          "gotchas": [
+            "sizeof(\"hello\") is 6, not 5"
+          ]
+        }
+      ]
+    }
+  ]
+}

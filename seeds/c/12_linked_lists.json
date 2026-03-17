@@ -1,0 +1,636 @@
+{
+  "concept_slug": "linked-lists",
+  "questions": [
+    {
+      "title": "How do you define a singly linked list node structure in C?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "struct", "self-referential"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A singly linked list node is a **self-referential structure** containing data and a pointer to the next node. The `struct Node` uses a pointer to its own type to create the chain.\n\n**Key design decisions:**\n- Use `typedef` to avoid writing `struct Node` everywhere\n- The `next` pointer is `NULL` for the last node in the list\n- You must use `struct Node *next` inside the definition (not the typedef alias) because the typedef is not yet complete\n\n**Memory layout:** Each node occupies `sizeof(int) + sizeof(pointer)` bytes, typically 8 or 12 bytes on 32-bit systems, 12 or 16 bytes on 64-bit systems due to alignment/padding.",
+          "pseudo_code": "Define struct Node:\n  int data\n  pointer to struct Node -> next\n\nCreate node:\n  Allocate memory for one Node\n  Set data = value\n  Set next = NULL\n  Return pointer to node",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Self-referential structure for singly linked list */\ntypedef struct Node {\n    int data;\n    struct Node *next;  /* pointer to next node */\n} Node;\n\n/* Factory function to create a new node */\nNode *createNode(int value) {\n    Node *newNode = (Node *)malloc(sizeof(Node));\n    if (newNode == NULL) {\n        fprintf(stderr, \"Memory allocation failed\\n\");\n        exit(EXIT_FAILURE);\n    }\n    newNode->data = value;\n    newNode->next = NULL;\n    return newNode;\n}\n\nint main(void) {\n    Node *head = createNode(10);\n    head->next = createNode(20);\n    head->next->next = createNode(30);\n\n    /* Traverse and print */\n    Node *curr = head;\n    while (curr != NULL) {\n        printf(\"%d -> \", curr->data);\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");  /* Output: 10 -> 20 -> 30 -> NULL */\n\n    /* Free all nodes */\n    curr = head;\n    while (curr != NULL) {\n        Node *temp = curr;\n        curr = curr->next;\n        free(temp);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Self-referential struct: contains a pointer to its own type",
+            "Use struct Node *next inside the definition, not the typedef alias",
+            "Always check malloc return value for NULL",
+            "Last node's next pointer is NULL (sentinel for end of list)",
+            "sizeof(Node) includes padding for alignment"
+          ],
+          "gotchas": [
+            "Cannot use the typedef name inside the struct definition itself -- use struct Node *next, not Node *next",
+            "Forgetting to set next = NULL in createNode leads to undefined behavior when traversing",
+            "Forgetting to check malloc return can cause NULL pointer dereference",
+            "sizeof(Node) may be larger than sizeof(int) + sizeof(Node*) due to struct padding"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A linked list node is a self-referential struct with data and a `next` pointer. Use `malloc` to allocate each node and always set `next = NULL` for the tail.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Self-referential struct with data + next pointer",
+            "Always initialize next to NULL"
+          ],
+          "gotchas": [
+            "Must use struct Node *next inside the definition, not the typedef alias"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you insert nodes at the head, tail, and a given position in a singly linked list?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "insertion", "head", "tail"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Linked list insertion has three variants:\n\n**Insert at head (O(1)):** Create new node, point its `next` to current head, update head pointer. This is the fastest insertion.\n\n**Insert at tail (O(n)):** Traverse to the last node, set its `next` to the new node. Can be made O(1) if you maintain a tail pointer.\n\n**Insert at position k (O(k)):** Traverse to position k-1, set new node's `next` to position k node, set position k-1 node's `next` to new node.\n\n**Critical:** When inserting at the head, you must update the head pointer. This is why many implementations pass `Node **head` (pointer to pointer) so the function can modify the caller's head variable.",
+          "pseudo_code": "InsertAtHead(head, value):\n  new = createNode(value)\n  new->next = *head\n  *head = new\n\nInsertAtTail(head, value):\n  new = createNode(value)\n  if *head is NULL:\n    *head = new\n    return\n  curr = *head\n  while curr->next != NULL:\n    curr = curr->next\n  curr->next = new\n\nInsertAtPosition(head, value, pos):\n  if pos == 0: InsertAtHead(head, value)\n  curr = *head\n  for i = 0 to pos-2:\n    curr = curr->next\n  new = createNode(value)\n  new->next = curr->next\n  curr->next = new",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    if (!n) { perror(\"malloc\"); exit(1); }\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Insert at head: O(1) */\nvoid insertAtHead(Node **head, int val) {\n    Node *newNode = createNode(val);\n    newNode->next = *head;\n    *head = newNode;\n}\n\n/* Insert at tail: O(n) */\nvoid insertAtTail(Node **head, int val) {\n    Node *newNode = createNode(val);\n    if (*head == NULL) {\n        *head = newNode;\n        return;\n    }\n    Node *curr = *head;\n    while (curr->next != NULL)\n        curr = curr->next;\n    curr->next = newNode;\n}\n\n/* Insert at position (0-indexed): O(pos) */\nvoid insertAtPosition(Node **head, int val, int pos) {\n    if (pos == 0) {\n        insertAtHead(head, val);\n        return;\n    }\n    Node *curr = *head;\n    for (int i = 0; i < pos - 1 && curr != NULL; i++)\n        curr = curr->next;\n    if (curr == NULL) {\n        fprintf(stderr, \"Position out of range\\n\");\n        return;\n    }\n    Node *newNode = createNode(val);\n    newNode->next = curr->next;\n    curr->next = newNode;\n}\n\nvoid printList(Node *head) {\n    while (head) {\n        printf(\"%d -> \", head->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    Node *head = NULL;\n    insertAtTail(&head, 10);\n    insertAtTail(&head, 30);\n    insertAtHead(&head, 5);\n    insertAtPosition(&head, 20, 2);\n    printList(head);  /* 5 -> 10 -> 20 -> 30 -> NULL */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use Node **head (double pointer) to modify the head from inside a function",
+            "Insert at head is O(1), insert at tail is O(n) without a tail pointer",
+            "Insert at position requires traversing to pos-1 first",
+            "Always handle the empty list case (head == NULL)",
+            "Order of pointer updates matters: set new->next before changing prev->next"
+          ],
+          "gotchas": [
+            "Passing Node *head instead of Node **head means the caller's head never changes",
+            "Inserting at position beyond the list length can dereference NULL",
+            "Forgetting to handle the empty list case causes segfault on tail insertion",
+            "Must set new->next before overwriting curr->next or you lose the rest of the list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `Node **head` (double pointer) to modify head from a function. Insert at head: O(1) -- point new node to old head, update head. Insert at tail: O(n) -- traverse to end. Insert at position: traverse to pos-1, splice in.",
+          "pseudo_code": "",
+          "actual_code": "void insertAtHead(Node **head, int val) {\n    Node *n = createNode(val);\n    n->next = *head;\n    *head = n;\n}\n\nvoid insertAtTail(Node **head, int val) {\n    Node *n = createNode(val);\n    if (!*head) { *head = n; return; }\n    Node *c = *head;\n    while (c->next) c = c->next;\n    c->next = n;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Double pointer (Node **head) needed to modify head",
+            "Head insert O(1), tail insert O(n)"
+          ],
+          "gotchas": [
+            "Passing Node *head instead of Node **head won't update the caller's head pointer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you delete nodes from a singly linked list by value and by position?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "deletion", "free"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Deleting from a linked list involves finding the target node, relinking the previous node's `next` pointer to skip the target, and freeing the target's memory.\n\n**Delete by value:** Traverse until you find the node whose data matches. Keep track of the previous node so you can relink.\n\n**Delete by position:** Traverse to position-1, relink, free the target.\n\n**Special case -- deleting head:** The head pointer itself must change. This is why we use `Node **head`.\n\n**Steps:**\n1. Handle empty list\n2. Handle deletion of head node (special case)\n3. Traverse to find target, keeping track of previous\n4. Relink: `prev->next = target->next`\n5. `free(target)`",
+          "pseudo_code": "DeleteByValue(head, value):\n  if *head is NULL: return\n  if (*head)->data == value:\n    temp = *head\n    *head = (*head)->next\n    free(temp)\n    return\n  curr = *head\n  while curr->next != NULL and curr->next->data != value:\n    curr = curr->next\n  if curr->next != NULL:\n    temp = curr->next\n    curr->next = temp->next\n    free(temp)\n\nDeleteByPosition(head, pos):\n  if pos == 0: delete head node\n  traverse to pos-1\n  relink and free",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Delete first occurrence of value */\nvoid deleteByValue(Node **head, int val) {\n    if (*head == NULL) return;\n\n    /* Special case: deleting the head */\n    if ((*head)->data == val) {\n        Node *temp = *head;\n        *head = (*head)->next;\n        free(temp);\n        return;\n    }\n\n    Node *curr = *head;\n    while (curr->next != NULL && curr->next->data != val)\n        curr = curr->next;\n\n    if (curr->next != NULL) {\n        Node *temp = curr->next;\n        curr->next = temp->next;\n        free(temp);\n    }\n}\n\n/* Delete node at 0-indexed position */\nvoid deleteByPosition(Node **head, int pos) {\n    if (*head == NULL) return;\n\n    if (pos == 0) {\n        Node *temp = *head;\n        *head = (*head)->next;\n        free(temp);\n        return;\n    }\n\n    Node *curr = *head;\n    for (int i = 0; i < pos - 1 && curr->next != NULL; i++)\n        curr = curr->next;\n\n    if (curr->next == NULL) return;  /* position out of range */\n\n    Node *temp = curr->next;\n    curr->next = temp->next;\n    free(temp);\n}\n\nvoid printList(Node *head) {\n    while (head) {\n        printf(\"%d -> \", head->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    Node *head = NULL;\n    for (int i = 1; i <= 5; i++) {\n        Node *n = createNode(i * 10);\n        n->next = head;\n        head = n;\n    }\n    printList(head);        /* 50 -> 40 -> 30 -> 20 -> 10 -> NULL */\n\n    deleteByValue(&head, 30);\n    printList(head);        /* 50 -> 40 -> 20 -> 10 -> NULL */\n\n    deleteByPosition(&head, 0);\n    printList(head);        /* 40 -> 20 -> 10 -> NULL */\n\n    deleteByPosition(&head, 1);\n    printList(head);        /* 40 -> 10 -> NULL */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always handle empty list and head-deletion as special cases",
+            "Keep a pointer to the previous node to relink around the deleted node",
+            "free() the deleted node to avoid memory leaks",
+            "Use Node **head so the function can update the caller's head pointer",
+            "Check bounds before accessing curr->next"
+          ],
+          "gotchas": [
+            "Forgetting to free the deleted node causes a memory leak",
+            "Using the freed pointer after free() is undefined behavior (use-after-free)",
+            "Deleting the head without updating the head pointer leaves a dangling pointer",
+            "Not handling the case where the value is not found can cause a segfault"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "To delete: find the node before the target, relink `prev->next = target->next`, then `free(target)`. Handle head deletion separately since the head pointer must change.",
+          "pseudo_code": "",
+          "actual_code": "void deleteByValue(Node **head, int val) {\n    if (!*head) return;\n    if ((*head)->data == val) {\n        Node *tmp = *head;\n        *head = (*head)->next;\n        free(tmp);\n        return;\n    }\n    Node *c = *head;\n    while (c->next && c->next->data != val)\n        c = c->next;\n    if (c->next) {\n        Node *tmp = c->next;\n        c->next = tmp->next;\n        free(tmp);\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "Relink prev->next to skip the deleted node, then free it",
+            "Handle head deletion as a special case"
+          ],
+          "gotchas": [
+            "Forgetting free() causes memory leaks; using a freed pointer is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you traverse and print all elements of a singly linked list?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "traversal", "iteration"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Traversal is the fundamental linked list operation. Start at the head and follow `next` pointers until you reach `NULL`.\n\n**Iterative traversal:** Use a `curr` pointer starting at `head`. In each iteration, process the current node and advance: `curr = curr->next`. Stop when `curr == NULL`.\n\n**Recursive traversal:** Call the function on `node->next` until the base case (`node == NULL`). Useful for reverse printing (print after the recursive call).\n\n**Common traversal tasks:**\n- Print all elements\n- Count nodes (list length)\n- Search for a value\n- Find the last node\n\n**Time complexity:** O(n) for all traversals. **Space:** O(1) iterative, O(n) recursive (call stack).",
+          "pseudo_code": "IterativeTraversal(head):\n  curr = head\n  while curr != NULL:\n    process(curr->data)\n    curr = curr->next\n\nRecursiveTraversal(node):\n  if node is NULL: return\n  process(node->data)\n  RecursiveTraversal(node->next)\n\nCountNodes(head):\n  count = 0\n  curr = head\n  while curr != NULL:\n    count++\n    curr = curr->next\n  return count",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\n/* Iterative print */\nvoid printList(Node *head) {\n    Node *curr = head;\n    while (curr != NULL) {\n        printf(\"%d -> \", curr->data);\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");\n}\n\n/* Recursive print */\nvoid printListRecursive(Node *node) {\n    if (node == NULL) {\n        printf(\"NULL\\n\");\n        return;\n    }\n    printf(\"%d -> \", node->data);\n    printListRecursive(node->next);\n}\n\n/* Reverse print using recursion (print after recursive call) */\nvoid printReverse(Node *node) {\n    if (node == NULL) return;\n    printReverse(node->next);\n    printf(\"%d \", node->data);\n}\n\n/* Count nodes */\nint countNodes(Node *head) {\n    int count = 0;\n    while (head != NULL) {\n        count++;\n        head = head->next;\n    }\n    return count;\n}\n\n/* Search for a value, return 1 if found, 0 otherwise */\nint search(Node *head, int target) {\n    while (head != NULL) {\n        if (head->data == target)\n            return 1;\n        head = head->next;\n    }\n    return 0;\n}\n\nint main(void) {\n    Node n3 = {30, NULL};\n    Node n2 = {20, &n3};\n    Node n1 = {10, &n2};\n\n    printList(&n1);           /* 10 -> 20 -> 30 -> NULL */\n    printListRecursive(&n1);  /* 10 -> 20 -> 30 -> NULL */\n\n    printf(\"Reverse: \");\n    printReverse(&n1);        /* 30 20 10 */\n    printf(\"\\n\");\n\n    printf(\"Count: %d\\n\", countNodes(&n1));  /* 3 */\n    printf(\"Found 20: %d\\n\", search(&n1, 20));  /* 1 */\n    printf(\"Found 99: %d\\n\", search(&n1, 99));  /* 0 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Iterative traversal: O(n) time, O(1) space",
+            "Recursive traversal: O(n) time, O(n) space (call stack)",
+            "Reverse printing via recursion: print after the recursive call",
+            "Always check for NULL before accessing node members",
+            "The head pointer is not modified during traversal (use a local copy)"
+          ],
+          "gotchas": [
+            "Modifying head directly (head = head->next) in a function that takes Node *head is safe since it is a local copy, but confusing -- prefer a separate curr variable",
+            "Recursive traversal on a very long list causes stack overflow",
+            "Infinite loop if the list has a cycle and you do not check for it",
+            "Forgetting the NULL check at the start causes segfault on empty list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Start at head, follow `next` pointers until `NULL`. Use iterative (O(1) space) or recursive (O(n) space). For reverse print, use recursion and print after the recursive call.",
+          "pseudo_code": "",
+          "actual_code": "void printList(Node *head) {\n    Node *curr = head;\n    while (curr) {\n        printf(\"%d -> \", curr->data);\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");\n}",
+          "code_language": "c",
+          "key_points": [
+            "Iterative: O(n) time, O(1) space",
+            "Use a curr pointer, do not modify head"
+          ],
+          "gotchas": [
+            "Infinite loop if the list has a cycle"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you reverse a singly linked list iteratively and recursively?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "reversal", "iterative", "recursive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reversing a linked list is one of the most common interview questions. There are two approaches:\n\n**Iterative (O(n) time, O(1) space):** Use three pointers: `prev`, `curr`, `next`. At each step, save `curr->next`, point `curr->next` to `prev`, advance `prev` and `curr`.\n\n**Recursive (O(n) time, O(n) space):** Recurse to the end of the list. On the way back, each node sets `node->next->next = node` (makes the next node point back) and `node->next = NULL` (breaks forward link).\n\nThe iterative approach is preferred in practice because it uses O(1) extra space.",
+          "pseudo_code": "IterativeReverse(head):\n  prev = NULL\n  curr = *head\n  while curr != NULL:\n    next = curr->next    // save next\n    curr->next = prev    // reverse link\n    prev = curr          // advance prev\n    curr = next          // advance curr\n  *head = prev           // new head\n\nRecursiveReverse(node):\n  if node is NULL or node->next is NULL:\n    return node          // base case: last node becomes new head\n  newHead = RecursiveReverse(node->next)\n  node->next->next = node  // reverse the link\n  node->next = NULL        // break forward link\n  return newHead",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Iterative reverse: O(n) time, O(1) space */\nvoid reverseIterative(Node **head) {\n    Node *prev = NULL;\n    Node *curr = *head;\n    Node *next = NULL;\n\n    while (curr != NULL) {\n        next = curr->next;   /* save next */\n        curr->next = prev;   /* reverse link */\n        prev = curr;         /* advance prev */\n        curr = next;         /* advance curr */\n    }\n    *head = prev;            /* prev is the new head */\n}\n\n/* Recursive reverse: O(n) time, O(n) space */\nNode *reverseRecursive(Node *node) {\n    /* Base case: empty list or single node */\n    if (node == NULL || node->next == NULL)\n        return node;\n\n    Node *newHead = reverseRecursive(node->next);\n    node->next->next = node;  /* make next node point back to us */\n    node->next = NULL;        /* remove our forward link */\n    return newHead;\n}\n\nvoid printList(Node *head) {\n    while (head) {\n        printf(\"%d -> \", head->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    /* Build list: 1 -> 2 -> 3 -> 4 -> 5 */\n    Node *head = NULL;\n    for (int i = 5; i >= 1; i--) {\n        Node *n = createNode(i);\n        n->next = head;\n        head = n;\n    }\n\n    printf(\"Original: \");\n    printList(head);  /* 1 -> 2 -> 3 -> 4 -> 5 -> NULL */\n\n    reverseIterative(&head);\n    printf(\"Reversed (iterative): \");\n    printList(head);  /* 5 -> 4 -> 3 -> 2 -> 1 -> NULL */\n\n    head = reverseRecursive(head);\n    printf(\"Reversed again (recursive): \");\n    printList(head);  /* 1 -> 2 -> 3 -> 4 -> 5 -> NULL */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Iterative uses three pointers (prev, curr, next): O(1) space",
+            "Recursive uses the call stack: O(n) space",
+            "After iterative reverse, prev becomes the new head",
+            "Recursive: node->next->next = node reverses the link on the way back",
+            "Both approaches are O(n) time"
+          ],
+          "gotchas": [
+            "Forgetting to set node->next = NULL in recursive version creates a cycle between the first two nodes",
+            "Forgetting to update *head = prev in iterative version means head still points to the old first node (now the last)",
+            "Recursive reverse on a very long list can cause stack overflow",
+            "Must save curr->next before overwriting curr->next = prev"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Iterative:** Three pointers (prev, curr, next). At each step: save next, reverse link, advance. **Recursive:** Recurse to end, then `node->next->next = node; node->next = NULL;` on the way back.",
+          "pseudo_code": "",
+          "actual_code": "void reverseIterative(Node **head) {\n    Node *prev = NULL, *curr = *head, *next;\n    while (curr) {\n        next = curr->next;\n        curr->next = prev;\n        prev = curr;\n        curr = next;\n    }\n    *head = prev;\n}\n\nNode *reverseRecursive(Node *node) {\n    if (!node || !node->next) return node;\n    Node *newHead = reverseRecursive(node->next);\n    node->next->next = node;\n    node->next = NULL;\n    return newHead;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Iterative: O(1) space with prev/curr/next pointers",
+            "Recursive: O(n) space, reverse links on the way back"
+          ],
+          "gotchas": [
+            "Forgetting node->next = NULL in recursive version creates a cycle"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you detect a cycle in a linked list using Floyd's algorithm?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "cycle-detection", "floyd", "slow-fast-pointer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Floyd's Cycle Detection (Tortoise and Hare)** uses two pointers moving at different speeds:\n- **Slow pointer:** moves 1 step at a time\n- **Fast pointer:** moves 2 steps at a time\n\nIf there is a cycle, the fast pointer will eventually catch up to the slow pointer (they will meet inside the cycle). If there is no cycle, the fast pointer will reach `NULL`.\n\n**Why it works:** In a cycle of length C, the fast pointer closes the gap by 1 node per iteration. So they must meet within C iterations after both enter the cycle.\n\n**Finding the cycle start:** After detection, reset one pointer to head. Move both pointers one step at a time. They will meet at the start of the cycle. This works because of the mathematical relationship between the distances.\n\n**Time:** O(n), **Space:** O(1).",
+          "pseudo_code": "DetectCycle(head):\n  slow = head\n  fast = head\n  while fast != NULL and fast->next != NULL:\n    slow = slow->next        // 1 step\n    fast = fast->next->next   // 2 steps\n    if slow == fast:\n      return true  // cycle found\n  return false  // no cycle\n\nFindCycleStart(head):\n  // First detect cycle\n  slow = fast = head\n  while fast and fast->next:\n    slow = slow->next\n    fast = fast->next->next\n    if slow == fast: break\n  if fast == NULL or fast->next == NULL:\n    return NULL  // no cycle\n  // Reset slow to head, move both 1 step\n  slow = head\n  while slow != fast:\n    slow = slow->next\n    fast = fast->next\n  return slow  // start of cycle",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Detect if a cycle exists: returns 1 if cycle, 0 otherwise */\nint hasCycle(Node *head) {\n    Node *slow = head;\n    Node *fast = head;\n\n    while (fast != NULL && fast->next != NULL) {\n        slow = slow->next;\n        fast = fast->next->next;\n        if (slow == fast)\n            return 1;  /* cycle detected */\n    }\n    return 0;  /* no cycle */\n}\n\n/* Find the starting node of the cycle, or NULL if no cycle */\nNode *findCycleStart(Node *head) {\n    Node *slow = head;\n    Node *fast = head;\n\n    /* Phase 1: Detect cycle */\n    while (fast != NULL && fast->next != NULL) {\n        slow = slow->next;\n        fast = fast->next->next;\n        if (slow == fast)\n            break;\n    }\n\n    /* No cycle */\n    if (fast == NULL || fast->next == NULL)\n        return NULL;\n\n    /* Phase 2: Find start of cycle */\n    slow = head;\n    while (slow != fast) {\n        slow = slow->next;\n        fast = fast->next;  /* both move 1 step now */\n    }\n    return slow;  /* start of cycle */\n}\n\nint main(void) {\n    /* Create: 1 -> 2 -> 3 -> 4 -> 5 -> back to 3 */\n    Node *n1 = createNode(1);\n    Node *n2 = createNode(2);\n    Node *n3 = createNode(3);\n    Node *n4 = createNode(4);\n    Node *n5 = createNode(5);\n    n1->next = n2; n2->next = n3; n3->next = n4;\n    n4->next = n5; n5->next = n3;  /* cycle! */\n\n    printf(\"Has cycle: %d\\n\", hasCycle(n1));  /* 1 */\n\n    Node *start = findCycleStart(n1);\n    if (start)\n        printf(\"Cycle starts at node with data: %d\\n\", start->data);  /* 3 */\n\n    /* Break cycle for cleanup */\n    n5->next = NULL;\n    /* free nodes... */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Floyd's algorithm: slow moves 1 step, fast moves 2 steps",
+            "If they meet, a cycle exists; if fast reaches NULL, no cycle",
+            "To find cycle start: reset slow to head, move both 1 step until they meet",
+            "O(n) time, O(1) space -- no hash table needed",
+            "Check both fast != NULL and fast->next != NULL to avoid segfault"
+          ],
+          "gotchas": [
+            "Must check both fast != NULL AND fast->next != NULL before advancing fast by 2",
+            "Comparing pointer addresses (slow == fast), not data values",
+            "The meeting point is NOT necessarily the start of the cycle",
+            "Cannot free nodes in a cyclic list without first breaking the cycle"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Floyd's Tortoise and Hare: slow pointer moves 1 step, fast moves 2. If they meet, cycle exists. To find cycle start: reset slow to head, move both 1 step until they meet again. O(n) time, O(1) space.",
+          "pseudo_code": "",
+          "actual_code": "int hasCycle(Node *head) {\n    Node *slow = head, *fast = head;\n    while (fast && fast->next) {\n        slow = slow->next;\n        fast = fast->next->next;\n        if (slow == fast) return 1;\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Slow pointer (1 step) and fast pointer (2 steps)",
+            "O(n) time, O(1) space"
+          ],
+          "gotchas": [
+            "Must check both fast != NULL and fast->next != NULL before advancing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the middle node of a linked list using the slow/fast pointer technique?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "slow-fast-pointer", "middle-node"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **slow/fast pointer** (tortoise and hare) technique finds the middle in a single pass:\n- **Slow** moves 1 step per iteration\n- **Fast** moves 2 steps per iteration\n\nWhen fast reaches the end, slow is at the middle.\n\n**Even-length lists:** Depending on the loop condition, you get either the first or second middle node:\n- `while (fast && fast->next)` -- slow lands on the **second** middle (e.g., for 1->2->3->4, slow is at 3)\n- `while (fast->next && fast->next->next)` -- slow lands on the **first** middle (e.g., slow is at 2)\n\n**Time:** O(n), **Space:** O(1). Only requires a single traversal.",
+          "pseudo_code": "FindMiddle(head):\n  slow = head\n  fast = head\n  while fast != NULL and fast->next != NULL:\n    slow = slow->next\n    fast = fast->next->next\n  return slow  // middle node",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Returns the middle node (second middle for even-length lists) */\nNode *findMiddle(Node *head) {\n    if (head == NULL) return NULL;\n\n    Node *slow = head;\n    Node *fast = head;\n\n    while (fast != NULL && fast->next != NULL) {\n        slow = slow->next;\n        fast = fast->next->next;\n    }\n    return slow;\n}\n\n/* Returns first middle for even-length lists */\nNode *findFirstMiddle(Node *head) {\n    if (head == NULL) return NULL;\n\n    Node *slow = head;\n    Node *fast = head;\n\n    while (fast->next != NULL && fast->next->next != NULL) {\n        slow = slow->next;\n        fast = fast->next->next;\n    }\n    return slow;\n}\n\nint main(void) {\n    /* Odd: 1 -> 2 -> 3 -> 4 -> 5 */\n    Node *head = createNode(1);\n    head->next = createNode(2);\n    head->next->next = createNode(3);\n    head->next->next->next = createNode(4);\n    head->next->next->next->next = createNode(5);\n\n    printf(\"Middle (odd): %d\\n\", findMiddle(head)->data);  /* 3 */\n\n    /* Even: 1 -> 2 -> 3 -> 4 */\n    Node *head2 = createNode(1);\n    head2->next = createNode(2);\n    head2->next->next = createNode(3);\n    head2->next->next->next = createNode(4);\n\n    printf(\"Middle (even, 2nd): %d\\n\", findMiddle(head2)->data);       /* 3 */\n    printf(\"Middle (even, 1st): %d\\n\", findFirstMiddle(head2)->data);  /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Slow/fast pointer: slow at middle when fast reaches end",
+            "Single pass: O(n) time, O(1) space",
+            "Loop condition determines which middle for even-length lists",
+            "while(fast && fast->next) gives second middle for even lists",
+            "Useful as a building block for merge sort on linked lists"
+          ],
+          "gotchas": [
+            "For even-length lists, the 'middle' depends on your loop condition -- interviewers may ask for either",
+            "Must handle NULL head to avoid segfault",
+            "Do not confuse with cycle detection -- same technique but different purpose",
+            "If the list has a cycle, this function loops forever"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Slow pointer moves 1 step, fast moves 2. When fast hits end, slow is at the middle. O(n) time, O(1) space, single pass.",
+          "pseudo_code": "",
+          "actual_code": "Node *findMiddle(Node *head) {\n    Node *slow = head, *fast = head;\n    while (fast && fast->next) {\n        slow = slow->next;\n        fast = fast->next->next;\n    }\n    return slow;  /* middle node */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Slow/fast pointer gives middle in one pass",
+            "O(n) time, O(1) space"
+          ],
+          "gotchas": [
+            "For even-length lists, loop condition determines first or second middle"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you merge two sorted linked lists into one sorted list?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "merge", "sorted", "two-pointer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Merging two sorted linked lists is a classic problem (used in merge sort for linked lists). The idea is similar to the merge step in merge sort:\n\n1. Create a dummy head node to simplify edge cases\n2. Compare the heads of both lists\n3. Attach the smaller node to the result and advance that list's pointer\n4. When one list is exhausted, attach the remainder of the other list\n\n**Dummy node trick:** Using a dummy/sentinel node at the start avoids special-casing the first element. The result starts at `dummy.next`.\n\n**Time:** O(n + m), **Space:** O(1) -- we reuse existing nodes, no new allocation needed.",
+          "pseudo_code": "MergeSorted(l1, l2):\n  dummy = Node(0)  // sentinel\n  tail = dummy\n  while l1 != NULL and l2 != NULL:\n    if l1->data <= l2->data:\n      tail->next = l1\n      l1 = l1->next\n    else:\n      tail->next = l2\n      l2 = l2->next\n    tail = tail->next\n  tail->next = (l1 != NULL) ? l1 : l2\n  return dummy.next",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Merge two sorted lists into one sorted list (iterative) */\nNode *mergeSorted(Node *l1, Node *l2) {\n    Node dummy;          /* stack-allocated sentinel */\n    dummy.next = NULL;\n    Node *tail = &dummy;\n\n    while (l1 != NULL && l2 != NULL) {\n        if (l1->data <= l2->data) {\n            tail->next = l1;\n            l1 = l1->next;\n        } else {\n            tail->next = l2;\n            l2 = l2->next;\n        }\n        tail = tail->next;\n    }\n\n    /* Attach remaining nodes */\n    tail->next = (l1 != NULL) ? l1 : l2;\n\n    return dummy.next;\n}\n\n/* Recursive merge */\nNode *mergeSortedRecursive(Node *l1, Node *l2) {\n    if (l1 == NULL) return l2;\n    if (l2 == NULL) return l1;\n\n    if (l1->data <= l2->data) {\n        l1->next = mergeSortedRecursive(l1->next, l2);\n        return l1;\n    } else {\n        l2->next = mergeSortedRecursive(l1, l2->next);\n        return l2;\n    }\n}\n\nvoid printList(Node *head) {\n    while (head) {\n        printf(\"%d -> \", head->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    /* List 1: 1 -> 3 -> 5 */\n    Node *l1 = createNode(1);\n    l1->next = createNode(3);\n    l1->next->next = createNode(5);\n\n    /* List 2: 2 -> 4 -> 6 */\n    Node *l2 = createNode(2);\n    l2->next = createNode(4);\n    l2->next->next = createNode(6);\n\n    Node *merged = mergeSorted(l1, l2);\n    printList(merged);  /* 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> NULL */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use a dummy/sentinel node to avoid special-casing the first element",
+            "Compare heads of both lists and attach the smaller one",
+            "When one list is exhausted, attach the rest of the other",
+            "O(n + m) time, O(1) space (iterative) -- reuses existing nodes",
+            "Recursive version is elegant but uses O(n + m) stack space"
+          ],
+          "gotchas": [
+            "The dummy node should be stack-allocated (not malloc'd) to avoid memory leaks",
+            "This modifies the original lists' next pointers -- the originals are consumed",
+            "Using <= (not <) preserves stability (equal elements keep original order)",
+            "Forgetting to attach the remaining list loses those elements"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use a dummy sentinel node. Compare heads of both lists, attach the smaller one, advance. When one list is done, attach the rest of the other. O(n+m) time, O(1) space.",
+          "pseudo_code": "",
+          "actual_code": "Node *mergeSorted(Node *l1, Node *l2) {\n    Node dummy;\n    Node *tail = &dummy;\n    while (l1 && l2) {\n        if (l1->data <= l2->data) {\n            tail->next = l1; l1 = l1->next;\n        } else {\n            tail->next = l2; l2 = l2->next;\n        }\n        tail = tail->next;\n    }\n    tail->next = l1 ? l1 : l2;\n    return dummy.next;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Dummy node simplifies edge cases",
+            "O(n + m) time, O(1) space"
+          ],
+          "gotchas": [
+            "Original lists are consumed (next pointers modified)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a doubly linked list in C?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "doubly-linked-list", "bidirectional"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **doubly linked list** has nodes with both `next` and `prev` pointers, allowing traversal in both directions.\n\n**Advantages over singly linked:**\n- Delete a node given only a pointer to it: O(1) (no need to find prev)\n- Traverse backwards\n- Insert before a given node: O(1)\n\n**Disadvantages:**\n- Extra memory per node (one more pointer)\n- More pointers to maintain on insert/delete (more error-prone)\n\n**Insert/delete** must update both `next` and `prev` pointers of affected nodes. The order of pointer updates is critical to avoid losing references.",
+          "pseudo_code": "Node structure:\n  int data\n  Node *prev\n  Node *next\n\nInsertAtHead(head, value):\n  new = createNode(value)\n  new->next = *head\n  if *head != NULL:\n    (*head)->prev = new\n  *head = new\n\nDeleteNode(head, node):\n  if node->prev != NULL:\n    node->prev->next = node->next\n  else:\n    *head = node->next  // deleting head\n  if node->next != NULL:\n    node->next->prev = node->prev\n  free(node)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct DNode {\n    int data;\n    struct DNode *prev;\n    struct DNode *next;\n} DNode;\n\nDNode *createDNode(int val) {\n    DNode *n = (DNode *)malloc(sizeof(DNode));\n    if (!n) { perror(\"malloc\"); exit(1); }\n    n->data = val;\n    n->prev = NULL;\n    n->next = NULL;\n    return n;\n}\n\n/* Insert at head */\nvoid insertAtHead(DNode **head, int val) {\n    DNode *newNode = createDNode(val);\n    newNode->next = *head;\n    if (*head != NULL)\n        (*head)->prev = newNode;\n    *head = newNode;\n}\n\n/* Insert at tail */\nvoid insertAtTail(DNode **head, int val) {\n    DNode *newNode = createDNode(val);\n    if (*head == NULL) {\n        *head = newNode;\n        return;\n    }\n    DNode *curr = *head;\n    while (curr->next != NULL)\n        curr = curr->next;\n    curr->next = newNode;\n    newNode->prev = curr;\n}\n\n/* Delete a given node (O(1) if you have the pointer) */\nvoid deleteNode(DNode **head, DNode *node) {\n    if (node == NULL) return;\n\n    if (node->prev != NULL)\n        node->prev->next = node->next;\n    else\n        *head = node->next;  /* deleting head */\n\n    if (node->next != NULL)\n        node->next->prev = node->prev;\n\n    free(node);\n}\n\nvoid printForward(DNode *head) {\n    printf(\"Forward: \");\n    DNode *curr = head;\n    DNode *last = NULL;\n    while (curr) {\n        printf(\"%d <-> \", curr->data);\n        last = curr;\n        curr = curr->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nvoid printBackward(DNode *tail) {\n    printf(\"Backward: \");\n    while (tail) {\n        printf(\"%d <-> \", tail->data);\n        tail = tail->prev;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    DNode *head = NULL;\n    insertAtTail(&head, 10);\n    insertAtTail(&head, 20);\n    insertAtTail(&head, 30);\n    insertAtHead(&head, 5);\n\n    printForward(head);  /* Forward: 5 <-> 10 <-> 20 <-> 30 <-> NULL */\n\n    /* Delete the second node (10) */\n    deleteNode(&head, head->next);\n    printForward(head);  /* Forward: 5 <-> 20 <-> 30 <-> NULL */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Each node has both prev and next pointers",
+            "Deletion with a known node pointer is O(1) -- no need to find predecessor",
+            "Can traverse in both directions",
+            "Extra pointer per node uses more memory than singly linked list",
+            "Must update both prev and next pointers on insert/delete"
+          ],
+          "gotchas": [
+            "Forgetting to update prev pointer of the node after the new node on insertion",
+            "Deleting head requires updating the head pointer AND setting new head's prev to NULL",
+            "More pointer updates means more chances for bugs and dangling pointers",
+            "Must check for NULL before accessing prev or next (head->prev and tail->next are NULL)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Each node has `prev` and `next` pointers. Allows O(1) deletion given a node pointer and bidirectional traversal. More memory per node, more pointer updates on insert/delete.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct DNode {\n    int data;\n    struct DNode *prev;\n    struct DNode *next;\n} DNode;\n\nvoid deleteNode(DNode **head, DNode *node) {\n    if (node->prev) node->prev->next = node->next;\n    else *head = node->next;\n    if (node->next) node->next->prev = node->prev;\n    free(node);\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(1) deletion given a node pointer",
+            "Bidirectional traversal"
+          ],
+          "gotchas": [
+            "Must update both prev and next pointers on every insert/delete"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a circular linked list in C?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "circular", "ring-buffer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In a **circular linked list**, the last node's `next` pointer points back to the head instead of `NULL`. This creates a ring structure.\n\n**Use cases:**\n- Round-robin scheduling\n- Circular buffers\n- Josephus problem\n- Multiplayer game turn order\n\n**Key differences from linear lists:**\n- No `NULL` at the end -- traversal must check if you've returned to the starting node\n- Insertion/deletion must maintain the circular link\n- Can start traversal from any node and visit all nodes\n\n**Variant:** In a circular doubly linked list, `head->prev` points to the tail and `tail->next` points to the head.",
+          "pseudo_code": "InsertAtHead(head, value):\n  new = createNode(value)\n  if *head == NULL:\n    new->next = new  // points to itself\n    *head = new\n    return\n  // Find the last node\n  last = *head\n  while last->next != *head:\n    last = last->next\n  new->next = *head\n  last->next = new\n  *head = new\n\nTraverse(head):\n  if head == NULL: return\n  curr = head\n  do:\n    print(curr->data)\n    curr = curr->next\n  while curr != head",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Insert at the end of circular list */\nvoid insertEnd(Node **head, int val) {\n    Node *newNode = createNode(val);\n    if (*head == NULL) {\n        newNode->next = newNode;  /* points to itself */\n        *head = newNode;\n        return;\n    }\n    /* Find the last node */\n    Node *last = *head;\n    while (last->next != *head)\n        last = last->next;\n    last->next = newNode;\n    newNode->next = *head;\n}\n\n/* Delete a node by value */\nvoid deleteNode(Node **head, int val) {\n    if (*head == NULL) return;\n\n    Node *curr = *head;\n    Node *prev = NULL;\n\n    /* Single node case */\n    if (curr->data == val && curr->next == *head) {\n        free(curr);\n        *head = NULL;\n        return;\n    }\n\n    /* Deleting head */\n    if (curr->data == val) {\n        Node *last = *head;\n        while (last->next != *head)\n            last = last->next;\n        *head = curr->next;\n        last->next = *head;\n        free(curr);\n        return;\n    }\n\n    /* Find node to delete */\n    prev = curr;\n    curr = curr->next;\n    while (curr != *head && curr->data != val) {\n        prev = curr;\n        curr = curr->next;\n    }\n    if (curr == *head) return;  /* not found */\n\n    prev->next = curr->next;\n    free(curr);\n}\n\n/* Traverse using do-while */\nvoid printCircular(Node *head) {\n    if (head == NULL) {\n        printf(\"(empty)\\n\");\n        return;\n    }\n    Node *curr = head;\n    do {\n        printf(\"%d -> \", curr->data);\n        curr = curr->next;\n    } while (curr != head);\n    printf(\"(back to %d)\\n\", head->data);\n}\n\nint main(void) {\n    Node *head = NULL;\n    insertEnd(&head, 10);\n    insertEnd(&head, 20);\n    insertEnd(&head, 30);\n    insertEnd(&head, 40);\n\n    printCircular(head);  /* 10 -> 20 -> 30 -> 40 -> (back to 10) */\n\n    deleteNode(&head, 20);\n    printCircular(head);  /* 10 -> 30 -> 40 -> (back to 10) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Last node's next points to head (no NULL terminator)",
+            "Single node: next points to itself",
+            "Must use do-while for traversal (check after first iteration)",
+            "Useful for round-robin scheduling and circular buffers",
+            "Deletion of head requires finding and updating the last node"
+          ],
+          "gotchas": [
+            "Using while(curr->next != NULL) causes infinite loop -- there is no NULL",
+            "Traversal must use do-while or track the starting node to know when to stop",
+            "Single-node deletion (the only node) must set head to NULL",
+            "Deleting head in circular list is more complex: must update last->next"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Last node's `next` points back to head. Use `do-while` for traversal. Single node points to itself. No NULL terminator -- you stop when you return to the start.",
+          "pseudo_code": "",
+          "actual_code": "void insertEnd(Node **head, int val) {\n    Node *n = createNode(val);\n    if (!*head) { n->next = n; *head = n; return; }\n    Node *last = *head;\n    while (last->next != *head) last = last->next;\n    last->next = n;\n    n->next = *head;\n}\n\nvoid printCircular(Node *head) {\n    if (!head) return;\n    Node *c = head;\n    do {\n        printf(\"%d -> \", c->data);\n        c = c->next;\n    } while (c != head);\n    printf(\"(back to head)\\n\");\n}",
+          "code_language": "c",
+          "key_points": [
+            "No NULL at end -- last->next == head",
+            "Use do-while for traversal"
+          ],
+          "gotchas": [
+            "while(curr != NULL) causes infinite loop in a circular list"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the nth node from the end of a linked list?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "two-pointer", "nth-from-end"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Finding the nth node from the end is a classic two-pointer problem.\n\n**Two-pointer approach (single pass, O(n) time, O(1) space):**\n1. Move the `first` pointer n steps ahead\n2. Then move both `first` and `second` one step at a time\n3. When `first` reaches NULL, `second` is at the nth node from the end\n\n**Why it works:** The two pointers maintain a gap of exactly n nodes. When the leading pointer hits the end, the trailing pointer is n positions from the end.\n\n**Alternative:** Traverse once to get the length L, then traverse again to position L - n. This requires two passes.\n\n**Edge cases:** n larger than list length, n = 0, single-node list.",
+          "pseudo_code": "NthFromEnd(head, n):\n  first = head\n  second = head\n  // Move first n steps ahead\n  for i = 0 to n-1:\n    if first is NULL: return NULL  // n > length\n    first = first->next\n  // Move both until first reaches end\n  while first != NULL:\n    first = first->next\n    second = second->next\n  return second",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Find nth node from end (1-indexed: n=1 means last node) */\nNode *nthFromEnd(Node *head, int n) {\n    Node *first = head;\n    Node *second = head;\n\n    /* Move first n steps ahead */\n    for (int i = 0; i < n; i++) {\n        if (first == NULL) return NULL;  /* n > list length */\n        first = first->next;\n    }\n\n    /* Move both until first reaches NULL */\n    while (first != NULL) {\n        first = first->next;\n        second = second->next;\n    }\n\n    return second;\n}\n\nint main(void) {\n    /* Build: 10 -> 20 -> 30 -> 40 -> 50 */\n    Node *head = createNode(10);\n    head->next = createNode(20);\n    head->next->next = createNode(30);\n    head->next->next->next = createNode(40);\n    head->next->next->next->next = createNode(50);\n\n    Node *result = nthFromEnd(head, 2);  /* 2nd from end */\n    if (result)\n        printf(\"2nd from end: %d\\n\", result->data);  /* 40 */\n\n    result = nthFromEnd(head, 5);  /* 5th from end = head */\n    if (result)\n        printf(\"5th from end: %d\\n\", result->data);  /* 10 */\n\n    result = nthFromEnd(head, 6);  /* beyond list */\n    printf(\"6th from end: %s\\n\", result ? \"found\" : \"NULL\");  /* NULL */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two-pointer technique: maintain n-node gap between pointers",
+            "Single pass: O(n) time, O(1) space",
+            "1-indexed: n=1 returns the last node",
+            "First move leading pointer n steps, then move both until leader hits NULL",
+            "Alternative: two-pass method -- get length, then traverse to (length - n)"
+          ],
+          "gotchas": [
+            "Off-by-one: clarify if n is 0-indexed or 1-indexed with the interviewer",
+            "n larger than list length -- must check for NULL during the initial advance",
+            "n = 0 may be invalid depending on convention -- validate input",
+            "Single-node list with n=1 should return that node"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Two pointers with n-node gap. Move first pointer n steps ahead, then move both until first reaches NULL. Second pointer is at nth from end. O(n) time, O(1) space, single pass.",
+          "pseudo_code": "",
+          "actual_code": "Node *nthFromEnd(Node *head, int n) {\n    Node *first = head, *second = head;\n    for (int i = 0; i < n; i++) {\n        if (!first) return NULL;\n        first = first->next;\n    }\n    while (first) {\n        first = first->next;\n        second = second->next;\n    }\n    return second;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two pointers with n-node gap",
+            "O(n) time, O(1) space"
+          ],
+          "gotchas": [
+            "Off-by-one: clarify 0-indexed vs 1-indexed with interviewer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you remove duplicates from a sorted linked list?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "duplicates", "sorted"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Since the list is **sorted**, all duplicates are adjacent. Compare each node with its next node:\n- If equal, skip the next node (relink and free)\n- If not equal, advance to next\n\n**Time:** O(n), **Space:** O(1)\n\nFor an **unsorted** list, you would need either:\n- Hash set: O(n) time, O(n) space\n- Nested loops: O(n^2) time, O(1) space\n\nThe sorted variant is the most commonly asked in interviews.",
+          "pseudo_code": "RemoveDuplicates(head):\n  curr = head\n  while curr != NULL and curr->next != NULL:\n    if curr->data == curr->next->data:\n      temp = curr->next\n      curr->next = temp->next\n      free(temp)\n    else:\n      curr = curr->next",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* Remove duplicates from sorted list */\nvoid removeDuplicates(Node *head) {\n    Node *curr = head;\n    while (curr != NULL && curr->next != NULL) {\n        if (curr->data == curr->next->data) {\n            Node *temp = curr->next;\n            curr->next = temp->next;\n            free(temp);\n        } else {\n            curr = curr->next;\n        }\n    }\n}\n\n/* Remove ALL nodes that have duplicates (keep only distinct values) */\nvoid removeAllDuplicates(Node **head) {\n    Node dummy;\n    dummy.next = *head;\n    Node *prev = &dummy;\n\n    while (prev->next != NULL) {\n        Node *curr = prev->next;\n        /* Check if curr has duplicates ahead */\n        while (curr->next != NULL && curr->data == curr->next->data) {\n            Node *temp = curr->next;\n            curr->next = temp->next;\n            free(temp);\n        }\n        if (prev->next == curr) {\n            prev = curr;  /* no duplicates, advance */\n        } else {\n            prev->next = curr->next;  /* remove curr too */\n            free(curr);\n        }\n    }\n    *head = dummy.next;\n}\n\nvoid printList(Node *head) {\n    while (head) {\n        printf(\"%d -> \", head->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    /* Sorted list with duplicates: 1 -> 1 -> 2 -> 3 -> 3 -> 3 -> 4 */\n    Node *head = createNode(1);\n    head->next = createNode(1);\n    head->next->next = createNode(2);\n    head->next->next->next = createNode(3);\n    head->next->next->next->next = createNode(3);\n    head->next->next->next->next->next = createNode(3);\n    head->next->next->next->next->next->next = createNode(4);\n\n    printf(\"Before: \");\n    printList(head);  /* 1 -> 1 -> 2 -> 3 -> 3 -> 3 -> 4 -> NULL */\n\n    removeDuplicates(head);\n    printf(\"After:  \");\n    printList(head);  /* 1 -> 2 -> 3 -> 4 -> NULL */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Sorted list: duplicates are adjacent, compare curr with curr->next",
+            "Do NOT advance curr when deleting -- the new next might also be a duplicate",
+            "O(n) time, O(1) space",
+            "Variant: remove ALL occurrences of duplicated values (keep only unique)",
+            "free() each removed node to prevent memory leaks"
+          ],
+          "gotchas": [
+            "Advancing curr when deleting misses consecutive duplicates (e.g., 1->1->1)",
+            "Forgetting to free removed nodes causes memory leaks",
+            "For unsorted lists, this approach does not work -- need hash set or O(n^2)",
+            "Empty list and single-node list should be handled (the while condition handles both)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Sorted list: compare each node with its next. If equal, skip and free the duplicate. Do not advance on deletion (next might also be a duplicate). O(n) time, O(1) space.",
+          "pseudo_code": "",
+          "actual_code": "void removeDuplicates(Node *head) {\n    Node *curr = head;\n    while (curr && curr->next) {\n        if (curr->data == curr->next->data) {\n            Node *tmp = curr->next;\n            curr->next = tmp->next;\n            free(tmp);\n        } else {\n            curr = curr->next;\n        }\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "Compare adjacent nodes in sorted list",
+            "Don't advance when deleting -- next might also be duplicate"
+          ],
+          "gotchas": [
+            "Only works for sorted lists; unsorted needs hash set or O(n^2)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the intersection point of two linked lists?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "intersection", "two-pointer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Two linked lists intersect when they share a common suffix -- from some node onward, they are the same list (same physical nodes, not just same values).\n\n**Approach 1 -- Length difference (most common):**\n1. Find lengths of both lists: L1 and L2\n2. Advance the longer list's pointer by |L1 - L2| steps\n3. Move both pointers one step at a time until they meet\n\n**Approach 2 -- Two-pointer trick (elegant):**\n1. Start pointer A at head of list 1, pointer B at head of list 2\n2. When A reaches the end, redirect to head of list 2\n3. When B reaches the end, redirect to head of list 1\n4. They will meet at the intersection (or both become NULL)\n\n**Why Approach 2 works:** Both pointers traverse L1 + L2 nodes total, so they are synchronized when they enter the common suffix.\n\n**Time:** O(n + m), **Space:** O(1).",
+          "pseudo_code": "Approach 1 (Length difference):\n  lenA = length(headA)\n  lenB = length(headB)\n  Advance longer list by |lenA - lenB| steps\n  Move both forward until they meet or both are NULL\n\nApproach 2 (Redirect trick):\n  a = headA, b = headB\n  while a != b:\n    a = (a != NULL) ? a->next : headB\n    b = (b != NULL) ? b->next : headA\n  return a  // intersection or NULL",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\nint getLength(Node *head) {\n    int len = 0;\n    while (head) { len++; head = head->next; }\n    return len;\n}\n\n/* Approach 1: Length difference */\nNode *getIntersection(Node *headA, Node *headB) {\n    int lenA = getLength(headA);\n    int lenB = getLength(headB);\n\n    /* Advance the longer list */\n    while (lenA > lenB) { headA = headA->next; lenA--; }\n    while (lenB > lenA) { headB = headB->next; lenB--; }\n\n    /* Move both until they meet */\n    while (headA != headB) {\n        headA = headA->next;\n        headB = headB->next;\n    }\n    return headA;  /* NULL if no intersection */\n}\n\n/* Approach 2: Two-pointer redirect trick */\nNode *getIntersectionV2(Node *headA, Node *headB) {\n    Node *a = headA;\n    Node *b = headB;\n\n    while (a != b) {\n        a = (a != NULL) ? a->next : headB;\n        b = (b != NULL) ? b->next : headA;\n    }\n    return a;  /* intersection node or NULL */\n}\n\nint main(void) {\n    /* Common suffix: 7 -> 8 -> NULL */\n    Node *common = createNode(7);\n    common->next = createNode(8);\n\n    /* List A: 1 -> 2 -> 7 -> 8 */\n    Node *headA = createNode(1);\n    headA->next = createNode(2);\n    headA->next->next = common;\n\n    /* List B: 3 -> 4 -> 5 -> 7 -> 8 */\n    Node *headB = createNode(3);\n    headB->next = createNode(4);\n    headB->next->next = createNode(5);\n    headB->next->next->next = common;\n\n    Node *inter = getIntersection(headA, headB);\n    if (inter)\n        printf(\"Intersection at: %d\\n\", inter->data);  /* 7 */\n\n    inter = getIntersectionV2(headA, headB);\n    if (inter)\n        printf(\"Intersection (v2) at: %d\\n\", inter->data);  /* 7 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Intersection means same physical node (pointer equality), not same value",
+            "Length difference method: align starting positions, then walk together",
+            "Redirect trick: both traverse L1 + L2 total, synchronizing at intersection",
+            "O(n + m) time, O(1) space for both approaches",
+            "If no intersection, both methods return NULL"
+          ],
+          "gotchas": [
+            "Comparing data values instead of pointer addresses is a common mistake",
+            "The two lists form a Y shape after intersection -- they cannot diverge again",
+            "Approach 2 loops forever if one list has a cycle -- only works on acyclic lists",
+            "In the redirect trick, must use a != NULL (not a->next) to handle the redirect at NULL"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Two-pointer redirect: pointer A starts at list 1, pointer B at list 2. When one reaches NULL, redirect to the other list's head. They meet at the intersection (or both become NULL). O(n+m) time, O(1) space.",
+          "pseudo_code": "",
+          "actual_code": "Node *getIntersection(Node *headA, Node *headB) {\n    Node *a = headA, *b = headB;\n    while (a != b) {\n        a = a ? a->next : headB;\n        b = b ? b->next : headA;\n    }\n    return a;  /* intersection or NULL */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Both pointers traverse L1 + L2 nodes, meeting at intersection",
+            "O(n + m) time, O(1) space"
+          ],
+          "gotchas": [
+            "Compare pointer addresses, not data values"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you clone a linked list that has both next and random pointers?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "clone", "deep-copy", "random-pointer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Each node has a `next` pointer and a `random` pointer that can point to any node in the list or NULL. The goal is to create a **deep copy** where all pointers in the clone refer to the cloned nodes, not the originals.\n\n**Approach 1 -- Hash map (O(n) time, O(n) space):**\n1. Create a copy of each node and store original->copy mapping\n2. Second pass: set each copy's next and random using the map\n\n**Approach 2 -- Interleaving (O(n) time, O(1) space):**\n1. Insert cloned nodes between originals: A -> A' -> B -> B' -> C -> C'\n2. Set random pointers: `clone->random = original->random->next`\n3. Separate the two lists\n\nThe interleaving approach is the most elegant interview answer.",
+          "pseudo_code": "Interleaving approach:\nStep 1: Insert copies\n  curr = head\n  while curr:\n    copy = new Node(curr->data)\n    copy->next = curr->next\n    curr->next = copy\n    curr = copy->next\n\nStep 2: Set random pointers\n  curr = head\n  while curr:\n    clone = curr->next\n    clone->random = curr->random ? curr->random->next : NULL\n    curr = clone->next\n\nStep 3: Separate lists\n  curr = head\n  cloneHead = head->next\n  while curr:\n    clone = curr->next\n    curr->next = clone->next\n    clone->next = clone->next ? clone->next->next : NULL\n    curr = curr->next",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct RNode {\n    int data;\n    struct RNode *next;\n    struct RNode *random;\n} RNode;\n\nRNode *createRNode(int val) {\n    RNode *n = (RNode *)malloc(sizeof(RNode));\n    n->data = val;\n    n->next = NULL;\n    n->random = NULL;\n    return n;\n}\n\n/* Clone using interleaving: O(n) time, O(1) extra space */\nRNode *cloneList(RNode *head) {\n    if (head == NULL) return NULL;\n\n    /* Step 1: Insert copy after each original node */\n    RNode *curr = head;\n    while (curr != NULL) {\n        RNode *copy = createRNode(curr->data);\n        copy->next = curr->next;\n        curr->next = copy;\n        curr = copy->next;\n    }\n\n    /* Step 2: Set random pointers for copies */\n    curr = head;\n    while (curr != NULL) {\n        RNode *copy = curr->next;\n        copy->random = (curr->random != NULL) ? curr->random->next : NULL;\n        curr = copy->next;\n    }\n\n    /* Step 3: Separate the two interleaved lists */\n    RNode *cloneHead = head->next;\n    curr = head;\n    while (curr != NULL) {\n        RNode *copy = curr->next;\n        curr->next = copy->next;\n        copy->next = (copy->next != NULL) ? copy->next->next : NULL;\n        curr = curr->next;\n    }\n\n    return cloneHead;\n}\n\nvoid printRList(RNode *head) {\n    while (head) {\n        printf(\"[%d, random->%s] -> \", head->data,\n               head->random ? (char[12]){0} : \"NULL\");\n        if (head->random) printf(\"(%d) \", head->random->data);\n        head = head->next;\n    }\n    printf(\"NULL\\n\");\n}\n\nint main(void) {\n    RNode *n1 = createRNode(1);\n    RNode *n2 = createRNode(2);\n    RNode *n3 = createRNode(3);\n    n1->next = n2; n2->next = n3;\n    n1->random = n3;  /* 1's random -> 3 */\n    n2->random = n1;  /* 2's random -> 1 */\n    n3->random = n2;  /* 3's random -> 2 */\n\n    RNode *clone = cloneList(n1);\n\n    /* Verify clone is independent */\n    printf(\"Original: %d, Clone: %d\\n\", n1->data, clone->data);\n    printf(\"Same memory? %s\\n\", (n1 == clone) ? \"YES\" : \"NO\");  /* NO */\n    printf(\"Clone random: %d\\n\", clone->random->data);  /* 3 */\n    printf(\"Clone->next->random: %d\\n\", clone->next->random->data);  /* 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Three-step interleaving: insert copies, set randoms, separate lists",
+            "Interleaving achieves O(1) extra space without a hash map",
+            "clone->random = original->random->next works because copies are interleaved",
+            "Must restore the original list during the separation step",
+            "Hash map approach is simpler but uses O(n) extra space"
+          ],
+          "gotchas": [
+            "Forgetting to restore the original list in step 3 corrupts both lists",
+            "NULL checks are critical: random can be NULL, and at list end next can be NULL",
+            "In C there is no built-in hash map -- you would need to implement one or use interleaving",
+            "This is a deep copy -- modifying the clone must not affect the original"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Interleaving method: (1) insert copy after each node, (2) set random pointers using `copy->random = original->random->next`, (3) separate the lists. O(n) time, O(1) extra space.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct RNode {\n    int data;\n    struct RNode *next;\n    struct RNode *random;\n} RNode;\n\nRNode *cloneList(RNode *head) {\n    if (!head) return NULL;\n    /* Step 1: Interleave copies */\n    for (RNode *c = head; c; c = c->next->next) {\n        RNode *cp = createRNode(c->data);\n        cp->next = c->next; c->next = cp;\n    }\n    /* Step 2: Set random pointers */\n    for (RNode *c = head; c; c = c->next->next)\n        c->next->random = c->random ? c->random->next : NULL;\n    /* Step 3: Separate */\n    RNode *clone = head->next;\n    for (RNode *c = head; c; c = c->next) {\n        RNode *cp = c->next;\n        c->next = cp->next;\n        cp->next = cp->next ? cp->next->next : NULL;\n    }\n    return clone;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Three steps: interleave, set randoms, separate",
+            "O(n) time, O(1) extra space"
+          ],
+          "gotchas": [
+            "Must restore original list in step 3 or both lists are corrupted"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you properly free all nodes in a linked list to avoid memory leaks?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["linked-list", "memory-management", "free", "memory-leak"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Freeing a linked list requires careful traversal because once you `free()` a node, you cannot access its `next` pointer. You must save `next` **before** freeing.\n\n**Correct pattern:**\n1. Save `curr->next` in a temporary pointer\n2. Free `curr`\n3. Advance to the saved next pointer\n\n**Common mistakes:**\n- `free(head)` then accessing `head->next` -- undefined behavior (use-after-free)\n- Freeing only the head -- leaks all remaining nodes\n- Not setting the head pointer to NULL after freeing -- dangling pointer\n\n**For doubly linked lists:** Same principle -- save next before freeing.\n\n**For circular lists:** Must detect when you've gone around the full circle.",
+          "pseudo_code": "FreeList(head):\n  curr = *head\n  while curr != NULL:\n    next = curr->next   // save before free\n    free(curr)\n    curr = next\n  *head = NULL           // prevent dangling pointer",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\nNode *createNode(int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = NULL;\n    return n;\n}\n\n/* CORRECT: Free all nodes safely */\nvoid freeList(Node **head) {\n    Node *curr = *head;\n    while (curr != NULL) {\n        Node *next = curr->next;  /* save next BEFORE freeing */\n        free(curr);\n        curr = next;\n    }\n    *head = NULL;  /* prevent dangling pointer */\n}\n\n/* WRONG: use-after-free bug */\nvoid freeListBUGGY(Node *head) {\n    while (head != NULL) {\n        free(head);          /* freed! */\n        head = head->next;   /* BUG: accessing freed memory */\n    }\n}\n\n/* Free circular linked list */\nvoid freeCircularList(Node **head) {\n    if (*head == NULL) return;\n\n    Node *curr = (*head)->next;\n    while (curr != *head) {\n        Node *next = curr->next;\n        free(curr);\n        curr = next;\n    }\n    free(*head);  /* free the head last */\n    *head = NULL;\n}\n\nint main(void) {\n    /* Build list */\n    Node *head = createNode(1);\n    head->next = createNode(2);\n    head->next->next = createNode(3);\n\n    printf(\"Before free: head = %p\\n\", (void *)head);\n\n    freeList(&head);\n\n    printf(\"After free: head = %p\\n\", (void *)head);  /* (nil) / 0x0 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Save next pointer BEFORE calling free() on the current node",
+            "Set head to NULL after freeing to avoid dangling pointer",
+            "Pass Node **head so the caller's pointer gets NULLed",
+            "For circular lists, stop when you return to the starting node",
+            "Use valgrind to verify all nodes are freed (no leaks)"
+          ],
+          "gotchas": [
+            "Accessing node->next after free(node) is undefined behavior (use-after-free)",
+            "Freeing only the head node leaks the rest of the list",
+            "Not NULLing the head pointer after freeing leaves a dangling pointer",
+            "Double-free: calling freeList twice on the same list without NULLing head crashes",
+            "In circular lists, naive traversal with while(curr != NULL) never terminates"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Save `curr->next` before calling `free(curr)`, then advance. Set head to NULL after freeing all nodes to prevent dangling pointer.",
+          "pseudo_code": "",
+          "actual_code": "void freeList(Node **head) {\n    Node *curr = *head;\n    while (curr) {\n        Node *next = curr->next;\n        free(curr);\n        curr = next;\n    }\n    *head = NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Save next before free, NULL out head after",
+            "Pass Node **head to NULL the caller's pointer"
+          ],
+          "gotchas": [
+            "Accessing node->next after free(node) is undefined behavior"
+          ]
+        }
+      ]
+    }
+  ]
+}

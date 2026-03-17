@@ -1,0 +1,635 @@
+{
+  "concept_slug": "arrays-strings",
+  "questions": [
+    {
+      "title": "How do you declare and initialize a 1D array in C?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["array", "declaration", "initialization", "1D-array"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Array declaration:** `type name[SIZE];` creates a fixed-size contiguous block of memory.\n\n**Initialization methods:**\n1. `int arr[5] = {1, 2, 3, 4, 5};` -- explicit values.\n2. `int arr[5] = {1, 2};` -- partial init, rest is zero: `{1, 2, 0, 0, 0}`.\n3. `int arr[5] = {0};` -- all zeros.\n4. `int arr[] = {1, 2, 3};` -- size deduced from initializer (3 elements).\n5. `int arr[5];` -- uninitialized (garbage values for local arrays).\n6. C99 designated initializers: `int arr[5] = {[2] = 42, [4] = 99};`.\n\n**Key facts:**\n- Array size must be a compile-time constant in C89 (VLAs allowed in C99).\n- Array indices start at 0.\n- No bounds checking -- accessing out-of-bounds is undefined behavior.\n- Arrays cannot be assigned to each other: `arr2 = arr1;` is illegal.",
+          "pseudo_code": "1. int arr[5];               // uninitialized\n2. int arr[5] = {1,2,3,4,5}; // explicit\n3. int arr[5] = {0};          // all zeros\n4. int arr[] = {1,2,3};       // size = 3 (deduced)\n5. int arr[5] = {[2]=42};     // designated init (C99)\n6. Access: arr[i], indices 0 to SIZE-1\n7. No bounds checking in C",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Full initialization */\n    int a[5] = {10, 20, 30, 40, 50};\n\n    /* Partial: rest is zero */\n    int b[5] = {1, 2};\n    /* b = {1, 2, 0, 0, 0} */\n\n    /* Size deduced from initializer */\n    int c[] = {100, 200, 300};\n    printf(\"c has %zu elements\\n\", sizeof(c) / sizeof(c[0])); /* 3 */\n\n    /* All zeros */\n    int d[5] = {0};\n\n    /* C99 designated initializers */\n    int e[5] = {[1] = 10, [3] = 30};\n    /* e = {0, 10, 0, 30, 0} */\n\n    /* Print arrays */\n    for (int i = 0; i < 5; i++) {\n        printf(\"a[%d]=%d  b[%d]=%d  d[%d]=%d  e[%d]=%d\\n\",\n               i, a[i], i, b[i], i, d[i], i, e[i]);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array indices start at 0; last valid index is SIZE-1",
+            "Partial initialization zero-fills remaining elements",
+            "int arr[] = {...} deduces size from initializer",
+            "No bounds checking -- out-of-bounds access is UB",
+            "Arrays cannot be assigned: arr2 = arr1 is illegal"
+          ],
+          "gotchas": [
+            "Local uninitialized arrays contain garbage values",
+            "Accessing arr[SIZE] (one past the end) is undefined behavior",
+            "arr = arr2 does not copy arrays; use memcpy() instead",
+            "VLAs (int arr[n] where n is a variable) are optional in C11 and not allowed in C89"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Declare: `int arr[5]`. Initialize: `= {1,2,3,4,5}`, `= {0}` for all zeros, or `= {1,2}` (rest zero). Size deduced with `int arr[] = {1,2,3}`. No bounds checking. Cannot assign arrays.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int arr[] = {10, 20, 30};\n    int n = sizeof(arr) / sizeof(arr[0]); /* 3 */\n    for (int i = 0; i < n; i++) printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "= {0} zeros all elements",
+            "sizeof(arr)/sizeof(arr[0]) gives element count"
+          ],
+          "gotchas": [
+            "Out-of-bounds access is undefined behavior, not an error"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How are 2D arrays stored in memory (row-major order)?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["2D-array", "row-major", "memory-layout"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In C, 2D arrays are stored in **row-major order**: all elements of row 0 come first, then row 1, then row 2, etc.\n\nFor `int m[3][4]`, the memory layout is:\n`m[0][0] m[0][1] m[0][2] m[0][3] m[1][0] m[1][1] ... m[2][3]`\n\n**Address formula:** `&m[i][j] = base + (i * num_cols + j) * sizeof(element)`\n\n**Why row-major matters:**\n- Accessing `m[i][j]` with `i` in the outer loop and `j` in the inner loop is cache-friendly (sequential memory access).\n- Column-major traversal (`j` outer, `i` inner) causes cache misses on every access.\n\n**Initialization:**\n- `int m[2][3] = {{1,2,3}, {4,5,6}};`\n- `int m[2][3] = {1,2,3,4,5,6};` -- same thing (fills row by row).\n- `int m[][3] = {{1,2,3}, {4,5,6}};` -- first dimension can be omitted.",
+          "pseudo_code": "Memory layout for int m[R][C]:\n  Row 0: m[0][0], m[0][1], ..., m[0][C-1]\n  Row 1: m[1][0], m[1][1], ..., m[1][C-1]\n  ...\n  Address: base + (i*C + j) * sizeof(int)\n\nRow-major: rows stored contiguously\nCache-friendly: for(i) for(j) m[i][j]  (GOOD)\nCache-hostile: for(j) for(i) m[i][j]  (BAD)",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int m[3][4] = {\n        {1,  2,  3,  4},\n        {5,  6,  7,  8},\n        {9, 10, 11, 12}\n    };\n\n    /* Print matrix */\n    for (int i = 0; i < 3; i++) {\n        for (int j = 0; j < 4; j++) {\n            printf(\"%3d\", m[i][j]);\n        }\n        printf(\"\\n\");\n    }\n\n    /* Verify row-major layout */\n    int *p = &m[0][0];\n    printf(\"\\nFlat memory: \");\n    for (int k = 0; k < 12; k++) {\n        printf(\"%d \", p[k]);\n    }\n    printf(\"\\n\"); /* 1 2 3 4 5 6 7 8 9 10 11 12 */\n\n    /* Address arithmetic */\n    printf(\"&m[0][0] = %p\\n\", (void *)&m[0][0]);\n    printf(\"&m[1][0] = %p\\n\", (void *)&m[1][0]);\n    printf(\"Difference: %td bytes\\n\",\n           (char *)&m[1][0] - (char *)&m[0][0]); /* 16 = 4*sizeof(int) */\n\n    /* First dimension can be omitted */\n    int n[][3] = {{1,2,3}, {4,5,6}};\n    printf(\"rows = %zu\\n\", sizeof(n) / sizeof(n[0])); /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C uses row-major order: rows are stored contiguously",
+            "Traverse with outer row loop, inner column loop for cache performance",
+            "Address: base + (i * cols + j) * sizeof(element)",
+            "First dimension can be omitted in initialization",
+            "2D array is really a 1D array of rows"
+          ],
+          "gotchas": [
+            "Column-major traversal can be 10x slower due to cache misses",
+            "2D arrays and pointer-to-pointer (int**) are NOT the same thing",
+            "Passing 2D arrays to functions requires specifying the column count: void f(int m[][COLS])",
+            "int m[3][4] is NOT the same as int *m[3] (array of pointers vs 2D array)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C stores 2D arrays in row-major order: all of row 0, then row 1, etc. Access `m[i][j]` with i outer, j inner for cache performance. Address: `base + (i*cols + j)*sizeof(elem)`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int m[2][3] = {{1,2,3},{4,5,6}};\n    int *flat = &m[0][0];\n    for (int i = 0; i < 6; i++) printf(\"%d \", flat[i]);\n    /* 1 2 3 4 5 6 (row-major) */\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Row-major: rows stored contiguously",
+            "Outer row, inner column for cache performance"
+          ],
+          "gotchas": [
+            "int m[3][4] is NOT the same as int **m"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is array decay to pointer and when does it happen?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["array-decay", "pointer", "implicit-conversion"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In most expressions, an array name **decays** (is implicitly converted) to a pointer to its first element.\n\n**When decay happens:**\n- Passing an array to a function.\n- Using an array in arithmetic expressions.\n- Assigning an array to a pointer variable.\n\n**When decay does NOT happen (3 exceptions):**\n1. `sizeof(arr)` -- gives the array size, not the pointer size.\n2. `&arr` -- gives a pointer to the entire array (`int (*)[N]`), not `int *`.\n3. String literal used to initialize a char array: `char s[] = \"hello\";`.\n\n**Consequence:** When you pass an array to a function, you lose the size information. The function receives just a pointer. That is why C functions typically require a separate `size` parameter.",
+          "pseudo_code": "int arr[5];\narr         -> decays to int* (pointer to arr[0])\nsizeof(arr) -> 20 (no decay! gives array size)\n&arr        -> int (*)[5] (no decay! pointer to whole array)\n\nIn function parameter:\n  void f(int arr[]) is actually void f(int *arr)\n  sizeof(arr) inside f gives pointer size, not array size",
+          "actual_code": "#include <stdio.h>\n\nvoid print_size(int arr[]) {\n    /* arr has decayed to pointer */\n    printf(\"Inside function: sizeof(arr) = %zu\\n\", sizeof(arr));\n    /* 8 on 64-bit (pointer size, NOT array size) */\n}\n\nint main(void) {\n    int arr[5] = {1, 2, 3, 4, 5};\n\n    /* No decay: sizeof gives array size */\n    printf(\"sizeof(arr) = %zu\\n\", sizeof(arr)); /* 20 */\n\n    /* Decay: array name becomes pointer */\n    int *p = arr;  /* arr decays to &arr[0] */\n    printf(\"*p = %d\\n\", *p); /* 1 */\n\n    /* No decay: &arr gives pointer to entire array */\n    int (*ap)[5] = &arr;  /* pointer to array of 5 ints */\n    printf(\"sizeof(*ap) = %zu\\n\", sizeof(*ap)); /* 20 */\n\n    /* Decay in function call */\n    print_size(arr); /* arr decays to pointer */\n\n    /* arr and &arr have same address but different types */\n    printf(\"arr    = %p\\n\", (void *)arr);    /* pointer to first element */\n    printf(\"&arr   = %p\\n\", (void *)&arr);   /* pointer to whole array */\n    printf(\"Same address? %d\\n\", (void *)arr == (void *)&arr); /* 1 (yes) */\n    /* But: arr+1 advances by sizeof(int); &arr+1 advances by sizeof(arr) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array name decays to pointer to first element in most contexts",
+            "Three exceptions: sizeof, &, and string literal initialization",
+            "Function parameters int arr[] and int *arr are identical",
+            "After decay, size information is lost",
+            "arr and &arr have the same address but different types"
+          ],
+          "gotchas": [
+            "sizeof(arr) in a function parameter gives pointer size, not array size",
+            "You cannot return an array from a function (it would return a dangling pointer)",
+            "arr + 1 points to arr[1]; &arr + 1 points past the entire array",
+            "void f(int arr[100]) does NOT enforce the size -- arr is still just a pointer"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Array names decay to pointers to the first element in most contexts. Exceptions: `sizeof(arr)`, `&arr`, and string literal initialization. In function parameters, `int arr[]` is just `int *ptr`. Size information is lost after decay.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nvoid f(int arr[]) { /* arr is just int* here */\n    printf(\"%zu\\n\", sizeof(arr)); /* pointer size (8) */\n}\nint main(void) {\n    int arr[5] = {0};\n    printf(\"%zu\\n\", sizeof(arr)); /* 20 (array size) */\n    f(arr); /* decay happens here */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array decays to pointer in most contexts",
+            "sizeof, &, and string init are the exceptions"
+          ],
+          "gotchas": [
+            "void f(int arr[100]) -- the 100 is ignored; arr is just a pointer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between string literals and char arrays?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["string-literal", "char-array", "strings", "read-only"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**String literal:** `\"hello\"` is stored in read-only memory. A pointer to it (`char *s = \"hello\"`) points to this read-only data. Modifying it is **undefined behavior**.\n\n**Char array:** `char s[] = \"hello\"` copies the string into a stack-allocated (or global) array. You CAN modify this copy.\n\n**Key differences:**\n\n| Feature | `char *s = \"hello\"` | `char s[] = \"hello\"` |\n|---------|---------------------|----------------------|\n| Storage | pointer to read-only | array on stack |\n| Modifiable | NO (UB) | YES |\n| sizeof(s) | pointer size (8) | 6 (5 chars + null) |\n| Reassignable | YES (s = \"world\") | NO (array name) |",
+          "pseudo_code": "char *s = \"hello\";    // pointer to read-only string literal\nchar s[] = \"hello\";   // array initialized with copy of string\n\nPointer version: s points to read-only memory, s is reassignable\nArray version: s IS the memory, s is modifiable, s is not reassignable\n\nModifying a string literal = undefined behavior\nModifying a char array = perfectly fine",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* String literal: pointer to read-only memory */\n    const char *literal = \"hello\";  /* use const for safety */\n    printf(\"%s, sizeof(literal)=%zu\\n\", literal, sizeof(literal)); /* 8 (ptr) */\n    /* literal[0] = 'H';  // UB! Do NOT modify string literals */\n\n    /* Char array: modifiable copy */\n    char array[] = \"hello\";\n    printf(\"%s, sizeof(array)=%zu\\n\", array, sizeof(array)); /* 6 (5+null) */\n    array[0] = 'H';  /* OK -- this is a modifiable copy */\n    printf(\"Modified: %s\\n\", array); /* Hello */\n\n    /* Pointer can be reassigned; array cannot */\n    literal = \"world\";  /* OK -- pointer now points elsewhere */\n    /* array = \"world\";  // ERROR: array name is not assignable */\n\n    /* String literals may be shared by the compiler */\n    const char *s1 = \"hello\";\n    const char *s2 = \"hello\";\n    printf(\"Same address? %d\\n\", s1 == s2); /* may be 1 (shared) */\n\n    /* Array is always a unique copy */\n    char a1[] = \"hello\";\n    char a2[] = \"hello\";\n    printf(\"Same address? %d\\n\", a1 == a2); /* always 0 (different) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "String literals are read-only; char arrays are modifiable",
+            "char *s = \"...\" is a pointer to read-only data; char s[] = \"...\" is a copy",
+            "sizeof(char*) is pointer size; sizeof(char[]) includes null terminator",
+            "Always use const char * for string literal pointers",
+            "Two identical string literals may share the same memory (compiler optimization)"
+          ],
+          "gotchas": [
+            "Modifying a string literal (char *s = \"hi\"; s[0] = 'H';) is undefined behavior",
+            "char *s = \"hello\" should be const char *s = \"hello\" for safety",
+            "sizeof(\"hello\") is 6 (includes null), strlen(\"hello\") is 5 (excludes null)",
+            "String literals persist for the entire program lifetime; stack arrays do not"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`char *s = \"hello\"` points to read-only memory. `char s[] = \"hello\"` is a modifiable copy. Modifying a string literal is UB. Use `const char *` for literal pointers.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    const char *lit = \"hello\"; /* read-only */\n    char arr[] = \"hello\";     /* modifiable copy */\n    arr[0] = 'H';\n    printf(\"%s %s\\n\", lit, arr); /* hello Hello */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Literal = read-only; array = modifiable copy",
+            "Use const char * for string literals"
+          ],
+          "gotchas": [
+            "Modifying a string literal is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why is the null terminator important in C strings?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["null-terminator", "strings", "buffer-overflow"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C strings are simply arrays of `char` terminated by a null byte (`'\\0'`, value 0). There is no length metadata stored with the string. Every string function relies on finding `'\\0'` to know where the string ends.\n\n**Why it matters:**\n- `strlen()` counts characters until it finds `'\\0'`.\n- `printf(\"%s\")` prints until `'\\0'`.\n- Missing null terminator: functions read past the array into unknown memory -- **undefined behavior**, potential security vulnerability.\n\n**The null terminator takes space:** `\"hello\"` requires 6 bytes (5 characters + `'\\0'`). A buffer for an N-character string must be at least N+1 bytes.\n\n**`'\\0'` vs NULL vs 0:**\n- `'\\0'` = character with value 0 (null terminator).\n- `NULL` = null pointer constant.\n- `0` = integer zero.\nAll have value 0, but they are used in different contexts.",
+          "pseudo_code": "\"hello\" in memory: ['h', 'e', 'l', 'l', 'o', '\\0']\n                    0     1    2    3    4     5\n\nstrlen(\"hello\") = 5 (does not count '\\0')\nsizeof(\"hello\") = 6 (includes '\\0')\n\nBuffer for N-char string needs N+1 bytes\nMissing '\\0' -> strlen/printf read past the array (UB)",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Null terminator included automatically */\n    char s[] = \"hello\";\n    printf(\"strlen = %zu\\n\", strlen(s));  /* 5 */\n    printf(\"sizeof = %zu\\n\", sizeof(s));  /* 6 */\n    printf(\"last byte = %d\\n\", s[5]);     /* 0 (null terminator) */\n\n    /* Manual string construction -- must add null terminator! */\n    char manual[6];\n    manual[0] = 'h';\n    manual[1] = 'e';\n    manual[2] = 'l';\n    manual[3] = 'l';\n    manual[4] = 'o';\n    manual[5] = '\\0';  /* CRITICAL: without this, strlen etc. are UB */\n    printf(\"manual: %s\\n\", manual); /* hello */\n\n    /* What happens without null terminator */\n    char bad[5] = {'h', 'e', 'l', 'l', 'o'}; /* NO null terminator */\n    printf(\"strlen = %zu\\n\", strlen(bad)); /* UNDEFINED: reads past array */\n    /* May print garbage after \"hello\", may crash */\n\n    /* Buffer sizing: always +1 for null terminator */\n    char buf[11]; /* can hold 10 chars + null */\n    strncpy(buf, \"0123456789\", sizeof(buf) - 1);\n    buf[sizeof(buf) - 1] = '\\0'; /* ensure termination */\n    printf(\"%s\\n\", buf);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C strings are null-terminated: '\\0' marks the end",
+            "strlen counts chars before '\\0'; sizeof includes it",
+            "Buffer for N chars needs N+1 bytes",
+            "Missing null terminator causes undefined behavior",
+            "Always ensure null termination after manual string operations"
+          ],
+          "gotchas": [
+            "char s[5] = \"hello\" has no room for null terminator -- s is NOT a valid string",
+            "strncpy does NOT guarantee null termination if source >= n chars",
+            "memset(buf, 0, sizeof(buf)) is a safe way to ensure null termination",
+            "String functions can read/write past the buffer if null terminator is missing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C strings end with `'\\0'`. All string functions depend on it. Missing null terminator = UB. Buffer for N chars needs N+1 bytes. `strlen` excludes it; `sizeof` includes it.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    char s[] = \"hello\"; /* {'h','e','l','l','o','\\0'} */\n    printf(\"len=%zu size=%zu\\n\", strlen(s), sizeof(s)); /* 5, 6 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Null terminator marks end of string",
+            "Buffer needs N+1 bytes for N-char string"
+          ],
+          "gotchas": [
+            "strncpy may not null-terminate -- always add '\\0' manually"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do the key string.h functions work (strlen, strcpy, strncpy, strcat, strcmp, strstr)?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["string-functions", "string.h", "strlen", "strcpy", "strcmp"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `<string.h>` library provides essential string manipulation functions:\n\n**`strlen(s)`** -- returns length (chars before `'\\0'`). O(n).\n\n**`strcpy(dst, src)`** -- copies src to dst including `'\\0'`. No bounds checking. Buffer overflow risk.\n\n**`strncpy(dst, src, n)`** -- copies at most n chars. If src < n, pads with zeros. If src >= n, does NOT null-terminate!\n\n**`strcat(dst, src)`** -- appends src to end of dst. dst must have enough space.\n\n**`strcmp(s1, s2)`** -- compares lexicographically. Returns <0, 0, or >0. Use this, not `==` for strings.\n\n**`strstr(haystack, needle)`** -- finds first occurrence of needle in haystack. Returns pointer or NULL.",
+          "pseudo_code": "strlen(s)           -> count chars before '\\0'\nstrcpy(dst, src)    -> copy src into dst (including '\\0')\nstrncpy(dst, src, n) -> copy up to n chars (may NOT null-terminate!)\nstrcat(dst, src)    -> append src to dst\nstrcmp(s1, s2)      -> <0 if s1<s2, 0 if equal, >0 if s1>s2\nstrstr(hay, needle) -> pointer to first occurrence, or NULL",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* strlen */\n    printf(\"strlen(\\\"hello\\\") = %zu\\n\", strlen(\"hello\")); /* 5 */\n\n    /* strcpy */\n    char buf[20];\n    strcpy(buf, \"hello\");\n    printf(\"strcpy: %s\\n\", buf); /* hello */\n\n    /* strncpy -- CAUTION: may not null-terminate */\n    char safe[6];\n    strncpy(safe, \"hello world\", sizeof(safe) - 1);\n    safe[sizeof(safe) - 1] = '\\0'; /* always null-terminate */\n    printf(\"strncpy: %s\\n\", safe); /* hello */\n\n    /* strcat */\n    char greeting[30] = \"Hello\";\n    strcat(greeting, \", \");\n    strcat(greeting, \"World!\");\n    printf(\"strcat: %s\\n\", greeting); /* Hello, World! */\n\n    /* strcmp */\n    printf(\"strcmp(\\\"abc\\\",\\\"abd\\\") = %d\\n\", strcmp(\"abc\", \"abd\")); /* < 0 */\n    printf(\"strcmp(\\\"abc\\\",\\\"abc\\\") = %d\\n\", strcmp(\"abc\", \"abc\")); /* 0 */\n    printf(\"strcmp(\\\"abd\\\",\\\"abc\\\") = %d\\n\", strcmp(\"abd\", \"abc\")); /* > 0 */\n\n    /* strstr */\n    const char *text = \"Hello, World!\";\n    const char *found = strstr(text, \"World\");\n    if (found) {\n        printf(\"Found at offset %td\\n\", found - text); /* 7 */\n    }\n\n    /* strstr not found */\n    if (strstr(text, \"xyz\") == NULL) {\n        printf(\"'xyz' not found\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use strcmp() for string comparison, NEVER == (that compares pointers)",
+            "strcpy has no bounds checking -- prefer strncpy or snprintf",
+            "strncpy may NOT null-terminate -- always add '\\0' manually",
+            "strlen is O(n) -- cache the result in loops",
+            "strstr returns NULL if not found"
+          ],
+          "gotchas": [
+            "s1 == s2 compares pointer addresses, not string contents -- always use strcmp()",
+            "strncpy does NOT null-terminate if source length >= n -- a major pitfall",
+            "strcpy/strcat with insufficient buffer space cause buffer overflow (security vulnerability)",
+            "strlen does NOT count the null terminator"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`strlen` = length. `strcpy` = copy (unsafe). `strncpy` = bounded copy (may not null-terminate!). `strcat` = append. `strcmp` = compare (use instead of ==). `strstr` = find substring.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    char buf[20];\n    strcpy(buf, \"hello\");\n    strcat(buf, \" world\");\n    printf(\"%s (len=%zu)\\n\", buf, strlen(buf)); /* hello world (len=11) */\n    printf(\"cmp=%d\\n\", strcmp(\"abc\", \"abc\")); /* 0 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use strcmp, not == for string comparison",
+            "strncpy may not null-terminate"
+          ],
+          "gotchas": [
+            "== compares pointers, not string content"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are buffer overflow risks with string functions?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["buffer-overflow", "security", "strcpy", "gets"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Buffer overflow** occurs when a program writes data beyond the bounds of a buffer. In C, this is undefined behavior and a major security vulnerability.\n\n**Dangerous functions:**\n- `gets()` -- reads a line with NO length limit. REMOVED in C11. Never use it.\n- `strcpy()` -- no bounds checking.\n- `strcat()` -- no bounds checking.\n- `sprintf()` -- no output limit.\n- `scanf(\"%s\")` -- no input limit.\n\n**Safe alternatives:**\n- `fgets(buf, size, stdin)` -- limits input to `size - 1` characters.\n- `strncpy(dst, src, n)` + manual null termination.\n- `snprintf(buf, size, fmt, ...)` -- limits output.\n- `strncat(dst, src, n)` -- limits append.\n\n**Why it matters:** Buffer overflows can overwrite return addresses on the stack, enabling attackers to execute arbitrary code (stack smashing).",
+          "pseudo_code": "DANGEROUS:                    SAFE:\ngets(buf)                  -> fgets(buf, size, stdin)\nstrcpy(dst, src)           -> strncpy(dst, src, size); dst[size-1]='\\0'\nsprintf(buf, fmt, ...)     -> snprintf(buf, size, fmt, ...)\nscanf(\"%s\", buf)           -> scanf(\"%99s\", buf)  // limit width\nstrcat(dst, src)           -> strncat(dst, src, remaining_space)",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    char buf[10];\n\n    /* DANGEROUS: strcpy with no bounds check */\n    /* strcpy(buf, \"this is way too long for buf\"); // buffer overflow! */\n\n    /* SAFE: strncpy with manual null termination */\n    strncpy(buf, \"this is way too long\", sizeof(buf) - 1);\n    buf[sizeof(buf) - 1] = '\\0';\n    printf(\"strncpy: '%s'\\n\", buf); /* 'this is w' */\n\n    /* SAFE: snprintf limits output */\n    snprintf(buf, sizeof(buf), \"%s %s\", \"hello\", \"world\");\n    printf(\"snprintf: '%s'\\n\", buf); /* 'hello wor' */\n\n    /* DANGEROUS: gets() -- NEVER use */\n    /* char line[10];\n       gets(line);  // removed in C11, can overflow */\n\n    /* SAFE: fgets limits input */\n    printf(\"Enter text: \");\n    /* fgets(buf, sizeof(buf), stdin); */\n    /* fgets reads at most sizeof(buf)-1 chars and null-terminates */\n\n    /* SAFE: scanf with width specifier */\n    /* scanf(\"%9s\", buf);  // reads at most 9 chars */\n\n    /* DANGEROUS: sprintf */\n    /* sprintf(buf, \"%d + %d = %d\", 100000, 200000, 300000); // overflow! */\n\n    /* SAFE: snprintf */\n    int written = snprintf(buf, sizeof(buf), \"%d\", 123456789);\n    printf(\"snprintf: '%s' (would need %d chars)\\n\", buf, written);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never use gets() -- it was removed from C11 for a reason",
+            "Use fgets() instead of gets() for safe input",
+            "Use snprintf() instead of sprintf() for safe formatting",
+            "Always pass buffer size to string functions",
+            "Buffer overflows are the #1 security vulnerability in C programs"
+          ],
+          "gotchas": [
+            "gets() has NO way to prevent buffer overflow -- it must never be used",
+            "strncpy does not null-terminate if source >= n characters",
+            "snprintf returns the number of chars that WOULD have been written, not what was written",
+            "fgets() includes the newline character in the buffer -- strip it if needed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Never use `gets()`, unbounded `strcpy`, `sprintf`, or `scanf(\"%s\")`. Use `fgets`, `strncpy`+null-terminate, `snprintf`, and `scanf(\"%Ns\")` instead. Buffer overflow = security vulnerability.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    char buf[10];\n    /* SAFE */\n    snprintf(buf, sizeof(buf), \"%s\", \"hello world\");\n    printf(\"'%s'\\n\", buf); /* 'hello wor' */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never use gets(); use fgets() instead",
+            "snprintf is the safe sprintf"
+          ],
+          "gotchas": [
+            "gets() was removed from C11 -- it has no safe usage"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between gets() and fgets()?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["gets", "fgets", "input", "safety"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`gets(buf)`:** Reads a line from stdin into buf with NO size limit. Cannot prevent buffer overflow. Was deprecated in C99 and **removed entirely in C11**. Never use it.\n\n**`fgets(buf, size, stream)`:** Reads at most `size - 1` characters from stream into buf. Always null-terminates. Stops at newline (which IS included in the buffer) or EOF.\n\n**Key differences:**\n- `gets()` does not know the buffer size -- inherently unsafe.\n- `fgets()` requires the buffer size -- safe by design.\n- `fgets()` retains the newline character; `gets()` strips it.\n- `fgets()` works with any FILE* (stdin, files); `gets()` only works with stdin.",
+          "pseudo_code": "gets(buf):              // NEVER USE\n  - No size limit\n  - Strips newline\n  - Only stdin\n  - REMOVED in C11\n\nfgets(buf, size, stream):  // ALWAYS USE\n  - Reads at most size-1 chars\n  - Always null-terminates\n  - Keeps newline in buffer\n  - Works with any FILE*",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nvoid strip_newline(char *s) {\n    size_t len = strlen(s);\n    if (len > 0 && s[len - 1] == '\\n') {\n        s[len - 1] = '\\0';\n    }\n}\n\nint main(void) {\n    char buf[20];\n\n    /* NEVER: gets(buf); -- removed in C11 */\n\n    /* CORRECT: fgets with size limit */\n    printf(\"Enter name: \");\n    if (fgets(buf, sizeof(buf), stdin) != NULL) {\n        strip_newline(buf);  /* remove trailing newline */\n        printf(\"Hello, %s!\\n\", buf);\n    }\n\n    /* fgets returns NULL on EOF or error */\n    /* Reading from file */\n    FILE *fp = fopen(\"/dev/null\", \"r\");\n    if (fp) {\n        if (fgets(buf, sizeof(buf), fp) == NULL) {\n            printf(\"EOF or error\\n\");\n        }\n        fclose(fp);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never use gets() -- it was removed from C11",
+            "fgets() limits input to size-1 characters and null-terminates",
+            "fgets() keeps the newline -- strip it manually if needed",
+            "fgets() returns NULL on EOF or error",
+            "fgets() works with any FILE*, not just stdin"
+          ],
+          "gotchas": [
+            "fgets() includes the newline in the buffer -- often need to strip it",
+            "If input exceeds size-1, fgets() leaves the rest in the input buffer for the next read",
+            "fgets() returns NULL on EOF AND on error -- check ferror() to distinguish",
+            "gets() cannot be made safe -- there is no version with a size parameter"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`gets()` reads with no limit (removed in C11). `fgets(buf, size, stdin)` reads at most size-1 chars and null-terminates. `fgets` keeps the newline. Always use `fgets`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    char buf[20];\n    if (fgets(buf, sizeof(buf), stdin)) {\n        buf[strcspn(buf, \"\\n\")] = '\\0'; /* strip newline */\n        printf(\"Got: '%s'\\n\", buf);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always fgets, never gets",
+            "strcspn trick to strip newline"
+          ],
+          "gotchas": [
+            "fgets keeps the newline character in the buffer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you reverse a string in C?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["string-reversal", "algorithm", "in-place"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "String reversal is a classic interview problem. The most efficient approach is **in-place reversal** using two pointers (or indices) that start at opposite ends and swap characters moving inward.\n\n**Algorithm:**\n1. Set `left = 0` and `right = strlen(s) - 1`.\n2. While `left < right`: swap `s[left]` and `s[right]`, increment left, decrement right.\n3. Time: O(n), Space: O(1).\n\n**Important:** You can only reverse modifiable strings (char arrays), NOT string literals.",
+          "pseudo_code": "1. left = 0, right = len - 1\n2. while (left < right):\n     swap(s[left], s[right])\n     left++\n     right--\n3. Time: O(n), Space: O(1)\n4. String must be modifiable (char array, not literal)",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nvoid reverse_string(char *s) {\n    int left = 0;\n    int right = (int)strlen(s) - 1;\n    while (left < right) {\n        char temp = s[left];\n        s[left] = s[right];\n        s[right] = temp;\n        left++;\n        right--;\n    }\n}\n\n/* Recursive version */\nvoid reverse_recursive(char *s, int left, int right) {\n    if (left >= right) return;\n    char temp = s[left];\n    s[left] = s[right];\n    s[right] = temp;\n    reverse_recursive(s, left + 1, right - 1);\n}\n\nint main(void) {\n    char s1[] = \"hello\";\n    reverse_string(s1);\n    printf(\"%s\\n\", s1); /* olleh */\n\n    char s2[] = \"abcdef\";\n    reverse_recursive(s2, 0, (int)strlen(s2) - 1);\n    printf(\"%s\\n\", s2); /* fedcba */\n\n    char s3[] = \"a\";\n    reverse_string(s3);\n    printf(\"%s\\n\", s3); /* a (single char) */\n\n    char s4[] = \"\";\n    reverse_string(s4);\n    printf(\"'%s'\\n\", s4); /* '' (empty string) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two-pointer swap from ends toward middle: O(n) time, O(1) space",
+            "Works for empty strings and single characters",
+            "Must use a modifiable char array, not a string literal",
+            "The recursive version uses O(n) stack space",
+            "Can also use XOR swap: a^=b; b^=a; a^=b; (but less readable)"
+          ],
+          "gotchas": [
+            "Cannot reverse a string literal: char *s = \"hello\"; reverse(s); is UB",
+            "strlen returns size_t (unsigned); casting to int avoids issues with empty strings",
+            "For UTF-8 multi-byte characters, byte-level reversal corrupts the string",
+            "XOR swap fails if both pointers point to the same location"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Swap characters from both ends moving inward. O(n) time, O(1) space. Use char array (not literal). Two-pointer approach with left/right indices.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nvoid reverse(char *s) {\n    int l = 0, r = (int)strlen(s) - 1;\n    while (l < r) {\n        char t = s[l]; s[l] = s[r]; s[r] = t;\n        l++; r--;\n    }\n}\nint main(void) {\n    char s[] = \"hello\";\n    reverse(s);\n    printf(\"%s\\n\", s); /* olleh */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two pointers, swap from ends",
+            "O(n) time, O(1) space"
+          ],
+          "gotchas": [
+            "Cannot reverse a string literal (read-only memory)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a string is a palindrome?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["palindrome", "algorithm", "string"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **palindrome** reads the same forwards and backwards (e.g., \"racecar\", \"madam\").\n\n**Algorithm:**\n1. Compare characters from both ends moving inward.\n2. If any pair differs, it is not a palindrome.\n3. If all pairs match (or pointers cross), it is a palindrome.\n\n**Variations:**\n- Case-insensitive: convert to lowercase before comparing.\n- Ignore non-alphanumeric characters: skip spaces, punctuation.\n- Recursive approach: compare first and last, then check inner substring.",
+          "pseudo_code": "1. left = 0, right = len - 1\n2. while (left < right):\n     if s[left] != s[right]: return false\n     left++, right--\n3. return true\n\nFor case-insensitive: use tolower()\nFor ignoring non-alpha: skip with isalnum()",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <ctype.h>\n\n/* Basic palindrome check */\nint is_palindrome(const char *s) {\n    int left = 0;\n    int right = (int)strlen(s) - 1;\n    while (left < right) {\n        if (s[left] != s[right]) return 0;\n        left++;\n        right--;\n    }\n    return 1;\n}\n\n/* Case-insensitive, ignoring non-alphanumeric */\nint is_palindrome_smart(const char *s) {\n    int left = 0;\n    int right = (int)strlen(s) - 1;\n    while (left < right) {\n        while (left < right && !isalnum(s[left])) left++;\n        while (left < right && !isalnum(s[right])) right--;\n        if (tolower(s[left]) != tolower(s[right])) return 0;\n        left++;\n        right--;\n    }\n    return 1;\n}\n\nint main(void) {\n    printf(\"racecar: %d\\n\", is_palindrome(\"racecar\"));     /* 1 */\n    printf(\"hello:   %d\\n\", is_palindrome(\"hello\"));       /* 0 */\n    printf(\"a:       %d\\n\", is_palindrome(\"a\"));           /* 1 */\n    printf(\"empty:   %d\\n\", is_palindrome(\"\"));            /* 1 */\n\n    /* Smart check */\n    printf(\"'A man, a plan, a canal: Panama': %d\\n\",\n           is_palindrome_smart(\"A man, a plan, a canal: Panama\")); /* 1 */\n    printf(\"'race a car': %d\\n\",\n           is_palindrome_smart(\"race a car\")); /* 0 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Compare from both ends moving inward: O(n) time, O(1) space",
+            "Empty string and single character are palindromes",
+            "For smart check: skip non-alphanumeric and use tolower()",
+            "Two-pointer technique is the standard approach",
+            "No extra memory needed (unlike creating a reversed copy)"
+          ],
+          "gotchas": [
+            "Be careful with unsigned strlen return when string is empty (0 - 1 wraps)",
+            "tolower() takes int, not char -- pass (unsigned char) for safety with non-ASCII",
+            "Don't forget to handle the empty string case",
+            "Creating a reversed copy and comparing with strcmp works but wastes O(n) space"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compare characters from both ends moving inward. If all pairs match, it is a palindrome. For case-insensitive: `tolower()`. For ignoring spaces: `isalnum()`. O(n) time, O(1) space.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint is_palindrome(const char *s) {\n    int l = 0, r = (int)strlen(s) - 1;\n    while (l < r) {\n        if (s[l++] != s[r--]) return 0;\n    }\n    return 1;\n}\nint main(void) {\n    printf(\"%d\\n\", is_palindrome(\"racecar\")); /* 1 */\n    printf(\"%d\\n\", is_palindrome(\"hello\"));   /* 0 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two pointers from ends, O(n) time",
+            "Empty string = palindrome"
+          ],
+          "gotchas": [
+            "Cast strlen to int to avoid underflow with empty strings"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do character classification functions work (ctype.h)?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["ctype", "isalpha", "isdigit", "toupper", "tolower"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `<ctype.h>` header provides functions to classify and convert individual characters.\n\n**Classification functions (return non-zero for true):**\n- `isalpha(c)` -- is a letter (A-Z, a-z)\n- `isdigit(c)` -- is a digit (0-9)\n- `isalnum(c)` -- is letter or digit\n- `isspace(c)` -- is whitespace (space, tab, newline, etc.)\n- `isupper(c)` / `islower(c)` -- is uppercase/lowercase letter\n- `isprint(c)` -- is printable (including space)\n- `ispunct(c)` -- is punctuation\n\n**Conversion functions:**\n- `toupper(c)` -- convert to uppercase (returns unchanged if not lowercase)\n- `tolower(c)` -- convert to lowercase (returns unchanged if not uppercase)\n\n**All functions take `int`, not `char`.** The argument must be representable as `unsigned char` or be EOF. Passing a negative `char` value is undefined behavior on some implementations.",
+          "pseudo_code": "isalpha('A') -> true    isdigit('5') -> true\nisspace(' ') -> true    isalnum('x') -> true\nisupper('A') -> true    islower('a') -> true\ntoupper('a') -> 'A'     tolower('A') -> 'a'\n\nAll take int, must be in range [0, 255] or EOF\nCast char to unsigned char before passing",
+          "actual_code": "#include <stdio.h>\n#include <ctype.h>\n\nint main(void) {\n    /* Classification */\n    printf(\"isalpha('A') = %d\\n\", isalpha('A') != 0);  /* 1 */\n    printf(\"isdigit('5') = %d\\n\", isdigit('5') != 0);  /* 1 */\n    printf(\"isspace(' ') = %d\\n\", isspace(' ') != 0);  /* 1 */\n    printf(\"isalnum('_') = %d\\n\", isalnum('_') != 0);  /* 0 */\n\n    /* Conversion */\n    printf(\"toupper('a') = %c\\n\", toupper('a'));  /* A */\n    printf(\"tolower('Z') = %c\\n\", tolower('Z'));  /* z */\n    printf(\"toupper('1') = %c\\n\", toupper('1'));  /* 1 (unchanged) */\n\n    /* Practical: count types in a string */\n    const char *s = \"Hello, World! 123\";\n    int letters = 0, digits = 0, spaces = 0, others = 0;\n    for (int i = 0; s[i]; i++) {\n        unsigned char c = (unsigned char)s[i];\n        if (isalpha(c)) letters++;\n        else if (isdigit(c)) digits++;\n        else if (isspace(c)) spaces++;\n        else others++;\n    }\n    printf(\"letters=%d digits=%d spaces=%d others=%d\\n\",\n           letters, digits, spaces, others);\n    /* letters=10 digits=3 spaces=2 others=2 */\n\n    /* Convert string to uppercase */\n    char buf[] = \"Hello World\";\n    for (int i = 0; buf[i]; i++) {\n        buf[i] = (char)toupper((unsigned char)buf[i]);\n    }\n    printf(\"%s\\n\", buf); /* HELLO WORLD */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "ctype.h functions classify single characters",
+            "All return int: non-zero for true, 0 for false",
+            "toupper/tolower return the converted character unchanged if not applicable",
+            "Always cast to unsigned char before passing to ctype functions",
+            "These are locale-dependent in the default C locale they cover ASCII"
+          ],
+          "gotchas": [
+            "Passing a signed char with value > 127 to ctype functions is UB -- cast to unsigned char first",
+            "isdigit('0') is true but isdigit(0) is false (0 is the NUL character, not the digit '0')",
+            "toupper/tolower return int, not char",
+            "These functions are locale-dependent -- behavior may differ with setlocale()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`<ctype.h>`: `isalpha`, `isdigit`, `isalnum`, `isspace`, `toupper`, `tolower`. All take `int`. Cast `char` to `unsigned char` before passing. Non-zero = true.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <ctype.h>\nint main(void) {\n    char s[] = \"Hello 123\";\n    for (int i = 0; s[i]; i++)\n        s[i] = (char)toupper((unsigned char)s[i]);\n    printf(\"%s\\n\", s); /* HELLO 123 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Cast to unsigned char before ctype functions",
+            "toupper/tolower leave non-letters unchanged"
+          ],
+          "gotchas": [
+            "Signed char > 127 causes UB in ctype functions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create an array of strings in C?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["array-of-strings", "char-pointer-array", "2D-char-array"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are two common ways to create an array of strings in C:\n\n**1. Array of pointers (most common):**\n```c\nconst char *names[] = {\"Alice\", \"Bob\", \"Charlie\"};\n```\nEach element is a pointer to a string literal. Different strings can have different lengths. Strings are read-only (string literals).\n\n**2. 2D char array:**\n```c\nchar names[3][20] = {\"Alice\", \"Bob\", \"Charlie\"};\n```\nEach row is a fixed-size char buffer. Strings are modifiable. All rows have the same fixed size (wastes space for short strings).\n\n**Comparison:**\n- Pointer array: flexible lengths, read-only (unless pointing to modifiable buffers).\n- 2D array: fixed row size, modifiable, contiguous memory.",
+          "pseudo_code": "Method 1: Array of pointers\n  const char *arr[] = {\"hello\", \"world\"};  // flexible, read-only\n  arr[0] = \"new\";  // OK (reassign pointer)\n  arr[0][0] = 'N';  // UB (string literal is read-only)\n\nMethod 2: 2D char array\n  char arr[2][10] = {\"hello\", \"world\"};   // fixed size, modifiable\n  arr[0][0] = 'H';  // OK (modifiable copy)\n  arr[0] = \"new\";   // ERROR (array not assignable)",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Method 1: Array of pointers to string literals */\n    const char *fruits[] = {\"Apple\", \"Banana\", \"Cherry\", \"Date\"};\n    int n = sizeof(fruits) / sizeof(fruits[0]);\n    for (int i = 0; i < n; i++) {\n        printf(\"%s\\n\", fruits[i]);\n    }\n\n    /* Method 2: 2D char array (modifiable) */\n    char names[3][20] = {\"Alice\", \"Bob\", \"Charlie\"};\n    names[1][0] = 'R';  /* Modify: Bob -> Rob */\n    strcpy(names[2], \"Dave\");  /* Replace string */\n    for (int i = 0; i < 3; i++) {\n        printf(\"%s\\n\", names[i]);\n    }\n\n    /* Sorting an array of string pointers */\n    const char *words[] = {\"banana\", \"apple\", \"cherry\"};\n    int wn = 3;\n    for (int i = 0; i < wn - 1; i++) {\n        for (int j = i + 1; j < wn; j++) {\n            if (strcmp(words[i], words[j]) > 0) {\n                const char *temp = words[i];\n                words[i] = words[j];\n                words[j] = temp;\n            }\n        }\n    }\n    for (int i = 0; i < wn; i++) printf(\"%s \", words[i]);\n    printf(\"\\n\"); /* apple banana cherry */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const char *arr[] for read-only string array (most common)",
+            "char arr[N][M] for modifiable strings with fixed max length",
+            "Pointer array is more memory-efficient for variable-length strings",
+            "Sorting pointer arrays just swaps pointers (fast)",
+            "2D array wastes space if strings have very different lengths"
+          ],
+          "gotchas": [
+            "const char *arr[] elements point to read-only literals -- cannot modify characters",
+            "char arr[3][10] wastes 10 bytes per row even for short strings",
+            "sizeof(arr)/sizeof(arr[0]) gives the count for both methods",
+            "Sorting a 2D char array requires copying entire strings (slow); sorting pointers is O(1) per swap"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`const char *arr[]` = array of pointers to string literals (flexible, read-only). `char arr[N][M]` = 2D char array (fixed size, modifiable). Pointer arrays are more common.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    const char *fruits[] = {\"Apple\", \"Banana\", \"Cherry\"};\n    for (int i = 0; i < 3; i++) printf(\"%s\\n\", fruits[i]);\n    char names[2][10] = {\"Alice\", \"Bob\"};\n    names[0][0] = 'a'; /* modifiable */\n    printf(\"%s\\n\", names[0]); /* alice */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const char *arr[] for string literal arrays",
+            "char arr[N][M] for modifiable string arrays"
+          ],
+          "gotchas": [
+            "Cannot modify characters through const char * pointers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are Variable Length Arrays (VLAs) in C99?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["VLA", "C99", "variable-length-array"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Variable Length Arrays (VLAs)** were introduced in C99 and allow array sizes to be determined at runtime (using a variable, not just a constant).\n\n**Syntax:** `int arr[n];` where `n` is a variable.\n\n**Key facts:**\n- Allocated on the stack (not the heap).\n- Size determined at runtime but cannot be changed after creation.\n- Made optional in C11 (compiler can choose not to support them).\n- NOT available in C89 or C++.\n\n**Advantages:**\n- Convenient for small, temporary arrays with runtime-known sizes.\n- No need for malloc/free.\n\n**Disadvantages:**\n- Allocated on the stack: risk of stack overflow for large sizes.\n- No way to check if allocation succeeded (unlike malloc which returns NULL).\n- Performance: may require runtime stack adjustments.\n- Controversial: some style guides forbid them (e.g., Linux kernel).",
+          "pseudo_code": "int n = get_size();\nint arr[n];           // VLA: size determined at runtime\n\nAllocated on stack (not heap)\nCannot resize after creation\nOptional in C11\nNot available in C89 or C++\nRisk: no way to detect allocation failure",
+          "actual_code": "#include <stdio.h>\n\nvoid print_table(int rows, int cols) {\n    /* VLA: size determined at runtime */\n    int table[rows][cols];\n\n    /* Initialize */\n    for (int i = 0; i < rows; i++) {\n        for (int j = 0; j < cols; j++) {\n            table[i][j] = i * cols + j;\n        }\n    }\n\n    /* Print */\n    for (int i = 0; i < rows; i++) {\n        for (int j = 0; j < cols; j++) {\n            printf(\"%4d\", table[i][j]);\n        }\n        printf(\"\\n\");\n    }\n}\n\nint main(void) {\n    int n = 5;\n    int arr[n];  /* VLA */\n\n    for (int i = 0; i < n; i++) {\n        arr[i] = i * i;\n    }\n    for (int i = 0; i < n; i++) {\n        printf(\"%d \", arr[i]);\n    }\n    printf(\"\\n\"); /* 0 1 4 9 16 */\n\n    /* VLA for 2D array with runtime dimensions */\n    print_table(3, 4);\n\n    /* sizeof VLA is evaluated at runtime */\n    printf(\"sizeof(arr) = %zu\\n\", sizeof(arr)); /* 20 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "VLA size is determined at runtime, allocated on the stack",
+            "Introduced in C99, made optional in C11",
+            "sizeof(VLA) is evaluated at runtime, not compile time",
+            "Cannot be initialized with {} syntax (only regular arrays can)",
+            "Useful for small temporary arrays with runtime-known sizes"
+          ],
+          "gotchas": [
+            "VLAs can cause stack overflow with large sizes -- no failure detection",
+            "Not supported by all compilers (MSVC does not support VLAs)",
+            "Cannot be used at file scope (only in function scope)",
+            "The Linux kernel bans VLAs due to stack overflow risk and unpredictable stack usage"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "VLAs (C99) allow runtime-sized arrays: `int arr[n]`. Allocated on stack, no resize, no failure detection. Optional in C11. Risky for large sizes. Use `malloc` for large/unknown sizes.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int n = 5;\n    int arr[n]; /* VLA: runtime size */\n    for (int i = 0; i < n; i++) arr[i] = i * i;\n    for (int i = 0; i < n; i++) printf(\"%d \", arr[i]);\n    printf(\"\\n\"); /* 0 1 4 9 16 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Runtime-sized stack allocation",
+            "Optional in C11; banned in Linux kernel"
+          ],
+          "gotchas": [
+            "No way to detect allocation failure (unlike malloc)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you determine the size of an array in C?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["array-size", "sizeof", "macro"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**The standard idiom:** `sizeof(arr) / sizeof(arr[0])` gives the number of elements.\n\n**Why it works:** `sizeof(arr)` gives the total byte size of the array; `sizeof(arr[0])` gives the byte size of one element. The division gives the element count.\n\n**When it does NOT work:**\n- When the array has decayed to a pointer (e.g., inside a function parameter). `sizeof(pointer) / sizeof(pointer[0])` gives pointer_size / element_size, which is wrong.\n- For dynamically allocated arrays (malloc'd memory).\n\n**Best practice:** Define a macro:\n```c\n#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))\n```\n\n**Safer macro (GCC/Clang):** Use `__builtin_types_compatible_p` to trigger a compile error if used on a pointer instead of an array.",
+          "pseudo_code": "Element count = sizeof(arr) / sizeof(arr[0])\n\nWorks for: actual arrays in the same scope\nFails for: pointers, function parameters, malloc'd memory\n\nMacro: #define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))",
+          "actual_code": "#include <stdio.h>\n\n#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))\n\n/* This does NOT work -- arr has decayed to a pointer */\nvoid bad_print(int arr[]) {\n    /* sizeof(arr) is sizeof(int*), NOT the array size */\n    int n = sizeof(arr) / sizeof(arr[0]);\n    printf(\"bad count: %d\\n\", n); /* likely 2 on 64-bit (8/4) */\n}\n\n/* Correct: pass the size separately */\nvoid good_print(const int *arr, int n) {\n    for (int i = 0; i < n; i++) {\n        printf(\"%d \", arr[i]);\n    }\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {10, 20, 30, 40, 50};\n    int n = ARRAY_SIZE(arr);\n    printf(\"Element count: %d\\n\", n); /* 5 */\n\n    bad_print(arr);       /* wrong count */\n    good_print(arr, n);   /* correct: 10 20 30 40 50 */\n\n    /* Works for any type */\n    double d[] = {1.1, 2.2, 3.3};\n    printf(\"doubles: %zu\\n\", ARRAY_SIZE(d)); /* 3 */\n\n    char s[] = \"hello\";\n    printf(\"chars (including null): %zu\\n\", ARRAY_SIZE(s)); /* 6 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof(arr)/sizeof(arr[0]) gives element count for actual arrays",
+            "Does NOT work after array decay (function parameters, pointers)",
+            "Always pass array size as a separate parameter to functions",
+            "Define an ARRAY_SIZE macro for convenience",
+            "sizeof(string_array) includes the null terminator"
+          ],
+          "gotchas": [
+            "sizeof(arr) inside a function parameter gives pointer size, not array size",
+            "This idiom fails silently for pointers -- it gives a wrong number without warning",
+            "For dynamically allocated arrays (malloc), you must track the size yourself",
+            "ARRAY_SIZE(\"hello\") is 6 (includes null), not 5"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sizeof(arr)/sizeof(arr[0])` gives element count. Only works for actual arrays in the same scope, NOT for pointers or function parameters. Always pass size as a separate parameter.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#define ARRAY_SIZE(a) (sizeof(a)/sizeof((a)[0]))\nint main(void) {\n    int arr[] = {1, 2, 3, 4, 5};\n    printf(\"count = %zu\\n\", ARRAY_SIZE(arr)); /* 5 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof(arr)/sizeof(arr[0]) for element count",
+            "Fails after array decay to pointer"
+          ],
+          "gotchas": [
+            "Gives wrong answer for pointers -- no compile warning"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common string interview patterns in C?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["interview", "patterns", "string-problems", "algorithms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Common C string interview problems and their patterns:\n\n**1. String reversal** -- two-pointer swap from ends.\n**2. Palindrome check** -- compare from both ends.\n**3. Anagram check** -- count character frequencies.\n**4. Remove duplicates** -- use a hash/frequency array.\n**5. First non-repeating character** -- count frequencies, then scan.\n**6. String to integer (atoi)** -- handle sign, digits, overflow.\n**7. Substring search** -- strstr() or KMP algorithm.\n**8. Word reversal** -- reverse entire string, then reverse each word.\n**9. String compression** -- \"aabccc\" -> \"a2b1c3\".\n**10. Check if one string is a rotation of another** -- concatenate s1+s1 and search for s2.\n\n**Key techniques:**\n- Use 256-element arrays for ASCII character counting.\n- Two-pointer technique for in-place operations.\n- strlen() is O(n) -- cache it before loops.",
+          "pseudo_code": "Pattern 1: Character counting (anagram, duplicates)\n  int freq[256] = {0};\n  for each char: freq[(unsigned char)c]++;\n\nPattern 2: Two pointers (reverse, palindrome)\n  left = 0, right = len-1\n  while (left < right): process and move inward\n\nPattern 3: atoi implementation\n  handle whitespace, sign, digits, overflow",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <ctype.h>\n\n/* Check if two strings are anagrams */\nint are_anagrams(const char *s1, const char *s2) {\n    int freq[256] = {0};\n    for (int i = 0; s1[i]; i++) freq[(unsigned char)s1[i]]++;\n    for (int i = 0; s2[i]; i++) freq[(unsigned char)s2[i]]--;\n    for (int i = 0; i < 256; i++) {\n        if (freq[i] != 0) return 0;\n    }\n    return 1;\n}\n\n/* Find first non-repeating character */\nchar first_unique(const char *s) {\n    int freq[256] = {0};\n    for (int i = 0; s[i]; i++) freq[(unsigned char)s[i]]++;\n    for (int i = 0; s[i]; i++) {\n        if (freq[(unsigned char)s[i]] == 1) return s[i];\n    }\n    return '\\0'; /* all characters repeat */\n}\n\n/* Simple atoi implementation */\nint my_atoi(const char *s) {\n    int sign = 1, result = 0, i = 0;\n    while (isspace((unsigned char)s[i])) i++;\n    if (s[i] == '-' || s[i] == '+') {\n        sign = (s[i] == '-') ? -1 : 1;\n        i++;\n    }\n    while (isdigit((unsigned char)s[i])) {\n        result = result * 10 + (s[i] - '0');\n        i++;\n    }\n    return sign * result;\n}\n\n/* Check if s2 is a rotation of s1 */\nint is_rotation(const char *s1, const char *s2) {\n    size_t len = strlen(s1);\n    if (len != strlen(s2)) return 0;\n    char doubled[200];\n    snprintf(doubled, sizeof(doubled), \"%s%s\", s1, s1);\n    return strstr(doubled, s2) != NULL;\n}\n\nint main(void) {\n    printf(\"anagram: %d\\n\", are_anagrams(\"listen\", \"silent\")); /* 1 */\n    printf(\"first unique in 'aabbc': %c\\n\", first_unique(\"aabbc\")); /* c */\n    printf(\"my_atoi('  -123') = %d\\n\", my_atoi(\"  -123\")); /* -123 */\n    printf(\"rotation: %d\\n\", is_rotation(\"abcde\", \"cdeab\")); /* 1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Character counting with int freq[256] = {0} for ASCII",
+            "Two-pointer for in-place string operations",
+            "Anagram = same character frequencies",
+            "Rotation check: s1+s1 contains all rotations of s1",
+            "atoi: skip whitespace, handle sign, extract digits"
+          ],
+          "gotchas": [
+            "Use unsigned char as array index to avoid negative indices",
+            "my_atoi does not handle overflow -- production code needs strtol()",
+            "Rotation check with concat needs buffer twice the string length + 1",
+            "Character counting assumes ASCII; does not work for multibyte UTF-8"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key patterns: character counting with `freq[256]` for anagrams/duplicates, two-pointer for reversal/palindrome, concatenation for rotation check, digit extraction for atoi. Use `unsigned char` for array indices.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint are_anagrams(const char *a, const char *b) {\n    int f[256] = {0};\n    while (*a) f[(unsigned char)*a++]++;\n    while (*b) f[(unsigned char)*b++]--;\n    for (int i = 0; i < 256; i++) if (f[i]) return 0;\n    return 1;\n}\nint main(void) {\n    printf(\"%d\\n\", are_anagrams(\"listen\", \"silent\")); /* 1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int freq[256] for character counting",
+            "Two-pointer for in-place operations"
+          ],
+          "gotchas": [
+            "Cast char to unsigned char before using as array index"
+          ]
+        }
+      ]
+    }
+  ]
+}

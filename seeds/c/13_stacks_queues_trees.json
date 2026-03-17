@@ -1,0 +1,622 @@
+{
+  "concept_slug": "stacks-queues-trees",
+  "questions": [
+    {
+      "title": "How do you implement a stack using an array in C?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["stack", "array", "LIFO"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **stack** is a Last-In-First-Out (LIFO) data structure. An array-based stack uses:\n- A fixed-size array to store elements\n- A `top` index that tracks the position of the topmost element (-1 means empty)\n\n**Operations:**\n- **push:** Increment `top`, place element at `arr[top]`. O(1)\n- **pop:** Return `arr[top]`, decrement `top`. O(1)\n- **peek:** Return `arr[top]` without modifying `top`. O(1)\n- **isEmpty:** Check if `top == -1`. O(1)\n- **isFull:** Check if `top == capacity - 1`. O(1)\n\n**Advantages:** Simple, cache-friendly (contiguous memory), no allocation overhead per operation.\n**Disadvantages:** Fixed size (must know max capacity), or use realloc for dynamic sizing.",
+          "pseudo_code": "Stack structure:\n  int arr[MAX]\n  int top = -1\n\nPush(stack, value):\n  if top == MAX-1: overflow error\n  top++\n  arr[top] = value\n\nPop(stack):\n  if top == -1: underflow error\n  value = arr[top]\n  top--\n  return value\n\nPeek(stack):\n  if top == -1: error\n  return arr[top]",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define MAX_SIZE 100\n\ntypedef struct {\n    int arr[MAX_SIZE];\n    int top;\n} Stack;\n\nvoid initStack(Stack *s) {\n    s->top = -1;\n}\n\nint isEmpty(Stack *s) {\n    return s->top == -1;\n}\n\nint isFull(Stack *s) {\n    return s->top == MAX_SIZE - 1;\n}\n\nvoid push(Stack *s, int val) {\n    if (isFull(s)) {\n        fprintf(stderr, \"Stack overflow\\n\");\n        return;\n    }\n    s->arr[++(s->top)] = val;\n}\n\nint pop(Stack *s) {\n    if (isEmpty(s)) {\n        fprintf(stderr, \"Stack underflow\\n\");\n        return -1;  /* sentinel value */\n    }\n    return s->arr[(s->top)--];\n}\n\nint peek(Stack *s) {\n    if (isEmpty(s)) {\n        fprintf(stderr, \"Stack is empty\\n\");\n        return -1;\n    }\n    return s->arr[s->top];\n}\n\nint main(void) {\n    Stack s;\n    initStack(&s);\n\n    push(&s, 10);\n    push(&s, 20);\n    push(&s, 30);\n\n    printf(\"Top: %d\\n\", peek(&s));   /* 30 */\n    printf(\"Pop: %d\\n\", pop(&s));    /* 30 */\n    printf(\"Pop: %d\\n\", pop(&s));    /* 20 */\n    printf(\"Empty: %d\\n\", isEmpty(&s));  /* 0 (false) */\n    printf(\"Pop: %d\\n\", pop(&s));    /* 10 */\n    printf(\"Empty: %d\\n\", isEmpty(&s));  /* 1 (true) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "top = -1 means empty stack",
+            "All operations (push, pop, peek) are O(1)",
+            "Array-based stack has fixed capacity -- must check for overflow",
+            "LIFO: last element pushed is the first one popped",
+            "Cache-friendly due to contiguous memory"
+          ],
+          "gotchas": [
+            "Using sentinel value -1 for error on pop is ambiguous if -1 is a valid data value",
+            "Stack overflow (top == MAX-1) silently dropping data if not handled",
+            "Pre-increment vs post-increment on top: s->arr[++s->top] = val (push) vs s->arr[s->top--] (pop)",
+            "Fixed size means you must know the maximum capacity in advance"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Array with `top` index (-1 = empty). Push: `arr[++top] = val`. Pop: `return arr[top--]`. All ops O(1). Fixed capacity.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct { int arr[100]; int top; } Stack;\nvoid initStack(Stack *s) { s->top = -1; }\nvoid push(Stack *s, int v) { s->arr[++(s->top)] = v; }\nint pop(Stack *s) { return s->arr[(s->top)--]; }\nint peek(Stack *s) { return s->arr[s->top]; }\nint isEmpty(Stack *s) { return s->top == -1; }",
+          "code_language": "c",
+          "key_points": [
+            "top = -1 means empty, all ops O(1)"
+          ],
+          "gotchas": [
+            "No overflow/underflow check in minimal version -- always add guards in production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a stack using a linked list in C?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["stack", "linked-list", "dynamic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A linked-list-based stack uses the head of the list as the top of the stack. Push inserts at head, pop removes from head.\n\n**Advantages over array-based:**\n- No fixed capacity -- grows dynamically\n- No wasted memory from pre-allocated array\n\n**Disadvantages:**\n- malloc/free overhead per push/pop\n- Not cache-friendly (nodes scattered in memory)\n- Extra memory per element (pointer overhead)\n\n**Operations:** All O(1) -- always operate at the head.",
+          "pseudo_code": "Push(top, value):\n  new = createNode(value)\n  new->next = *top\n  *top = new\n\nPop(top):\n  if *top is NULL: underflow\n  temp = *top\n  value = temp->data\n  *top = temp->next\n  free(temp)\n  return value",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\ntypedef struct {\n    Node *top;\n    int size;\n} Stack;\n\nvoid initStack(Stack *s) {\n    s->top = NULL;\n    s->size = 0;\n}\n\nint isEmpty(Stack *s) {\n    return s->top == NULL;\n}\n\nvoid push(Stack *s, int val) {\n    Node *newNode = (Node *)malloc(sizeof(Node));\n    if (!newNode) { perror(\"malloc\"); exit(1); }\n    newNode->data = val;\n    newNode->next = s->top;\n    s->top = newNode;\n    s->size++;\n}\n\nint pop(Stack *s) {\n    if (isEmpty(s)) {\n        fprintf(stderr, \"Stack underflow\\n\");\n        exit(1);\n    }\n    Node *temp = s->top;\n    int val = temp->data;\n    s->top = temp->next;\n    free(temp);\n    s->size--;\n    return val;\n}\n\nint peek(Stack *s) {\n    if (isEmpty(s)) {\n        fprintf(stderr, \"Stack is empty\\n\");\n        exit(1);\n    }\n    return s->top->data;\n}\n\nvoid freeStack(Stack *s) {\n    while (!isEmpty(s))\n        pop(s);\n}\n\nint main(void) {\n    Stack s;\n    initStack(&s);\n\n    push(&s, 10);\n    push(&s, 20);\n    push(&s, 30);\n\n    printf(\"Size: %d\\n\", s.size);    /* 3 */\n    printf(\"Top: %d\\n\", peek(&s));   /* 30 */\n    printf(\"Pop: %d\\n\", pop(&s));    /* 30 */\n    printf(\"Pop: %d\\n\", pop(&s));    /* 20 */\n\n    freeStack(&s);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Push = insert at head, Pop = remove from head, both O(1)",
+            "No fixed capacity -- grows and shrinks dynamically",
+            "Each node requires extra memory for the next pointer",
+            "Must free nodes on pop to avoid memory leaks",
+            "Can track size with a counter for O(1) size queries"
+          ],
+          "gotchas": [
+            "Forgetting to free the popped node causes memory leaks",
+            "malloc failure on push should be handled (check return value)",
+            "More overhead per operation than array-based stack due to malloc/free",
+            "Not cache-friendly -- nodes are scattered across heap"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Push inserts at head, pop removes from head. Dynamic sizing with no capacity limit. All ops O(1) but has malloc/free overhead.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct Node { int data; struct Node *next; } Node;\n\nvoid push(Node **top, int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val;\n    n->next = *top;\n    *top = n;\n}\n\nint pop(Node **top) {\n    Node *tmp = *top;\n    int val = tmp->data;\n    *top = tmp->next;\n    free(tmp);\n    return val;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Push at head, pop from head -- both O(1)",
+            "No capacity limit"
+          ],
+          "gotchas": [
+            "Must free popped nodes to avoid memory leaks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the core stack operations and how do push, pop, peek, and isEmpty work?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["stack", "operations", "LIFO", "abstract-data-type"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A stack is an **abstract data type** (ADT) with these core operations:\n\n| Operation | Description | Time |\n|-----------|-------------|------|\n| **push(x)** | Add element x to the top | O(1) |\n| **pop()** | Remove and return the top element | O(1) |\n| **peek()/top()** | Return the top element without removing | O(1) |\n| **isEmpty()** | Return true if stack has no elements | O(1) |\n| **size()** | Return number of elements | O(1) |\n\n**LIFO principle:** The last element added is the first removed. Think of a stack of plates.\n\n**Applications:**\n- Function call stack (recursion)\n- Undo/redo functionality\n- Expression evaluation (postfix)\n- Parentheses matching\n- DFS traversal\n- Browser back button",
+          "pseudo_code": "Stack ADT operations:\n  push(x)   -> adds x to top\n  pop()     -> removes and returns top\n  peek()    -> returns top without removal\n  isEmpty() -> true if no elements\n  size()    -> number of elements\n\nAll operations are O(1) time complexity.\n\nInvariant: pop() returns elements in reverse order of push().",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define CAPACITY 10\n\ntypedef struct {\n    int data[CAPACITY];\n    int top;\n} Stack;\n\nvoid init(Stack *s)     { s->top = -1; }\nint isEmpty(Stack *s)   { return s->top == -1; }\nint isFull(Stack *s)    { return s->top == CAPACITY - 1; }\nint size(Stack *s)      { return s->top + 1; }\n\nvoid push(Stack *s, int val) {\n    if (isFull(s)) { fprintf(stderr, \"Overflow\\n\"); return; }\n    s->data[++(s->top)] = val;\n}\n\nint pop(Stack *s) {\n    if (isEmpty(s)) { fprintf(stderr, \"Underflow\\n\"); return -1; }\n    return s->data[(s->top)--];\n}\n\nint peek(Stack *s) {\n    if (isEmpty(s)) { fprintf(stderr, \"Empty\\n\"); return -1; }\n    return s->data[s->top];\n}\n\nint main(void) {\n    Stack s;\n    init(&s);\n\n    /* Demonstrate LIFO behavior */\n    push(&s, 1);\n    push(&s, 2);\n    push(&s, 3);\n\n    printf(\"Size: %d\\n\", size(&s));    /* 3 */\n    printf(\"Peek: %d\\n\", peek(&s));    /* 3 (not removed) */\n    printf(\"Size: %d\\n\", size(&s));    /* 3 (unchanged) */\n\n    while (!isEmpty(&s))\n        printf(\"Pop: %d\\n\", pop(&s));  /* 3, 2, 1 (LIFO order) */\n\n    printf(\"Empty: %d\\n\", isEmpty(&s));  /* 1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "All core operations (push, pop, peek, isEmpty) are O(1)",
+            "LIFO: last in, first out -- pop returns elements in reverse push order",
+            "peek() reads top without removal -- useful for lookahead",
+            "Stack is an ADT -- can be implemented with array or linked list",
+            "Function call stack in C uses a stack for activation records"
+          ],
+          "gotchas": [
+            "pop() on empty stack is undefined behavior if not checked -- always guard with isEmpty()",
+            "peek() also needs an empty check -- same risk as pop()",
+            "Returning -1 as error sentinel is ambiguous if -1 is valid data",
+            "push() on a full array-based stack causes overflow if not checked"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stack ADT: push (add to top), pop (remove from top), peek (read top), isEmpty. All O(1). LIFO order. Implemented with array (fixed size) or linked list (dynamic).",
+          "pseudo_code": "",
+          "actual_code": "void push(Stack *s, int v)  { s->data[++(s->top)] = v; }\nint  pop(Stack *s)          { return s->data[(s->top)--]; }\nint  peek(Stack *s)         { return s->data[s->top]; }\nint  isEmpty(Stack *s)      { return s->top == -1; }",
+          "code_language": "c",
+          "key_points": [
+            "All operations O(1), LIFO order"
+          ],
+          "gotchas": [
+            "Always check isEmpty() before pop() or peek()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you convert an infix expression to postfix using a stack?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["stack", "infix", "postfix", "shunting-yard"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **Shunting Yard algorithm** (by Dijkstra) converts infix notation (e.g., `A + B * C`) to postfix/RPN (e.g., `A B C * +`) using a stack for operators.\n\n**Algorithm:**\n1. Scan tokens left to right\n2. **Operand:** Output immediately\n3. **Operator:** Pop operators with higher or equal precedence from stack to output, then push current operator\n4. **'(':** Push onto stack\n5. **')':** Pop to output until '(' is found, discard '('\n6. After all tokens: pop remaining operators to output\n\n**Precedence:** `* /` > `+ -`. For left-associative operators, pop equal precedence too.\n\n**Example:** `A + B * C` -> scan A (output), + (push), B (output), * (push, higher than +), C (output), end (pop * then +) -> `A B C * +`",
+          "pseudo_code": "InfixToPostfix(expression):\n  for each token in expression:\n    if token is operand:\n      output(token)\n    else if token is '(':\n      stack.push(token)\n    else if token is ')':\n      while stack.top() != '(':\n        output(stack.pop())\n      stack.pop()  // discard '('\n    else:  // operator\n      while stack is not empty and\n            stack.top() != '(' and\n            precedence(stack.top()) >= precedence(token):\n        output(stack.pop())\n      stack.push(token)\n  // Pop remaining operators\n  while stack is not empty:\n    output(stack.pop())",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <ctype.h>\n\n#define MAX 100\n\nchar stack[MAX];\nint top = -1;\n\nvoid push(char c)    { stack[++top] = c; }\nchar pop(void)       { return stack[top--]; }\nchar peek(void)      { return stack[top]; }\nint isEmpty(void)    { return top == -1; }\n\nint precedence(char op) {\n    switch (op) {\n        case '+': case '-': return 1;\n        case '*': case '/': return 2;\n        case '^': return 3;\n        default: return 0;\n    }\n}\n\nint isRightAssociative(char op) {\n    return op == '^';\n}\n\nvoid infixToPostfix(const char *infix, char *postfix) {\n    int j = 0;\n\n    for (int i = 0; infix[i] != '\\0'; i++) {\n        char c = infix[i];\n\n        if (isalnum(c)) {\n            postfix[j++] = c;  /* operand -> output */\n        } else if (c == '(') {\n            push(c);\n        } else if (c == ')') {\n            while (!isEmpty() && peek() != '(')\n                postfix[j++] = pop();\n            pop();  /* discard '(' */\n        } else {  /* operator */\n            while (!isEmpty() && peek() != '(' &&\n                   (precedence(peek()) > precedence(c) ||\n                    (precedence(peek()) == precedence(c) && !isRightAssociative(c)))) {\n                postfix[j++] = pop();\n            }\n            push(c);\n        }\n    }\n\n    /* Pop remaining operators */\n    while (!isEmpty())\n        postfix[j++] = pop();\n\n    postfix[j] = '\\0';\n}\n\nint main(void) {\n    char postfix[MAX];\n\n    infixToPostfix(\"A+B*C\", postfix);\n    printf(\"A+B*C -> %s\\n\", postfix);       /* ABC*+ */\n\n    infixToPostfix(\"(A+B)*C\", postfix);\n    printf(\"(A+B)*C -> %s\\n\", postfix);     /* AB+C* */\n\n    infixToPostfix(\"A+B*C-D/E\", postfix);\n    printf(\"A+B*C-D/E -> %s\\n\", postfix);   /* ABC*+DE/- */\n\n    infixToPostfix(\"A^B^C\", postfix);\n    printf(\"A^B^C -> %s\\n\", postfix);       /* ABC^^ (right-associative) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Shunting Yard algorithm by Dijkstra",
+            "Operands go directly to output, operators go on stack",
+            "Pop higher/equal precedence operators before pushing",
+            "Parentheses: '(' pushed, ')' pops until '(' found",
+            "Right-associative operators (^) do not pop equal precedence"
+          ],
+          "gotchas": [
+            "Forgetting to handle right-associativity for ^ gives wrong result for A^B^C",
+            "Not discarding the '(' when ')' is encountered leaves it in output",
+            "Spaces in input need to be skipped if the expression has spaces",
+            "Unmatched parentheses cause stack underflow or leftover '(' in output"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Shunting Yard: operands go to output, operators go on stack. Pop higher/equal precedence ops before pushing. '(' pushes, ')' pops until '('. End: pop all remaining.",
+          "pseudo_code": "",
+          "actual_code": "int precedence(char op) {\n    if (op == '+' || op == '-') return 1;\n    if (op == '*' || op == '/') return 2;\n    return 0;\n}\n\nvoid infixToPostfix(const char *in, char *out) {\n    char stack[100]; int top = -1, j = 0;\n    for (int i = 0; in[i]; i++) {\n        char c = in[i];\n        if (isalnum(c)) out[j++] = c;\n        else if (c == '(') stack[++top] = c;\n        else if (c == ')') {\n            while (stack[top] != '(') out[j++] = stack[top--];\n            top--;  /* discard '(' */\n        } else {\n            while (top >= 0 && stack[top] != '(' &&\n                   precedence(stack[top]) >= precedence(c))\n                out[j++] = stack[top--];\n            stack[++top] = c;\n        }\n    }\n    while (top >= 0) out[j++] = stack[top--];\n    out[j] = '\\0';\n}",
+          "code_language": "c",
+          "key_points": [
+            "Operands to output, operators to stack with precedence rules"
+          ],
+          "gotchas": [
+            "Right-associative operators (^) need special handling"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you evaluate a postfix (RPN) expression using a stack?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["stack", "postfix", "evaluation", "RPN"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Postfix (Reverse Polish Notation) evaluation is straightforward with a stack:\n\n1. Scan tokens left to right\n2. **Operand:** Push onto stack\n3. **Operator:** Pop two operands, apply operator, push result\n4. After all tokens, the stack contains the final result\n\n**Important:** The first popped value is the **right** operand, the second is the **left**. This matters for non-commutative operators (-, /).\n\n**Example:** `2 3 4 * +` -> push 2, push 3, push 4, see *: pop 4 and 3, compute 3*4=12, push 12, see +: pop 12 and 2, compute 2+12=14, push 14. Result: 14.",
+          "pseudo_code": "EvaluatePostfix(expression):\n  for each token:\n    if token is number:\n      stack.push(token)\n    else:  // operator\n      right = stack.pop()\n      left = stack.pop()\n      result = apply(left, operator, right)\n      stack.push(result)\n  return stack.pop()  // final result",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <ctype.h>\n\n#define MAX 100\n\nint stack[MAX];\nint top = -1;\n\nvoid push(int val)  { stack[++top] = val; }\nint pop(void)       { return stack[top--]; }\n\nint evaluatePostfix(const char *expr) {\n    for (int i = 0; expr[i] != '\\0'; i++) {\n        char c = expr[i];\n\n        if (c == ' ') continue;  /* skip spaces */\n\n        if (isdigit(c)) {\n            push(c - '0');  /* convert char to int */\n        } else {\n            int right = pop();  /* first pop = right operand */\n            int left = pop();   /* second pop = left operand */\n            int result;\n\n            switch (c) {\n                case '+': result = left + right; break;\n                case '-': result = left - right; break;\n                case '*': result = left * right; break;\n                case '/': \n                    if (right == 0) {\n                        fprintf(stderr, \"Division by zero\\n\");\n                        exit(1);\n                    }\n                    result = left / right;\n                    break;\n                default:\n                    fprintf(stderr, \"Unknown operator: %c\\n\", c);\n                    exit(1);\n            }\n            push(result);\n        }\n    }\n    return pop();\n}\n\nint main(void) {\n    printf(\"2 3 + = %d\\n\", evaluatePostfix(\"23+\"));       /* 5 */\n    printf(\"2 3 4 * + = %d\\n\", evaluatePostfix(\"234*+\"));  /* 14 */\n    printf(\"5 1 2 + 4 * + 3 - = %d\\n\",\n           evaluatePostfix(\"512+4*+3-\"));                    /* 14 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Operands pushed, operators pop two and push result",
+            "First pop is right operand, second is left operand",
+            "Order matters for - and /: left op right, not right op left",
+            "Final result is the single value remaining on stack",
+            "Postfix needs no parentheses -- precedence is implicit in order"
+          ],
+          "gotchas": [
+            "Swapping left/right operands gives wrong results for subtraction and division",
+            "Division by zero must be checked",
+            "Single-digit assumption: c - '0' only works for 0-9; multi-digit needs parsing",
+            "If the expression is invalid (too few operands), stack underflow occurs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Scan left to right: push operands, for operators pop two (right first, then left), compute, push result. Final stack value is the answer.",
+          "pseudo_code": "",
+          "actual_code": "int evaluatePostfix(const char *expr) {\n    int stack[100], top = -1;\n    for (int i = 0; expr[i]; i++) {\n        if (isdigit(expr[i])) {\n            stack[++top] = expr[i] - '0';\n        } else {\n            int r = stack[top--], l = stack[top--];\n            switch (expr[i]) {\n                case '+': stack[++top] = l + r; break;\n                case '-': stack[++top] = l - r; break;\n                case '*': stack[++top] = l * r; break;\n                case '/': stack[++top] = l / r; break;\n            }\n        }\n    }\n    return stack[top];\n}",
+          "code_language": "c",
+          "key_points": [
+            "First pop = right operand, second = left"
+          ],
+          "gotchas": [
+            "Swapping left/right gives wrong answer for - and /"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check for balanced parentheses using a stack?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["stack", "parentheses", "balanced", "matching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Balanced parentheses checking is a classic stack application. For each opening bracket, push it. For each closing bracket, pop and verify it matches.\n\n**Algorithm:**\n1. Scan string left to right\n2. **Opening bracket** (`(`, `[`, `{`): Push onto stack\n3. **Closing bracket** (`)`, `]`, `}`): Pop from stack and check if it matches\n4. At the end, the stack should be empty (all brackets matched)\n\n**Invalid cases:**\n- Closing bracket with empty stack (extra closing)\n- Popped bracket does not match (mismatched types)\n- Non-empty stack at end (extra opening)",
+          "pseudo_code": "IsBalanced(str):\n  for each char c in str:\n    if c is opening bracket:\n      stack.push(c)\n    else if c is closing bracket:\n      if stack is empty: return false\n      top = stack.pop()\n      if top does not match c: return false\n  return stack.isEmpty()",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n#define MAX 1000\n\nchar stack[MAX];\nint top = -1;\n\nvoid push(char c)  { stack[++top] = c; }\nchar pop(void)     { return stack[top--]; }\nint isEmpty(void)  { return top == -1; }\n\nint isMatchingPair(char open, char close) {\n    return (open == '(' && close == ')') ||\n           (open == '[' && close == ']') ||\n           (open == '{' && close == '}');\n}\n\nint isBalanced(const char *expr) {\n    top = -1;  /* reset stack */\n\n    for (int i = 0; expr[i] != '\\0'; i++) {\n        char c = expr[i];\n\n        if (c == '(' || c == '[' || c == '{') {\n            push(c);\n        } else if (c == ')' || c == ']' || c == '}') {\n            if (isEmpty())\n                return 0;  /* extra closing bracket */\n            char open = pop();\n            if (!isMatchingPair(open, c))\n                return 0;  /* mismatched brackets */\n        }\n        /* non-bracket characters are ignored */\n    }\n\n    return isEmpty();  /* true if all brackets matched */\n}\n\nint main(void) {\n    const char *tests[] = {\n        \"{[()]}\",       /* balanced */\n        \"{[(])}\",       /* mismatched */\n        \"((())\",        /* extra opening */\n        \"())\",          /* extra closing */\n        \"a*(b+c)-[d/e]\", /* balanced with non-bracket chars */\n    };\n    int n = sizeof(tests) / sizeof(tests[0]);\n\n    for (int i = 0; i < n; i++) {\n        printf(\"\\\"%s\\\" -> %s\\n\", tests[i],\n               isBalanced(tests[i]) ? \"Balanced\" : \"Not balanced\");\n    }\n    /* Output:\n       \"{[()]}\" -> Balanced\n       \"{[(])}\" -> Not balanced\n       \"((())\" -> Not balanced\n       \"())\" -> Not balanced\n       \"a*(b+c)-[d/e]\" -> Balanced\n    */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Push opening brackets, pop and match on closing brackets",
+            "Three failure conditions: empty stack on close, mismatch, non-empty at end",
+            "Non-bracket characters should be ignored",
+            "O(n) time, O(n) space in worst case (all opening brackets)",
+            "Common interview question -- often the first stack application asked"
+          ],
+          "gotchas": [
+            "Forgetting to check isEmpty() before pop leads to stack underflow",
+            "Only checking for '(' and ')' and forgetting '[' ']' '{' '}' in a full solution",
+            "Not checking stack is empty at the end misses unmatched opening brackets",
+            "Global stack state must be reset between calls (top = -1)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Push opening brackets. On closing, pop and check match. At end, stack must be empty. Three failure cases: empty stack on close, mismatch, non-empty at end.",
+          "pseudo_code": "",
+          "actual_code": "int isBalanced(const char *s) {\n    char stack[1000]; int top = -1;\n    for (int i = 0; s[i]; i++) {\n        if (s[i] == '(' || s[i] == '[' || s[i] == '{') {\n            stack[++top] = s[i];\n        } else if (s[i] == ')' || s[i] == ']' || s[i] == '}') {\n            if (top < 0) return 0;\n            char o = stack[top--];\n            if ((s[i]==')' && o!='(') || (s[i]==']' && o!='[') || (s[i]=='}' && o!='{'))\n                return 0;\n        }\n    }\n    return top == -1;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Push opens, pop and match on closes, stack must be empty at end"
+          ],
+          "gotchas": [
+            "Not checking empty stack at the end misses unmatched opening brackets"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a queue using a circular array (circular buffer) in C?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["queue", "circular-buffer", "array", "FIFO"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **queue** is a First-In-First-Out (FIFO) data structure. A circular buffer avoids the problem of wasted space in a linear array implementation.\n\n**Key idea:** Use modulo arithmetic (`% capacity`) so indices wrap around from the end of the array back to the beginning.\n\n**Design:**\n- `front`: index of the first element\n- `rear`: index of the last element (or next empty slot)\n- `count`: number of elements (simplifies full/empty detection)\n\n**Without count:** Distinguish full from empty using `(rear + 1) % capacity == front` for full (wastes one slot) or use a boolean flag.\n\n**Operations:** enqueue, dequeue, peek, isEmpty, isFull -- all O(1).",
+          "pseudo_code": "CircularQueue:\n  arr[MAX], front = 0, rear = -1, count = 0\n\nEnqueue(queue, value):\n  if count == MAX: overflow\n  rear = (rear + 1) % MAX\n  arr[rear] = value\n  count++\n\nDequeue(queue):\n  if count == 0: underflow\n  value = arr[front]\n  front = (front + 1) % MAX\n  count--\n  return value",
+          "actual_code": "#include <stdio.h>\n\n#define MAX 5\n\ntypedef struct {\n    int arr[MAX];\n    int front;\n    int rear;\n    int count;\n} Queue;\n\nvoid initQueue(Queue *q) {\n    q->front = 0;\n    q->rear = -1;\n    q->count = 0;\n}\n\nint isEmpty(Queue *q) { return q->count == 0; }\nint isFull(Queue *q)  { return q->count == MAX; }\n\nvoid enqueue(Queue *q, int val) {\n    if (isFull(q)) {\n        fprintf(stderr, \"Queue overflow\\n\");\n        return;\n    }\n    q->rear = (q->rear + 1) % MAX;  /* wrap around */\n    q->arr[q->rear] = val;\n    q->count++;\n}\n\nint dequeue(Queue *q) {\n    if (isEmpty(q)) {\n        fprintf(stderr, \"Queue underflow\\n\");\n        return -1;\n    }\n    int val = q->arr[q->front];\n    q->front = (q->front + 1) % MAX;  /* wrap around */\n    q->count--;\n    return val;\n}\n\nint peekFront(Queue *q) {\n    if (isEmpty(q)) return -1;\n    return q->arr[q->front];\n}\n\nint main(void) {\n    Queue q;\n    initQueue(&q);\n\n    enqueue(&q, 10);\n    enqueue(&q, 20);\n    enqueue(&q, 30);\n    printf(\"Dequeue: %d\\n\", dequeue(&q));  /* 10 (FIFO) */\n\n    enqueue(&q, 40);\n    enqueue(&q, 50);\n    /* Queue now wraps around in the array */\n    enqueue(&q, 60);\n    printf(\"Front: %d\\n\", peekFront(&q));  /* 20 */\n\n    while (!isEmpty(&q))\n        printf(\"Dequeue: %d\\n\", dequeue(&q));  /* 20, 30, 40, 50, 60 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Circular buffer uses modulo to wrap indices: (index + 1) % MAX",
+            "All operations are O(1)",
+            "Using a count field simplifies full/empty detection",
+            "FIFO: first enqueued element is first dequeued",
+            "Without count, one slot is wasted to distinguish full from empty"
+          ],
+          "gotchas": [
+            "Without a count or flag, front == rear is ambiguous (full or empty)",
+            "Forgetting the modulo wrap-around causes array out-of-bounds access",
+            "Initializing rear to -1 (last occupied) vs front (next empty) changes the logic",
+            "Fixed capacity -- must either reject or resize on overflow"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Circular array queue: use `% capacity` for index wrap-around. Track front, rear, and count. FIFO: enqueue at rear, dequeue from front. All ops O(1).",
+          "pseudo_code": "",
+          "actual_code": "typedef struct { int arr[100]; int front, rear, count; } Queue;\n\nvoid initQueue(Queue *q) { q->front = 0; q->rear = -1; q->count = 0; }\nvoid enqueue(Queue *q, int v) {\n    q->rear = (q->rear + 1) % 100;\n    q->arr[q->rear] = v;\n    q->count++;\n}\nint dequeue(Queue *q) {\n    int v = q->arr[q->front];\n    q->front = (q->front + 1) % 100;\n    q->count--;\n    return v;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Modulo arithmetic for circular wrap-around, all ops O(1)"
+          ],
+          "gotchas": [
+            "Without count field, full and empty states look the same (front == rear)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a queue using a linked list in C?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["queue", "linked-list", "FIFO", "dynamic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A linked-list queue maintains **front** and **rear** pointers:\n- **Enqueue:** Create a new node, attach to rear, update rear pointer\n- **Dequeue:** Remove the front node, update front pointer\n\nBoth operations are O(1) because we maintain a tail/rear pointer.\n\n**Advantages:** No fixed capacity, grows dynamically.\n**Disadvantages:** malloc/free overhead per operation, not cache-friendly.\n\n**Empty queue:** Both front and rear are NULL.",
+          "pseudo_code": "Queue:\n  Node *front = NULL\n  Node *rear = NULL\n\nEnqueue(queue, value):\n  new = createNode(value)\n  if rear is NULL:\n    front = rear = new\n  else:\n    rear->next = new\n    rear = new\n\nDequeue(queue):\n  if front is NULL: underflow\n  temp = front\n  value = temp->data\n  front = front->next\n  if front is NULL: rear = NULL\n  free(temp)\n  return value",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node {\n    int data;\n    struct Node *next;\n} Node;\n\ntypedef struct {\n    Node *front;\n    Node *rear;\n    int count;\n} Queue;\n\nvoid initQueue(Queue *q) {\n    q->front = q->rear = NULL;\n    q->count = 0;\n}\n\nint isEmpty(Queue *q) { return q->front == NULL; }\n\nvoid enqueue(Queue *q, int val) {\n    Node *newNode = (Node *)malloc(sizeof(Node));\n    if (!newNode) { perror(\"malloc\"); exit(1); }\n    newNode->data = val;\n    newNode->next = NULL;\n\n    if (q->rear == NULL) {\n        q->front = q->rear = newNode;\n    } else {\n        q->rear->next = newNode;\n        q->rear = newNode;\n    }\n    q->count++;\n}\n\nint dequeue(Queue *q) {\n    if (isEmpty(q)) {\n        fprintf(stderr, \"Queue underflow\\n\");\n        return -1;\n    }\n    Node *temp = q->front;\n    int val = temp->data;\n    q->front = q->front->next;\n\n    if (q->front == NULL)\n        q->rear = NULL;  /* queue is now empty */\n\n    free(temp);\n    q->count--;\n    return val;\n}\n\nint peekFront(Queue *q) {\n    if (isEmpty(q)) return -1;\n    return q->front->data;\n}\n\nvoid freeQueue(Queue *q) {\n    while (!isEmpty(q))\n        dequeue(q);\n}\n\nint main(void) {\n    Queue q;\n    initQueue(&q);\n\n    enqueue(&q, 10);\n    enqueue(&q, 20);\n    enqueue(&q, 30);\n\n    printf(\"Front: %d\\n\", peekFront(&q));    /* 10 */\n    printf(\"Dequeue: %d\\n\", dequeue(&q));    /* 10 */\n    printf(\"Dequeue: %d\\n\", dequeue(&q));    /* 20 */\n    printf(\"Count: %d\\n\", q.count);          /* 1 */\n\n    freeQueue(&q);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Maintain both front and rear pointers for O(1) enqueue and dequeue",
+            "Enqueue at rear, dequeue from front (FIFO)",
+            "When dequeuing the last element, must set rear to NULL too",
+            "No fixed capacity -- grows dynamically",
+            "Free nodes on dequeue to prevent memory leaks"
+          ],
+          "gotchas": [
+            "Forgetting to update rear to NULL when the last element is dequeued causes dangling pointer",
+            "Enqueue on empty queue: must set both front AND rear to the new node",
+            "malloc failure on enqueue should be handled",
+            "More memory per element than array queue (pointer overhead)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Maintain front and rear pointers. Enqueue at rear, dequeue from front. Both O(1). When last element removed, set both to NULL.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct Node { int data; struct Node *next; } Node;\ntypedef struct { Node *front; Node *rear; } Queue;\n\nvoid enqueue(Queue *q, int val) {\n    Node *n = (Node *)malloc(sizeof(Node));\n    n->data = val; n->next = NULL;\n    if (!q->rear) { q->front = q->rear = n; return; }\n    q->rear->next = n; q->rear = n;\n}\n\nint dequeue(Queue *q) {\n    Node *tmp = q->front;\n    int val = tmp->data;\n    q->front = tmp->next;\n    if (!q->front) q->rear = NULL;\n    free(tmp);\n    return val;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Front and rear pointers, both O(1)"
+          ],
+          "gotchas": [
+            "Must NULL rear when dequeuing the last element"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define a binary tree node and implement basic tree structure in C?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["tree", "binary-tree", "node-structure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **binary tree** node contains data and pointers to left and right children. Each node has at most two children.\n\n**Terminology:**\n- **Root:** Top node with no parent\n- **Leaf:** Node with no children (both left and right are NULL)\n- **Height:** Longest path from root to a leaf\n- **Depth:** Distance from root to a node\n- **Complete binary tree:** All levels filled except possibly the last (filled left to right)\n- **Full binary tree:** Every node has 0 or 2 children\n- **Perfect binary tree:** All interior nodes have 2 children, all leaves at same level\n\nA tree with n nodes has exactly n-1 edges.",
+          "pseudo_code": "TreeNode structure:\n  int data\n  TreeNode *left\n  TreeNode *right\n\nCreateNode(value):\n  node = malloc(sizeof(TreeNode))\n  node->data = value\n  node->left = NULL\n  node->right = NULL\n  return node",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *node = (TreeNode *)malloc(sizeof(TreeNode));\n    if (!node) { perror(\"malloc\"); exit(1); }\n    node->data = val;\n    node->left = NULL;\n    node->right = NULL;\n    return node;\n}\n\n/* Check if a node is a leaf */\nint isLeaf(TreeNode *node) {\n    return node != NULL && node->left == NULL && node->right == NULL;\n}\n\n/* Count total nodes */\nint countNodes(TreeNode *root) {\n    if (root == NULL) return 0;\n    return 1 + countNodes(root->left) + countNodes(root->right);\n}\n\n/* Count leaf nodes */\nint countLeaves(TreeNode *root) {\n    if (root == NULL) return 0;\n    if (isLeaf(root)) return 1;\n    return countLeaves(root->left) + countLeaves(root->right);\n}\n\nvoid freeTree(TreeNode *root) {\n    if (root == NULL) return;\n    freeTree(root->left);\n    freeTree(root->right);\n    free(root);\n}\n\nint main(void) {\n    /*       1\n     *      / \\\n     *     2   3\n     *    / \\\n     *   4   5\n     */\n    TreeNode *root = createNode(1);\n    root->left = createNode(2);\n    root->right = createNode(3);\n    root->left->left = createNode(4);\n    root->left->right = createNode(5);\n\n    printf(\"Total nodes: %d\\n\", countNodes(root));   /* 5 */\n    printf(\"Leaf nodes: %d\\n\", countLeaves(root));   /* 3 (nodes 3, 4, 5) */\n    printf(\"Is 3 a leaf? %d\\n\", isLeaf(root->right)); /* 1 */\n    printf(\"Is 2 a leaf? %d\\n\", isLeaf(root->left));  /* 0 */\n\n    freeTree(root);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Binary tree node: data + left pointer + right pointer",
+            "Leaf node: both children are NULL",
+            "Tree with n nodes has n-1 edges",
+            "Recursive structure: trees are naturally recursive (subtrees)",
+            "Always free tree with post-order traversal (free children before parent)"
+          ],
+          "gotchas": [
+            "Forgetting to initialize left and right to NULL leads to garbage pointers",
+            "Freeing a tree requires post-order (children first) -- freeing parent first loses child pointers",
+            "Binary tree is NOT the same as binary search tree (BST has ordering)",
+            "A tree with only one node has height 0 (or 1, depending on convention -- clarify with interviewer)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Binary tree node has data, left child, and right child pointers. Leaf = both children NULL. Recursion is natural for tree operations.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Data + left + right pointers",
+            "Initialize children to NULL"
+          ],
+          "gotchas": [
+            "Not initializing children to NULL leads to garbage pointers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement inorder, preorder, and postorder tree traversals recursively?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["tree", "traversal", "inorder", "preorder", "postorder", "DFS"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The three depth-first tree traversals differ only in when the **root** is processed relative to its children:\n\n| Traversal | Order | Use Case |\n|-----------|-------|----------|\n| **Inorder** | Left, Root, Right | BST gives sorted order |\n| **Preorder** | Root, Left, Right | Copy tree, serialize |\n| **Postorder** | Left, Right, Root | Delete tree, evaluate expression tree |\n\nAll three are O(n) time and O(h) space (call stack), where h is the height.\n\n**Mnemonic:** The name tells you when the root is visited:\n- **In**order: root is **in** the middle\n- **Pre**order: root is **before** (first)\n- **Post**order: root is **after** (last)",
+          "pseudo_code": "Inorder(node):\n  if node is NULL: return\n  Inorder(node->left)     // L\n  process(node->data)     // Root\n  Inorder(node->right)    // R\n\nPreorder(node):\n  if node is NULL: return\n  process(node->data)     // Root\n  Preorder(node->left)    // L\n  Preorder(node->right)   // R\n\nPostorder(node):\n  if node is NULL: return\n  Postorder(node->left)   // L\n  Postorder(node->right)  // R\n  process(node->data)     // Root",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\n/* Inorder: Left, Root, Right */\nvoid inorder(TreeNode *node) {\n    if (node == NULL) return;\n    inorder(node->left);\n    printf(\"%d \", node->data);\n    inorder(node->right);\n}\n\n/* Preorder: Root, Left, Right */\nvoid preorder(TreeNode *node) {\n    if (node == NULL) return;\n    printf(\"%d \", node->data);\n    preorder(node->left);\n    preorder(node->right);\n}\n\n/* Postorder: Left, Right, Root */\nvoid postorder(TreeNode *node) {\n    if (node == NULL) return;\n    postorder(node->left);\n    postorder(node->right);\n    printf(\"%d \", node->data);\n}\n\nint main(void) {\n    /*       1\n     *      / \\\n     *     2   3\n     *    / \\\n     *   4   5\n     */\n    TreeNode *root = createNode(1);\n    root->left = createNode(2);\n    root->right = createNode(3);\n    root->left->left = createNode(4);\n    root->left->right = createNode(5);\n\n    printf(\"Inorder:   \"); inorder(root);   printf(\"\\n\");  /* 4 2 5 1 3 */\n    printf(\"Preorder:  \"); preorder(root);  printf(\"\\n\");  /* 1 2 4 5 3 */\n    printf(\"Postorder: \"); postorder(root); printf(\"\\n\");  /* 4 5 2 3 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Inorder (L-Root-R): gives sorted order for BST",
+            "Preorder (Root-L-R): used to copy/serialize a tree",
+            "Postorder (L-R-Root): used to free/delete a tree",
+            "All are O(n) time, O(h) space where h = height",
+            "Base case is always: if node == NULL, return"
+          ],
+          "gotchas": [
+            "Inorder on a non-BST tree does NOT produce sorted output",
+            "Deep/skewed trees cause stack overflow with recursive traversals",
+            "Forgetting the NULL base case causes segfault",
+            "For tree deletion, MUST use postorder (free children before parent)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Inorder:** L, Root, R (sorted for BST). **Preorder:** Root, L, R (copy/serialize). **Postorder:** L, R, Root (delete/free). All O(n) time, O(h) space.",
+          "pseudo_code": "",
+          "actual_code": "void inorder(TreeNode *n) {\n    if (!n) return;\n    inorder(n->left);\n    printf(\"%d \", n->data);\n    inorder(n->right);\n}\nvoid preorder(TreeNode *n) {\n    if (!n) return;\n    printf(\"%d \", n->data);\n    preorder(n->left);\n    preorder(n->right);\n}\nvoid postorder(TreeNode *n) {\n    if (!n) return;\n    postorder(n->left);\n    postorder(n->right);\n    printf(\"%d \", n->data);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Name tells when root is visited: pre (first), in (middle), post (last)"
+          ],
+          "gotchas": [
+            "Use postorder to free a tree -- freeing parent first loses children"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement level-order (BFS) traversal of a binary tree using a queue?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["tree", "BFS", "level-order", "queue"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Level-order traversal** visits nodes level by level, left to right. It uses a **queue** (FIFO) instead of the call stack.\n\n**Algorithm:**\n1. Enqueue the root\n2. While queue is not empty:\n   a. Dequeue a node, process it\n   b. Enqueue its left child (if exists)\n   c. Enqueue its right child (if exists)\n\nThis is essentially **BFS (Breadth-First Search)** on a tree.\n\n**Time:** O(n), **Space:** O(w) where w is the maximum width of the tree (up to n/2 for a complete tree).\n\n**Variant:** To print level by level (with newlines), track the size of the queue at the start of each level.",
+          "pseudo_code": "LevelOrder(root):\n  if root is NULL: return\n  queue = empty queue\n  enqueue(root)\n  while queue is not empty:\n    node = dequeue()\n    process(node->data)\n    if node->left: enqueue(node->left)\n    if node->right: enqueue(node->right)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\n/* Simple queue for tree node pointers */\n#define MAX_Q 100\ntypedef struct {\n    TreeNode *arr[MAX_Q];\n    int front, rear, count;\n} Queue;\n\nvoid initQ(Queue *q) { q->front = 0; q->rear = -1; q->count = 0; }\nint isEmptyQ(Queue *q) { return q->count == 0; }\nvoid enqueue(Queue *q, TreeNode *node) {\n    q->rear = (q->rear + 1) % MAX_Q;\n    q->arr[q->rear] = node;\n    q->count++;\n}\nTreeNode *dequeue(Queue *q) {\n    TreeNode *node = q->arr[q->front];\n    q->front = (q->front + 1) % MAX_Q;\n    q->count--;\n    return node;\n}\n\n/* Level-order (BFS) traversal */\nvoid levelOrder(TreeNode *root) {\n    if (root == NULL) return;\n\n    Queue q;\n    initQ(&q);\n    enqueue(&q, root);\n\n    while (!isEmptyQ(&q)) {\n        TreeNode *node = dequeue(&q);\n        printf(\"%d \", node->data);\n\n        if (node->left)  enqueue(&q, node->left);\n        if (node->right) enqueue(&q, node->right);\n    }\n    printf(\"\\n\");\n}\n\n/* Level-by-level printing */\nvoid levelOrderByLevel(TreeNode *root) {\n    if (root == NULL) return;\n\n    Queue q;\n    initQ(&q);\n    enqueue(&q, root);\n\n    while (!isEmptyQ(&q)) {\n        int levelSize = q.count;  /* nodes at current level */\n        for (int i = 0; i < levelSize; i++) {\n            TreeNode *node = dequeue(&q);\n            printf(\"%d \", node->data);\n            if (node->left)  enqueue(&q, node->left);\n            if (node->right) enqueue(&q, node->right);\n        }\n        printf(\"\\n\");  /* newline after each level */\n    }\n}\n\nint main(void) {\n    /*       1\n     *      / \\\n     *     2   3\n     *    / \\   \\\n     *   4   5   6\n     */\n    TreeNode *root = createNode(1);\n    root->left = createNode(2);\n    root->right = createNode(3);\n    root->left->left = createNode(4);\n    root->left->right = createNode(5);\n    root->right->right = createNode(6);\n\n    printf(\"Level order: \");\n    levelOrder(root);          /* 1 2 3 4 5 6 */\n\n    printf(\"By level:\\n\");\n    levelOrderByLevel(root);\n    /* 1\n       2 3\n       4 5 6 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "BFS using a queue: enqueue root, dequeue-process-enqueue children",
+            "O(n) time, O(w) space where w = max width",
+            "Level-by-level: track queue size at start of each level",
+            "Unlike DFS traversals (inorder etc.), this is not naturally recursive",
+            "C has no built-in queue -- must implement one (array or linked list)"
+          ],
+          "gotchas": [
+            "Queue must store pointers (TreeNode *), not copies of nodes",
+            "Queue overflow if tree is too wide for the array -- size accordingly",
+            "NULL root should be handled before enqueuing",
+            "This is BFS, not DFS -- uses queue, not stack"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "BFS with a queue: enqueue root, then repeatedly dequeue, process, enqueue children. O(n) time, O(w) space.",
+          "pseudo_code": "",
+          "actual_code": "void levelOrder(TreeNode *root) {\n    if (!root) return;\n    TreeNode *queue[100];\n    int front = 0, rear = 0;\n    queue[rear++] = root;\n    while (front < rear) {\n        TreeNode *n = queue[front++];\n        printf(\"%d \", n->data);\n        if (n->left)  queue[rear++] = n->left;\n        if (n->right) queue[rear++] = n->right;\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "Queue-based BFS: enqueue root, dequeue-process-enqueue children"
+          ],
+          "gotchas": [
+            "Linear queue (non-circular) wastes space -- use circular for production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement insert, search, and delete operations in a Binary Search Tree (BST)?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["BST", "binary-search-tree", "insert", "search", "delete"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **Binary Search Tree (BST)** maintains the invariant: for every node, all values in the left subtree are **less** and all values in the right subtree are **greater**.\n\n**Search (O(h)):** Compare target with current node. Go left if smaller, right if larger.\n\n**Insert (O(h)):** Search for the correct position, insert as a leaf.\n\n**Delete (O(h)):** Three cases:\n1. **Leaf node:** Simply remove (free)\n2. **One child:** Replace node with its child\n3. **Two children:** Replace with inorder successor (smallest in right subtree) or inorder predecessor (largest in left subtree), then delete the successor\n\n**h** is the height: O(log n) for balanced trees, O(n) for skewed trees.",
+          "pseudo_code": "Search(root, key):\n  if root is NULL or root->data == key: return root\n  if key < root->data: return Search(root->left, key)\n  else: return Search(root->right, key)\n\nInsert(root, key):\n  if root is NULL: return createNode(key)\n  if key < root->data: root->left = Insert(root->left, key)\n  else if key > root->data: root->right = Insert(root->right, key)\n  return root  // duplicate ignored\n\nDelete(root, key):\n  if root is NULL: return NULL\n  if key < root->data: root->left = Delete(root->left, key)\n  else if key > root->data: root->right = Delete(root->right, key)\n  else:  // found the node\n    if no left child: return right child\n    if no right child: return left child\n    // two children: find inorder successor\n    successor = minNode(root->right)\n    root->data = successor->data\n    root->right = Delete(root->right, successor->data)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\n/* Search: O(h) */\nTreeNode *search(TreeNode *root, int key) {\n    if (root == NULL || root->data == key)\n        return root;\n    if (key < root->data)\n        return search(root->left, key);\n    return search(root->right, key);\n}\n\n/* Insert: O(h) */\nTreeNode *insert(TreeNode *root, int key) {\n    if (root == NULL)\n        return createNode(key);\n    if (key < root->data)\n        root->left = insert(root->left, key);\n    else if (key > root->data)\n        root->right = insert(root->right, key);\n    /* duplicate keys ignored */\n    return root;\n}\n\n/* Find minimum node in a subtree */\nTreeNode *findMin(TreeNode *node) {\n    while (node->left != NULL)\n        node = node->left;\n    return node;\n}\n\n/* Delete: O(h) */\nTreeNode *delete(TreeNode *root, int key) {\n    if (root == NULL) return NULL;\n\n    if (key < root->data) {\n        root->left = delete(root->left, key);\n    } else if (key > root->data) {\n        root->right = delete(root->right, key);\n    } else {\n        /* Found the node to delete */\n\n        /* Case 1 & 2: zero or one child */\n        if (root->left == NULL) {\n            TreeNode *temp = root->right;\n            free(root);\n            return temp;\n        }\n        if (root->right == NULL) {\n            TreeNode *temp = root->left;\n            free(root);\n            return temp;\n        }\n\n        /* Case 3: two children */\n        TreeNode *successor = findMin(root->right);\n        root->data = successor->data;\n        root->right = delete(root->right, successor->data);\n    }\n    return root;\n}\n\nvoid inorder(TreeNode *root) {\n    if (!root) return;\n    inorder(root->left);\n    printf(\"%d \", root->data);\n    inorder(root->right);\n}\n\nint main(void) {\n    TreeNode *root = NULL;\n    int keys[] = {50, 30, 70, 20, 40, 60, 80};\n    for (int i = 0; i < 7; i++)\n        root = insert(root, keys[i]);\n\n    printf(\"Inorder: \"); inorder(root); printf(\"\\n\");\n    /* 20 30 40 50 60 70 80 */\n\n    /* Search */\n    TreeNode *found = search(root, 40);\n    printf(\"Found 40: %s\\n\", found ? \"yes\" : \"no\");  /* yes */\n\n    /* Delete node with two children (50) */\n    root = delete(root, 50);\n    printf(\"After deleting 50: \"); inorder(root); printf(\"\\n\");\n    /* 20 30 40 60 70 80 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "BST invariant: left < root < right",
+            "Search, insert, delete are all O(h) where h is the height",
+            "Delete with two children: replace with inorder successor (min of right subtree)",
+            "Inorder traversal of BST gives sorted order",
+            "Balanced BST: h = O(log n), skewed BST: h = O(n)"
+          ],
+          "gotchas": [
+            "delete is a keyword-like identifier in C++ but valid in C -- still, consider naming it bstDelete",
+            "Forgetting to reassign root->left or root->right from the recursive call loses the updated subtree",
+            "Deleting a node and not freeing it causes memory leak",
+            "Duplicate handling must be defined: ignore, count, or store in left/right"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "BST: left < root < right. Search/insert follow comparisons. Delete has 3 cases: leaf, one child (replace with child), two children (replace with inorder successor). All O(h).",
+          "pseudo_code": "",
+          "actual_code": "TreeNode *insert(TreeNode *root, int key) {\n    if (!root) return createNode(key);\n    if (key < root->data) root->left = insert(root->left, key);\n    else if (key > root->data) root->right = insert(root->right, key);\n    return root;\n}\n\nTreeNode *search(TreeNode *root, int key) {\n    if (!root || root->data == key) return root;\n    return key < root->data ? search(root->left, key) : search(root->right, key);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Left < root < right, all ops O(h)"
+          ],
+          "gotchas": [
+            "Skewed BST degrades to O(n) -- use balanced BST (AVL/Red-Black) for guarantee"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the height (or depth) of a binary tree?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["tree", "height", "depth", "recursive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Height** of a tree is the number of edges on the longest path from the root to a leaf. (Some definitions count nodes instead of edges -- clarify with interviewer.)\n\n**Recursive approach:**\n- Height of NULL tree = -1 (edge convention) or 0 (node convention)\n- Height = 1 + max(height(left), height(right))\n\n**Iterative approach:** Use level-order traversal and count levels.\n\n**Common conventions:**\n- Empty tree: height = -1 (edge-based) or 0 (some use this)\n- Single node: height = 0 (edge-based) or 1 (node-based)\n\n**Time:** O(n), **Space:** O(h) for recursive, O(w) for iterative.",
+          "pseudo_code": "Height(root):\n  if root is NULL:\n    return -1  // edge convention\n  leftHeight = Height(root->left)\n  rightHeight = Height(root->right)\n  return 1 + max(leftHeight, rightHeight)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\n/* Height: number of edges on longest root-to-leaf path */\nint height(TreeNode *root) {\n    if (root == NULL)\n        return -1;  /* edge convention: empty tree has height -1 */\n\n    int leftH = height(root->left);\n    int rightH = height(root->right);\n\n    return 1 + (leftH > rightH ? leftH : rightH);\n}\n\n/* Alternative: node-count convention (height = number of nodes on longest path) */\nint heightNodeCount(TreeNode *root) {\n    if (root == NULL)\n        return 0;\n\n    int leftH = heightNodeCount(root->left);\n    int rightH = heightNodeCount(root->right);\n\n    return 1 + (leftH > rightH ? leftH : rightH);\n}\n\n/* Depth of a specific node (distance from root) */\nint depth(TreeNode *root, int target, int currentDepth) {\n    if (root == NULL) return -1;\n    if (root->data == target) return currentDepth;\n\n    int left = depth(root->left, target, currentDepth + 1);\n    if (left != -1) return left;\n    return depth(root->right, target, currentDepth + 1);\n}\n\nint main(void) {\n    /*       1\n     *      / \\\n     *     2   3\n     *    /\n     *   4\n     *  /\n     * 5\n     */\n    TreeNode *root = createNode(1);\n    root->left = createNode(2);\n    root->right = createNode(3);\n    root->left->left = createNode(4);\n    root->left->left->left = createNode(5);\n\n    printf(\"Height (edges): %d\\n\", height(root));           /* 3 */\n    printf(\"Height (nodes): %d\\n\", heightNodeCount(root));  /* 4 */\n    printf(\"Depth of 4: %d\\n\", depth(root, 4, 0));          /* 2 */\n    printf(\"Depth of 5: %d\\n\", depth(root, 5, 0));          /* 3 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Height = 1 + max(left height, right height)",
+            "Base case: NULL returns -1 (edge convention) or 0 (node convention)",
+            "Depth of a node = distance from root (0 for root)",
+            "O(n) time -- must visit every node",
+            "Height of balanced tree: O(log n), skewed tree: O(n)"
+          ],
+          "gotchas": [
+            "Convention ambiguity: edge-count vs node-count -- clarify with interviewer",
+            "Empty tree height: -1 or 0 depending on convention",
+            "Height and depth are different: height goes down (root to leaf), depth goes down (root to node)",
+            "C has no built-in max() -- use ternary operator or define a macro"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Recursively: `height(node) = 1 + max(height(left), height(right))`. Base: NULL returns -1 (edge count) or 0 (node count). O(n) time.",
+          "pseudo_code": "",
+          "actual_code": "int height(TreeNode *root) {\n    if (!root) return -1;\n    int l = height(root->left);\n    int r = height(root->right);\n    return 1 + (l > r ? l : r);\n}",
+          "code_language": "c",
+          "key_points": [
+            "height = 1 + max(left, right), base = -1 for NULL"
+          ],
+          "gotchas": [
+            "Clarify edge-count vs node-count convention with interviewer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a binary tree is a valid BST?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["BST", "validation", "range-check", "inorder"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Checking if a tree is a valid BST requires verifying that **every** node satisfies the BST property, not just its immediate children.\n\n**Wrong approach:** Checking `node->left->data < node->data < node->right->data` only checks direct children. A node deep in the left subtree could still violate the BST property relative to an ancestor.\n\n**Correct approach 1 -- Min/Max range:**\nPass valid range (min, max) down the recursion. Each node must be within its allowed range.\n\n**Correct approach 2 -- Inorder traversal:**\nInorder traversal of a BST produces sorted output. Track the previous value and ensure each value is greater.\n\n**Time:** O(n), **Space:** O(h) for both approaches.",
+          "pseudo_code": "Approach 1 - Range check:\nIsBST(node, min, max):\n  if node is NULL: return true\n  if node->data <= min or node->data >= max: return false\n  return IsBST(node->left, min, node->data) AND\n         IsBST(node->right, node->data, max)\n\nInitial call: IsBST(root, INT_MIN, INT_MAX)\n\nApproach 2 - Inorder:\nIsBST_Inorder(node, prev):\n  if node is NULL: return true\n  if !IsBST_Inorder(node->left, prev): return false\n  if *prev >= node->data: return false\n  *prev = node->data\n  return IsBST_Inorder(node->right, prev)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <limits.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\n/* Approach 1: Min/Max range check */\nint isBSTHelper(TreeNode *node, long min, long max) {\n    if (node == NULL) return 1;\n\n    if (node->data <= min || node->data >= max)\n        return 0;\n\n    return isBSTHelper(node->left, min, node->data) &&\n           isBSTHelper(node->right, node->data, max);\n}\n\nint isBST(TreeNode *root) {\n    return isBSTHelper(root, LONG_MIN, LONG_MAX);\n}\n\n/* Approach 2: Inorder traversal check */\nint isBSTInorder(TreeNode *node, long *prev) {\n    if (node == NULL) return 1;\n\n    if (!isBSTInorder(node->left, prev))\n        return 0;\n\n    if (*prev >= node->data)\n        return 0;  /* not strictly increasing */\n\n    *prev = node->data;\n    return isBSTInorder(node->right, prev);\n}\n\nint isBSTv2(TreeNode *root) {\n    long prev = LONG_MIN;\n    return isBSTInorder(root, &prev);\n}\n\nint main(void) {\n    /* Valid BST:\n     *       5\n     *      / \\\n     *     3   7\n     *    / \\   \\\n     *   2   4   8\n     */\n    TreeNode *valid = createNode(5);\n    valid->left = createNode(3);\n    valid->right = createNode(7);\n    valid->left->left = createNode(2);\n    valid->left->right = createNode(4);\n    valid->right->right = createNode(8);\n\n    /* Invalid BST (6 in left subtree > 5):\n     *       5\n     *      / \\\n     *     3   7\n     *      \\\n     *       6    <-- violates BST: 6 > 5 but in left subtree\n     */\n    TreeNode *invalid = createNode(5);\n    invalid->left = createNode(3);\n    invalid->right = createNode(7);\n    invalid->left->right = createNode(6);\n\n    printf(\"Valid tree is BST: %d\\n\", isBST(valid));      /* 1 */\n    printf(\"Invalid tree is BST: %d\\n\", isBST(invalid));  /* 0 */\n    printf(\"Valid (v2): %d\\n\", isBSTv2(valid));            /* 1 */\n    printf(\"Invalid (v2): %d\\n\", isBSTv2(invalid));        /* 0 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Must check against ALL ancestors, not just parent",
+            "Range approach: pass (min, max) bounds down recursion",
+            "Inorder approach: values must be strictly increasing",
+            "Use long for bounds to handle INT_MIN/INT_MAX edge cases",
+            "O(n) time, O(h) space for both approaches"
+          ],
+          "gotchas": [
+            "Checking only immediate children is WRONG -- must validate against full ancestor chain",
+            "Using int for bounds fails when node values are INT_MIN or INT_MAX -- use long",
+            "Equal values: decide if duplicates are allowed (usually not in a BST)",
+            "Inorder approach must use a pointer for prev to maintain state across recursive calls"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pass (min, max) range down recursion. Each node must be within range. Or: inorder traversal must be strictly increasing. Both O(n).",
+          "pseudo_code": "",
+          "actual_code": "int isBSTHelper(TreeNode *n, long min, long max) {\n    if (!n) return 1;\n    if (n->data <= min || n->data >= max) return 0;\n    return isBSTHelper(n->left, min, n->data) &&\n           isBSTHelper(n->right, n->data, max);\n}\nint isBST(TreeNode *root) {\n    return isBSTHelper(root, LONG_MIN, LONG_MAX);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Range check validates against ALL ancestors, not just parent"
+          ],
+          "gotchas": [
+            "Checking only direct children is wrong -- will miss violations deeper in the tree"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the minimum and maximum values in a BST?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["BST", "minimum", "maximum", "leftmost", "rightmost"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In a BST, the **minimum** value is at the **leftmost** node and the **maximum** is at the **rightmost** node.\n\n**Minimum:** Keep going left until `node->left == NULL`.\n**Maximum:** Keep going right until `node->right == NULL`.\n\n**Time:** O(h) where h is the height (O(log n) for balanced BST, O(n) for skewed).\n\nThis property is used in:\n- BST deletion (finding inorder successor = min of right subtree)\n- Range queries\n- Floor/ceiling operations\n\n**Recursive vs Iterative:** Both are straightforward, but iterative is preferred (no stack overhead).",
+          "pseudo_code": "FindMin(root):\n  if root is NULL: error (empty tree)\n  while root->left != NULL:\n    root = root->left\n  return root\n\nFindMax(root):\n  if root is NULL: error (empty tree)\n  while root->right != NULL:\n    root = root->right\n  return root",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct TreeNode {\n    int data;\n    struct TreeNode *left;\n    struct TreeNode *right;\n} TreeNode;\n\nTreeNode *createNode(int val) {\n    TreeNode *n = (TreeNode *)malloc(sizeof(TreeNode));\n    n->data = val;\n    n->left = n->right = NULL;\n    return n;\n}\n\nTreeNode *insert(TreeNode *root, int key) {\n    if (!root) return createNode(key);\n    if (key < root->data) root->left = insert(root->left, key);\n    else if (key > root->data) root->right = insert(root->right, key);\n    return root;\n}\n\n/* Iterative: find minimum (leftmost node) */\nTreeNode *findMin(TreeNode *root) {\n    if (root == NULL) return NULL;\n    while (root->left != NULL)\n        root = root->left;\n    return root;\n}\n\n/* Iterative: find maximum (rightmost node) */\nTreeNode *findMax(TreeNode *root) {\n    if (root == NULL) return NULL;\n    while (root->right != NULL)\n        root = root->right;\n    return root;\n}\n\n/* Recursive versions */\nTreeNode *findMinRecursive(TreeNode *root) {\n    if (root == NULL || root->left == NULL)\n        return root;\n    return findMinRecursive(root->left);\n}\n\nTreeNode *findMaxRecursive(TreeNode *root) {\n    if (root == NULL || root->right == NULL)\n        return root;\n    return findMaxRecursive(root->right);\n}\n\nint main(void) {\n    TreeNode *root = NULL;\n    int keys[] = {50, 30, 70, 20, 40, 60, 80, 10};\n    for (int i = 0; i < 8; i++)\n        root = insert(root, keys[i]);\n\n    /*       50\n     *      /  \\\n     *    30    70\n     *   / \\   / \\\n     *  20 40 60  80\n     *  /\n     * 10\n     */\n\n    TreeNode *minNode = findMin(root);\n    TreeNode *maxNode = findMax(root);\n\n    printf(\"Minimum: %d\\n\", minNode->data);  /* 10 */\n    printf(\"Maximum: %d\\n\", maxNode->data);  /* 80 */\n\n    /* Min/max of a subtree (used in BST delete) */\n    TreeNode *minRight = findMin(root->right);\n    printf(\"Min of right subtree: %d\\n\", minRight->data);  /* 60 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Minimum: leftmost node (keep going left)",
+            "Maximum: rightmost node (keep going right)",
+            "O(h) time where h = tree height",
+            "Finding min of right subtree gives inorder successor (used in BST delete)",
+            "Iterative preferred over recursive (no stack overhead)"
+          ],
+          "gotchas": [
+            "Calling findMin/findMax on an empty tree (NULL root) -- must handle this case",
+            "This only works for BSTs, not general binary trees",
+            "For a general binary tree, you must traverse ALL nodes: O(n)",
+            "Skewed BST (all left or all right) degrades to O(n)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Min: follow left pointers to the leftmost node. Max: follow right pointers to the rightmost. O(h) time. Only works for BSTs.",
+          "pseudo_code": "",
+          "actual_code": "TreeNode *findMin(TreeNode *root) {\n    while (root && root->left) root = root->left;\n    return root;\n}\nTreeNode *findMax(TreeNode *root) {\n    while (root && root->right) root = root->right;\n    return root;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Min = leftmost, Max = rightmost, O(h)"
+          ],
+          "gotchas": [
+            "Only works for BSTs -- general binary trees need full traversal"
+          ]
+        }
+      ]
+    }
+  ]
+}

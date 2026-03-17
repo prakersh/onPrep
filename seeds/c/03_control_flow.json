@@ -1,0 +1,509 @@
+{
+  "concept_slug": "control-flow",
+  "questions": [
+    {
+      "title": "How do if/else if/else chains work in C?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["if-else", "conditional", "branching"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `if` statement evaluates a condition (any expression). If the expression is non-zero (true), the body executes. `else if` provides additional conditions. `else` catches all remaining cases.\n\n**Key rules:**\n- The condition can be any expression. Zero = false, non-zero = true.\n- Braces `{}` are optional for single statements but strongly recommended.\n- `else` binds to the nearest preceding unmatched `if` (dangling else problem).\n- Conditions are evaluated top-to-bottom; only the first true branch executes.\n- There is no `elif` keyword in C (unlike Python) -- it is `else if` (two keywords).",
+          "pseudo_code": "1. if (condition1) { ... }\n2. else if (condition2) { ... }  // only checked if condition1 is false\n3. else { ... }                  // runs if all conditions are false\n4. Conditions evaluated top-to-bottom\n5. Only the first matching branch executes\n6. Zero = false, non-zero = true",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int score = 85;\n\n    if (score >= 90) {\n        printf(\"Grade: A\\n\");\n    } else if (score >= 80) {\n        printf(\"Grade: B\\n\"); /* This prints */\n    } else if (score >= 70) {\n        printf(\"Grade: C\\n\");\n    } else {\n        printf(\"Grade: F\\n\");\n    }\n\n    /* Any non-zero value is true */\n    int x = 42;\n    if (x) {\n        printf(\"x is non-zero (truthy)\\n\"); /* Prints */\n    }\n\n    /* Common pattern: null check */\n    int *ptr = NULL;\n    if (ptr) {\n        printf(\"ptr is valid\\n\");\n    } else {\n        printf(\"ptr is NULL\\n\"); /* Prints */\n    }\n\n    /* Single-statement if (braces recommended anyway) */\n    if (score > 50)\n        printf(\"Passed\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Any non-zero expression is true; zero is false",
+            "Only the first matching branch executes",
+            "Always use braces, even for single-statement bodies",
+            "else binds to the nearest unmatched if",
+            "Null pointers evaluate to false; non-null to true"
+          ],
+          "gotchas": [
+            "if (x = 5) is assignment (always true), not comparison -- use if (x == 5)",
+            "Omitting braces can cause bugs when adding statements later (Apple's goto fail bug)",
+            "The dangling else problem: else binds to the nearest if, not the one you might expect",
+            "if (0.1 + 0.2 == 0.3) is false due to floating-point precision"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`if (cond)` executes when cond is non-zero. `else if` chains additional checks. `else` is the default. Only the first true branch runs. Always use braces.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 5;\n    if (x > 10) {\n        printf(\"big\\n\");\n    } else if (x > 0) {\n        printf(\"positive\\n\"); /* prints */\n    } else {\n        printf(\"non-positive\\n\");\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Non-zero = true, zero = false",
+            "Always use braces for safety"
+          ],
+          "gotchas": [
+            "if (x = 5) is assignment, not comparison"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the switch statement work and what is fall-through behavior?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["switch", "case", "fall-through", "break"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `switch` statement compares an integer expression against constant `case` labels and jumps to the matching one.\n\n**Fall-through:** After executing a case, execution continues to the NEXT case unless `break` is encountered. This is a major source of bugs but can be used intentionally (e.g., multiple cases sharing code).\n\n**Rules:**\n- The switch expression must be an integer type (char, int, enum, etc.). Not float, not string.\n- Case labels must be compile-time integer constants.\n- `default` handles unmatched values (optional but recommended).\n- Each case is a label (jump target), not a block -- variables declared in one case are visible in others (use braces to create a block).\n- Duplicate case values are a compile error.",
+          "pseudo_code": "1. switch (integer_expr) { case CONST: ... break; }\n2. Without break: execution falls through to the next case\n3. case labels must be integer constants\n4. default: handles unmatched values\n5. Intentional fall-through: group multiple cases\n6. Use braces inside case to declare local variables",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int day = 3;\n\n    /* Basic switch with break */\n    switch (day) {\n        case 1: printf(\"Monday\\n\"); break;\n        case 2: printf(\"Tuesday\\n\"); break;\n        case 3: printf(\"Wednesday\\n\"); break; /* This prints */\n        case 4: printf(\"Thursday\\n\"); break;\n        case 5: printf(\"Friday\\n\"); break;\n        default: printf(\"Weekend\\n\"); break;\n    }\n\n    /* Fall-through bug (missing break) */\n    int x = 1;\n    switch (x) {\n        case 1: printf(\"one \");\n        case 2: printf(\"two \");\n        case 3: printf(\"three\\n\");\n    }\n    /* Output: one two three (all three print!) */\n\n    /* Intentional fall-through: grouping cases */\n    char ch = 'A';\n    switch (ch) {\n        case 'a':\n        case 'e':\n        case 'i':\n        case 'o':\n        case 'u':\n        case 'A':\n        case 'E':\n        case 'I':\n        case 'O':\n        case 'U':\n            printf(\"%c is a vowel\\n\", ch);\n            break;\n        default:\n            printf(\"%c is a consonant\\n\", ch);\n            break;\n    }\n\n    /* Local variables in case need braces */\n    switch (day) {\n        case 3: {\n            int temp = day * 10;\n            printf(\"temp = %d\\n\", temp);\n            break;\n        }\n        default:\n            break;\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Fall-through is the default: without break, execution continues to the next case",
+            "Case labels must be compile-time integer constants",
+            "switch only works with integer types (not floats or strings)",
+            "Intentional fall-through groups multiple case values",
+            "Use braces inside case to declare local variables"
+          ],
+          "gotchas": [
+            "Forgetting break causes fall-through -- the #1 switch bug",
+            "Variables declared in one case (without braces) are in scope for all subsequent cases",
+            "switch does not work with strings -- use if/else if with strcmp() instead",
+            "case ranges (case 1 ... 5:) are a GCC extension, not standard C"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`switch` jumps to a matching `case` label. Without `break`, execution falls through to the next case. Only integer types are allowed. `default` handles unmatched values. Use braces for local variables inside case.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 2;\n    switch (x) {\n        case 1: printf(\"one\\n\"); break;\n        case 2: printf(\"two\\n\"); break; /* prints */\n        default: printf(\"other\\n\"); break;\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Without break, execution falls through",
+            "Only integer types in switch"
+          ],
+          "gotchas": [
+            "Missing break is the most common switch bug"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between for, while, and do-while loops?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["for", "while", "do-while", "loops"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C has three loop constructs:\n\n**`for` loop:** Best when the number of iterations is known. Has init, condition, and update in one line.\n```\nfor (init; condition; update) { body }\n```\n\n**`while` loop:** Best when the loop depends on a condition that may not be iteration-count based.\n```\nwhile (condition) { body }\n```\n\n**`do-while` loop:** The body executes **at least once**, then the condition is checked.\n```\ndo { body } while (condition);\n```\n\n**Key differences:**\n- `for` and `while` check the condition BEFORE the body (may execute zero times).\n- `do-while` checks AFTER the body (always executes at least once).\n- `for` puts init/condition/update together for readability.\n- Any loop can be rewritten using the other two forms.",
+          "pseudo_code": "for (init; cond; update) { body }  // pre-test, known iterations\nwhile (cond) { body }               // pre-test, condition-based\ndo { body } while (cond);            // post-test, at least once\n\nfor = while equivalent:\n  init;\n  while (cond) { body; update; }\n\ndo-while always executes body at least once",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* for loop: known iterations */\n    printf(\"for: \");\n    for (int i = 0; i < 5; i++) {\n        printf(\"%d \", i);\n    }\n    printf(\"\\n\"); /* 0 1 2 3 4 */\n\n    /* while loop: condition-based */\n    printf(\"while: \");\n    int n = 1;\n    while (n <= 16) {\n        printf(\"%d \", n);\n        n *= 2;\n    }\n    printf(\"\\n\"); /* 1 2 4 8 16 */\n\n    /* do-while: executes at least once */\n    printf(\"do-while: \");\n    int x = 100;\n    do {\n        printf(\"%d \", x);\n        x--;\n    } while (x > 100); /* condition false immediately */\n    printf(\"\\n\"); /* 100 (body ran once!) */\n\n    /* do-while for input validation */\n    int value;\n    do {\n        value = 42; /* simulate reading input */\n    } while (value < 0);\n    printf(\"valid: %d\\n\", value);\n\n    /* while vs do-while: zero iterations */\n    int count = 0;\n    while (count > 0) {\n        printf(\"never\\n\"); /* never executes */\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "for: init/condition/update in one line, best for counted loops",
+            "while: pre-test loop, may execute zero times",
+            "do-while: post-test loop, always executes at least once",
+            "for and while are equivalent in power; do-while guarantees one execution",
+            "do-while is common for input validation and macro wrappers"
+          ],
+          "gotchas": [
+            "do-while requires a semicolon after while(cond); -- easy to forget",
+            "for(;;) and while(1) both create infinite loops",
+            "In C89, you cannot declare variables in for-loop init: int i in for(int i=0;...) requires C99+",
+            "Modifying the loop variable inside the body of a for-loop can cause confusing behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`for`: known iterations, pre-test. `while`: condition-based, pre-test (0+ times). `do-while`: post-test, always runs at least once. `do-while` requires a trailing semicolon.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    for (int i = 0; i < 3; i++) printf(\"%d \", i); /* 0 1 2 */\n    printf(\"\\n\");\n    int x = 10;\n    do { printf(\"%d\\n\", x); } while (x < 0); /* prints 10 once */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "for/while = pre-test; do-while = post-test",
+            "do-while runs at least once"
+          ],
+          "gotchas": [
+            "Forgetting the semicolon after do-while: do { } while(cond) <-- needs ; here"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do break and continue work in loops?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["break", "continue", "loop-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`break`** immediately exits the innermost enclosing loop or switch. Execution continues after the loop/switch.\n\n**`continue`** skips the rest of the current iteration and jumps to the next iteration (the condition check in while/do-while, or the update expression in for).\n\n**Key rules:**\n- Both only affect the **innermost** loop. To break out of nested loops, use a flag variable, goto, or refactor into a function with return.\n- `break` in a switch inside a loop only exits the switch, not the loop.\n- `continue` in a for-loop skips to the update expression (i++), then the condition check.\n- `continue` in a while-loop skips to the condition check directly.",
+          "pseudo_code": "break:    exit innermost loop/switch immediately\ncontinue: skip rest of current iteration, go to next\n\nIn for(init;cond;update): continue goes to update, then cond\nIn while(cond): continue goes to cond\nIn do-while: continue goes to cond at bottom\n\nNeither affects outer loops -- only the innermost",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* break: exit loop early */\n    printf(\"break: \");\n    for (int i = 0; i < 10; i++) {\n        if (i == 5) break;\n        printf(\"%d \", i);\n    }\n    printf(\"\\n\"); /* 0 1 2 3 4 */\n\n    /* continue: skip even numbers */\n    printf(\"continue: \");\n    for (int i = 0; i < 10; i++) {\n        if (i % 2 == 0) continue;\n        printf(\"%d \", i);\n    }\n    printf(\"\\n\"); /* 1 3 5 7 9 */\n\n    /* continue in while -- be careful with counter */\n    printf(\"while continue: \");\n    int j = 0;\n    while (j < 10) {\n        j++;\n        if (j % 2 == 0) continue;\n        printf(\"%d \", j);\n    }\n    printf(\"\\n\"); /* 1 3 5 7 9 */\n\n    /* break only exits innermost loop */\n    for (int row = 0; row < 3; row++) {\n        for (int col = 0; col < 3; col++) {\n            if (col == 1) break; /* only breaks inner loop */\n            printf(\"(%d,%d) \", row, col);\n        }\n    }\n    printf(\"\\n\"); /* (0,0) (1,0) (2,0) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "break exits the innermost loop or switch",
+            "continue skips to the next iteration",
+            "In for-loops, continue skips to the update expression, not past it",
+            "Neither break nor continue affects outer loops",
+            "break in a switch inside a loop only exits the switch"
+          ],
+          "gotchas": [
+            "continue in a while-loop can skip the counter increment, causing an infinite loop",
+            "break inside a switch that is inside a loop only breaks the switch, not the loop",
+            "There is no labeled break in C (unlike Java) -- use goto or a flag for nested loops",
+            "Using too many break/continue makes code hard to follow -- consider refactoring"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`break` exits the innermost loop/switch. `continue` skips to the next iteration. Neither affects outer loops. In for-loops, `continue` goes to the update expression.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    for (int i = 0; i < 10; i++) {\n        if (i == 3) continue;  /* skip 3 */\n        if (i == 7) break;     /* stop at 7 */\n        printf(\"%d \", i);      /* 0 1 2 4 5 6 */\n    }\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "break = exit loop; continue = skip iteration",
+            "Only affects the innermost loop"
+          ],
+          "gotchas": [
+            "continue in while can skip the counter update, causing infinite loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When is it appropriate to use goto in C?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["goto", "label", "cleanup", "error-handling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`goto` transfers control to a labeled statement within the same function. While widely considered bad practice for general flow control, it has legitimate uses in C:\n\n**Legitimate uses:**\n1. **Error handling / cleanup:** Jumping to a cleanup section at the end of a function to release resources (the Linux kernel uses this extensively).\n2. **Breaking out of nested loops:** C has no labeled break, so goto is the cleanest way.\n3. **Generated code:** Machine-generated C code often uses goto.\n\n**Rules:**\n- Labels have function scope (visible throughout the function).\n- Cannot jump into a different function.\n- Cannot jump over a variable declaration with an initializer (C99+).\n- Can only jump within the same function.",
+          "pseudo_code": "1. goto label;  // jump to label\n2. label: statement;  // label definition\n3. Legitimate: error cleanup, breaking nested loops\n4. Avoid: spaghetti code, replacing structured loops\n5. Cannot jump into another function or over VLA declarations",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Pattern 1: Error cleanup (Linux kernel style) */\nint process_data(const char *filename) {\n    FILE *fp = NULL;\n    char *buffer = NULL;\n    int result = -1;\n\n    fp = fopen(filename, \"r\");\n    if (!fp) goto cleanup;\n\n    buffer = malloc(1024);\n    if (!buffer) goto cleanup;\n\n    /* ... do work ... */\n    result = 0; /* success */\n\ncleanup:\n    free(buffer);  /* free(NULL) is safe */\n    if (fp) fclose(fp);\n    return result;\n}\n\n/* Pattern 2: Breaking out of nested loops */\nvoid find_value(int matrix[3][3], int target) {\n    for (int i = 0; i < 3; i++) {\n        for (int j = 0; j < 3; j++) {\n            if (matrix[i][j] == target) {\n                printf(\"Found at (%d,%d)\\n\", i, j);\n                goto done;  /* clean exit from both loops */\n            }\n        }\n    }\n    printf(\"Not found\\n\");\ndone:\n    return;\n}\n\nint main(void) {\n    int m[3][3] = {{1,2,3},{4,5,6},{7,8,9}};\n    find_value(m, 5); /* Found at (1,1) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "goto is acceptable for error cleanup and breaking nested loops",
+            "The cleanup pattern is widely used in the Linux kernel",
+            "Labels have function scope -- visible throughout the function",
+            "goto can only jump within the same function",
+            "Always jump forward (to cleanup at the end) for readability"
+          ],
+          "gotchas": [
+            "Jumping over variable initialization (C99+ with VLAs) is undefined behavior",
+            "Spaghetti code: using goto for general flow control makes code unmaintainable",
+            "goto cannot cross function boundaries -- use setjmp/longjmp for that (but avoid it too)",
+            "Jumping into a loop or switch body from outside leads to confusing behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`goto` jumps to a label within the same function. Legitimate uses: error cleanup and breaking nested loops. The Linux kernel uses goto extensively for cleanup. Avoid for general flow control.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint init(void) {\n    char *buf = malloc(100);\n    if (!buf) goto fail;\n    /* ... work ... */\n    free(buf);\n    return 0;\nfail:\n    return -1;\n}\nint main(void) {\n    printf(\"%d\\n\", init());\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Legitimate for cleanup and nested loop exit",
+            "Only within the same function"
+          ],
+          "gotchas": [
+            "Never jump over variable declarations with initializers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do nested loops work and what are common patterns?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["nested-loops", "patterns", "matrix"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Nested loops are loops inside loops. The inner loop completes all its iterations for each iteration of the outer loop.\n\n**Common patterns:**\n1. **Matrix traversal:** Row-by-row processing of 2D arrays.\n2. **Triangle patterns:** Star/number triangles (common interview question).\n3. **Multiplication table:** Two counters generating combinations.\n4. **Bubble sort:** Outer loop for passes, inner for comparisons.\n\n**Performance:** The total iterations are the product of all loop counts. A triply-nested loop over N elements is O(N^3).\n\n**Breaking out:** `break` only exits the inner loop. Use goto, a flag, or refactor to a function for breaking all loops.",
+          "pseudo_code": "for (i = 0; i < rows; i++) {\n    for (j = 0; j < cols; j++) {\n        process(matrix[i][j]);\n    }\n}\n\nTotal iterations = outer_count * inner_count\nbreak only exits the innermost loop",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* 2D array traversal */\n    int matrix[3][4] = {\n        {1, 2, 3, 4},\n        {5, 6, 7, 8},\n        {9, 10, 11, 12}\n    };\n    for (int i = 0; i < 3; i++) {\n        for (int j = 0; j < 4; j++) {\n            printf(\"%3d\", matrix[i][j]);\n        }\n        printf(\"\\n\");\n    }\n\n    /* Right triangle pattern */\n    printf(\"\\nTriangle:\\n\");\n    for (int i = 1; i <= 5; i++) {\n        for (int j = 0; j < i; j++) {\n            printf(\"* \");\n        }\n        printf(\"\\n\");\n    }\n\n    /* Multiplication table */\n    printf(\"\\nMultiplication table:\\n\");\n    for (int i = 1; i <= 5; i++) {\n        for (int j = 1; j <= 5; j++) {\n            printf(\"%3d\", i * j);\n        }\n        printf(\"\\n\");\n    }\n\n    /* Breaking nested loops with flag */\n    int found = 0;\n    for (int i = 0; i < 3 && !found; i++) {\n        for (int j = 0; j < 4 && !found; j++) {\n            if (matrix[i][j] == 7) {\n                printf(\"\\nFound 7 at [%d][%d]\\n\", i, j);\n                found = 1;\n            }\n        }\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Inner loop runs completely for each outer iteration",
+            "Total iterations = product of all loop counts",
+            "Row-major traversal (i then j) is cache-friendly for C arrays",
+            "break only exits the innermost loop",
+            "Use a flag variable or goto to break out of nested loops"
+          ],
+          "gotchas": [
+            "O(N^2) or O(N^3) nested loops can be very slow for large N",
+            "Traversing matrix[j][i] (column-major) causes cache misses in C's row-major layout",
+            "break inside the inner loop does NOT exit the outer loop",
+            "Declaring the same variable name in both outer and inner loop is valid but confusing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Nested loops: inner loop completes fully for each outer iteration. Total iterations = product of loop counts. `break` only exits the inner loop. Row-major order (outer=row, inner=col) is cache-friendly.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    for (int i = 1; i <= 4; i++) {\n        for (int j = 0; j < i; j++) {\n            printf(\"*\");\n        }\n        printf(\"\\n\");\n    }\n    /* *\n       **\n       ***\n       **** */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Inner loop runs fully per outer iteration",
+            "break only exits innermost loop"
+          ],
+          "gotchas": [
+            "Column-major traversal of a 2D array is slow due to cache misses"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is Duff's device?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["duffs-device", "optimization", "loop-unrolling", "switch"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Duff's device** is a technique that interleaves a `switch` statement with a `do-while` loop to perform loop unrolling. It was invented by Tom Duff in 1983 to speed up memory-to-memory copies.\n\nIt exploits the fact that `case` labels in C are just jump targets and can appear inside loop bodies. This allows the first iteration to start partway through the unrolled loop body.\n\n**How it works:**\n1. Calculate how many extra iterations are needed before the unrolled loop can start (n % unroll_factor).\n2. Use a switch to jump into the middle of the first loop iteration.\n3. The do-while handles the remaining full groups of iterations.\n\n**Modern relevance:**\n- Modern compilers perform loop unrolling automatically.\n- Duff's device is mostly a historical curiosity and interview question.\n- It demonstrates C's flexible switch/case semantics.",
+          "pseudo_code": "1. Calculate remainder: n % 8\n2. Use switch(remainder) to jump into middle of loop\n3. do-while handles full groups of 8\n4. Each iteration processes 8 elements (unrolled)\n5. First partial iteration handles the remainder",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n/* Duff's device: copy n bytes from src to dst */\nvoid duff_copy(char *dst, const char *src, int n) {\n    if (n <= 0) return;\n    int iterations = (n + 7) / 8;\n    switch (n % 8) {\n        case 0: do { *dst++ = *src++;\n        case 7:      *dst++ = *src++;\n        case 6:      *dst++ = *src++;\n        case 5:      *dst++ = *src++;\n        case 4:      *dst++ = *src++;\n        case 3:      *dst++ = *src++;\n        case 2:      *dst++ = *src++;\n        case 1:      *dst++ = *src++;\n                } while (--iterations > 0);\n    }\n}\n\nint main(void) {\n    const char *src = \"Hello, Duff's device!\";\n    char dst[32] = {0};\n    int len = (int)strlen(src) + 1;\n\n    duff_copy(dst, src, len);\n    printf(\"%s\\n\", dst); /* Hello, Duff's device! */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Interleaves switch with do-while for manual loop unrolling",
+            "Exploits C's fall-through: case labels are just jump targets",
+            "Handles non-multiple-of-8 counts by starting mid-loop",
+            "Modern compilers auto-unroll loops, making this mostly obsolete",
+            "Demonstrates the power and danger of C's switch semantics"
+          ],
+          "gotchas": [
+            "This code is very hard to read and maintain -- avoid in production",
+            "Modern compilers optimize loops better than manual unrolling in most cases",
+            "Some compilers may generate worse code with Duff's device than a simple loop",
+            "The technique only works because case labels are jump targets, not block boundaries"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Duff's device interleaves a switch with a do-while loop for manual loop unrolling. It exploits C's fall-through behavior. Mostly a historical curiosity now -- modern compilers auto-optimize loops.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n/* Simplified Duff's device: send n values */\nvoid send(int *to, const int *from, int n) {\n    int iterations = (n + 3) / 4;\n    switch (n % 4) {\n        case 0: do { *to++ = *from++;\n        case 3:      *to++ = *from++;\n        case 2:      *to++ = *from++;\n        case 1:      *to++ = *from++;\n                } while (--iterations > 0);\n    }\n}\nint main(void) {\n    int src[] = {1,2,3,4,5,6,7}, dst[7];\n    send(dst, src, 7);\n    for (int i = 0; i < 7; i++) printf(\"%d \", dst[i]);\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Manual loop unrolling using switch fall-through",
+            "Obsolete -- compilers do this automatically now"
+          ],
+          "gotchas": [
+            "Very hard to read; prefer compiler optimization flags instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create infinite loops and when are they useful?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["infinite-loop", "event-loop", "while-true"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **infinite loop** runs forever unless explicitly broken out of. Common forms:\n\n1. `while (1) { ... }` -- most common in C.\n2. `for (;;) { ... }` -- equivalent, some teams prefer this.\n3. `do { ... } while (1);` -- less common.\n\n**Legitimate uses:**\n1. **Event loops:** GUI applications, servers waiting for connections.\n2. **Embedded systems:** Main loop that runs forever (MCU firmware).\n3. **OS kernels:** Scheduler loop.\n4. **Menu systems:** Keep showing menu until user quits.\n5. **Read-process loops:** Keep reading input until EOF.\n\n**Breaking out:** Use `break`, `return`, or `exit()`. In signal-driven programs, use a volatile flag.",
+          "pseudo_code": "while (1) { ... break; }  // most common form\nfor (;;) { ... break; }    // equivalent\ndo { ... } while (1);      // less common\n\nBreak out with: break, return, exit(), or volatile flag",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Form 1: while(1) */\n    int count = 0;\n    while (1) {\n        if (count >= 5) break;\n        printf(\"tick %d\\n\", count++);\n    }\n\n    /* Form 2: for(;;) -- equivalent */\n    count = 0;\n    for (;;) {\n        if (count >= 3) break;\n        printf(\"tock %d\\n\", count++);\n    }\n\n    /* Practical: menu system */\n    int choice = 0;\n    int iterations = 0;\n    while (1) {\n        /* Simulate menu choice */\n        choice = (iterations < 2) ? 1 : 3;\n        switch (choice) {\n            case 1: printf(\"Option 1\\n\"); break;\n            case 2: printf(\"Option 2\\n\"); break;\n            case 3: printf(\"Quit\\n\"); goto exit_menu;\n        }\n        iterations++;\n    }\nexit_menu:\n\n    /* Embedded-style: event loop */\n    /* while (1) {\n        poll_sensors();\n        process_data();\n        update_outputs();\n    } */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "while(1) and for(;;) are the two standard forms",
+            "Always have a clear exit condition (break, return, exit)",
+            "Common in event loops, servers, embedded firmware, and menu systems",
+            "for(;;) generates no compiler warnings about constant conditions",
+            "Use volatile flag for signal-driven loop termination"
+          ],
+          "gotchas": [
+            "An infinite loop without side effects is undefined behavior in C11",
+            "Forgetting the exit condition creates a hang, not a crash",
+            "while(1) may generate a compiler warning about constant condition; for(;;) avoids this",
+            "In multithreaded code, the loop variable must be volatile or atomic to prevent optimization"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`while(1)` and `for(;;)` create infinite loops. Always include a `break` or `return` to exit. Used for event loops, servers, embedded systems, and menus. `for(;;)` avoids constant-condition warnings.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int i = 0;\n    for (;;) {\n        if (i >= 3) break;\n        printf(\"%d\\n\", i++);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "while(1) and for(;;) are equivalent",
+            "Always have an exit path"
+          ],
+          "gotchas": [
+            "Infinite loop without side effects is UB in C11"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How can loops be optimized in C?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["loop-optimization", "performance", "cache"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Loop optimization techniques in C:\n\n**1. Minimize work inside the loop:**\n- Move invariant calculations out of the loop (loop hoisting).\n- Pre-compute values used repeatedly.\n\n**2. Loop unrolling:**\n- Process multiple elements per iteration to reduce loop overhead.\n- Modern compilers do this automatically with -O2/-O3.\n\n**3. Cache-friendly access:**\n- Access arrays sequentially (stride-1) for good cache performance.\n- For 2D arrays: `arr[i][j]` in row-major order (i outer, j inner).\n\n**4. Reduce function calls:**\n- Cache strlen() result: `for(int i = 0, len = strlen(s); i < len; i++)`.\n- Avoid calling functions with the same arguments repeatedly.\n\n**5. Use appropriate types:**\n- Loop counters as `int` or `size_t`, not `short` or `char`.\n- Use `unsigned` for counters that are always non-negative.\n\n**6. Let the compiler optimize:**\n- Use `-O2` or `-O3` flags.\n- Avoid premature optimization -- profile first.",
+          "pseudo_code": "1. Hoist invariants: move constant computations out of loop\n2. Cache function results: len = strlen(s) before loop\n3. Access memory sequentially for cache hits\n4. Use compiler optimization: -O2, -O3\n5. Profile before optimizing: premature optimization is evil\n6. Prefer int for loop counters (natural register size)",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* BAD: strlen called every iteration -- O(n^2)! */\n    char str[] = \"hello world\";\n    /* for (int i = 0; i < strlen(str); i++) { ... } */\n\n    /* GOOD: cache the length */\n    int len = (int)strlen(str);\n    for (int i = 0; i < len; i++) {\n        str[i] = str[i]; /* placeholder operation */\n    }\n\n    /* BAD: invariant inside loop */\n    /* for (int i = 0; i < n; i++) {\n           result += arr[i] * (x * y + z);  // x*y+z is constant\n       } */\n\n    /* GOOD: hoist invariant */\n    int arr[] = {1, 2, 3, 4, 5};\n    int n = 5, x = 2, y = 3, z = 1;\n    int factor = x * y + z;  /* compute once */\n    int result = 0;\n    for (int i = 0; i < n; i++) {\n        result += arr[i] * factor;\n    }\n    printf(\"result = %d\\n\", result);\n\n    /* Cache-friendly: row-major traversal */\n    int matrix[100][100];\n    /* GOOD: sequential memory access */\n    for (int i = 0; i < 100; i++) {\n        for (int j = 0; j < 100; j++) {\n            matrix[i][j] = i + j;\n        }\n    }\n\n    /* BAD: column-major causes cache misses */\n    /* for (int j = 0; j < 100; j++)\n           for (int i = 0; i < 100; i++)\n               matrix[i][j] = i + j; */\n\n    printf(\"matrix[50][50] = %d\\n\", matrix[50][50]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Cache strlen() result outside the loop",
+            "Hoist loop-invariant computations",
+            "Access arrays sequentially for cache locality",
+            "Use compiler optimization flags (-O2, -O3) first",
+            "Profile before micro-optimizing -- find the real bottleneck"
+          ],
+          "gotchas": [
+            "strlen() in a loop condition is O(n) per call, making the loop O(n^2)",
+            "Column-major traversal of row-major arrays can be 10x slower due to cache misses",
+            "Manual loop unrolling can make code slower if it defeats compiler auto-vectorization",
+            "Premature optimization is the root of all evil (Knuth) -- always measure first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key optimizations: cache `strlen()` before loop, hoist invariant computations, access arrays sequentially (row-major), and use `-O2`/`-O3` compiler flags. Profile before optimizing.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    char s[] = \"hello\";\n    /* BAD: for(int i=0; i<strlen(s); i++) -- O(n^2) */\n    /* GOOD: */\n    int len = (int)strlen(s);\n    for (int i = 0; i < len; i++) {\n        printf(\"%c\", s[i]);\n    }\n    printf(\"\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Cache function results outside loops",
+            "Sequential memory access for cache performance"
+          ],
+          "gotchas": [
+            "strlen() in loop condition makes it O(n^2)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the dangling else problem?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["dangling-else", "if-else", "ambiguity"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **dangling else** problem is an ambiguity that arises when an `else` clause could associate with more than one `if` statement.\n\n**Example:**\n```c\nif (a)\n    if (b)\n        printf(\"A\");\nelse\n    printf(\"B\");\n```\n\n**Question:** Does the `else` belong to the outer `if(a)` or the inner `if(b)`?\n\n**C's rule:** `else` binds to the **nearest unmatched if**. So it belongs to `if(b)`. This means:\n- If `a` is false: nothing prints.\n- If `a` is true and `b` is true: prints \"A\".\n- If `a` is true and `b` is false: prints \"B\".\n\n**Solution:** Always use braces to make the intent clear. The ambiguity disappears with explicit blocks.",
+          "pseudo_code": "Without braces:\n  if (a)\n    if (b) stmt1;\n  else stmt2;        // else binds to inner if(b)\n\nWith braces (intent 1: else with inner if):\n  if (a) {\n    if (b) stmt1;\n    else stmt2;\n  }\n\nWith braces (intent 2: else with outer if):\n  if (a) {\n    if (b) stmt1;\n  } else {\n    stmt2;\n  }",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int a = 1, b = 0;\n\n    /* Dangling else: else binds to nearest if (if(b)) */\n    printf(\"Dangling: \");\n    if (a)\n        if (b)\n            printf(\"both true\");\n    else\n        printf(\"b is false\");  /* This prints (else binds to if(b)) */\n    printf(\"\\n\");\n\n    /* Clear intent 1: else with inner if */\n    printf(\"Intent 1: \");\n    if (a) {\n        if (b) {\n            printf(\"both true\");\n        } else {\n            printf(\"a true, b false\"); /* This prints */\n        }\n    }\n    printf(\"\\n\");\n\n    /* Clear intent 2: else with outer if */\n    a = 0;\n    printf(\"Intent 2: \");\n    if (a) {\n        if (b) {\n            printf(\"both true\");\n        }\n    } else {\n        printf(\"a is false\"); /* This prints */\n    }\n    printf(\"\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "else binds to the nearest unmatched if",
+            "Indentation does NOT affect which if the else belongs to",
+            "Always use braces to make intent explicit",
+            "The dangling else is a classic source of logic bugs",
+            "Most style guides require braces for all if/else bodies"
+          ],
+          "gotchas": [
+            "Misleading indentation can make dangling else look correct when it is wrong",
+            "Without braces, adding a second statement to an if body creates a different bug",
+            "The compiler follows syntax rules, not indentation",
+            "Python avoids this with mandatory indentation; C does not"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "When `else` could match multiple `if` statements, it binds to the **nearest unmatched if**. This can be misleading if indentation suggests otherwise. Always use braces to make the binding explicit.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int a = 1, b = 0;\n    /* else binds to if(b), not if(a) */\n    if (a) {\n        if (b) {\n            printf(\"both\\n\");\n        }\n    } else {\n        printf(\"a false\\n\"); /* clear intent with braces */\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "else binds to nearest unmatched if",
+            "Braces eliminate ambiguity"
+          ],
+          "gotchas": [
+            "Indentation does not affect parsing in C"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does switch work with enum types?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["switch", "enum", "exhaustive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Using `switch` with `enum` is a powerful pattern in C. Enums provide named constants, and the compiler can warn about unhandled enum values in a switch.\n\n**Benefits:**\n- Self-documenting code: `case STATE_INIT:` instead of `case 0:`.\n- Compiler warnings: If you enable `-Wswitch`, the compiler warns about missing enum values.\n- Type safety: enum makes the intent clearer than magic numbers.\n\n**Best practice:**\n- Do NOT add a `default` case when switching on an enum -- this allows the compiler to warn about missing cases.\n- If you must have a default, put an assertion to catch unexpected values.\n- Always handle all enum values.\n\n**Limitation:** In C, enum is just `int` under the hood. You can assign any integer to an enum variable, and the compiler will not complain. This is different from C++ enum class.",
+          "pseudo_code": "1. Define enum with named states/values\n2. switch(enum_var) with case for each enum value\n3. Omit default to let compiler warn about missing cases\n4. Enable -Wswitch or -Wall for warnings\n5. enum values are just ints in C -- no type safety guarantee",
+          "actual_code": "#include <stdio.h>\n\ntypedef enum {\n    COLOR_RED,\n    COLOR_GREEN,\n    COLOR_BLUE,\n    COLOR_YELLOW\n} Color;\n\nconst char *color_name(Color c) {\n    switch (c) {\n        case COLOR_RED:    return \"Red\";\n        case COLOR_GREEN:  return \"Green\";\n        case COLOR_BLUE:   return \"Blue\";\n        case COLOR_YELLOW: return \"Yellow\";\n        /* No default: compiler warns if we add a new color\n           and forget to handle it here (-Wswitch) */\n    }\n    return \"Unknown\"; /* fallback for invalid values */\n}\n\n/* State machine pattern */\ntypedef enum {\n    STATE_INIT,\n    STATE_RUNNING,\n    STATE_DONE\n} State;\n\nvoid run_machine(void) {\n    State s = STATE_INIT;\n    int steps = 0;\n    while (s != STATE_DONE) {\n        switch (s) {\n            case STATE_INIT:\n                printf(\"Initializing...\\n\");\n                s = STATE_RUNNING;\n                break;\n            case STATE_RUNNING:\n                printf(\"Running step %d\\n\", steps++);\n                if (steps >= 3) s = STATE_DONE;\n                break;\n            case STATE_DONE:\n                break;\n        }\n    }\n    printf(\"Done!\\n\");\n}\n\nint main(void) {\n    printf(\"%s\\n\", color_name(COLOR_BLUE)); /* Blue */\n    run_machine();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "enum + switch is self-documenting and maintainable",
+            "Omit default to get compiler warnings about unhandled enum values",
+            "State machine pattern: enum for states, switch for transitions",
+            "Enable -Wswitch (included in -Wall) for missing case warnings",
+            "enum values are named constants that make code readable"
+          ],
+          "gotchas": [
+            "Adding default suppresses the -Wswitch warning about missing enum values",
+            "In C, enum is just int -- you can assign any integer, bypassing the enum values",
+            "Enum values without explicit assignment start at 0 and increment by 1",
+            "If you cast an arbitrary int to enum and switch on it, unhandled values fall through silently"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Switch on enum gives self-documenting code and compiler warnings for missing cases (with `-Wswitch`). Omit `default` to let the compiler catch missing cases. Enum values are just ints in C.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\ntypedef enum { RED, GREEN, BLUE } Color;\nconst char *name(Color c) {\n    switch (c) {\n        case RED:   return \"Red\";\n        case GREEN: return \"Green\";\n        case BLUE:  return \"Blue\";\n    }\n    return \"Unknown\";\n}\nint main(void) {\n    printf(\"%s\\n\", name(GREEN)); /* Green */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Omit default for compiler warnings on missing cases",
+            "enum + switch is ideal for state machines"
+          ],
+          "gotchas": [
+            "default suppresses -Wswitch warnings about missing enum values"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a simple state machine using switch in C?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["state-machine", "switch", "enum", "design-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **state machine** has a finite set of states, transitions between states based on input/events, and actions performed during transitions.\n\n**Implementation pattern:**\n1. Define states as an enum.\n2. Use a switch statement to handle each state.\n3. Each case processes the current state and sets the next state.\n4. Wrap in a loop that runs until a terminal state is reached.\n\nThis is one of the most common and useful patterns in C programming, used in parsers, network protocols, embedded controllers, and game logic.\n\n**Advantages:**\n- Clear, readable structure.\n- Easy to add new states.\n- Compiler can warn about unhandled states (if no default).\n- Each state's logic is isolated in its case block.",
+          "pseudo_code": "1. enum State { START, PROCESSING, ERROR, DONE };\n2. State current = START;\n3. while (current != DONE) {\n4.   switch (current) {\n5.     case START:      ... current = PROCESSING; break;\n6.     case PROCESSING: ... current = DONE; break;\n7.     case ERROR:      ... current = DONE; break;\n8.   }\n9. }",
+          "actual_code": "#include <stdio.h>\n#include <ctype.h>\n#include <string.h>\n\n/* Simple integer parser state machine */\ntypedef enum {\n    PARSE_START,\n    PARSE_SIGN,\n    PARSE_DIGITS,\n    PARSE_DONE,\n    PARSE_ERROR\n} ParseState;\n\nint parse_int(const char *str, int *result) {\n    ParseState state = PARSE_START;\n    int sign = 1;\n    int value = 0;\n    int i = 0;\n    int len = (int)strlen(str);\n\n    while (state != PARSE_DONE && state != PARSE_ERROR) {\n        char ch = (i < len) ? str[i] : '\\0';\n\n        switch (state) {\n            case PARSE_START:\n                if (ch == '+' || ch == '-') {\n                    sign = (ch == '-') ? -1 : 1;\n                    state = PARSE_SIGN;\n                    i++;\n                } else if (isdigit(ch)) {\n                    state = PARSE_DIGITS;\n                } else {\n                    state = PARSE_ERROR;\n                }\n                break;\n\n            case PARSE_SIGN:\n                if (isdigit(ch)) {\n                    state = PARSE_DIGITS;\n                } else {\n                    state = PARSE_ERROR;\n                }\n                break;\n\n            case PARSE_DIGITS:\n                if (isdigit(ch)) {\n                    value = value * 10 + (ch - '0');\n                    i++;\n                } else if (ch == '\\0') {\n                    state = PARSE_DONE;\n                } else {\n                    state = PARSE_ERROR;\n                }\n                break;\n\n            case PARSE_DONE:\n            case PARSE_ERROR:\n                break;\n        }\n    }\n\n    if (state == PARSE_DONE) {\n        *result = sign * value;\n        return 1; /* success */\n    }\n    return 0; /* error */\n}\n\nint main(void) {\n    int val;\n    if (parse_int(\"-42\", &val)) {\n        printf(\"Parsed: %d\\n\", val); /* -42 */\n    }\n    if (parse_int(\"123\", &val)) {\n        printf(\"Parsed: %d\\n\", val); /* 123 */\n    }\n    if (!parse_int(\"12abc\", &val)) {\n        printf(\"Parse error\\n\"); /* error */\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Enum for states, switch for transitions, loop until terminal state",
+            "Each state handles its own input and decides the next state",
+            "Clean separation of concerns: one case per state",
+            "Used everywhere: parsers, protocols, embedded controllers, games",
+            "Compiler warns about unhandled states if no default case"
+          ],
+          "gotchas": [
+            "Forgetting break causes unintended fall-through between states",
+            "State machines can grow large -- consider function pointers for complex cases",
+            "Always handle the terminal/error states to avoid infinite loops",
+            "Without a default case, adding a new enum value will trigger -Wswitch if unhandled"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define states as enum, switch on current state in a loop, each case sets the next state. Break when terminal state is reached. This pattern is used in parsers, protocols, and embedded systems.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\ntypedef enum { START, RUNNING, DONE } State;\nint main(void) {\n    State s = START;\n    int n = 0;\n    while (s != DONE) {\n        switch (s) {\n            case START:   printf(\"Init\\n\"); s = RUNNING; break;\n            case RUNNING: printf(\"Step %d\\n\", n++);\n                          if (n >= 3) s = DONE; break;\n            case DONE:    break;\n        }\n    }\n    printf(\"Done\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Enum + switch + loop = state machine",
+            "Each case handles one state and sets the next"
+          ],
+          "gotchas": [
+            "Forgetting break causes fall-through between states"
+          ]
+        }
+      ]
+    }
+  ]
+}

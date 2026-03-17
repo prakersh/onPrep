@@ -1,0 +1,635 @@
+{
+  "concept_slug": "dynamic-memory",
+  "questions": [
+    {
+      "title": "How does malloc() work and should you cast its return value in C?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["malloc", "heap-allocation", "casting", "stdlib"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`malloc(size_t size)`** allocates `size` bytes of uninitialized memory on the heap and returns a `void *` pointer to the beginning of the block. Returns `NULL` if allocation fails.\n\n**The casting debate:**\n\n**In C:** Casting is **not required** and many style guides discourage it. `void *` implicitly converts to any pointer type in C. Casting can:\n- Hide the bug of forgetting to `#include <stdlib.h>` (in C89, missing prototype defaults to returning int)\n- Add visual clutter\n- Cause maintenance issues if the type changes\n\n**In C++:** Casting **is required** because C++ does not allow implicit conversion from `void *`.\n\n**Best practices:**\n- Always check the return value for NULL\n- Use `sizeof(*p)` instead of `sizeof(Type)` to avoid type mismatches\n- Free the memory when done\n\n**Under the hood:** `malloc` typically uses `brk()/sbrk()` for small allocations and `mmap()` for large ones. The allocator maintains metadata (size, free-list pointers) adjacent to each block.",
+          "pseudo_code": "1. Call malloc(num_bytes) -- returns void* or NULL\n2. Check for NULL (allocation failure)\n3. Use the memory\n4. Call free(ptr) when done\n\nPreferred pattern:\n  int *p = malloc(sizeof(*p) * count);\n  if (!p) { handle_error(); }\n  /* use p */\n  free(p);",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    /* Preferred C style: no cast, sizeof(*p) */\n    int *arr = malloc(sizeof(*arr) * 5);\n    if (arr == NULL) {\n        perror(\"malloc failed\");\n        return 1;\n    }\n\n    for (int i = 0; i < 5; i++) {\n        arr[i] = (i + 1) * 10;\n    }\n\n    for (int i = 0; i < 5; i++) {\n        printf(\"%d \", arr[i]); /* 10 20 30 40 50 */\n    }\n    printf(\"\\n\");\n\n    free(arr);\n    arr = NULL; /* prevent dangling pointer */\n\n    /* Single element allocation */\n    double *val = malloc(sizeof(*val));\n    if (val) {\n        *val = 3.14;\n        printf(\"%.2f\\n\", *val); /* 3.14 */\n        free(val);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "malloc returns void* -- no cast needed in C (implicit conversion)",
+            "Always check for NULL return (allocation failure)",
+            "Use sizeof(*p) instead of sizeof(Type) for type-safe allocation",
+            "Memory is uninitialized -- contains garbage values",
+            "Every malloc must have a corresponding free"
+          ],
+          "gotchas": [
+            "In C89, forgetting #include <stdlib.h> with a cast hides the implicit-int-return bug",
+            "malloc(0) is implementation-defined: may return NULL or a unique pointer that must not be dereferenced",
+            "Memory from malloc is NOT zero-initialized -- use calloc if you need zeroed memory",
+            "On Linux, malloc may succeed even without enough physical memory (overcommit) -- OOM killer handles it later"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`malloc(size)` allocates uninitialized heap memory, returns `void *` or NULL. No cast needed in C. Use `sizeof(*p)` pattern. Always check for NULL and free when done.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int *p = malloc(sizeof(*p) * 10); /* no cast in C */\n    if (!p) { perror(\"malloc\"); return 1; }\n    p[0] = 42;\n    printf(\"%d\\n\", p[0]); /* 42 */\n    free(p);\n    p = NULL;\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "No cast needed in C; use sizeof(*p) for safety",
+            "Always check for NULL and free when done"
+          ],
+          "gotchas": [
+            "Memory is uninitialized -- use calloc for zero-initialized memory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between calloc() and malloc()?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["calloc", "malloc", "zero-initialization", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both allocate heap memory, but they differ in important ways:\n\n**`malloc(size_t size)`:**\n- Takes a single size in bytes\n- Memory is **uninitialized** (contains garbage)\n- Slightly faster (no zeroing overhead)\n\n**`calloc(size_t nmemb, size_t size)`:**\n- Takes element count and element size separately\n- Memory is **zero-initialized** (all bytes set to 0)\n- Performs internal overflow check on `nmemb * size`\n- May be optimized by the OS (e.g., pages from mmap are already zeroed)\n\n**Key advantage of calloc's two-argument form:**\n`calloc` checks for arithmetic overflow when computing `nmemb * size`. With `malloc(n * size)`, if `n * size` overflows, you allocate a small buffer but use it as if it were large -- a classic heap overflow vulnerability.\n\n**When to use which:**\n- Use `calloc` when you need zero-initialized memory (arrays, structs)\n- Use `malloc` when you will immediately overwrite all bytes (performance)\n- Use `calloc` for security-sensitive code (prevents info leaks from uninitialized data)",
+          "pseudo_code": "malloc(n * sizeof(int)):\n  1. Allocate n*sizeof(int) bytes\n  2. Memory contains garbage\n  3. NO overflow check on n*sizeof(int)\n\ncalloc(n, sizeof(int)):\n  1. Check if n * sizeof(int) overflows\n  2. If overflow, return NULL\n  3. Allocate n*sizeof(int) bytes\n  4. Zero-fill all bytes\n  5. Return pointer",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int n = 5;\n\n    /* malloc: uninitialized memory */\n    int *a = malloc(sizeof(*a) * n);\n    if (a) {\n        printf(\"malloc (uninitialized): \");\n        for (int i = 0; i < n; i++)\n            printf(\"%d \", a[i]); /* garbage values */\n        printf(\"\\n\");\n        free(a);\n    }\n\n    /* calloc: zero-initialized memory */\n    int *b = calloc(n, sizeof(*b));\n    if (b) {\n        printf(\"calloc (zeroed): \");\n        for (int i = 0; i < n; i++)\n            printf(\"%d \", b[i]); /* 0 0 0 0 0 */\n        printf(\"\\n\");\n        free(b);\n    }\n\n    /* calloc overflow protection */\n    size_t huge = (size_t)-1; /* SIZE_MAX */\n    int *c = calloc(huge, sizeof(int));\n    if (c == NULL) {\n        printf(\"calloc correctly returned NULL for overflow\\n\");\n    }\n\n    /* malloc overflow vulnerability: */\n    /* int *d = malloc(huge * sizeof(int)); */\n    /* huge * sizeof(int) wraps around, allocating a tiny buffer! */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "calloc zero-initializes; malloc does not",
+            "calloc takes (count, size) and checks for multiplication overflow",
+            "malloc(n * size) can silently overflow, allocating too little memory",
+            "calloc may be faster for large allocations (OS provides pre-zeroed pages)",
+            "Use calloc for arrays/structs; malloc when you will immediately overwrite all data"
+          ],
+          "gotchas": [
+            "calloc zeros bytes to 0, but 0 bytes is not necessarily NULL pointer or 0.0 float on all platforms (though it is on IEEE 754 and common ABIs)",
+            "calloc(0, sizeof(int)) and malloc(0) have implementation-defined behavior",
+            "Do not assume calloc is always slower -- for large allocations, the OS often provides pre-zeroed pages",
+            "malloc(n * size) is a potential integer overflow vulnerability -- prefer calloc or check manually"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`calloc(count, size)` allocates zeroed memory and checks for overflow. `malloc(size)` allocates uninitialized memory with no overflow check. Prefer calloc for arrays and security-sensitive code.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int *a = malloc(5 * sizeof(int));  /* uninitialized */\n    int *b = calloc(5, sizeof(int));   /* all zeros */\n    if (b) {\n        printf(\"%d %d %d\\n\", b[0], b[1], b[2]); /* 0 0 0 */\n        free(b);\n    }\n    free(a);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "calloc = zero-initialized + overflow check",
+            "malloc = uninitialized, no overflow check"
+          ],
+          "gotchas": [
+            "malloc(n * size) can silently overflow -- calloc prevents this"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does realloc() work and what are the common pitfalls?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["realloc", "resize", "pitfalls", "memory-management"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`realloc(void *ptr, size_t size)`** resizes a previously allocated block to `size` bytes. It may:\n1. **Extend in place** if contiguous space is available\n2. **Allocate new block, copy data, free old block** if not\n3. Return the same pointer or a new one\n\n**Special cases:**\n- `realloc(NULL, size)` is equivalent to `malloc(size)`\n- `realloc(ptr, 0)` is implementation-defined (C11): may free and return NULL, or return a non-NULL pointer\n\n**The critical pitfall -- losing the original pointer:**\n```c\np = realloc(p, new_size); /* WRONG! */\n```\nIf realloc fails, it returns NULL **but does not free the original block**. Assigning NULL to `p` loses the only reference to the original memory, causing a memory leak.\n\n**Safe pattern:**\n```c\nvoid *tmp = realloc(p, new_size);\nif (tmp == NULL) { /* handle error, p is still valid */ }\nelse { p = tmp; }\n```",
+          "pseudo_code": "Safe realloc pattern:\n1. tmp = realloc(p, new_size)\n2. if tmp == NULL:\n     p is still valid, handle error\n3. else:\n     p = tmp  (may be same address or new)\n4. If growing: new bytes are uninitialized\n5. If shrinking: excess bytes are freed\n\nNEVER: p = realloc(p, size)  -- leaks on failure!",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int capacity = 4;\n    int size = 0;\n    int *arr = malloc(sizeof(*arr) * capacity);\n    if (!arr) return 1;\n\n    /* Dynamic array: grow as needed */\n    for (int i = 0; i < 10; i++) {\n        if (size == capacity) {\n            int new_cap = capacity * 2;\n            /* SAFE realloc: use a temporary */\n            int *tmp = realloc(arr, sizeof(*tmp) * new_cap);\n            if (tmp == NULL) {\n                perror(\"realloc failed\");\n                free(arr); /* original is still valid */\n                return 1;\n            }\n            arr = tmp;\n            capacity = new_cap;\n            printf(\"Grew to capacity %d\\n\", capacity);\n        }\n        arr[size++] = i * 10;\n    }\n\n    for (int i = 0; i < size; i++) {\n        printf(\"%d \", arr[i]);\n    }\n    printf(\"\\n\"); /* 0 10 20 30 40 50 60 70 80 90 */\n\n    /* Shrink */\n    int *shrunk = realloc(arr, sizeof(*shrunk) * size);\n    if (shrunk) arr = shrunk;\n    /* Even if realloc fails when shrinking, arr is still usable */\n\n    free(arr);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "realloc may move the block to a new address -- always use the returned pointer",
+            "NEVER assign directly: p = realloc(p, size) -- use a temp variable",
+            "New bytes (when growing) are uninitialized",
+            "realloc(NULL, size) == malloc(size)",
+            "Grow by doubling capacity for amortized O(1) appends"
+          ],
+          "gotchas": [
+            "p = realloc(p, size) leaks memory if realloc fails (returns NULL, loses original pointer)",
+            "Old pointers to the block become dangling if realloc moves the data",
+            "realloc(ptr, 0) behavior is implementation-defined in C11 -- do not use it as free()",
+            "Growing by 1 byte at a time causes O(n^2) copying -- always grow by a factor (typically 2x)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`realloc(ptr, size)` resizes a heap block. May return a new address. Always use a temp: `tmp = realloc(p, size); if (tmp) p = tmp;`. Never write `p = realloc(p, size)` -- leaks on failure.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int *p = malloc(sizeof(int) * 2);\n    p[0] = 10; p[1] = 20;\n\n    int *tmp = realloc(p, sizeof(int) * 4);\n    if (!tmp) { free(p); return 1; }\n    p = tmp;\n    p[2] = 30; p[3] = 40;\n\n    for (int i = 0; i < 4; i++)\n        printf(\"%d \", p[i]); /* 10 20 30 40 */\n    printf(\"\\n\");\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always use a temporary variable for realloc's return value",
+            "realloc may move data to a new address"
+          ],
+          "gotchas": [
+            "p = realloc(p, size) loses original memory on failure -- memory leak"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What happens when you call free() and what is a double-free bug?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["free", "double-free", "undefined-behavior", "heap-corruption"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`free(void *ptr)`** releases a previously allocated block back to the memory allocator. The allocator marks the block as available for future allocations.\n\n**What free() does:**\n1. Reads the metadata (size, flags) stored before the block\n2. Marks the block as free in the allocator's internal data structures\n3. May coalesce with adjacent free blocks to reduce fragmentation\n4. Does NOT zero out the memory or return it to the OS immediately\n\n**Special cases:**\n- `free(NULL)` is safe and does nothing (guaranteed by the standard)\n- `free(ptr)` where ptr was not from malloc/calloc/realloc is undefined behavior\n- `free(ptr)` where ptr was already freed is a **double-free** bug\n\n**Double-free is dangerous because:**\n- It corrupts the allocator's internal data structures (free lists)\n- An attacker can exploit it to execute arbitrary code\n- The allocator may return the same block to two different callers\n- It may not crash immediately -- corruption manifests later in unrelated code\n\n**Prevention:**\n- Set pointer to NULL after free: `free(p); p = NULL;`\n- Use ownership semantics: only the owner frees\n- Use AddressSanitizer: `gcc -fsanitize=address`",
+          "pseudo_code": "What free(ptr) does internally:\n1. Read block header (size, allocated flag)\n2. Mark block as free in free-list\n3. If adjacent blocks are free, merge them (coalescing)\n4. Block memory still contains old data (not zeroed)\n\nDouble free:\n  free(p);  /* Block added to free list */\n  free(p);  /* Block added AGAIN -- corrupts free list */\n  /* Now allocator may give same block to two mallocs */\n\nPrevention:\n  free(p); p = NULL;\n  free(p);  /* free(NULL) is safe -- no-op */",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\nint main(void) {\n    /* Normal free */\n    int *p = malloc(sizeof(int));\n    *p = 42;\n    free(p);\n    p = NULL; /* prevent double free */\n\n    /* free(NULL) is safe */\n    free(NULL); /* no-op, perfectly fine */\n\n    /* Using SAFE_FREE macro */\n    int *q = malloc(sizeof(int) * 10);\n    if (q) {\n        q[0] = 100;\n        printf(\"%d\\n\", q[0]); /* 100 */\n        SAFE_FREE(q);\n        /* q is now NULL */\n        SAFE_FREE(q); /* safe: free(NULL) is a no-op */\n    }\n\n    /* Demonstrating ownership pattern */\n    char *buffer = malloc(256);\n    if (buffer) {\n        snprintf(buffer, 256, \"Hello, World!\");\n        printf(\"%s\\n\", buffer);\n        /* Owner frees the buffer */\n        SAFE_FREE(buffer);\n    }\n\n    return 0;\n}\n\n/*\n * Double-free example (DO NOT RUN -- undefined behavior):\n *   int *p = malloc(sizeof(int));\n *   free(p);\n *   free(p);  // DOUBLE FREE: corrupts heap metadata\n *\n * Detect with:\n *   gcc -fsanitize=address -g prog.c && ./a.out\n *   valgrind ./a.out\n */",
+          "code_language": "c",
+          "key_points": [
+            "free() returns memory to the allocator but does not zero it",
+            "free(NULL) is safe and does nothing -- guaranteed by the standard",
+            "Double-free corrupts the heap and is a serious security vulnerability",
+            "Always set pointers to NULL after free to prevent double-free",
+            "Only free memory obtained from malloc/calloc/realloc"
+          ],
+          "gotchas": [
+            "Double-free may not crash immediately -- it corrupts heap metadata silently",
+            "free() does not set the pointer to NULL -- you must do it yourself",
+            "Freeing a pointer not from malloc (stack address, static, or middle of a block) is undefined behavior",
+            "Memory is not zeroed after free -- sensitive data (passwords) should be explicitly cleared first"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`free(ptr)` returns heap memory to the allocator. `free(NULL)` is safe. Double-free corrupts the heap -- prevent it by setting pointers to NULL after free.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\nint main(void) {\n    int *p = malloc(sizeof(int));\n    *p = 42;\n    SAFE_FREE(p);  /* free + set NULL */\n    SAFE_FREE(p);  /* safe: free(NULL) is a no-op */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "free(NULL) is safe; double-free is undefined behavior",
+            "Always NULL pointers after free"
+          ],
+          "gotchas": [
+            "Double-free is a security vulnerability exploitable by attackers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common memory leak patterns in C and how do you avoid them?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["memory-leak", "patterns", "prevention", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **memory leak** occurs when allocated memory is no longer reachable by any pointer, making it impossible to free. Over time, leaks exhaust available memory.\n\n**Common leak patterns:**\n\n1. **Lost pointer (reassignment without free):**\n```c\np = malloc(100);\np = malloc(200); /* first block leaked! */\n```\n\n2. **Early return without cleanup:**\n```c\np = malloc(100);\nif (error) return -1; /* p leaked! */\nfree(p);\n```\n\n3. **Exception-like flow (goto cleanup):**\nMissing the goto on error paths.\n\n4. **Forgotten free in data structures:**\nFreeing a linked list head but not traversing to free all nodes.\n\n5. **Strdup/asprintf without free:**\nFunctions that allocate internally (strdup, asprintf, getline) require the caller to free.\n\n6. **Realloc failure:**\nUsing `p = realloc(p, size)` -- if it fails, original is leaked.\n\n**Prevention strategies:**\n- Use the goto-cleanup pattern for functions with multiple allocations\n- Document ownership: who allocates, who frees\n- Use Valgrind or ASan in CI/CD\n- Write destroy/cleanup functions for every create/init function",
+          "pseudo_code": "Leak pattern 1 -- overwritten pointer:\n  p = malloc(A);  /* block A allocated */\n  p = malloc(B);  /* block A leaked! */\n\nLeak pattern 2 -- early return:\n  p = malloc(A);\n  if (error) return;  /* A leaked! */\n  free(p);\n\nGoto cleanup pattern (prevention):\n  int func() {\n    int *a = NULL, *b = NULL;\n    a = malloc(...);\n    if (!a) goto cleanup;\n    b = malloc(...);\n    if (!b) goto cleanup;\n    /* use a and b */\n  cleanup:\n    free(b);  /* free(NULL) is safe */\n    free(a);\n    return result;\n  }",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* BAD: memory leak on early return */\nint process_bad(const char *input) {\n    char *buf = malloc(strlen(input) + 1);\n    if (!buf) return -1;\n    strcpy(buf, input);\n\n    if (strlen(buf) < 3) {\n        return -2; /* LEAK: buf not freed! */\n    }\n\n    printf(\"Processed: %s\\n\", buf);\n    free(buf);\n    return 0;\n}\n\n/* GOOD: goto cleanup pattern */\nint process_good(const char *input) {\n    int result = 0;\n    char *buf = NULL;\n    char *upper = NULL;\n\n    buf = malloc(strlen(input) + 1);\n    if (!buf) { result = -1; goto cleanup; }\n    strcpy(buf, input);\n\n    upper = malloc(strlen(input) + 1);\n    if (!upper) { result = -1; goto cleanup; }\n\n    for (size_t i = 0; input[i]; i++) {\n        upper[i] = (input[i] >= 'a' && input[i] <= 'z')\n                   ? input[i] - 32 : input[i];\n    }\n    upper[strlen(input)] = '\\0';\n\n    if (strlen(buf) < 3) {\n        result = -2;\n        goto cleanup; /* both buf and upper freed */\n    }\n\n    printf(\"Original: %s, Upper: %s\\n\", buf, upper);\n\ncleanup:\n    free(upper); /* free(NULL) is safe */\n    free(buf);\n    return result;\n}\n\nint main(void) {\n    process_good(\"hello\");\n    process_good(\"hi\"); /* short input, early exit but no leak */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "A leak occurs when no pointer references allocated memory, making free impossible",
+            "Reassigning a pointer without freeing first is the most common leak",
+            "Use the goto-cleanup pattern for functions with multiple allocations",
+            "Initialize pointers to NULL so free(NULL) is safe in cleanup",
+            "Valgrind and ASan are essential for leak detection in CI/CD"
+          ],
+          "gotchas": [
+            "strdup(), getline(), asprintf() allocate internally -- caller must free the result",
+            "Memory leaks in long-running programs (servers, daemons) are far more critical than in short-lived ones",
+            "A leak of 1 byte per request can crash a server over days",
+            "Static analysis cannot catch all leaks -- runtime tools (Valgrind) are essential"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Leaks occur when allocated memory becomes unreachable. Common causes: pointer reassignment without free, early return, forgotten free in data structures. Prevent with goto-cleanup pattern and Valgrind.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint func(void) {\n    int ret = 0;\n    int *a = NULL, *b = NULL;\n    a = malloc(sizeof(int) * 10);\n    if (!a) { ret = -1; goto cleanup; }\n    b = malloc(sizeof(int) * 20);\n    if (!b) { ret = -1; goto cleanup; }\n    /* use a and b */\n    a[0] = 1; b[0] = 2;\ncleanup:\n    free(b); /* free(NULL) safe */\n    free(a);\n    return ret;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use goto-cleanup to ensure all allocations are freed on every path",
+            "Initialize pointers to NULL so cleanup with free(NULL) is safe"
+          ],
+          "gotchas": [
+            "strdup() returns malloc'd memory that the caller must free"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a dangling pointer after free and how does it differ from a memory leak?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["dangling-pointer", "memory-leak", "use-after-free", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Dangling pointer** and **memory leak** are opposite problems:\n\n| | Dangling Pointer | Memory Leak |\n|---|---|---|\n| Definition | Pointer to freed/invalid memory | Memory with no pointer to it |\n| Cause | Using pointer after free/scope-exit | Losing all references to allocated memory |\n| Symptom | Crashes, corruption, security exploits | Gradual memory exhaustion |\n| Detection | ASan, Valgrind (use-after-free) | Valgrind (leak-check), ASan (leak sanitizer) |\n\n**Dangling pointer example:**\n```c\nint *p = malloc(sizeof(int));\nfree(p);\n*p = 42; /* dangling: p still holds the old address */\n```\n\n**Memory leak example:**\n```c\nint *p = malloc(sizeof(int));\np = NULL; /* leak: the allocated block is now unreachable */\n```\n\n**Why use-after-free is more dangerous than leaks:**\n- Leads to arbitrary code execution exploits\n- Causes data corruption that manifests far from the bug\n- The freed memory may be reallocated to another variable, creating cross-contamination\n\n**Both are solved by proper ownership discipline and tooling.**",
+          "pseudo_code": "Dangling pointer:\n  p = malloc(N)\n  free(p)\n  *p = 42     /* BUG: p points to freed memory */\n  Fix: p = NULL after free\n\nMemory leak:\n  p = malloc(N)\n  p = NULL    /* BUG: allocated block is unreachable */\n  Fix: free(p) before reassigning\n\nBoth fixed:\n  p = malloc(N)\n  /* ... use p ... */\n  free(p)\n  p = NULL",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    /* --- Dangling pointer scenario --- */\n    int *dp = malloc(sizeof(int));\n    if (!dp) return 1;\n    *dp = 42;\n    printf(\"Before free: %d\\n\", *dp); /* 42 */\n    free(dp);\n    /* dp is now dangling -- DO NOT dereference */\n    dp = NULL; /* Fix: prevent accidental use */\n\n    /* --- Memory leak scenario --- */\n    int *lp = malloc(sizeof(int) * 100);\n    if (!lp) return 1;\n    lp[0] = 99;\n    /* BUG: reassigning without free leaks the 100-int block */\n    /* lp = malloc(sizeof(int) * 200); */\n    /* Fix: free before reassign */\n    free(lp);\n    lp = malloc(sizeof(int) * 200);\n    if (lp) {\n        lp[0] = 77;\n        printf(\"New allocation: %d\\n\", lp[0]); /* 77 */\n        free(lp);\n    }\n\n    /* --- Use-after-free exploitation risk --- */\n    /*\n     * int *a = malloc(64);\n     * free(a);\n     * char *b = malloc(64);  // may get the same block!\n     * a[0] = 0xDEADBEEF;    // corrupts b's data\n     */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Dangling pointer: pointer to freed memory; leak: memory with no pointer",
+            "They are opposite problems: dangling = freed too early; leak = never freed",
+            "Use-after-free is a critical security vulnerability (more dangerous than leaks)",
+            "Freed memory may be reallocated to another variable, causing cross-contamination",
+            "Both are detected by Valgrind and AddressSanitizer"
+          ],
+          "gotchas": [
+            "Use-after-free may work intermittently because the allocator does not immediately reuse the block",
+            "Dangling pointers can be exploited for arbitrary code execution in security-critical code",
+            "Setting p = NULL after free only protects that one copy -- other aliases remain dangling",
+            "In multithreaded code, another thread may free memory you are still using (race condition)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dangling pointer: pointer to freed memory (freed too early). Memory leak: allocated memory with no pointer to it (never freed). Dangling pointers are more dangerous -- they cause crashes and security exploits. Leaks cause gradual memory exhaustion.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdlib.h>\n\nint main(void) {\n    /* Dangling: freed but pointer still exists */\n    int *dp = malloc(sizeof(int));\n    free(dp);\n    dp = NULL; /* fix: prevent use-after-free */\n\n    /* Leak: pointer lost, memory unreachable */\n    int *lp = malloc(sizeof(int));\n    free(lp); /* fix: free before losing pointer */\n    lp = NULL;\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Dangling: freed too early; Leak: never freed",
+            "Use-after-free is a critical security vulnerability"
+          ],
+          "gotchas": [
+            "Setting one pointer to NULL does not fix other aliases to the same freed block"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between heap and stack memory in C?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["heap", "stack", "memory-layout", "comparison"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Stack memory:**\n- Allocated automatically for local variables and function call frames\n- LIFO (last in, first out) -- grows downward on most architectures\n- Allocation/deallocation is extremely fast (just adjust stack pointer)\n- Limited size (typically 1-8 MB, configurable via `ulimit -s`)\n- Scope-bound: automatically freed when function returns\n- Cannot be resized\n\n**Heap memory:**\n- Allocated manually via malloc/calloc/realloc\n- No order constraint -- can allocate and free in any order\n- Slower than stack (allocator must search free lists, handle fragmentation)\n- Much larger (limited by virtual address space, typically GBs)\n- Must be freed explicitly -- programmer is responsible\n- Can be resized (realloc)\n\n**C process memory layout (low to high):**\n1. Text segment (code)\n2. Data segment (initialized globals)\n3. BSS segment (uninitialized globals)\n4. Heap (grows upward)\n5. ... (unmapped region)\n6. Stack (grows downward)\n7. Kernel space\n\n**When to use each:**\n- Stack: small, fixed-size, short-lived data (local variables, small arrays)\n- Heap: large, variable-size, or long-lived data (dynamic arrays, structs returned from functions)",
+          "pseudo_code": "Stack:\n  void func() {\n    int x = 10;     /* stack: auto allocated */\n    int arr[100];   /* stack: 400 bytes */\n  }                 /* auto deallocated on return */\n\nHeap:\n  void func() {\n    int *p = malloc(400);  /* heap: manual */\n    /* ... use p ... */\n    free(p);               /* manual dealloc */\n  }\n\nStack: fast, small, automatic, LIFO\nHeap: slower, large, manual, any order",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint global_var = 42; /* data segment */\nint uninit_global;   /* BSS segment */\n\nvoid demonstrate_stack(void) {\n    int local = 10;        /* stack */\n    int arr[5] = {1,2,3,4,5}; /* stack */\n    printf(\"Stack var address: %p\\n\", (void *)&local);\n    printf(\"Stack arr address: %p\\n\", (void *)arr);\n    /* local and arr are automatically freed when function returns */\n}\n\nvoid demonstrate_heap(void) {\n    int *p = malloc(sizeof(int) * 5); /* heap */\n    if (!p) return;\n    printf(\"Heap address:      %p\\n\", (void *)p);\n    for (int i = 0; i < 5; i++) p[i] = i * 10;\n    free(p); /* must be explicitly freed */\n}\n\nint main(void) {\n    printf(\"Global var address: %p\\n\", (void *)&global_var);\n    printf(\"Uninit global addr: %p\\n\", (void *)&uninit_global);\n\n    demonstrate_stack();\n    demonstrate_heap();\n\n    /* Stack vs heap size comparison */\n    /* int huge_stack[10000000]; */  /* likely stack overflow! */\n    int *huge_heap = malloc(sizeof(int) * 10000000); /* usually fine */\n    if (huge_heap) {\n        printf(\"Large heap allocation succeeded\\n\");\n        free(huge_heap);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stack: automatic, fast, small, LIFO, scope-bound lifetime",
+            "Heap: manual (malloc/free), slower, large, arbitrary lifetime",
+            "Stack typically 1-8 MB; heap limited by virtual address space (GBs)",
+            "Stack overflow is a hard crash; heap exhaustion returns NULL from malloc",
+            "Use stack for small fixed-size data; heap for large or variable-size data"
+          ],
+          "gotchas": [
+            "Returning a pointer to a stack variable creates a dangling pointer -- the variable is destroyed on return",
+            "Large stack arrays (e.g., int arr[1000000]) can cause stack overflow",
+            "VLAs (variable-length arrays) are on the stack -- large VLAs can overflow it",
+            "Stack size can be changed with ulimit -s but is typically fixed at program start"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stack: automatic, fast, small (1-8 MB), LIFO, freed on function return. Heap: manual (malloc/free), slower, large (GBs), freed explicitly. Use stack for small/short-lived data, heap for large/dynamic data.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int stack_var = 10;  /* stack: automatic lifetime */\n    int *heap_var = malloc(sizeof(int)); /* heap: manual lifetime */\n    *heap_var = 20;\n\n    printf(\"stack: %p = %d\\n\", (void *)&stack_var, stack_var);\n    printf(\"heap:  %p = %d\\n\", (void *)heap_var, *heap_var);\n\n    free(heap_var); /* must free heap memory */\n    /* stack_var freed automatically when main returns */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stack is fast + automatic; heap is flexible + manual",
+            "Never return addresses of stack variables"
+          ],
+          "gotchas": [
+            "Large stack allocations (big arrays, deep recursion) cause stack overflow"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is memory fragmentation and how does it affect C programs?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["fragmentation", "heap", "memory-pool", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Memory fragmentation** occurs when free memory is broken into small, non-contiguous chunks, making it impossible to satisfy large allocation requests even when total free memory is sufficient.\n\n**Two types:**\n\n1. **External fragmentation:** Free blocks exist between allocated blocks. Total free memory is enough, but no single contiguous block is large enough.\n```\n[USED][FREE-32][USED][FREE-64][USED][FREE-32]\n Total free: 128 bytes, but cannot allocate 100 bytes\n```\n\n2. **Internal fragmentation:** Allocated blocks are larger than requested due to alignment requirements or allocator granularity (e.g., request 5 bytes, get 8).\n\n**Impact:**\n- Allocation failures despite available total memory\n- Increased memory usage (internal padding)\n- Degraded cache performance (scattered data)\n- Especially critical in embedded and real-time systems\n\n**Mitigation strategies:**\n- Memory pools (pre-allocate fixed-size blocks)\n- Slab allocators (group same-sized allocations)\n- Allocate and free in LIFO order when possible\n- Use arrays instead of many small allocations\n- Compact allocators (with relocation)",
+          "pseudo_code": "External fragmentation example:\n  malloc(100) -> block A\n  malloc(100) -> block B\n  malloc(100) -> block C\n  free(A)\n  free(C)\n  /* Memory: [FREE-100][B-100][FREE-100] */\n  malloc(200) -> FAILS! (no contiguous 200-byte block)\n  /* Even though 200 bytes are free in total */\n\nMitigation: memory pool\n  Pool of N fixed-size blocks\n  Allocate: grab next free block (O(1))\n  Free: return block to pool (O(1))\n  No fragmentation since all blocks are same size",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Simple fixed-size memory pool to avoid fragmentation */\n#define POOL_BLOCK_SIZE 64\n#define POOL_BLOCK_COUNT 10\n\ntypedef struct {\n    char memory[POOL_BLOCK_SIZE * POOL_BLOCK_COUNT];\n    int used[POOL_BLOCK_COUNT]; /* 0 = free, 1 = used */\n} MemPool;\n\nvoid pool_init(MemPool *pool) {\n    memset(pool->used, 0, sizeof(pool->used));\n}\n\nvoid *pool_alloc(MemPool *pool) {\n    for (int i = 0; i < POOL_BLOCK_COUNT; i++) {\n        if (!pool->used[i]) {\n            pool->used[i] = 1;\n            return pool->memory + (i * POOL_BLOCK_SIZE);\n        }\n    }\n    return NULL; /* pool exhausted */\n}\n\nvoid pool_free(MemPool *pool, void *ptr) {\n    if (!ptr) return;\n    ptrdiff_t offset = (char *)ptr - pool->memory;\n    int index = (int)(offset / POOL_BLOCK_SIZE);\n    if (index >= 0 && index < POOL_BLOCK_COUNT) {\n        pool->used[index] = 0;\n    }\n}\n\nint main(void) {\n    MemPool pool;\n    pool_init(&pool);\n\n    /* Allocate from pool -- no fragmentation */\n    int *a = (int *)pool_alloc(&pool);\n    int *b = (int *)pool_alloc(&pool);\n    int *c = (int *)pool_alloc(&pool);\n\n    *a = 10; *b = 20; *c = 30;\n    printf(\"%d %d %d\\n\", *a, *b, *c); /* 10 20 30 */\n\n    pool_free(&pool, b); /* free middle block */\n    int *d = (int *)pool_alloc(&pool); /* reuses b's slot */\n    *d = 40;\n    printf(\"%d\\n\", *d); /* 40 */\n\n    /* No fragmentation: all blocks are the same size */\n    printf(\"Block size: %d bytes\\n\", POOL_BLOCK_SIZE);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "External fragmentation: free memory is scattered in non-contiguous blocks",
+            "Internal fragmentation: allocator gives more bytes than requested (alignment/rounding)",
+            "Can cause allocation failure even when total free memory is sufficient",
+            "Memory pools with fixed-size blocks eliminate external fragmentation",
+            "Especially critical in embedded systems and long-running servers"
+          ],
+          "gotchas": [
+            "Standard malloc has no compaction -- once fragmented, only freeing can help",
+            "Mixing many small and large allocations worsens fragmentation",
+            "Memory pools trade flexibility for fragmentation-free operation",
+            "realloc can worsen fragmentation by leaving holes when it moves data"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Fragmentation: free memory exists but in scattered, non-contiguous blocks. External = gaps between allocations; internal = wasted padding. Mitigate with memory pools (fixed-size blocks) or by grouping similar-sized allocations.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    /* Fragmentation scenario */\n    char *a = malloc(100);\n    char *b = malloc(100);\n    char *c = malloc(100);\n    free(a); free(c);\n    /* 200 bytes free but not contiguous */\n    char *d = malloc(200); /* may fail due to fragmentation */\n    printf(\"200-byte alloc: %s\\n\", d ? \"success\" : \"failed\");\n    free(b); free(d);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "External fragmentation prevents large allocations despite sufficient total free memory",
+            "Fixed-size memory pools eliminate fragmentation"
+          ],
+          "gotchas": [
+            "Standard malloc cannot compact/defragment -- fragmentation accumulates over time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a simple memory pool in C?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["memory-pool", "custom-allocator", "fragmentation", "performance"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **memory pool** (also called arena or slab allocator) pre-allocates a large block and carves it into fixed-size chunks. It provides O(1) allocation and deallocation with zero fragmentation.\n\n**Design:**\n1. Allocate a large block at startup\n2. Divide it into N equal-sized slots\n3. Maintain a **free list** (linked list of available slots)\n4. Allocate: pop from free list\n5. Free: push back to free list\n\n**The free list trick:**\nSince free blocks are not in use, we can store the next-pointer *inside* the free block itself -- no additional metadata memory needed.\n\n**Advantages:**\n- O(1) alloc and free (no searching)\n- Zero external fragmentation (all blocks same size)\n- Cache-friendly (contiguous memory)\n- Deterministic timing (important for real-time systems)\n\n**Disadvantages:**\n- All allocations are the same size (wastes memory for small objects)\n- Must know maximum allocation count upfront\n- Cannot allocate objects larger than block size",
+          "pseudo_code": "Initialize:\n  1. Allocate pool_size * block_size bytes\n  2. Chain all blocks into a free list\n  3. Each free block stores a pointer to the next free block\n\nAllocate:\n  1. If free_list is NULL, return NULL (exhausted)\n  2. block = free_list\n  3. free_list = free_list->next\n  4. Return block\n\nFree:\n  1. Cast block to free-list node\n  2. block->next = free_list\n  3. free_list = block",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <stdint.h>\n\ntypedef struct FreeNode {\n    struct FreeNode *next;\n} FreeNode;\n\ntypedef struct {\n    void *memory;       /* raw block */\n    FreeNode *free_list; /* head of free list */\n    size_t block_size;  /* size of each slot */\n    size_t count;       /* total number of slots */\n} MemPool;\n\nint pool_create(MemPool *pool, size_t block_size, size_t count) {\n    /* Ensure block_size can hold a FreeNode pointer */\n    if (block_size < sizeof(FreeNode)) {\n        block_size = sizeof(FreeNode);\n    }\n    pool->block_size = block_size;\n    pool->count = count;\n    pool->memory = malloc(block_size * count);\n    if (!pool->memory) return -1;\n\n    /* Build free list: chain all blocks together */\n    pool->free_list = NULL;\n    for (size_t i = 0; i < count; i++) {\n        FreeNode *node = (FreeNode *)((char *)pool->memory + i * block_size);\n        node->next = pool->free_list;\n        pool->free_list = node;\n    }\n    return 0;\n}\n\nvoid *pool_alloc(MemPool *pool) {\n    if (!pool->free_list) return NULL; /* exhausted */\n    FreeNode *block = pool->free_list;\n    pool->free_list = block->next;\n    return (void *)block;\n}\n\nvoid pool_free(MemPool *pool, void *ptr) {\n    if (!ptr) return;\n    FreeNode *node = (FreeNode *)ptr;\n    node->next = pool->free_list;\n    pool->free_list = node;\n}\n\nvoid pool_destroy(MemPool *pool) {\n    free(pool->memory);\n    pool->memory = NULL;\n    pool->free_list = NULL;\n}\n\n/* Example: pool of fixed-size structs */\ntypedef struct { int x, y; } Point;\n\nint main(void) {\n    MemPool pool;\n    pool_create(&pool, sizeof(Point), 100);\n\n    Point *p1 = (Point *)pool_alloc(&pool);\n    Point *p2 = (Point *)pool_alloc(&pool);\n    p1->x = 10; p1->y = 20;\n    p2->x = 30; p2->y = 40;\n    printf(\"p1=(%d,%d) p2=(%d,%d)\\n\", p1->x, p1->y, p2->x, p2->y);\n\n    pool_free(&pool, p1); /* O(1) */\n\n    Point *p3 = (Point *)pool_alloc(&pool); /* reuses p1's slot */\n    p3->x = 50; p3->y = 60;\n    printf(\"p3=(%d,%d)\\n\", p3->x, p3->y);\n\n    pool_destroy(&pool);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pre-allocate a large block, divide into fixed-size slots",
+            "Free list is stored inside the free blocks themselves (no extra metadata)",
+            "O(1) allocation and deallocation",
+            "Zero external fragmentation since all blocks are the same size",
+            "Used in game engines, RTOS, network stacks, and kernel allocators"
+          ],
+          "gotchas": [
+            "Block size must be at least sizeof(void*) to hold the free-list pointer",
+            "Freeing a pointer not from this pool corrupts the free list",
+            "All allocations are the same size -- unsuitable for variable-size needs",
+            "Thread safety requires a mutex or lock-free free list"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A memory pool pre-allocates fixed-size blocks and uses an embedded free list for O(1) alloc/free. Each free block stores a next-pointer inside itself. Zero fragmentation, deterministic timing.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct Node { struct Node *next; } Node;\n\ntypedef struct {\n    void *mem;\n    Node *free_list;\n} Pool;\n\nvoid pool_init(Pool *p, size_t blk, size_t n) {\n    p->mem = malloc(blk * n);\n    p->free_list = NULL;\n    for (size_t i = 0; i < n; i++) {\n        Node *nd = (Node *)((char *)p->mem + i * blk);\n        nd->next = p->free_list;\n        p->free_list = nd;\n    }\n}\n\nvoid *pool_alloc(Pool *p) {\n    if (!p->free_list) return NULL;\n    Node *b = p->free_list;\n    p->free_list = b->next;\n    return b;\n}\n\nvoid pool_free(Pool *p, void *ptr) {\n    Node *n = (Node *)ptr;\n    n->next = p->free_list;\n    p->free_list = n;\n}\n\nint main(void) {\n    Pool pool;\n    pool_init(&pool, 32, 10);\n    int *a = (int *)pool_alloc(&pool);\n    *a = 42;\n    printf(\"%d\\n\", *a);\n    pool_free(&pool, a);\n    free(pool.mem);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(1) alloc and free with zero fragmentation",
+            "Free list is embedded inside unused blocks"
+          ],
+          "gotchas": [
+            "Block size must be >= sizeof(void*) for the embedded free-list pointer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is alloca() and why is it considered risky?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["alloca", "stack-allocation", "risks", "vla"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`alloca(size_t size)`** allocates memory on the **stack frame** of the calling function. The memory is automatically freed when the function returns.\n\n**How it works:**\n- Adjusts the stack pointer to make room for `size` bytes\n- Returns a pointer to the newly available stack space\n- No matching `free()` needed or allowed\n- Available via `<alloca.h>` (not part of standard C, but widely supported)\n\n**Advantages:**\n- Extremely fast (just a stack pointer adjustment)\n- No memory leak possible (auto-freed on return)\n- No fragmentation\n\n**Risks:**\n- **Stack overflow:** No way to detect failure -- if the stack overflows, behavior is undefined (usually a crash, no NULL return)\n- **Cannot check for failure:** Unlike malloc, alloca does not return NULL on failure\n- **Not portable:** Not part of C standard (POSIX does not guarantee it either)\n- **Dangerous in loops:** Each iteration allocates more stack without freeing\n- **Cannot free early:** Memory persists until the function returns\n\n**C99 VLAs as an alternative:**\nVariable-length arrays (`int arr[n]`) achieve a similar effect but are scoped to the block, not the function.",
+          "pseudo_code": "alloca(size):\n  1. Subtract size from stack pointer\n  2. Return new stack pointer value\n  3. NO failure check possible\n  4. Memory freed when function returns\n\nRisk:\n  void func(int n) {\n    char *buf = alloca(n);  /* if n is huge, stack overflow */\n    /* no way to check if alloca succeeded */\n  }\n\nSafer alternative:\n  void func(int n) {\n    char *buf = malloc(n);\n    if (!buf) handle_error();\n    /* use buf */\n    free(buf);\n  }",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\n#if defined(__GNUC__) || defined(__clang__)\n#include <alloca.h>\n#endif\n\nvoid process_line(const char *line) {\n    size_t len = strlen(line);\n\n    /* alloca: allocates on stack, auto-freed on return */\n    /* ONLY use when size is known to be small and bounded */\n    if (len < 1024) { /* guard against stack overflow */\n        char *upper = (char *)alloca(len + 1);\n        for (size_t i = 0; i <= len; i++) {\n            upper[i] = (line[i] >= 'a' && line[i] <= 'z')\n                       ? line[i] - 32 : line[i];\n        }\n        printf(\"Upper: %s\\n\", upper);\n        /* upper is freed when process_line returns */\n    }\n}\n\nvoid vla_example(int n) {\n    /* C99 VLA: similar to alloca but block-scoped */\n    if (n > 0 && n < 1024) {\n        int arr[n]; /* on stack, freed at block/function exit */\n        for (int i = 0; i < n; i++) arr[i] = i;\n        printf(\"VLA sum: \");\n        int sum = 0;\n        for (int i = 0; i < n; i++) sum += arr[i];\n        printf(\"%d\\n\", sum);\n    }\n}\n\nint main(void) {\n    process_line(\"hello world\");\n    vla_example(5); /* VLA sum: 10 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "alloca allocates on the stack -- extremely fast, auto-freed on return",
+            "No failure indication: stack overflow is undefined behavior, not NULL",
+            "Not part of standard C -- portability concern",
+            "Never use in loops -- each iteration consumes more stack without freeing",
+            "C99 VLAs provide a similar but block-scoped alternative"
+          ],
+          "gotchas": [
+            "alloca in a loop accumulates stack usage -- can easily overflow",
+            "Cannot free alloca memory early -- it persists until function return",
+            "If the size argument comes from untrusted input, attacker can cause stack overflow",
+            "Some compilers (MSVC) use _alloca instead of alloca"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`alloca(size)` allocates on the stack, auto-freed on function return. Very fast but risky: no failure check, not standard C, stack overflow is UB. Never use with untrusted sizes or in loops.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <alloca.h>\n#include <string.h>\n\nvoid demo(int n) {\n    if (n > 0 && n < 1024) { /* always bound the size */\n        int *arr = (int *)alloca(sizeof(int) * n);\n        for (int i = 0; i < n; i++) arr[i] = i * 10;\n        printf(\"%d\\n\", arr[n - 1]); /* auto-freed on return */\n    }\n}\n\nint main(void) {\n    demo(5); /* 40 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stack allocation: fast, no free needed, but no error handling",
+            "Never use with unbounded or untrusted size values"
+          ],
+          "gotchas": [
+            "No way to detect failure -- stack overflow crashes without returning NULL"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are flexible array members in C99 and how do you use them?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["flexible-array", "c99", "struct", "dynamic-size"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **flexible array member (FAM)** is an array without a specified size at the end of a struct (C99 feature). It allows you to allocate a struct with a variable-length trailing array in a single allocation.\n\n**Declaration:**\n```c\nstruct Buffer {\n    size_t length;\n    char data[]; /* flexible array member -- must be last */\n};\n```\n\n**Rules:**\n- Must be the **last member** of the struct\n- Struct must have at least one other member\n- `sizeof(struct Buffer)` does not include the flexible array\n- Cannot declare the struct on the stack (must heap-allocate)\n- Cannot be used in arrays of structs\n\n**Allocation:**\n```c\nstruct Buffer *buf = malloc(sizeof(*buf) + length * sizeof(buf->data[0]));\n```\n\n**Advantages over the old \"struct hack\" (`char data[1]`):**\n- Standard-compliant (not relying on undefined behavior)\n- `sizeof` returns the correct size for the fixed members\n- Clearer intent\n\n**Use cases:** Variable-length network packets, string objects, serialization buffers.",
+          "pseudo_code": "struct Packet {\n    uint16_t type;\n    uint16_t length;\n    char payload[];  /* flexible array member */\n};\n\nAllocate:\n  size = sizeof(struct Packet) + payload_length\n  pkt = malloc(size)\n  pkt->type = TYPE_DATA\n  pkt->length = payload_length\n  memcpy(pkt->payload, data, payload_length)\n\nsizeof(struct Packet) = size of type + length + padding (no payload)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\ntypedef struct {\n    size_t length;\n    char data[]; /* flexible array member */\n} String;\n\nString *string_create(const char *text) {\n    size_t len = strlen(text);\n    /* Allocate struct + room for string + null terminator */\n    String *s = malloc(sizeof(String) + len + 1);\n    if (!s) return NULL;\n    s->length = len;\n    memcpy(s->data, text, len + 1);\n    return s;\n}\n\nvoid string_print(const String *s) {\n    printf(\"String(%zu): \\\"%s\\\"\\n\", s->length, s->data);\n}\n\n/* Variable-length packet example */\ntypedef struct {\n    int type;\n    int payload_size;\n    unsigned char payload[];\n} Packet;\n\nPacket *packet_create(int type, const void *data, int size) {\n    Packet *pkt = malloc(sizeof(Packet) + size);\n    if (!pkt) return NULL;\n    pkt->type = type;\n    pkt->payload_size = size;\n    memcpy(pkt->payload, data, size);\n    return pkt;\n}\n\nint main(void) {\n    /* String with flexible array member */\n    String *s = string_create(\"Hello, C99!\");\n    if (s) {\n        string_print(s); /* String(11): \"Hello, C99!\" */\n        printf(\"sizeof(String) = %zu\\n\", sizeof(String));\n        /* sizeof(String) only includes 'length', not data[] */\n        free(s);\n    }\n\n    /* Packet with flexible array member */\n    int values[] = {1, 2, 3};\n    Packet *pkt = packet_create(42, values, sizeof(values));\n    if (pkt) {\n        printf(\"Packet type=%d, size=%d\\n\", pkt->type, pkt->payload_size);\n        int *pv = (int *)pkt->payload;\n        printf(\"Payload: %d %d %d\\n\", pv[0], pv[1], pv[2]);\n        free(pkt);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Flexible array member: array[] with no size as the last struct member",
+            "sizeof(struct) excludes the flexible array -- add payload size to malloc",
+            "C99 feature; replaces the non-standard 'struct hack' (data[1])",
+            "Struct must have at least one other member besides the FAM",
+            "Single allocation for header + variable data = cache-friendly and fewer mallocs"
+          ],
+          "gotchas": [
+            "Cannot use FAM structs on the stack or in arrays -- must be heap-allocated",
+            "Copying the struct with assignment (a = b) does not copy the flexible array data",
+            "realloc on a FAM struct is fine but invalidates any cached sizeof calculation",
+            "The old 'struct hack' (char data[1]) is technically undefined behavior -- FAMs are the correct replacement"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A flexible array member (`char data[]`) at the end of a struct allows single-allocation variable-length objects. Allocate with `malloc(sizeof(struct) + data_size)`. C99 feature replacing the old `data[1]` hack.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\ntypedef struct {\n    int len;\n    char data[]; /* flexible array member */\n} Buf;\n\nint main(void) {\n    const char *msg = \"hello\";\n    Buf *b = malloc(sizeof(Buf) + strlen(msg) + 1);\n    b->len = strlen(msg);\n    memcpy(b->data, msg, b->len + 1);\n    printf(\"%s (len=%d)\\n\", b->data, b->len); /* hello (len=5) */\n    free(b);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Flexible array: last member, no size, single malloc for struct + data",
+            "sizeof(struct) excludes the FAM"
+          ],
+          "gotchas": [
+            "Cannot stack-allocate or array-of FAM structs; struct assignment does not copy FAM data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is aligned_alloc() and when do you need memory alignment?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["aligned-alloc", "alignment", "simd", "c11"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`aligned_alloc(size_t alignment, size_t size)`** (C11) allocates `size` bytes of memory with the specified `alignment`. The alignment must be a power of 2, and size must be a multiple of alignment.\n\n**Why alignment matters:**\n1. **Hardware requirements:** Some CPU instructions (SIMD/SSE/AVX) require data aligned to 16, 32, or 64 bytes\n2. **Performance:** Misaligned access can be 2-10x slower or cause bus errors on strict architectures\n3. **Atomics:** Lock-free atomic operations often require natural alignment\n4. **Cache lines:** Aligning to cache-line boundaries (typically 64 bytes) avoids false sharing in multithreaded code\n\n**Alternative functions:**\n- `posix_memalign(void **ptr, size_t alignment, size_t size)` -- POSIX, returns error code\n- `_aligned_malloc(size, alignment)` -- Windows/MSVC\n- `memalign(alignment, size)` -- older, deprecated\n\n**Memory from aligned_alloc must be freed with regular `free()`.**\n\n**Note:** Standard `malloc()` guarantees alignment suitable for any standard type (typically 8 or 16 bytes). `aligned_alloc` is only needed for stricter alignment requirements.",
+          "pseudo_code": "aligned_alloc(alignment, size):\n  Preconditions:\n    alignment must be power of 2\n    size must be multiple of alignment\n  Returns: pointer aligned to 'alignment' boundary, or NULL\n  Free with: free(ptr)  -- normal free\n\nExample:\n  /* 32-byte aligned for AVX SIMD */\n  float *v = aligned_alloc(32, 32 * sizeof(float));\n  /* address of v is divisible by 32 */",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <stdint.h>\n\nint main(void) {\n    /* Regular malloc alignment (usually 8 or 16) */\n    int *regular = malloc(sizeof(int) * 4);\n    printf(\"malloc alignment: %p (mod 16 = %zu)\\n\",\n           (void *)regular, (uintptr_t)regular % 16);\n    free(regular);\n\n    /* 64-byte alignment (cache line) using aligned_alloc (C11) */\n    size_t alignment = 64;\n    size_t size = 64 * sizeof(float); /* must be multiple of alignment */\n    float *aligned = aligned_alloc(alignment, size);\n    if (aligned) {\n        printf(\"aligned_alloc: %p (mod 64 = %zu)\\n\",\n               (void *)aligned, (uintptr_t)aligned % 64);\n        /* Verify alignment */\n        if ((uintptr_t)aligned % alignment == 0) {\n            printf(\"Correctly aligned to %zu bytes\\n\", alignment);\n        }\n\n        /* Use for SIMD-friendly data */\n        for (int i = 0; i < 16; i++) {\n            aligned[i] = (float)i;\n        }\n        printf(\"aligned[0]=%.0f aligned[15]=%.0f\\n\",\n               aligned[0], aligned[15]);\n\n        free(aligned); /* normal free works */\n    }\n\n    /* POSIX alternative: posix_memalign */\n    void *posix_ptr = NULL;\n    if (posix_memalign(&posix_ptr, 32, 128) == 0) {\n        printf(\"posix_memalign: %p (mod 32 = %zu)\\n\",\n               posix_ptr, (uintptr_t)posix_ptr % 32);\n        free(posix_ptr);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "aligned_alloc(alignment, size) allocates with specified alignment (C11)",
+            "alignment must be power of 2; size must be multiple of alignment",
+            "Needed for SIMD (SSE/AVX), cache-line alignment, and strict hardware requirements",
+            "Regular free() works for aligned_alloc memory",
+            "Standard malloc already aligns to max_align_t (usually 8 or 16 bytes)"
+          ],
+          "gotchas": [
+            "size must be a multiple of alignment -- otherwise undefined behavior",
+            "On Windows, use _aligned_malloc() and _aligned_free() instead",
+            "posix_memalign returns error code (not pointer), and takes a void** parameter",
+            "Over-aligning wastes memory due to padding -- only align when necessary"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`aligned_alloc(alignment, size)` (C11) allocates memory aligned to a boundary (power of 2). Needed for SIMD, cache-line alignment. Regular `free()` works. Alignment must be power of 2, size must be multiple of alignment.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <stdint.h>\n\nint main(void) {\n    /* 64-byte aligned (cache line) */\n    float *p = aligned_alloc(64, 64 * sizeof(float));\n    if (p) {\n        printf(\"mod 64 = %zu\\n\", (uintptr_t)p % 64); /* 0 */\n        free(p);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C11; alignment = power of 2; size = multiple of alignment",
+            "Freed with regular free()"
+          ],
+          "gotchas": [
+            "Windows uses _aligned_malloc/_aligned_free instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you dynamically allocate a 2D array in C?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["2d-array", "dynamic-allocation", "interview-pattern", "matrix"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are three common approaches to dynamically allocating a 2D array:\n\n**Method 1: Array of pointers (most common in interviews)**\n- Allocate an array of `int*` (rows), then allocate each row separately\n- Allows ragged arrays (rows of different lengths)\n- Two levels of indirection; not contiguous in memory\n- Requires N+1 allocations and N+1 frees\n\n**Method 2: Single contiguous block with row pointers**\n- Allocate one block for all data + one block for row pointers\n- Still accessed with `arr[i][j]` syntax\n- Cache-friendly (contiguous data)\n- Only 2 allocations and 2 frees\n\n**Method 3: Single flat allocation (simulated 2D)**\n- Allocate `rows * cols` elements in one block\n- Access with `arr[i * cols + j]` (manual index calculation)\n- Most cache-friendly, simplest allocation/deallocation\n- Only 1 allocation and 1 free\n- No `arr[i][j]` syntax\n\n**Recommendation:** Method 3 for performance-critical code; Method 1 for interviews (tests pointer skills); Method 2 as a good compromise.",
+          "pseudo_code": "Method 1 (array of pointers):\n  int **arr = malloc(rows * sizeof(int*))\n  for i in 0..rows-1:\n    arr[i] = malloc(cols * sizeof(int))\n  Use: arr[i][j]\n  Free: free each row, then free arr\n\nMethod 2 (contiguous + row pointers):\n  int *data = malloc(rows * cols * sizeof(int))\n  int **arr = malloc(rows * sizeof(int*))\n  for i in 0..rows-1:\n    arr[i] = data + i * cols\n  Use: arr[i][j]\n  Free: free data, free arr\n\nMethod 3 (flat):\n  int *arr = malloc(rows * cols * sizeof(int))\n  Use: arr[i * cols + j]\n  Free: free arr",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Method 1: Array of pointers */\nint **alloc_2d_method1(int rows, int cols) {\n    int **arr = malloc(sizeof(int *) * rows);\n    if (!arr) return NULL;\n    for (int i = 0; i < rows; i++) {\n        arr[i] = malloc(sizeof(int) * cols);\n        if (!arr[i]) {\n            /* cleanup on failure */\n            for (int j = 0; j < i; j++) free(arr[j]);\n            free(arr);\n            return NULL;\n        }\n    }\n    return arr;\n}\n\nvoid free_2d_method1(int **arr, int rows) {\n    for (int i = 0; i < rows; i++) free(arr[i]);\n    free(arr);\n}\n\n/* Method 2: Contiguous block with row pointers */\nint **alloc_2d_method2(int rows, int cols) {\n    int **arr = malloc(sizeof(int *) * rows);\n    int *data = malloc(sizeof(int) * rows * cols);\n    if (!arr || !data) { free(arr); free(data); return NULL; }\n    for (int i = 0; i < rows; i++) {\n        arr[i] = data + i * cols;\n    }\n    return arr;\n}\n\nvoid free_2d_method2(int **arr) {\n    free(arr[0]); /* free the contiguous data block */\n    free(arr);    /* free the row pointer array */\n}\n\n/* Method 3: Flat array */\nint *alloc_2d_flat(int rows, int cols) {\n    return malloc(sizeof(int) * rows * cols);\n}\n\nint main(void) {\n    int rows = 3, cols = 4;\n\n    /* Method 1 */\n    int **m1 = alloc_2d_method1(rows, cols);\n    m1[1][2] = 42;\n    printf(\"Method 1: m1[1][2] = %d\\n\", m1[1][2]);\n    free_2d_method1(m1, rows);\n\n    /* Method 2 */\n    int **m2 = alloc_2d_method2(rows, cols);\n    m2[1][2] = 99;\n    printf(\"Method 2: m2[1][2] = %d\\n\", m2[1][2]);\n    free_2d_method2(m2);\n\n    /* Method 3 */\n    int *m3 = alloc_2d_flat(rows, cols);\n    m3[1 * cols + 2] = 77;\n    printf(\"Method 3: m3[1][2] = %d\\n\", m3[1 * cols + 2]);\n    free(m3);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Method 1 (array of pointers): flexible, allows ragged arrays, N+1 allocations",
+            "Method 2 (contiguous + pointers): cache-friendly, 2 allocations, arr[i][j] syntax",
+            "Method 3 (flat): most efficient, 1 allocation, manual indexing arr[i*cols+j]",
+            "Method 1 is most common in interviews; Method 3 is best for performance",
+            "Always handle partial allocation failure with proper cleanup"
+          ],
+          "gotchas": [
+            "Method 1: each row is a separate malloc -- not cache-friendly, many allocations to free",
+            "Method 1: partial allocation failure requires freeing already-allocated rows",
+            "Method 2: free(arr[0]) frees all data, then free(arr) -- do not free individual rows",
+            "A VLA pointer (int (*p)[cols] = malloc(rows * sizeof(*p))) is a clean C99 alternative for Method 2"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Three ways: (1) array of pointers (`int **`, N+1 mallocs), (2) contiguous block + row pointers (2 mallocs, cache-friendly), (3) flat array with manual indexing (`arr[i*cols+j]`, 1 malloc, fastest). Method 2 is the best compromise.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int rows = 3, cols = 4;\n    /* Method 2: contiguous + row pointers */\n    int *data = malloc(sizeof(int) * rows * cols);\n    int **arr = malloc(sizeof(int *) * rows);\n    for (int i = 0; i < rows; i++)\n        arr[i] = data + i * cols;\n\n    arr[1][2] = 42;\n    printf(\"%d\\n\", arr[1][2]); /* 42 */\n\n    free(data);\n    free(arr);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Contiguous block + row pointers: 2 mallocs, cache-friendly, arr[i][j] syntax",
+            "Flat array (1 malloc) is fastest but requires manual index math"
+          ],
+          "gotchas": [
+            "Array-of-pointers method (N+1 mallocs) is not cache-friendly and error-prone to free"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Valgrind to detect memory leaks and errors?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["valgrind", "debugging", "leak-detection", "memory-errors"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Valgrind** is a dynamic analysis tool that detects memory errors at runtime. Its **Memcheck** tool is the default and most commonly used.\n\n**What Valgrind detects:**\n1. **Memory leaks** -- allocated but never freed\n2. **Use after free** -- accessing freed memory\n3. **Double free** -- freeing the same block twice\n4. **Invalid read/write** -- buffer overflows, out-of-bounds access\n5. **Use of uninitialized values** -- reading memory before writing\n6. **Mismatched alloc/free** -- e.g., malloc with delete, new with free\n\n**Usage:**\n```bash\ngcc -g -O0 program.c -o program    # compile with debug info\nvalgrind --leak-check=full ./program\nvalgrind --leak-check=full --show-leak-kinds=all ./program\nvalgrind --track-origins=yes ./program  # trace uninitialized values\n```\n\n**Leak categories:**\n- **Definitely lost:** No pointer to the block (definite leak)\n- **Indirectly lost:** Lost because a parent pointer was lost\n- **Possibly lost:** Interior pointer exists (may or may not be a leak)\n- **Still reachable:** Pointer exists at exit (not freed but not lost)\n\n**Alternative: AddressSanitizer (ASan):**\n`gcc -fsanitize=address -g` is faster and catches similar bugs but uses more memory.",
+          "pseudo_code": "Workflow:\n1. Compile with -g and no optimization: gcc -g -O0 prog.c\n2. Run under Valgrind: valgrind --leak-check=full ./a.out\n3. Read the output:\n   - HEAP SUMMARY: total allocs vs frees\n   - LEAK SUMMARY: definitely/indirectly/possibly lost\n   - ERROR SUMMARY: total errors\n4. Fix each reported issue\n5. Re-run until 0 errors and 0 leaks\n\nCommon flags:\n  --leak-check=full        detailed leak info\n  --show-leak-kinds=all    show all leak types\n  --track-origins=yes      trace uninitialized values\n  --verbose                extra diagnostic info",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* This program has intentional bugs for Valgrind to find */\n\nvoid leak_example(void) {\n    int *p = malloc(sizeof(int) * 10);\n    p[0] = 42;\n    /* BUG: forgot to free p -- memory leak */\n    /* Fix: free(p); */\n}\n\nvoid uninit_example(void) {\n    int *arr = malloc(sizeof(int) * 5);\n    /* BUG: reading uninitialized memory */\n    /* printf(\"%d\\n\", arr[3]); */\n    /* Fix: initialize first */\n    memset(arr, 0, sizeof(int) * 5);\n    printf(\"%d\\n\", arr[3]); /* 0 */\n    free(arr);\n}\n\nvoid overflow_example(void) {\n    int *arr = malloc(sizeof(int) * 3);\n    arr[0] = 1; arr[1] = 2; arr[2] = 3;\n    /* BUG: out-of-bounds write */\n    /* arr[3] = 4; */\n    /* Valgrind reports: Invalid write of size 4 */\n    free(arr);\n}\n\nint main(void) {\n    leak_example();     /* Valgrind: definitely lost: 40 bytes */\n    uninit_example();\n    overflow_example();\n\n    /* Clean allocation for comparison */\n    char *msg = malloc(20);\n    snprintf(msg, 20, \"hello\");\n    printf(\"%s\\n\", msg);\n    free(msg); /* properly freed */\n\n    return 0;\n}\n\n/*\n * Compile and run:\n *   gcc -g -O0 program.c -o program\n *   valgrind --leak-check=full --show-leak-kinds=all ./program\n *\n * Alternative (faster, compile-time instrumentation):\n *   gcc -fsanitize=address -g program.c -o program\n *   ./program\n */",
+          "code_language": "c",
+          "key_points": [
+            "Compile with -g -O0 for useful Valgrind output (debug info, no optimization)",
+            "valgrind --leak-check=full detects leaks, use-after-free, overflows, and uninitialized reads",
+            "Leak types: definitely lost, indirectly lost, possibly lost, still reachable",
+            "AddressSanitizer (-fsanitize=address) is faster but uses more memory",
+            "Target: 0 errors and 0 bytes definitely lost"
+          ],
+          "gotchas": [
+            "Valgrind slows programs by 10-50x -- not suitable for performance testing",
+            "Valgrind only detects errors on executed code paths -- not a substitute for code review",
+            "Some system libraries have known 'still reachable' blocks that are not real leaks",
+            "ASan and Valgrind cannot be used simultaneously -- choose one"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compile with `gcc -g -O0`, run with `valgrind --leak-check=full ./program`. Detects leaks, use-after-free, overflows, and uninitialized reads. Alternative: `gcc -fsanitize=address -g` for faster runtime checks.",
+          "pseudo_code": "",
+          "actual_code": "/* Compile: gcc -g -O0 prog.c -o prog */\n/* Run:     valgrind --leak-check=full ./prog */\n\n#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    int *p = malloc(sizeof(int) * 5);\n    p[0] = 42;\n    printf(\"%d\\n\", p[0]);\n    free(p); /* remove this line to see Valgrind report a leak */\n    return 0;\n}\n\n/* Alternative: gcc -fsanitize=address -g prog.c && ./a.out */",
+          "code_language": "c",
+          "key_points": [
+            "valgrind --leak-check=full for comprehensive memory error detection",
+            "gcc -fsanitize=address is a faster alternative"
+          ],
+          "gotchas": [
+            "Valgrind is 10-50x slower than normal execution"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are best practices for memory management in C?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["best-practices", "memory-management", "safety", "guidelines"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Memory management is the most error-prone aspect of C programming. Following these best practices prevents the majority of bugs:\n\n**Allocation:**\n1. Always check malloc/calloc/realloc return values for NULL\n2. Use `sizeof(*p)` instead of `sizeof(Type)` -- type-safe if p's type changes\n3. Prefer calloc for arrays (zero-initialized, overflow-checked)\n4. Use safe realloc pattern: `tmp = realloc(p, size); if (tmp) p = tmp;`\n\n**Deallocation:**\n5. Every allocation must have exactly one corresponding free\n6. Set pointers to NULL after free: `free(p); p = NULL;`\n7. Use a SAFE_FREE macro for consistency\n8. free(NULL) is safe -- leverage this in cleanup code\n\n**Ownership:**\n9. Document who owns (and frees) each allocation\n10. Use the create/destroy pattern for opaque types\n11. If a function allocates, document whether caller must free\n\n**Patterns:**\n12. Use goto-cleanup for functions with multiple allocations\n13. Initialize all pointers to NULL at declaration\n14. Use const for pointers that should not modify data\n\n**Tooling:**\n15. Run Valgrind or ASan in CI/CD -- not just locally\n16. Enable compiler warnings: `-Wall -Wextra -Werror`\n17. Use static analysis: cppcheck, Clang Static Analyzer",
+          "pseudo_code": "Allocation checklist:\n  [x] Check return value for NULL\n  [x] Use sizeof(*p) not sizeof(Type)\n  [x] Prefer calloc for zeroed arrays\n  [x] Safe realloc with temp variable\n\nDeallocation checklist:\n  [x] Every malloc has a matching free\n  [x] NULL pointer after free\n  [x] SAFE_FREE macro for consistency\n  [x] Cleanup on all error paths (goto cleanup)\n\nOwnership checklist:\n  [x] Document ownership in comments/docs\n  [x] create/destroy function pairs\n  [x] Caller vs callee responsibility clear",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Best practice: SAFE_FREE macro */\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\n/* Best practice: sizeof(*p) pattern */\nint *create_array(int count) {\n    int *arr = calloc(count, sizeof(*arr)); /* calloc: zeroed + overflow check */\n    if (!arr) {\n        perror(\"calloc\");\n        return NULL;\n    }\n    return arr; /* caller owns and must free */\n}\n\n/* Best practice: goto-cleanup pattern */\nint process_data(int n) {\n    int result = -1;\n    int *buffer = NULL;\n    char *name = NULL;\n\n    /* Initialize all pointers to NULL */\n    buffer = malloc(sizeof(*buffer) * n);\n    if (!buffer) goto cleanup;\n\n    name = malloc(256);\n    if (!name) goto cleanup;\n\n    /* ... process data ... */\n    for (int i = 0; i < n; i++) buffer[i] = i;\n    snprintf(name, 256, \"result_%d\", n);\n    printf(\"%s: first=%d last=%d\\n\", name, buffer[0], buffer[n-1]);\n\n    result = 0; /* success */\n\ncleanup:\n    SAFE_FREE(name);   /* free(NULL) is safe */\n    SAFE_FREE(buffer);\n    return result;\n}\n\n/* Best practice: create/destroy pairs */\ntypedef struct {\n    int *data;\n    int size;\n} IntVector;\n\nIntVector *vector_create(int size) {\n    IntVector *v = malloc(sizeof(*v));\n    if (!v) return NULL;\n    v->data = calloc(size, sizeof(*v->data));\n    if (!v->data) { free(v); return NULL; }\n    v->size = size;\n    return v;\n}\n\nvoid vector_destroy(IntVector *v) {\n    if (v) {\n        free(v->data);\n        free(v);\n    }\n}\n\nint main(void) {\n    /* Using create/destroy pattern */\n    IntVector *v = vector_create(5);\n    if (v) {\n        for (int i = 0; i < v->size; i++) v->data[i] = i * 10;\n        printf(\"v[2] = %d\\n\", v->data[2]); /* 20 */\n        vector_destroy(v);\n    }\n\n    /* Using goto-cleanup pattern */\n    process_data(10);\n\n    /* Using safe array creation */\n    int *arr = create_array(5);\n    if (arr) {\n        printf(\"zeroed: %d\\n\", arr[0]); /* 0 */\n        SAFE_FREE(arr);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always check allocation return values; use sizeof(*p) for type safety",
+            "Set pointers to NULL after free; use SAFE_FREE macro",
+            "goto-cleanup pattern handles multiple allocations with proper error-path cleanup",
+            "Document ownership: who allocates, who frees",
+            "Run Valgrind/ASan in CI, enable -Wall -Wextra -Werror"
+          ],
+          "gotchas": [
+            "The most common memory bug is forgetting to free on error paths (early returns)",
+            "Ownership transfer must be explicitly documented -- implicit transfer is a design smell",
+            "Thread-safe memory management requires additional synchronization (mutexes)",
+            "On Linux, malloc rarely returns NULL due to overcommit -- test error paths explicitly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key rules: check malloc for NULL, use `sizeof(*p)`, prefer calloc for arrays, safe realloc with temp, NULL after free, goto-cleanup for multiple allocs, create/destroy pairs for types, Valgrind in CI.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\nint main(void) {\n    /* sizeof(*p) pattern + NULL check */\n    int *p = calloc(10, sizeof(*p));\n    if (!p) { perror(\"calloc\"); return 1; }\n\n    p[0] = 42;\n    printf(\"%d\\n\", p[0]);\n\n    SAFE_FREE(p); /* free + NULL */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof(*p), NULL checks, SAFE_FREE, goto-cleanup, create/destroy pairs",
+            "Valgrind and -fsanitize=address in CI"
+          ],
+          "gotchas": [
+            "Linux overcommit means malloc rarely returns NULL -- test error paths explicitly"
+          ]
+        }
+      ]
+    }
+  ]
+}

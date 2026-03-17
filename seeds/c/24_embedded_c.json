@@ -1,0 +1,425 @@
+{
+  "concept_slug": "embedded-c",
+  "questions": [
+    {
+      "title": "Why is the volatile keyword essential in embedded C for hardware registers and ISR-shared variables?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["volatile", "hardware-register", "ISR", "compiler-optimization", "embedded"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `volatile` keyword tells the compiler that a variable's value can change at any time without any action being taken by the code the compiler is aware of. This prevents the compiler from optimizing away reads or caching the value in a register.\n\n**Why it is needed**:\n\n1. **Hardware registers**: A memory-mapped I/O register can change value between two reads because the hardware updates it. Without `volatile`, the compiler may read it once, cache the value in a CPU register, and reuse the stale value.\n\n2. **ISR-shared variables**: A variable modified in an Interrupt Service Routine and read in the main loop. Without `volatile`, the compiler may hoist the read out of the loop (it sees no write in the loop body and assumes the value never changes).\n\n3. **Memory-mapped status polling**: Spinning on a status register waiting for a bit to change. Without `volatile`, the compiler optimizes the loop into an infinite loop (reads the register once, sees the bit is not set, loops forever without re-reading).\n\n**What volatile does NOT do**:\n- It does NOT provide atomicity. A `volatile uint32_t` read/write is still non-atomic on 8-bit MCUs.\n- It does NOT provide memory barrier semantics. It prevents the compiler from optimizing away the access, but does not prevent CPU reordering (though on most embedded MCUs, memory ordering is strict).\n- It does NOT replace mutexes or disable interrupts for data consistency.",
+          "pseudo_code": "Without volatile:\n  while (STATUS_REG & BUSY_BIT);  /* compiler reads once, loops forever */\n\nWith volatile:\n  while (*(volatile uint32_t *)STATUS_ADDR & BUSY_BIT);\n  /* compiler re-reads from memory on every iteration */\n\nISR pattern:\n  volatile int flag = 0;\n  ISR: flag = 1;\n  main: while (!flag);  /* works because volatile forces re-read */",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Example 1: Hardware register polling */\n#define STATUS_REG (*(volatile uint32_t *)0x40001000)\n#define DATA_REG   (*(volatile uint32_t *)0x40001004)\n#define BUSY_BIT   (1U << 0)\n\nvoid wait_for_ready(void) {\n    /* Without volatile, compiler may optimize this to:\n       if (STATUS_REG & BUSY_BIT) while(1); */\n    while (STATUS_REG & BUSY_BIT)\n        ; /* spin until hardware clears BUSY */\n}\n\n/* Example 2: ISR-shared variable */\nvolatile int data_ready = 0;\nvolatile uint8_t rx_buffer[64];\n\n/* Called from interrupt context */\nvoid UART_ISR(void) {\n    /* Read hardware, fill buffer */\n    rx_buffer[0] = DATA_REG & 0xFF;\n    data_ready = 1; /* Signal main loop */\n}\n\nvoid main_loop(void) {\n    while (1) {\n        /* Without volatile, compiler may read data_ready once\n           and never re-check it */\n        if (data_ready) {\n            /* Process rx_buffer */\n            data_ready = 0;\n        }\n    }\n}\n\n/* Example 3: Volatile pointer to non-volatile data vs\n   non-volatile pointer to volatile data */\nvoid pointer_qualifiers(void) {\n    volatile uint32_t *hw_reg;  /* pointer to volatile data */\n    /* Reads through hw_reg always go to memory */\n\n    uint32_t * volatile ptr;     /* volatile pointer to non-volatile data */\n    /* The pointer itself may change (e.g., DMA updates it) */\n}\n\nint main(void) {\n    /* Demonstrate volatile prevents optimization */\n    volatile int sensor_value = 0;\n    /* This loop will re-read sensor_value each iteration */\n    while (sensor_value == 0) {\n        /* In real embedded code, hardware changes sensor_value */\n        break; /* for demo only */\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "volatile prevents the compiler from caching a variable in a register",
+            "Required for hardware registers -- they change without software action",
+            "Required for variables shared between ISR and main code",
+            "volatile does NOT provide atomicity -- you still need critical sections",
+            "volatile does NOT provide memory barrier semantics on most architectures"
+          ],
+          "gotchas": [
+            "volatile does not make accesses atomic -- a 32-bit volatile read on an 8-bit MCU is still 4 separate byte reads",
+            "volatile does not prevent compiler reordering of OTHER accesses around the volatile access (use compiler barriers for that)",
+            "Over-using volatile hurts performance -- only apply it where truly needed",
+            "A common interview mistake: claiming volatile replaces mutexes or makes code thread-safe -- it does not"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`volatile` tells the compiler the value can change unexpectedly (hardware, ISR). Prevents optimizing away reads. Required for memory-mapped registers and ISR-shared vars. Does NOT provide atomicity or memory barriers.",
+          "pseudo_code": "",
+          "actual_code": "/* Hardware register -- must use volatile */\n#define STATUS (*(volatile uint32_t *)0x40001000)\nwhile (STATUS & 0x01);  /* re-reads every iteration */\n\n/* ISR-shared variable */\nvolatile int flag = 0;\nvoid ISR(void) { flag = 1; }\nvoid main_loop(void) { while (!flag); }",
+          "code_language": "c",
+          "key_points": [
+            "Prevents compiler from caching register/variable value",
+            "Does NOT provide atomicity or thread safety"
+          ],
+          "gotchas": [
+            "volatile is not a substitute for mutexes or atomic operations"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does memory-mapped I/O work in embedded C (accessing hardware registers via pointers)?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["memory-mapped-io", "hardware-registers", "pointers", "embedded"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In **memory-mapped I/O (MMIO)**, hardware peripheral registers are assigned specific addresses in the CPU's address space. Reading/writing these addresses reads/writes the hardware registers instead of RAM.\n\n**How it works**:\n- The MCU's memory map defines which address ranges correspond to which peripherals (GPIO, UART, SPI, timers, etc.).\n- Software accesses these registers by casting the address to a `volatile` pointer and dereferencing it.\n\n**Common patterns**:\n\n1. **Direct address casting**:\n```c\n#define GPIOA_ODR (*(volatile uint32_t *)0x48000014)\nGPIOA_ODR |= (1 << 5); /* Set bit 5 of GPIO port A output */\n```\n\n2. **Struct overlay**: Map a struct over the register block. Each struct field corresponds to a register at a specific offset.\n```c\ntypedef struct {\n    volatile uint32_t MODER;   /* offset 0x00 */\n    volatile uint32_t OTYPER;  /* offset 0x04 */\n    volatile uint32_t OSPEEDR; /* offset 0x08 */\n    ...\n} GPIO_TypeDef;\n#define GPIOA ((GPIO_TypeDef *)0x48000000)\nGPIOA->MODER |= (1 << 10);\n```\n\nThe struct overlay approach is preferred because:\n- Clear register names instead of magic addresses.\n- Compiler ensures correct offsets via struct layout.\n- Matches the vendor's reference manual register descriptions.",
+          "pseudo_code": "1. Look up peripheral base address from datasheet\n2. Define register offsets (or use struct overlay)\n3. Cast base address to volatile pointer\n4. Read/write through the pointer\n\nExample for GPIO:\n  base = 0x48000000\n  ODR offset = 0x14\n  *(volatile uint32_t *)(base + 0x14) |= (1 << pin)  /* set pin high */\n  *(volatile uint32_t *)(base + 0x14) &= ~(1 << pin) /* set pin low */",
+          "actual_code": "#include <stdint.h>\n\n/* --- Method 1: Direct address macros --- */\n#define PERIPH_BASE    0x40000000U\n#define GPIOA_BASE     (PERIPH_BASE + 0x8000000U)\n#define GPIOA_MODER    (*(volatile uint32_t *)(GPIOA_BASE + 0x00))\n#define GPIOA_ODR      (*(volatile uint32_t *)(GPIOA_BASE + 0x14))\n\nvoid led_on_direct(void) {\n    GPIOA_MODER |= (1U << 10);  /* Set PA5 as output (MODER5 = 01) */\n    GPIOA_ODR   |= (1U << 5);   /* Set PA5 high */\n}\n\n/* --- Method 2: Struct overlay (preferred) --- */\ntypedef struct {\n    volatile uint32_t MODER;    /* Mode register       offset 0x00 */\n    volatile uint32_t OTYPER;   /* Output type         offset 0x04 */\n    volatile uint32_t OSPEEDR;  /* Output speed        offset 0x08 */\n    volatile uint32_t PUPDR;    /* Pull-up/pull-down   offset 0x0C */\n    volatile uint32_t IDR;      /* Input data          offset 0x10 */\n    volatile uint32_t ODR;      /* Output data         offset 0x14 */\n    volatile uint32_t BSRR;     /* Bit set/reset       offset 0x18 */\n} GPIO_TypeDef;\n\n#define GPIOA ((GPIO_TypeDef *)0x48000000U)\n#define GPIOB ((GPIO_TypeDef *)0x48000400U)\n\nvoid led_on_struct(void) {\n    /* Configure PA5 as output */\n    GPIOA->MODER &= ~(3U << 10); /* Clear MODER5 bits */\n    GPIOA->MODER |=  (1U << 10); /* Set MODER5 = 01 (output) */\n\n    /* Set PA5 high using BSRR (atomic bit set) */\n    GPIOA->BSRR = (1U << 5);     /* Set bit 5 */\n\n    /* Set PA5 low using BSRR (atomic bit reset) */\n    GPIOA->BSRR = (1U << (5 + 16)); /* Reset bit 5 */\n}\n\n/* --- Reading a status register --- */\nuint32_t read_input(void) {\n    return GPIOA->IDR; /* Read all 16 input pins */\n}\n\nint is_button_pressed(int pin) {\n    return (GPIOA->IDR & (1U << pin)) ? 1 : 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "MMIO maps hardware registers to specific memory addresses",
+            "Always use volatile pointers for register access",
+            "Struct overlay provides readable register names and correct offsets",
+            "BSRR register allows atomic bit set/reset without read-modify-write",
+            "Register addresses come from the MCU datasheet/reference manual"
+          ],
+          "gotchas": [
+            "Read-modify-write on registers (|= or &=) is NOT atomic -- an interrupt between read and write can corrupt the register",
+            "Some registers have side effects on read (e.g., reading a UART data register clears the receive flag)",
+            "Writing to read-only registers or reading write-only registers is undefined behavior",
+            "Struct padding can misalign fields -- use __attribute__((packed)) or verify layout matches the datasheet"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Memory-mapped I/O accesses hardware registers at fixed addresses. Cast the address to a `volatile uint32_t *` and dereference. Struct overlays provide clearer code. Always use volatile.",
+          "pseudo_code": "",
+          "actual_code": "/* Direct register access */\n#define LED_REG (*(volatile uint32_t *)0x48000014)\nLED_REG |= (1 << 5);  /* set pin 5 high */\n\n/* Struct overlay (preferred) */\ntypedef struct {\n    volatile uint32_t MODER;\n    volatile uint32_t ODR;\n} GPIO_TypeDef;\n#define GPIOA ((GPIO_TypeDef *)0x48000000)\nGPIOA->ODR |= (1 << 5);",
+          "code_language": "c",
+          "key_points": [
+            "Cast hardware address to volatile pointer to access registers",
+            "Struct overlay is the preferred pattern for register blocks"
+          ],
+          "gotchas": [
+            "Read-modify-write (|=) on registers is not atomic -- interrupts can cause corruption"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write an Interrupt Service Routine (ISR) in C and what are the constraints?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["ISR", "interrupt", "embedded", "constraints", "reentrant"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **Interrupt Service Routine (ISR)** is a function called automatically by the hardware when an interrupt occurs (timer overflow, UART receive, GPIO edge, etc.). ISRs preempt normal code execution.\n\n**Writing an ISR in C**:\n- On ARM Cortex-M, ISRs are regular C functions with specific names matching the vector table (e.g., `void TIM2_IRQHandler(void)`).\n- On AVR/8051, use compiler-specific syntax: `ISR(TIMER0_OVF_vect)` or `void __attribute__((interrupt)) handler(void)`.\n- The compiler generates special prologue/epilogue code to save/restore registers.\n\n**Critical constraints**:\n1. **Keep ISRs short**: Do minimal work. Set a flag, copy data to a buffer, and return. Process in the main loop.\n2. **No blocking calls**: No `printf()`, `malloc()`, `sleep()`, `mutex_lock()` or any function that may block or is not reentrant.\n3. **Shared variables must be volatile**: Variables accessed by both ISR and main code must be `volatile`.\n4. **Atomicity**: Accessing shared data larger than the CPU word size is not atomic. Disable interrupts around critical sections.\n5. **No dynamic memory**: `malloc()`/`free()` are not reentrant and not safe in ISR context.\n6. **Acknowledge the interrupt**: Clear the interrupt flag in the peripheral register, or the ISR fires again immediately (infinite interrupt loop).",
+          "pseudo_code": "ISR pattern:\n1. Save context (compiler does this automatically)\n2. Clear the interrupt flag in the hardware register\n3. Do minimal work (set flag, copy byte to buffer)\n4. Restore context and return (compiler handles this)\n\nMain loop pattern:\n  while (1) {\n    if (isr_flag) {\n      process_data();\n      isr_flag = 0;\n    }\n  }",
+          "actual_code": "#include <stdint.h>\n\n/* Simulated hardware registers */\n#define TIM2_SR    (*(volatile uint32_t *)0x40000010)\n#define TIM2_SR_UIF  (1U << 0) /* Update interrupt flag */\n\n#define UART1_DR   (*(volatile uint32_t *)0x40011004)\n#define UART1_SR   (*(volatile uint32_t *)0x40011000)\n#define UART_RXNE  (1U << 5)\n\n/* --- Shared state (volatile!) --- */\nvolatile uint8_t rx_buf[128];\nvolatile uint8_t rx_head = 0;\nvolatile uint8_t timer_tick = 0;\n\n/* --- Timer ISR (ARM Cortex-M style) --- */\nvoid TIM2_IRQHandler(void) {\n    if (TIM2_SR & TIM2_SR_UIF) {\n        TIM2_SR &= ~TIM2_SR_UIF; /* MUST clear flag first */\n        timer_tick = 1;           /* Signal main loop */\n        /* Do NOT call printf, malloc, etc. here! */\n    }\n}\n\n/* --- UART Receive ISR --- */\nvoid USART1_IRQHandler(void) {\n    if (UART1_SR & UART_RXNE) {\n        uint8_t data = (uint8_t)(UART1_DR & 0xFF); /* reading DR clears RXNE */\n        rx_buf[rx_head] = data;\n        rx_head = (rx_head + 1) % sizeof(rx_buf); /* circular buffer */\n    }\n}\n\n/* --- Main loop processes data set by ISR --- */\nvoid main_loop(void) {\n    static uint8_t rx_tail = 0;\n\n    while (1) {\n        /* Process timer tick */\n        if (timer_tick) {\n            timer_tick = 0;\n            /* Update display, toggle LED, etc. */\n        }\n\n        /* Process received UART data */\n        while (rx_tail != rx_head) {\n            uint8_t byte = rx_buf[rx_tail];\n            rx_tail = (rx_tail + 1) % sizeof(rx_buf);\n            /* process byte */\n            (void)byte;\n        }\n    }\n}\n\n/* --- Critical section: disable interrupts for atomic access --- */\nstatic inline void disable_interrupts(void) {\n    /* ARM: __disable_irq(); or asm volatile(\"cpsid i\"); */\n}\n\nstatic inline void enable_interrupts(void) {\n    /* ARM: __enable_irq(); or asm volatile(\"cpsie i\"); */\n}\n\nvoid safe_read_shared_data(uint32_t *dest, volatile uint32_t *src) {\n    disable_interrupts();\n    *dest = *src; /* atomic with respect to ISR */\n    enable_interrupts();\n}",
+          "code_language": "c",
+          "key_points": [
+            "ISRs must be short -- set a flag, buffer data, return quickly",
+            "Clear the interrupt flag in the ISR or it fires repeatedly (infinite loop)",
+            "Shared variables between ISR and main MUST be volatile",
+            "No malloc, printf, or blocking calls in ISR context",
+            "Use disable/enable interrupts for critical sections when accessing shared multi-byte data"
+          ],
+          "gotchas": [
+            "Forgetting to clear the interrupt flag causes the ISR to fire in an infinite loop, locking up the system",
+            "printf() in an ISR can cause deadlock (printf may hold a lock that the main code also holds)",
+            "On 8-bit MCUs, even a 16-bit volatile read is NOT atomic -- disable interrupts around it",
+            "Spending too long in an ISR causes other interrupts to be delayed or lost"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ISRs handle hardware interrupts. Keep them short (set flag, buffer data). Clear the interrupt flag. Shared variables must be `volatile`. No malloc/printf/blocking calls.",
+          "pseudo_code": "",
+          "actual_code": "volatile uint8_t flag = 0;\n\nvoid TIM2_IRQHandler(void) {\n    TIM2_SR &= ~(1U << 0); /* clear interrupt flag */\n    flag = 1;               /* signal main loop */\n}\n\nvoid main_loop(void) {\n    while (1) {\n        if (flag) { flag = 0; /* process */ }\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "ISRs: short, clear flag, use volatile for shared state",
+            "No malloc/printf/blocking in ISR context"
+          ],
+          "gotchas": [
+            "Forgetting to clear the interrupt flag causes an infinite ISR loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use bit manipulation to configure hardware registers (set, clear, toggle specific bits)?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["bit-manipulation", "registers", "set-clear-toggle", "embedded", "masks"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Embedded C constantly requires setting, clearing, and toggling individual bits in hardware registers without affecting other bits.\n\n**Core operations**:\n\n1. **Set bit n**: `reg |= (1U << n)` -- OR with a mask.\n2. **Clear bit n**: `reg &= ~(1U << n)` -- AND with inverted mask.\n3. **Toggle bit n**: `reg ^= (1U << n)` -- XOR with mask.\n4. **Check bit n**: `if (reg & (1U << n))` -- AND with mask.\n5. **Set multi-bit field**: Clear the field first, then OR in the value:\n   ```c\n   reg &= ~(0x3 << 4);  /* clear bits 5:4 */\n   reg |=  (0x2 << 4);  /* set bits 5:4 = 10 (binary) */\n   ```\n\n**Why `1U` (unsigned)?**\nLeft-shifting a signed `1` into the sign bit is undefined behavior. Always use `1U` for bit operations.\n\n**Macro patterns for readability**:\n```c\n#define BIT(n)          (1U << (n))\n#define SET_BIT(r, n)   ((r) |= BIT(n))\n#define CLR_BIT(r, n)   ((r) &= ~BIT(n))\n#define TGL_BIT(r, n)   ((r) ^= BIT(n))\n#define GET_BIT(r, n)   (((r) >> (n)) & 1U)\n```",
+          "pseudo_code": "Set bit n:    reg = reg | (1 << n)\nClear bit n:  reg = reg & ~(1 << n)\nToggle bit n: reg = reg ^ (1 << n)\nCheck bit n:  (reg >> n) & 1\n\nSet field [h:l] to value v:\n  mask = ((1 << (h-l+1)) - 1) << l\n  reg = (reg & ~mask) | ((v << l) & mask)",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Bit manipulation macros */\n#define BIT(n)           (1U << (n))\n#define SET_BIT(r, n)    ((r) |= BIT(n))\n#define CLR_BIT(r, n)    ((r) &= ~BIT(n))\n#define TGL_BIT(r, n)    ((r) ^= BIT(n))\n#define GET_BIT(r, n)    (((r) >> (n)) & 1U)\n\n/* Multi-bit field macros */\n#define SET_FIELD(reg, mask, shift, val) \\\n    do { (reg) = ((reg) & ~((mask) << (shift))) | \\\n                 (((val) & (mask)) << (shift)); } while(0)\n\n/* Example: GPIO MODER register (2 bits per pin) */\n#define MODER_MASK  0x3U    /* 2-bit field */\n#define MODER_INPUT  0x0U\n#define MODER_OUTPUT 0x1U\n#define MODER_AF     0x2U\n#define MODER_ANALOG 0x3U\n\nint main(void) {\n    uint32_t reg = 0;\n\n    /* Set bit 5 */\n    SET_BIT(reg, 5);\n    printf(\"After SET bit 5:    0x%08X\\n\", reg); /* 0x00000020 */\n\n    /* Set bit 3 */\n    SET_BIT(reg, 3);\n    printf(\"After SET bit 3:    0x%08X\\n\", reg); /* 0x00000028 */\n\n    /* Clear bit 5 */\n    CLR_BIT(reg, 5);\n    printf(\"After CLR bit 5:    0x%08X\\n\", reg); /* 0x00000008 */\n\n    /* Toggle bit 3 */\n    TGL_BIT(reg, 3);\n    printf(\"After TGL bit 3:    0x%08X\\n\", reg); /* 0x00000000 */\n\n    /* Multi-bit field: set pin 5 to output mode (bits 11:10 = 01) */\n    uint32_t moder = 0;\n    SET_FIELD(moder, MODER_MASK, 10, MODER_OUTPUT);\n    printf(\"MODER pin5=output:  0x%08X\\n\", moder); /* 0x00000400 */\n\n    /* Set pin 3 to analog mode (bits 7:6 = 11) */\n    SET_FIELD(moder, MODER_MASK, 6, MODER_ANALOG);\n    printf(\"MODER +pin3=analog: 0x%08X\\n\", moder); /* 0x000004C0 */\n\n    /* Check if pin 5 is output */\n    uint32_t pin5_mode = (moder >> 10) & MODER_MASK;\n    printf(\"Pin 5 mode: %u (1=output)\\n\", pin5_mode);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Set: reg |= (1U << n); Clear: reg &= ~(1U << n); Toggle: reg ^= (1U << n)",
+            "Always use 1U (unsigned) to avoid undefined behavior from shifting into the sign bit",
+            "Multi-bit fields: clear the field with AND, then set with OR",
+            "Macros like BIT(n), SET_BIT, CLR_BIT improve readability",
+            "Read-modify-write operations are not atomic -- protect with critical sections when needed"
+          ],
+          "gotchas": [
+            "Shifting signed 1 into the sign bit is undefined behavior -- always use 1U",
+            "Read-modify-write (|= and &=) is NOT atomic -- an interrupt between read and write corrupts the register",
+            "Forgetting to clear a multi-bit field before setting it ORs the new value with the old one",
+            "Some registers require specific access width (byte/half-word/word) -- check the datasheet"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set bit: `reg |= (1U << n)`. Clear: `reg &= ~(1U << n)`. Toggle: `reg ^= (1U << n)`. Check: `(reg >> n) & 1`. Always use `1U` to avoid UB.",
+          "pseudo_code": "",
+          "actual_code": "#define BIT(n) (1U << (n))\nuint32_t reg = 0;\nreg |= BIT(5);      /* set bit 5 */\nreg &= ~BIT(5);     /* clear bit 5 */\nreg ^= BIT(5);      /* toggle bit 5 */\nif (reg & BIT(5))   /* check bit 5 */",
+          "code_language": "c",
+          "key_points": [
+            "Set: |=, Clear: &= ~, Toggle: ^=, Check: &",
+            "Use 1U (unsigned) for all bit shifts"
+          ],
+          "gotchas": [
+            "Read-modify-write on registers is not atomic in interrupt context"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is endianness (big-endian vs little-endian) and how do you handle byte swapping in C?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["endianness", "big-endian", "little-endian", "byte-swap", "portability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Endianness** describes the byte order in which multi-byte values are stored in memory.\n\n**Little-endian** (x86, ARM default): Least significant byte at the lowest address.\n- `0x12345678` stored as: `78 56 34 12`\n\n**Big-endian** (network byte order, some MIPS/POWER): Most significant byte at the lowest address.\n- `0x12345678` stored as: `12 34 56 78`\n\n**Where it matters**:\n1. **Network protocols**: Network byte order is big-endian. Use `htons()`/`htonl()`/`ntohs()`/`ntohl()` for conversions.\n2. **File formats**: Binary file formats specify an endianness. You must convert when reading on a different-endian machine.\n3. **Hardware communication**: SPI/I2C/UART data may arrive in a different byte order than the CPU expects.\n4. **Type punning**: Casting a `uint8_t *` to a `uint32_t *` and dereferencing gives different results on different endianness.\n\n**Detection at runtime**:\n```c\nint is_little_endian(void) {\n    uint32_t x = 1;\n    return *(uint8_t *)&x == 1;\n}\n```\n\n**Byte swapping**:\n- GCC: `__builtin_bswap16()`, `__builtin_bswap32()`, `__builtin_bswap64()`.\n- Manual: shift and mask operations.\n- POSIX: `htobe32()`, `be32toh()`, etc. (from `<endian.h>`).",
+          "pseudo_code": "Little-endian stores uint32_t 0xAABBCCDD as:\n  addr+0: DD  (least significant byte first)\n  addr+1: CC\n  addr+2: BB\n  addr+3: AA\n\nBig-endian stores it as:\n  addr+0: AA  (most significant byte first)\n  addr+1: BB\n  addr+2: CC\n  addr+3: DD\n\nByte swap 32-bit:\n  result = ((x & 0xFF) << 24) |\n           ((x & 0xFF00) << 8) |\n           ((x & 0xFF0000) >> 8) |\n           ((x & 0xFF000000) >> 24)",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n#include <string.h>\n\n/* Detect endianness at runtime */\nint is_little_endian(void) {\n    uint32_t x = 1;\n    return *(uint8_t *)&x == 1;\n}\n\n/* Manual byte swap */\nuint16_t swap16(uint16_t x) {\n    return (x >> 8) | (x << 8);\n}\n\nuint32_t swap32(uint32_t x) {\n    return ((x & 0xFF000000U) >> 24) |\n           ((x & 0x00FF0000U) >> 8)  |\n           ((x & 0x0000FF00U) << 8)  |\n           ((x & 0x000000FFU) << 24);\n}\n\n/* Safe portable read: always works regardless of endianness */\nuint32_t read_be32(const uint8_t *buf) {\n    return ((uint32_t)buf[0] << 24) |\n           ((uint32_t)buf[1] << 16) |\n           ((uint32_t)buf[2] << 8)  |\n           ((uint32_t)buf[3]);\n}\n\nvoid write_be32(uint8_t *buf, uint32_t val) {\n    buf[0] = (val >> 24) & 0xFF;\n    buf[1] = (val >> 16) & 0xFF;\n    buf[2] = (val >> 8)  & 0xFF;\n    buf[3] = val & 0xFF;\n}\n\nint main(void) {\n    printf(\"System is %s-endian\\n\",\n           is_little_endian() ? \"little\" : \"big\");\n\n    /* Show byte layout */\n    uint32_t val = 0x12345678;\n    uint8_t *bytes = (uint8_t *)&val;\n    printf(\"0x%08X in memory: %02X %02X %02X %02X\\n\",\n           val, bytes[0], bytes[1], bytes[2], bytes[3]);\n    /* Little-endian: 78 56 34 12 */\n    /* Big-endian:    12 34 56 78 */\n\n    /* Byte swap */\n    uint32_t swapped = swap32(val);\n    printf(\"Swapped: 0x%08X\\n\", swapped); /* 0x78563412 */\n\n    /* GCC built-in (preferred) */\n    uint32_t gcc_swapped = __builtin_bswap32(val);\n    printf(\"GCC swap: 0x%08X\\n\", gcc_swapped); /* 0x78563412 */\n\n    /* Portable big-endian read from byte buffer */\n    uint8_t net_data[] = {0x12, 0x34, 0x56, 0x78};\n    uint32_t host_val = read_be32(net_data);\n    printf(\"From network: 0x%08X\\n\", host_val); /* 0x12345678 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Little-endian: LSB at lowest address (x86, ARM default). Big-endian: MSB first (network order)",
+            "Network protocols use big-endian -- convert with htons/htonl/ntohs/ntohl",
+            "Portable reads: build value from individual bytes using shifts, not pointer casts",
+            "__builtin_bswap32() is the fastest swap on GCC/Clang (compiles to a single instruction)",
+            "ARM can be configured as either endianness but defaults to little-endian"
+          ],
+          "gotchas": [
+            "Casting uint8_t* to uint32_t* to read multi-byte values is endian-dependent AND violates strict aliasing",
+            "Some ARM Cortex-M chips support byte-reverse instructions (REV) -- the compiler uses them with __builtin_bswap",
+            "Bi-endian CPUs (ARM, MIPS) can switch endianness, making assumptions about byte order dangerous",
+            "Serialization formats (Protocol Buffers, MessagePack) handle endianness for you -- prefer them over raw binary"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Little-endian: LSB first (x86). Big-endian: MSB first (network). Use `htonl()`/`ntohl()` for network. Use `__builtin_bswap32()` for fast swaps. Build values from bytes with shifts for portability.",
+          "pseudo_code": "",
+          "actual_code": "/* Detect */\nuint32_t x = 1;\nint little = (*(uint8_t *)&x == 1);\n\n/* Portable big-endian read */\nuint32_t read_be32(const uint8_t *b) {\n    return (b[0]<<24) | (b[1]<<16) | (b[2]<<8) | b[3];\n}\n\n/* Fast swap (GCC) */\nuint32_t swapped = __builtin_bswap32(0x12345678); /* 0x78563412 */",
+          "code_language": "c",
+          "key_points": [
+            "Little-endian: LSB first; Big-endian: MSB first",
+            "Build from bytes with shifts for portable code"
+          ],
+          "gotchas": [
+            "Pointer casts for multi-byte reads are endian-dependent and violate strict aliasing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are packed structures and when do you use __attribute__((packed)) or #pragma pack?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["packed", "struct", "alignment", "pragma-pack", "attribute"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "By default, the compiler adds **padding** between struct members to align them to their natural boundaries (e.g., `int` on 4-byte boundary, `short` on 2-byte). This improves CPU access speed but wastes memory.\n\n**Packed structures** remove all padding, storing members contiguously.\n\n**Two syntaxes**:\n1. GCC/Clang: `__attribute__((packed))`\n2. MSVC/GCC: `#pragma pack(push, 1)` ... `#pragma pack(pop)`\n\n**When to use packed structs**:\n1. **Hardware register overlays**: Register maps have fixed offsets with no padding.\n2. **Network protocol headers**: Wire format has no padding (e.g., TCP/IP headers).\n3. **Binary file formats**: File format specifies exact byte layout.\n4. **Inter-processor communication**: Shared memory between CPUs with different alignment requirements.\n\n**Performance penalty**: Accessing misaligned data on ARM can cause a fault (unless the CPU supports unaligned access, which Cortex-M3+ does with a performance penalty). On x86, misaligned access works but is slower.",
+          "pseudo_code": "Normal struct (with padding):\n  struct { char a; int b; char c; }\n  Layout: [a][pad][pad][pad][b][b][b][b][c][pad][pad][pad]\n  sizeof = 12\n\nPacked struct (no padding):\n  struct __attribute__((packed)) { char a; int b; char c; }\n  Layout: [a][b][b][b][b][c]\n  sizeof = 6",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n#include <stddef.h>\n\n/* Normal struct (with padding) */\nstruct normal {\n    uint8_t  a;   /* offset 0, size 1 */\n    /* 3 bytes padding */\n    uint32_t b;   /* offset 4, size 4 */\n    uint8_t  c;   /* offset 8, size 1 */\n    /* 3 bytes padding */\n};  /* total: 12 bytes */\n\n/* Packed struct (no padding) */\nstruct __attribute__((packed)) packed {\n    uint8_t  a;   /* offset 0 */\n    uint32_t b;   /* offset 1 (misaligned!) */\n    uint8_t  c;   /* offset 5 */\n};  /* total: 6 bytes */\n\n/* Alternative: #pragma pack */\n#pragma pack(push, 1)\nstruct packed_pragma {\n    uint8_t  a;\n    uint32_t b;\n    uint8_t  c;\n};\n#pragma pack(pop)\n\n/* Network protocol header example */\nstruct __attribute__((packed)) ip_header {\n    uint8_t  ver_ihl;     /* version + IHL */\n    uint8_t  tos;         /* type of service */\n    uint16_t total_len;   /* total length (big-endian) */\n    uint16_t id;          /* identification */\n    uint16_t frag_off;    /* fragment offset */\n    uint8_t  ttl;         /* time to live */\n    uint8_t  protocol;    /* protocol (6=TCP, 17=UDP) */\n    uint16_t checksum;    /* header checksum */\n    uint32_t src_addr;    /* source IP */\n    uint32_t dst_addr;    /* destination IP */\n};\n\nint main(void) {\n    printf(\"sizeof(normal): %zu\\n\", sizeof(struct normal));  /* 12 */\n    printf(\"sizeof(packed): %zu\\n\", sizeof(struct packed));  /* 6 */\n    printf(\"sizeof(packed_pragma): %zu\\n\", sizeof(struct packed_pragma)); /* 6 */\n    printf(\"sizeof(ip_header): %zu\\n\", sizeof(struct ip_header)); /* 20 */\n\n    /* Show offsets */\n    printf(\"normal.b offset: %zu\\n\", offsetof(struct normal, b));  /* 4 */\n    printf(\"packed.b offset: %zu\\n\", offsetof(struct packed, b));  /* 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Packed structs remove padding -- members are stored contiguously",
+            "__attribute__((packed)) is GCC/Clang; #pragma pack works on MSVC too",
+            "Use for hardware registers, network headers, binary file formats",
+            "Accessing misaligned members is slower and may fault on some architectures",
+            "offsetof() macro verifies the actual offset of each member"
+          ],
+          "gotchas": [
+            "Taking the address of a packed struct member and passing it to a function expecting aligned data causes undefined behavior",
+            "On ARM Cortex-M0, misaligned access causes a HardFault -- packed structs are dangerous",
+            "Packed structs cannot be directly compared with memcmp to non-packed structs (different layouts)",
+            "#pragma pack affects ALL structs until #pragma pack(pop) -- always use push/pop pairs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Packed structs remove padding for exact memory layout. Use `__attribute__((packed))` (GCC) or `#pragma pack(1)` (portable). Needed for hardware registers and network protocol headers.",
+          "pseudo_code": "",
+          "actual_code": "struct __attribute__((packed)) header {\n    uint8_t  type;    /* offset 0 */\n    uint32_t length;  /* offset 1 (no padding!) */\n    uint8_t  flags;   /* offset 5 */\n}; /* sizeof = 6 (not 12) */\n\n#pragma pack(push, 1)\nstruct alt { uint8_t a; uint32_t b; }; /* sizeof = 5 */\n#pragma pack(pop)",
+          "code_language": "c",
+          "key_points": [
+            "Removes padding for contiguous member layout",
+            "Use for hardware registers, protocol headers, binary formats"
+          ],
+          "gotchas": [
+            "Misaligned access may fault on ARM Cortex-M0 -- use with care"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why is malloc often avoided in embedded systems and what are the alternatives?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["malloc", "embedded", "static-allocation", "memory-pool", "determinism"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In embedded systems, `malloc()`/`free()` are generally avoided for several critical reasons:\n\n**1. Fragmentation**: Repeated alloc/free cycles fragment the heap. On a system with only 32KB RAM, fragmentation can exhaust memory even when total free space is sufficient.\n\n**2. Non-deterministic timing**: `malloc()` has variable execution time (searching free lists, coalescing, requesting memory from OS). Real-time systems need bounded, predictable timing.\n\n**3. No OS / no heap manager**: Bare-metal systems may not have a heap set up at all. The startup code only initializes the stack.\n\n**4. Memory leaks are fatal**: On a desktop, a slow leak may not matter for hours. On an embedded device running 24/7, a leak eventually exhausts all RAM and crashes the system.\n\n**5. Failure handling**: `malloc()` can return NULL. In safety-critical code, you must handle allocation failure at every call site.\n\n**Alternatives**:\n\n1. **Static allocation**: Declare all buffers at compile time. Sizes are known and fixed.\n2. **Memory pools**: Pre-allocate a fixed number of fixed-size blocks. Allocation is O(1) and deterministic.\n3. **Stack allocation**: Use local variables on the stack (but beware stack overflow).\n4. **Compile-time configuration**: Use `#define` for buffer sizes, tunable per deployment.\n5. **Custom allocators**: Pool allocators, arena/bump allocators for specific patterns.",
+          "pseudo_code": "Memory pool (fixed-size blocks):\n1. Define a static array of N blocks of size S\n2. Maintain a free list (linked list through the blocks)\n3. alloc: pop from free list (O(1))\n4. free: push back to free list (O(1))\n5. No fragmentation -- all blocks are the same size",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n#include <string.h>\n\n/* --- Static allocation (preferred in embedded) --- */\n#define MAX_SENSORS 8\n#define BUF_SIZE 256\n\nstatic uint16_t sensor_data[MAX_SENSORS]; /* always available */\nstatic char uart_rx_buf[BUF_SIZE];        /* always available */\n\n/* --- Memory pool allocator --- */\n#define POOL_BLOCK_SIZE 32\n#define POOL_BLOCK_COUNT 16\n\ntypedef struct pool_block {\n    struct pool_block *next;\n    uint8_t data[POOL_BLOCK_SIZE - sizeof(struct pool_block *)];\n} pool_block_t;\n\nstatic pool_block_t pool_storage[POOL_BLOCK_COUNT];\nstatic pool_block_t *pool_free_list = NULL;\n\nvoid pool_init(void) {\n    pool_free_list = NULL;\n    for (int i = POOL_BLOCK_COUNT - 1; i >= 0; i--) {\n        pool_storage[i].next = pool_free_list;\n        pool_free_list = &pool_storage[i];\n    }\n}\n\nvoid *pool_alloc(void) {\n    if (pool_free_list == NULL) return NULL; /* pool exhausted */\n    pool_block_t *block = pool_free_list;\n    pool_free_list = block->next;\n    return block;\n}\n\nvoid pool_free(void *ptr) {\n    if (ptr == NULL) return;\n    pool_block_t *block = (pool_block_t *)ptr;\n    block->next = pool_free_list;\n    pool_free_list = block;\n}\n\n/* --- Arena allocator (bump allocator) --- */\n#define ARENA_SIZE 4096\nstatic uint8_t arena_buf[ARENA_SIZE];\nstatic size_t arena_offset = 0;\n\nvoid *arena_alloc(size_t size) {\n    /* Align to 4 bytes */\n    size = (size + 3) & ~3U;\n    if (arena_offset + size > ARENA_SIZE) return NULL;\n    void *ptr = &arena_buf[arena_offset];\n    arena_offset += size;\n    return ptr;\n}\n\nvoid arena_reset(void) {\n    arena_offset = 0; /* free everything at once */\n}\n\nint main(void) {\n    /* Pool allocator demo */\n    pool_init();\n    void *a = pool_alloc();\n    void *b = pool_alloc();\n    printf(\"Pool alloc a=%p, b=%p\\n\", a, b);\n    pool_free(a);\n    void *c = pool_alloc(); /* reuses a's block */\n    printf(\"Pool alloc c=%p (reused)\\n\", c);\n    pool_free(b);\n    pool_free(c);\n\n    /* Arena allocator demo */\n    int *x = arena_alloc(sizeof(int));\n    *x = 42;\n    char *s = arena_alloc(16);\n    strcpy(s, \"hello\");\n    printf(\"Arena: x=%d, s=%s\\n\", *x, s);\n    arena_reset(); /* free all at once */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "malloc causes fragmentation, non-deterministic timing, and leak risk in embedded systems",
+            "Static allocation: all buffers declared at compile time, sizes known",
+            "Memory pools: fixed-size blocks, O(1) alloc/free, zero fragmentation",
+            "Arena/bump allocators: fast allocation, bulk free (reset entire arena)",
+            "Safety-critical standards (MISRA C, DO-178C) often prohibit dynamic allocation entirely"
+          ],
+          "gotchas": [
+            "Even a small memory leak is fatal on embedded devices running 24/7",
+            "Static allocation wastes memory if buffers are sized for worst case but rarely used",
+            "Pool allocators only work when all allocations are the same size (or a few known sizes)",
+            "Arena allocators cannot free individual allocations -- only reset the entire arena"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "malloc is avoided in embedded due to fragmentation, non-deterministic timing, and leak risk. Alternatives: static allocation, memory pools (fixed-size blocks, O(1)), arena/bump allocators.",
+          "pseudo_code": "",
+          "actual_code": "/* Static allocation */\nstatic uint8_t buffer[256]; /* always available, no fragmentation */\n\n/* Pool allocator (O(1) alloc/free) */\nvoid *pool_alloc(void) {\n    if (!free_list) return NULL;\n    void *p = free_list;\n    free_list = free_list->next;\n    return p;\n}\nvoid pool_free(void *p) {\n    ((block_t *)p)->next = free_list;\n    free_list = p;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Static buffers and memory pools replace malloc in embedded",
+            "Pools give O(1) alloc/free with no fragmentation"
+          ],
+          "gotchas": [
+            "Even small leaks are fatal on devices running 24/7 with limited RAM"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does fixed-point arithmetic work when no FPU is available?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["fixed-point", "no-fpu", "embedded", "Q-format", "arithmetic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Many embedded MCUs (Cortex-M0, 8-bit AVR, PIC) lack a floating-point unit (FPU). Software floating-point is extremely slow (100-1000x slower than integer ops). **Fixed-point arithmetic** uses integers to represent fractional values.\n\n**Concept**: An integer represents a fractional value by implicitly dividing by a power of 2.\n\n**Q-format notation**: `Q m.n` means m integer bits and n fractional bits.\n- `Q15`: 1 sign bit + 15 fractional bits. Stored in `int16_t`. Range: -1.0 to +0.999...\n- `Q16.16`: 16 integer bits + 16 fractional bits. Stored in `int32_t`. Range: -32768 to +32767.999...\n\n**Operations**:\n- **Conversion**: `fixed = (int32_t)(float_val * (1 << FRAC_BITS))`\n- **Addition/subtraction**: Direct integer add/sub (same scale).\n- **Multiplication**: `result = ((int64_t)a * b) >> FRAC_BITS` (need wider intermediate to avoid overflow).\n- **Division**: `result = ((int64_t)a << FRAC_BITS) / b`.\n\n**Advantages over float**: Deterministic timing, smaller code, no FPU needed.\n**Disadvantages**: Limited range, overflow risk, more complex code.",
+          "pseudo_code": "Q16.16 format (16 fractional bits):\n  SCALE = 1 << 16 = 65536\n  To fixed:  f = (int32_t)(real_value * 65536)\n  To float:  real = f / 65536.0\n  Add:       c = a + b        (same as integer)\n  Multiply:  c = (int32_t)(((int64_t)a * b) >> 16)\n  Divide:    c = (int32_t)(((int64_t)a << 16) / b)",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Q16.16 fixed-point: 16 integer bits, 16 fractional bits */\ntypedef int32_t fixed_t;\n#define FRAC_BITS 16\n#define FIXED_ONE (1 << FRAC_BITS) /* 65536 = represents 1.0 */\n\n/* Convert float to fixed */\nfixed_t float_to_fixed(double f) {\n    return (fixed_t)(f * FIXED_ONE);\n}\n\n/* Convert fixed to float (for display) */\ndouble fixed_to_float(fixed_t f) {\n    return (double)f / FIXED_ONE;\n}\n\n/* Multiply two fixed-point numbers */\nfixed_t fixed_mul(fixed_t a, fixed_t b) {\n    /* Use 64-bit intermediate to prevent overflow */\n    return (fixed_t)(((int64_t)a * b) >> FRAC_BITS);\n}\n\n/* Divide two fixed-point numbers */\nfixed_t fixed_div(fixed_t a, fixed_t b) {\n    return (fixed_t)(((int64_t)a << FRAC_BITS) / b);\n}\n\nint main(void) {\n    fixed_t a = float_to_fixed(3.14159);\n    fixed_t b = float_to_fixed(2.0);\n\n    printf(\"a = %.5f (raw: %d)\\n\", fixed_to_float(a), a);\n    printf(\"b = %.5f (raw: %d)\\n\", fixed_to_float(b), b);\n\n    /* Addition: direct integer add */\n    fixed_t sum = a + b;\n    printf(\"a + b = %.5f\\n\", fixed_to_float(sum)); /* ~5.14159 */\n\n    /* Multiplication */\n    fixed_t product = fixed_mul(a, b);\n    printf(\"a * b = %.5f\\n\", fixed_to_float(product)); /* ~6.28318 */\n\n    /* Division */\n    fixed_t quotient = fixed_div(a, b);\n    printf(\"a / b = %.5f\\n\", fixed_to_float(quotient)); /* ~1.57080 */\n\n    /* Temperature example: 23.5 degrees */\n    fixed_t temp = float_to_fixed(23.5);\n    fixed_t scale = float_to_fixed(1.8);\n    fixed_t offset = float_to_fixed(32.0);\n    fixed_t fahrenheit = fixed_mul(temp, scale) + offset;\n    printf(\"%.1f C = %.1f F\\n\",\n           fixed_to_float(temp), fixed_to_float(fahrenheit));\n    /* 23.5 C = 74.3 F */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Fixed-point uses integers with an implicit fractional scale (power of 2)",
+            "Q16.16: 16 integer bits + 16 fractional bits in a 32-bit int",
+            "Add/subtract: direct integer operations (same format)",
+            "Multiply: use 64-bit intermediate, right-shift by FRAC_BITS",
+            "100-1000x faster than software float on MCUs without FPU"
+          ],
+          "gotchas": [
+            "Multiplication without 64-bit intermediate overflows silently -- always widen first",
+            "Fixed-point range is much smaller than float -- overflow is easy to hit",
+            "Rounding errors accumulate over many operations -- consider adding 0.5 LSB before truncating",
+            "Mixing different Q-formats in one expression requires manual scaling"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Fixed-point uses integers with an implicit fractional scale. Q16.16: multiply float by 65536 to convert. Add/sub directly. Multiply: `((int64_t)a * b) >> 16`. Much faster than software float.",
+          "pseudo_code": "",
+          "actual_code": "typedef int32_t fixed_t;\n#define FRAC 16\n#define TO_FIXED(f) ((fixed_t)((f) * (1 << FRAC)))\n\nfixed_t a = TO_FIXED(3.14);\nfixed_t b = TO_FIXED(2.0);\nfixed_t sum = a + b;                           /* add directly */\nfixed_t prod = (fixed_t)(((int64_t)a * b) >> FRAC); /* multiply */",
+          "code_language": "c",
+          "key_points": [
+            "Integer arithmetic with implicit fractional scale",
+            "Use 64-bit intermediate for multiplication to avoid overflow"
+          ],
+          "gotchas": [
+            "Overflow is easy -- range is much smaller than float"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What happens during bare-metal startup (reset vector, stack initialization, C runtime setup)?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["startup", "reset-vector", "bare-metal", "crt0", "linker-script"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When a bare-metal embedded system powers on or resets, the CPU begins executing from a fixed address. On ARM Cortex-M:\n\n1. **Reset vector**: The CPU reads the initial stack pointer from address 0x00000000 and the reset handler address from 0x00000004. It sets SP and jumps to the reset handler.\n\n2. **Reset handler** (startup code, often in assembly or `startup.s`):\n   - Copies the `.data` section from Flash to RAM (initialized globals).\n   - Zeros the `.bss` section in RAM (uninitialized globals).\n   - Optionally initializes the FPU, clock system, and memory controller.\n   - Calls `__libc_init_array()` for C++ constructors (if applicable).\n   - Calls `main()`.\n\n3. **Linker script** defines the memory layout:\n   - Where `.text` (code), `.data`, `.bss`, and `.stack` go.\n   - Provides symbols `_sdata`, `_edata`, `_sbss`, `_ebss` that startup code uses.\n\n**Vector table** (ARM Cortex-M): An array of function pointers at the start of Flash. Entry 0 = initial SP, entry 1 = reset handler, entries 2+ = exception/interrupt handlers.\n\n**Without proper startup**: Global variables are garbage (no .data copy), BSS is not zeroed, and the stack pointer may be invalid. The program crashes immediately.",
+          "pseudo_code": "Power-on / Reset:\n1. CPU reads SP from address 0x0\n2. CPU reads PC from address 0x4 (Reset_Handler)\n3. Jump to Reset_Handler\n\nReset_Handler:\n4. Copy .data from Flash (LMA) to RAM (VMA)\n5. Zero .bss in RAM\n6. Initialize hardware (clock, FPU)\n7. Call main()\n8. If main returns: infinite loop (should never happen)",
+          "actual_code": "#include <stdint.h>\n\n/* Symbols defined by the linker script */\nextern uint32_t _sidata;  /* Start of .data in Flash (Load addr) */\nextern uint32_t _sdata;   /* Start of .data in RAM */\nextern uint32_t _edata;   /* End of .data in RAM */\nextern uint32_t _sbss;    /* Start of .bss in RAM */\nextern uint32_t _ebss;    /* End of .bss in RAM */\nextern uint32_t _estack;  /* Top of stack */\n\n/* Forward declaration */\nint main(void);\n\n/* Reset handler -- called on power-up/reset */\nvoid Reset_Handler(void) {\n    /* 1. Copy .data from Flash to RAM */\n    uint32_t *src = &_sidata;\n    uint32_t *dst = &_sdata;\n    while (dst < &_edata) {\n        *dst++ = *src++;\n    }\n\n    /* 2. Zero .bss */\n    dst = &_sbss;\n    while (dst < &_ebss) {\n        *dst++ = 0;\n    }\n\n    /* 3. Optionally: configure clock, enable FPU, etc. */\n    /* SystemInit(); */\n\n    /* 4. Call main */\n    main();\n\n    /* 5. Should never reach here */\n    while (1) { }\n}\n\n/* Default handler for unhandled interrupts */\nvoid Default_Handler(void) {\n    while (1) { } /* Hang */\n}\n\n/* Weak aliases so user can override individual handlers */\nvoid NMI_Handler(void)       __attribute__((weak, alias(\"Default_Handler\")));\nvoid HardFault_Handler(void) __attribute__((weak, alias(\"Default_Handler\")));\nvoid SysTick_Handler(void)   __attribute__((weak, alias(\"Default_Handler\")));\n\n/* Vector table -- placed at start of Flash by linker script */\n__attribute__((section(\".isr_vector\")))\nconst uint32_t vector_table[] = {\n    (uint32_t)&_estack,          /* Initial stack pointer */\n    (uint32_t)Reset_Handler,     /* Reset */\n    (uint32_t)NMI_Handler,       /* NMI */\n    (uint32_t)HardFault_Handler, /* Hard fault */\n    /* ... more exception/interrupt handlers ... */\n};",
+          "code_language": "c",
+          "key_points": [
+            "CPU reads initial SP and reset handler address from the vector table at address 0",
+            "Startup code copies .data from Flash to RAM and zeros .bss",
+            "Linker script defines memory regions and provides boundary symbols",
+            "Vector table is an array of function pointers for all exceptions/interrupts",
+            "Without proper startup, globals are uninitialized garbage"
+          ],
+          "gotchas": [
+            "If .data is not copied from Flash, initialized global variables contain garbage",
+            "If .bss is not zeroed, uninitialized globals are not zero (C standard requires them to be)",
+            "The vector table must be properly aligned (on Cortex-M, at least 256-byte aligned)",
+            "If main() returns on a bare-metal system, the CPU enters an undefined state -- always loop at the end"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "On reset: CPU reads SP + PC from vector table, jumps to Reset_Handler. Startup code copies .data from Flash to RAM, zeros .bss, then calls main(). Linker script provides memory layout symbols.",
+          "pseudo_code": "",
+          "actual_code": "void Reset_Handler(void) {\n    /* Copy .data from Flash to RAM */\n    uint32_t *src = &_sidata, *dst = &_sdata;\n    while (dst < &_edata) *dst++ = *src++;\n\n    /* Zero .bss */\n    dst = &_sbss;\n    while (dst < &_ebss) *dst++ = 0;\n\n    main();\n    while (1) {} /* never return */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Copy .data from Flash, zero .bss, call main()",
+            "Vector table entry 0 = SP, entry 1 = Reset_Handler"
+          ],
+          "gotchas": [
+            "Without startup code, globals are garbage and BSS is not zeroed"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a circular buffer (ring buffer) in embedded C?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["circular-buffer", "ring-buffer", "FIFO", "ISR", "embedded"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **circular buffer** (ring buffer) is the most common data structure in embedded systems. It is used to pass data between an ISR (producer) and the main loop (consumer), or between any producer/consumer pair.\n\n**Properties**:\n- Fixed-size array used as a FIFO queue.\n- `head` points to the next write position (producer advances).\n- `tail` points to the next read position (consumer advances).\n- When head or tail reaches the end, it wraps to 0.\n- **Full detection**: The buffer is full when `(head + 1) % size == tail`. This wastes one slot to distinguish full from empty.\n- **Empty detection**: `head == tail`.\n\n**Power-of-2 optimization**: If the buffer size is a power of 2, modulo can be replaced with a bitwise AND: `index & (SIZE - 1)`. This is faster (no division).\n\n**ISR safety**: If the buffer size is a power of 2 and head/tail are `volatile`, a single producer (ISR) and single consumer (main) can operate without locks. This is because each index is only written by one side. However, this only works for the single-producer, single-consumer case.",
+          "pseudo_code": "init: head = 0, tail = 0\n\nwrite (producer):\n  next = (head + 1) % SIZE\n  if next == tail: buffer full, discard or block\n  buf[head] = data\n  head = next\n\nread (consumer):\n  if head == tail: buffer empty\n  data = buf[tail]\n  tail = (tail + 1) % SIZE\n  return data\n\ncount: (head - tail + SIZE) % SIZE",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n#include <stdbool.h>\n\n/* Power-of-2 size for fast modulo */\n#define RING_SIZE 64  /* must be power of 2 */\n#define RING_MASK (RING_SIZE - 1)\n\ntypedef struct {\n    uint8_t buffer[RING_SIZE];\n    volatile uint8_t head; /* write index (producer/ISR) */\n    volatile uint8_t tail; /* read index  (consumer/main) */\n} ring_buf_t;\n\nvoid ring_init(ring_buf_t *rb) {\n    rb->head = 0;\n    rb->tail = 0;\n}\n\nbool ring_is_empty(const ring_buf_t *rb) {\n    return rb->head == rb->tail;\n}\n\nbool ring_is_full(const ring_buf_t *rb) {\n    return ((rb->head + 1) & RING_MASK) == rb->tail;\n}\n\nuint8_t ring_count(const ring_buf_t *rb) {\n    return (rb->head - rb->tail) & RING_MASK;\n}\n\n/* Producer (called from ISR) */\nbool ring_put(ring_buf_t *rb, uint8_t byte) {\n    uint8_t next = (rb->head + 1) & RING_MASK;\n    if (next == rb->tail) return false; /* full */\n    rb->buffer[rb->head] = byte;\n    rb->head = next;\n    return true;\n}\n\n/* Consumer (called from main loop) */\nbool ring_get(ring_buf_t *rb, uint8_t *byte) {\n    if (rb->head == rb->tail) return false; /* empty */\n    *byte = rb->buffer[rb->tail];\n    rb->tail = (rb->tail + 1) & RING_MASK;\n    return true;\n}\n\nint main(void) {\n    ring_buf_t uart_rx;\n    ring_init(&uart_rx);\n\n    /* Simulate ISR pushing data */\n    ring_put(&uart_rx, 'H');\n    ring_put(&uart_rx, 'i');\n    ring_put(&uart_rx, '!');\n\n    printf(\"Count: %d\\n\", ring_count(&uart_rx)); /* 3 */\n\n    /* Main loop consuming data */\n    uint8_t ch;\n    while (ring_get(&uart_rx, &ch)) {\n        printf(\"Got: %c\\n\", ch);\n    }\n    /* Output: H, i, ! */\n\n    printf(\"Empty: %d\\n\", ring_is_empty(&uart_rx)); /* 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Circular buffer is a fixed-size FIFO with head (write) and tail (read) indices",
+            "Full when (head+1) % size == tail; empty when head == tail (wastes one slot)",
+            "Power-of-2 size allows & mask instead of % for faster index wrapping",
+            "Lock-free for single producer + single consumer with volatile indices",
+            "Most common data structure in embedded (UART RX/TX, ADC sampling, etc.)"
+          ],
+          "gotchas": [
+            "One slot is always wasted to distinguish full from empty -- a 64-byte buffer holds 63 bytes",
+            "The lock-free property ONLY works for single producer + single consumer -- multiple producers need locking",
+            "On 8-bit MCUs with 8-bit head/tail, the size must be <= 256 and power of 2 for correct wrapping",
+            "If the producer overruns the buffer (writes when full), data is silently lost unless you check ring_is_full"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Circular buffer: fixed-size array with `head` (write) and `tail` (read) indices. Full: `(head+1)%size == tail`. Empty: `head == tail`. Power-of-2 size enables fast `& mask` wrapping. Lock-free for single producer/consumer.",
+          "pseudo_code": "",
+          "actual_code": "#define SIZE 64\n#define MASK (SIZE - 1)\nuint8_t buf[SIZE];\nvolatile uint8_t head = 0, tail = 0;\n\nbool put(uint8_t b) {\n    uint8_t next = (head + 1) & MASK;\n    if (next == tail) return false; /* full */\n    buf[head] = b;\n    head = next;\n    return true;\n}\n\nbool get(uint8_t *b) {\n    if (head == tail) return false; /* empty */\n    *b = buf[tail];\n    tail = (tail + 1) & MASK;\n    return true;\n}",
+          "code_language": "c",
+          "key_points": [
+            "head writes, tail reads; power-of-2 for fast modulo",
+            "Lock-free for single producer + single consumer"
+          ],
+          "gotchas": [
+            "One slot wasted to distinguish full from empty"
+          ]
+        }
+      ]
+    }
+  ]
+}

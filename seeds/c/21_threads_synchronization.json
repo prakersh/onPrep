@@ -1,0 +1,635 @@
+{
+  "concept_slug": "threads-synchronization",
+  "questions": [
+    {
+      "title": "How does pthread_create() work, and what is the thread function signature?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["pthread_create", "thread-creation", "pthreads"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`pthread_create()` creates a new thread within the calling process.\n\n**Prototype:**\n```c\n#include <pthread.h>\nint pthread_create(pthread_t *thread, const pthread_attr_t *attr,\n                   void *(*start_routine)(void *), void *arg);\n```\n\n**Parameters:**\n- `thread` -- output parameter: stores the new thread's ID\n- `attr` -- thread attributes (NULL for defaults: joinable, default stack size)\n- `start_routine` -- function the thread will execute. Signature: `void *func(void *arg)`\n- `arg` -- single argument passed to the start routine (use a struct for multiple values)\n\n**Return value:** 0 on success, error number on failure (does NOT set errno).\n\n**Thread function signature:** Must be `void *(*)(void *)` -- takes a void pointer, returns a void pointer. The return value is available to `pthread_join()`.\n\n**Key points:**\n- The new thread starts executing `start_routine` immediately (scheduling order is indeterminate)\n- All threads share the process address space (global variables, heap, file descriptors)\n- Each thread has its own stack, thread ID, errno, signal mask, and scheduling priority\n- Compile and link with `-pthread` flag",
+          "pseudo_code": "1. Define thread function: void *worker(void *arg) { ... return result; }\n2. pthread_t tid;\n3. pthread_create(&tid, NULL, worker, arg)\n4. Thread runs worker(arg) concurrently\n5. pthread_join(tid, &result) -- wait for thread, get return value\n6. Compile: gcc -pthread program.c",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\ntypedef struct {\n    int id;\n    const char *message;\n} thread_arg_t;\n\nvoid *worker(void *arg) {\n    thread_arg_t *ta = (thread_arg_t *)arg;\n    printf(\"Thread %d: %s\\n\", ta->id, ta->message);\n\n    /* Allocate and return a result */\n    int *result = malloc(sizeof(int));\n    *result = ta->id * 10;\n    return result;\n}\n\nint main(void) {\n    pthread_t threads[3];\n    thread_arg_t args[3] = {\n        {1, \"Hello\"}, {2, \"World\"}, {3, \"!\"}\n    };\n\n    /* Create threads */\n    for (int i = 0; i < 3; i++) {\n        int ret = pthread_create(&threads[i], NULL, worker, &args[i]);\n        if (ret != 0) {\n            fprintf(stderr, \"pthread_create: %s\\n\", strerror(ret));\n            return 1;\n        }\n    }\n\n    /* Join threads and get results */\n    for (int i = 0; i < 3; i++) {\n        void *retval;\n        pthread_join(threads[i], &retval);\n        printf(\"Thread %d returned: %d\\n\", i + 1, *(int *)retval);\n        free(retval);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Thread function signature: void *func(void *arg)",
+            "pthread_create returns 0 on success, error number on failure (not -1)",
+            "All threads share global memory, heap, and file descriptors",
+            "Each thread has its own stack, errno, and signal mask",
+            "Compile with -pthread flag"
+          ],
+          "gotchas": [
+            "Passing a pointer to a local variable as arg can be a race if the variable changes before thread reads it",
+            "pthreads functions return error codes directly (not via errno)",
+            "Forgetting -pthread flag causes undefined behavior (may seem to work but fail at runtime)",
+            "Thread function must return void* -- returning without a value is undefined if pthread_join expects one"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pthread_create(&tid, NULL, func, arg)` creates a thread running `func(arg)`. Function signature: `void *func(void *)`. Returns 0 on success. Compile with `-pthread`.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\nvoid *worker(void *arg) {\n    printf(\"Thread: %s\\n\", (char *)arg);\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t;\n    pthread_create(&t, NULL, worker, \"hello\");\n    pthread_join(t, NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Signature: void *func(void *arg)",
+            "Returns error code, not -1"
+          ],
+          "gotchas": [
+            "Must compile with -pthread flag"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between pthread_join() and pthread_detach()?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["pthread_join", "pthread_detach", "joinable", "detached"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Threads can be in one of two states regarding resource cleanup:\n\n**Joinable (default):**\n- Another thread must call `pthread_join()` to collect the thread's return value and release its resources\n- Like `waitpid()` for processes -- if not joined, resources leak (thread zombie)\n- `pthread_join(tid, &retval)` blocks until the target thread terminates\n\n**Detached:**\n- Resources are automatically released when the thread terminates\n- No thread can join it (pthread_join fails with EINVAL)\n- Created by calling `pthread_detach(tid)` or by setting the `PTHREAD_CREATE_DETACHED` attribute\n\n**When to use each:**\n- **Join** when you need the thread's return value or need to synchronize on its completion\n- **Detach** for fire-and-forget threads (e.g., handling a client connection, background cleanup)\n\n**Important:** A joinable thread that is never joined leaks resources (stack, thread ID) even after it has finished. This is the thread equivalent of a zombie process.",
+          "pseudo_code": "Joinable (default):\n  pthread_create(&tid, NULL, func, arg)\n  /* thread runs... terminates... resources held */\n  pthread_join(tid, &retval)  /* blocks, collects retval, frees resources */\n\nDetached:\n  pthread_create(&tid, NULL, func, arg)\n  pthread_detach(tid)  /* resources freed automatically on termination */\n  /* cannot pthread_join(tid) -- would fail */\n\nOr create detached from start:\n  pthread_attr_init(&attr)\n  pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED)\n  pthread_create(&tid, &attr, func, arg)\n  pthread_attr_destroy(&attr)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nvoid *joinable_worker(void *arg) {\n    (void)arg;\n    printf(\"Joinable thread running\\n\");\n    return (void *)42L;  /* return value available to joiner */\n}\n\nvoid *detached_worker(void *arg) {\n    (void)arg;\n    printf(\"Detached thread running (fire-and-forget)\\n\");\n    /* Resources freed automatically when this returns */\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t1, t2;\n\n    /* Joinable thread */\n    pthread_create(&t1, NULL, joinable_worker, NULL);\n    void *retval;\n    pthread_join(t1, &retval);  /* blocks until t1 finishes */\n    printf(\"Joinable returned: %ld\\n\", (long)retval);\n\n    /* Detached thread (method 1: detach after create) */\n    pthread_create(&t2, NULL, detached_worker, NULL);\n    pthread_detach(t2);\n    /* Cannot join t2 */\n\n    /* Detached thread (method 2: create detached) */\n    pthread_t t3;\n    pthread_attr_t attr;\n    pthread_attr_init(&attr);\n    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);\n    pthread_create(&t3, &attr, detached_worker, NULL);\n    pthread_attr_destroy(&attr);\n\n    sleep(1);  /* let detached threads finish */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Joinable: must call pthread_join to collect return value and free resources",
+            "Detached: resources freed automatically, cannot be joined",
+            "Default state is joinable -- unjoin'd threads leak resources",
+            "pthread_detach can be called by the thread itself or another thread",
+            "Detaching or joining a thread more than once is undefined behavior"
+          ],
+          "gotchas": [
+            "Joining a detached thread is undefined behavior",
+            "Detaching an already-joined thread is undefined behavior",
+            "A joinable thread that terminates without being joined leaks resources",
+            "pthread_join blocks the caller -- use pthread_tryjoin_np (Linux) for non-blocking"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Joinable (default): must `pthread_join()` to get return value and free resources. Detached: auto-cleanup on exit, cannot be joined. Unjoin'd joinable threads leak resources (thread zombies).",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\nvoid *func(void *a) { return a; }\n\nint main(void) {\n    pthread_t t;\n    pthread_create(&t, NULL, func, (void*)42L);\n    void *r;\n    pthread_join(t, &r);  /* joinable: get result */\n    printf(\"%ld\\n\", (long)r);\n\n    pthread_create(&t, NULL, func, NULL);\n    pthread_detach(t);  /* detached: fire and forget */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Joinable = must join; Detached = auto-cleanup",
+            "Unjoin'd threads leak resources"
+          ],
+          "gotchas": [
+            "Joining a detached thread is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What resources do threads share vs have privately?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["thread-vs-process", "shared-resources", "private-resources"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "All threads in a process share the same address space but have some private resources.\n\n**Shared between threads:**\n- Text segment (code)\n- Global and static variables\n- Heap (dynamic memory)\n- File descriptors\n- Signal dispositions (handlers)\n- Current working directory\n- User and group IDs\n- Process ID\n\n**Private to each thread:**\n- Thread ID (`pthread_t`)\n- Stack (local variables, function call chain)\n- `errno` (thread-local on modern systems)\n- Signal mask (`pthread_sigmask`)\n- Thread-specific data (`pthread_key_t`)\n- Scheduling priority and policy\n- CPU affinity\n- Pending signals (thread-directed)\n\n**Implications:**\n- Sharing the heap means one thread's `malloc()` is visible to all threads, but also means concurrent access needs synchronization\n- Sharing file descriptors means `close()` in one thread affects all threads\n- Local variables are safe because each thread has its own stack, but do not return pointers to stack variables to other threads",
+          "pseudo_code": "Thread A and B share:\n  global_var, heap_ptr, fd 3, signal handlers, CWD, PID\n\nThread A private:\n  stack (local vars), errno, signal mask, thread ID, TLS\n\nThread B private:\n  stack (local vars), errno, signal mask, thread ID, TLS\n\nConsequences:\n  global_var access: NEEDS synchronization (mutex)\n  local_var: SAFE (own stack)\n  malloc'd ptr: shared, NEEDS synchronization\n  errno: SAFE (thread-local)\n  close(fd): affects ALL threads",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <errno.h>\n\nint global_counter = 0;  /* SHARED -- needs synchronization */\npthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\n\nvoid *thread_func(void *arg) {\n    int thread_id = *(int *)arg;\n\n    /* Stack variable -- private to this thread */\n    int local_var = thread_id * 100;\n\n    /* errno is thread-local */\n    errno = 0;  /* does not affect other threads */\n\n    /* Global variable -- shared, needs lock */\n    pthread_mutex_lock(&mtx);\n    global_counter++;\n    printf(\"Thread %d: global=%d, local=%d, errno=%d\\n\",\n           thread_id, global_counter, local_var, errno);\n    pthread_mutex_unlock(&mtx);\n\n    /* Heap -- shared but allocated here */\n    int *heap_val = malloc(sizeof(int));\n    *heap_val = local_var;\n    return heap_val;  /* caller must free */\n}\n\nint main(void) {\n    pthread_t threads[3];\n    int ids[] = {1, 2, 3};\n\n    for (int i = 0; i < 3; i++)\n        pthread_create(&threads[i], NULL, thread_func, &ids[i]);\n\n    for (int i = 0; i < 3; i++) {\n        void *retval;\n        pthread_join(threads[i], &retval);\n        printf(\"Thread %d returned heap value: %d\\n\", i + 1, *(int *)retval);\n        free(retval);\n    }\n\n    printf(\"Final global_counter = %d\\n\", global_counter);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Shared: globals, heap, fds, signal handlers, PID, CWD",
+            "Private: stack, errno, signal mask, thread ID, TLS",
+            "Shared data access requires synchronization (mutexes)",
+            "errno is thread-local in modern pthreads implementations",
+            "close() in one thread closes the fd for ALL threads"
+          ],
+          "gotchas": [
+            "Never return a pointer to a local variable from a thread function",
+            "close(fd) in one thread can crash another thread using the same fd",
+            "Static local variables are shared (they are not on the stack)",
+            "malloc is thread-safe but the memory it returns is shared and needs synchronization"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Threads share: globals, heap, fds, signal handlers. Private: stack, errno, signal mask, thread ID. Shared data needs synchronization. errno is thread-local.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\nint shared = 0;\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\n\nvoid *func(void *a) {\n    int local = 42;  /* private (stack) */\n    pthread_mutex_lock(&m);\n    shared++;  /* shared -- needs lock */\n    pthread_mutex_unlock(&m);\n    (void)a; (void)local;\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t;\n    pthread_create(&t, NULL, func, NULL);\n    pthread_join(t, NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Globals/heap shared; stack/errno private",
+            "Shared access needs mutexes"
+          ],
+          "gotchas": [
+            "close(fd) in one thread affects all threads"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do mutexes work (pthread_mutex_init/lock/unlock/destroy)?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["mutex", "pthread_mutex", "mutual-exclusion", "critical-section"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A mutex (mutual exclusion) ensures that only one thread can execute a critical section at a time.\n\n**Key functions:**\n```c\nint pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr);\nint pthread_mutex_lock(pthread_mutex_t *mutex);     /* blocks if locked */\nint pthread_mutex_trylock(pthread_mutex_t *mutex);  /* non-blocking */\nint pthread_mutex_unlock(pthread_mutex_t *mutex);\nint pthread_mutex_destroy(pthread_mutex_t *mutex);\n```\n\n**Static initialization:**\n```c\npthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;  /* no init/destroy needed */\n```\n\n**Mutex types (via attributes):**\n- `PTHREAD_MUTEX_DEFAULT` (or `NORMAL`): undefined behavior on double-lock\n- `PTHREAD_MUTEX_ERRORCHECK`: returns `EDEADLK` on double-lock by same thread\n- `PTHREAD_MUTEX_RECURSIVE`: allows same thread to lock multiple times (must unlock same number)\n\n**Usage pattern:**\n```c\npthread_mutex_lock(&mtx);\n/* critical section: only one thread here at a time */\npthread_mutex_unlock(&mtx);\n```\n\n**Important:** Protect the DATA, not the code. Lock the mutex before accessing shared data and unlock after. Keep critical sections as short as possible to maximize concurrency.",
+          "pseudo_code": "1. Initialize: mutex = PTHREAD_MUTEX_INITIALIZER (or pthread_mutex_init)\n2. Before accessing shared data: pthread_mutex_lock(&mutex)\n3. Access/modify shared data (critical section)\n4. After done: pthread_mutex_unlock(&mutex)\n5. Cleanup: pthread_mutex_destroy(&mutex)\n\nRules:\n- Lock and unlock must be in the same thread\n- Do not lock a normal mutex twice (deadlock)\n- Do not unlock a mutex you did not lock (undefined)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\n#define NUM_THREADS 10\n#define ITERATIONS 100000\n\nstatic int counter = 0;\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\n\nvoid *increment(void *arg) {\n    (void)arg;\n    for (int i = 0; i < ITERATIONS; i++) {\n        pthread_mutex_lock(&mtx);\n        counter++;  /* protected by mutex */\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t threads[NUM_THREADS];\n\n    for (int i = 0; i < NUM_THREADS; i++)\n        pthread_create(&threads[i], NULL, increment, NULL);\n\n    for (int i = 0; i < NUM_THREADS; i++)\n        pthread_join(threads[i], NULL);\n\n    printf(\"Counter: %d (expected %d)\\n\",\n           counter, NUM_THREADS * ITERATIONS);\n    /* Without mutex: counter < expected (race condition) */\n    /* With mutex: counter == expected (correct) */\n\n    pthread_mutex_destroy(&mtx);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Mutex ensures mutual exclusion -- only one thread in the critical section",
+            "PTHREAD_MUTEX_INITIALIZER for static initialization (no destroy needed)",
+            "pthread_mutex_trylock returns EBUSY if already locked (non-blocking)",
+            "Keep critical sections short for maximum concurrency",
+            "ERRORCHECK type detects double-lock; RECURSIVE type allows it"
+          ],
+          "gotchas": [
+            "Locking a normal mutex twice from the same thread is undefined (usually deadlock)",
+            "Unlocking a mutex not locked by the current thread is undefined behavior",
+            "Destroying a locked mutex is undefined behavior",
+            "Forgetting to unlock (e.g., on error path) causes deadlock -- consider cleanup handlers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Mutex ensures one thread at a time in critical section. `pthread_mutex_lock()` blocks if locked, `unlock()` releases. Use `PTHREAD_MUTEX_INITIALIZER` for static init. Keep critical sections short.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\nint shared = 0;\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\n\nvoid *func(void *a) {\n    (void)a;\n    pthread_mutex_lock(&m);\n    shared++;\n    pthread_mutex_unlock(&m);\n    return NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "lock/critical section/unlock pattern",
+            "PTHREAD_MUTEX_INITIALIZER for static init"
+          ],
+          "gotchas": [
+            "Double-lock from same thread = undefined (deadlock with NORMAL type)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What causes deadlocks with mutexes, and how do you prevent them?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["deadlock", "mutex", "lock-ordering", "prevention"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Deadlock with mutexes occurs when threads form a circular wait chain, each holding one mutex and waiting for another.\n\n**Common scenario:**\n```\nThread A: lock(mutex1) -> lock(mutex2)  // blocks waiting for B\nThread B: lock(mutex2) -> lock(mutex1)  // blocks waiting for A\n```\n\n**Prevention strategies:**\n\n1. **Lock ordering:** Always acquire mutexes in the same global order. If all threads lock mutex1 before mutex2, no circular wait can form.\n\n2. **Try-lock with backoff:** Use `pthread_mutex_trylock()`. If it fails (EBUSY), release all held mutexes and retry.\n\n3. **Single coarse lock:** Use one mutex instead of multiple. Reduces concurrency but eliminates deadlock.\n\n4. **Lock hierarchy:** Assign a numerical level to each mutex. Only lock higher-level mutexes while holding lower-level ones.\n\n5. **Timeout:** Use `pthread_mutex_timedlock()` (POSIX) to detect potential deadlocks.\n\n**Detection tools:** Valgrind (helgrind/drd), Thread Sanitizer (`-fsanitize=thread`), `PTHREAD_MUTEX_ERRORCHECK` type.\n\n**Best practice:** Lock ordering is the most widely used and reliable strategy. Document the ordering in comments.",
+          "pseudo_code": "DEADLOCK:\n  Thread A: lock(m1) -> lock(m2)  // waits for B\n  Thread B: lock(m2) -> lock(m1)  // waits for A\n  // Circular wait -> deadlock!\n\nFIX (lock ordering):\n  Thread A: lock(m1) -> lock(m2)  // always m1 first\n  Thread B: lock(m1) -> lock(m2)  // same order!\n  // Thread B blocks on m1, but A can proceed -> no deadlock\n\nFIX (try-lock):\n  Thread A: lock(m1); if trylock(m2)==EBUSY: unlock(m1); retry",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <errno.h>\n\npthread_mutex_t m1 = PTHREAD_MUTEX_INITIALIZER;\npthread_mutex_t m2 = PTHREAD_MUTEX_INITIALIZER;\n\n/* CORRECT: lock ordering (always m1 before m2) */\nvoid *safe_worker(void *arg) {\n    (void)arg;\n    pthread_mutex_lock(&m1);  /* always lock m1 first */\n    pthread_mutex_lock(&m2);  /* then m2 */\n    printf(\"Thread %lu: both locks held\\n\", (unsigned long)pthread_self());\n    pthread_mutex_unlock(&m2);\n    pthread_mutex_unlock(&m1);\n    return NULL;\n}\n\n/* ALTERNATIVE: try-lock with backoff */\nvoid *trylock_worker(void *arg) {\n    (void)arg;\n    int locked = 0;\n    while (!locked) {\n        pthread_mutex_lock(&m1);\n        if (pthread_mutex_trylock(&m2) == 0) {\n            locked = 1;  /* got both */\n        } else {\n            pthread_mutex_unlock(&m1);  /* release and retry */\n            /* Optional: sched_yield() or short sleep */\n        }\n    }\n    printf(\"Thread: both locks via trylock\\n\");\n    pthread_mutex_unlock(&m2);\n    pthread_mutex_unlock(&m1);\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t1, t2;\n    pthread_create(&t1, NULL, safe_worker, NULL);\n    pthread_create(&t2, NULL, safe_worker, NULL);\n    pthread_join(t1, NULL);\n    pthread_join(t2, NULL);\n    printf(\"No deadlock with lock ordering\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Deadlock: circular wait between threads holding different mutexes",
+            "Lock ordering is the primary prevention strategy",
+            "trylock + backoff avoids blocking but may cause livelock",
+            "PTHREAD_MUTEX_ERRORCHECK detects double-lock (returns EDEADLK)",
+            "Thread Sanitizer (-fsanitize=thread) detects potential deadlocks at runtime"
+          ],
+          "gotchas": [
+            "Lock ordering must be documented and enforced by all code paths",
+            "trylock backoff can cause livelock (both threads keep retrying)",
+            "Holding a mutex while calling unknown code (callbacks) risks deadlock",
+            "Forgetting to unlock on error paths is a common cause of deadlock"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Deadlock: Thread A holds m1, waits for m2; Thread B holds m2, waits for m1. Prevent with lock ordering (always lock in same order), trylock+backoff, or single coarse lock.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\npthread_mutex_t m1, m2;\n\n/* Always lock m1 before m2 */\nvoid safe(void) {\n    pthread_mutex_lock(&m1);\n    pthread_mutex_lock(&m2);\n    /* critical section */\n    pthread_mutex_unlock(&m2);\n    pthread_mutex_unlock(&m1);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Lock ordering prevents deadlocks",
+            "Document the ordering"
+          ],
+          "gotchas": [
+            "Callbacks while holding locks risk deadlock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do condition variables work (pthread_cond_wait/signal/broadcast)?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["condition-variable", "pthread_cond", "wait", "signal", "broadcast"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Condition variables allow threads to wait for a specific condition to become true, without busy-waiting.\n\n**Key functions:**\n```c\nint pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);\nint pthread_cond_signal(pthread_cond_t *cond);     /* wake ONE waiter */\nint pthread_cond_broadcast(pthread_cond_t *cond);  /* wake ALL waiters */\nint pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,\n                           const struct timespec *abstime);\n```\n\n**How pthread_cond_wait works (atomically):**\n1. Unlocks the mutex\n2. Puts the calling thread to sleep\n3. When woken up, re-acquires the mutex before returning\n\n**Why always use a while loop (not if):**\n```c\npthread_mutex_lock(&mtx);\nwhile (!condition)  /* NOT if (!condition) */\n    pthread_cond_wait(&cond, &mtx);\n/* condition is true here, mutex is held */\npthread_mutex_unlock(&mtx);\n```\n\nReasons for the while loop:\n- **Spurious wakeups:** pthread_cond_wait can return without being signaled\n- **Stolen wakeups:** Another thread might have changed the condition before this thread re-acquires the mutex\n- **Broadcast:** Multiple waiters wake up, but only one should proceed\n\n**signal vs broadcast:**\n- `signal` wakes ONE waiting thread (use when exactly one waiter should proceed)\n- `broadcast` wakes ALL waiting threads (use when multiple waiters might proceed, or when condition meaning has changed for all)",
+          "pseudo_code": "Waiter:\n  pthread_mutex_lock(&mutex)\n  while (!condition)                    // always while, not if\n      pthread_cond_wait(&cond, &mutex)  // atomic: unlock + sleep + relock\n  // condition is true, mutex is held\n  /* do work */\n  pthread_mutex_unlock(&mutex)\n\nSignaler:\n  pthread_mutex_lock(&mutex)\n  condition = true                      // modify condition\n  pthread_cond_signal(&cond)            // wake one waiter\n  pthread_mutex_unlock(&mutex)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <unistd.h>\n\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\nstatic pthread_cond_t cond = PTHREAD_COND_INITIALIZER;\nstatic int data_ready = 0;\nstatic int shared_data = 0;\n\nvoid *producer(void *arg) {\n    (void)arg;\n    sleep(1);  /* simulate work */\n\n    pthread_mutex_lock(&mtx);\n    shared_data = 42;\n    data_ready = 1;\n    printf(\"Producer: data ready\\n\");\n    pthread_cond_signal(&cond);  /* wake one consumer */\n    pthread_mutex_unlock(&mtx);\n\n    return NULL;\n}\n\nvoid *consumer(void *arg) {\n    (void)arg;\n    pthread_mutex_lock(&mtx);\n\n    while (!data_ready)  /* MUST be while, not if */\n        pthread_cond_wait(&cond, &mtx);  /* atomic unlock+sleep+relock */\n\n    printf(\"Consumer: got data = %d\\n\", shared_data);\n    pthread_mutex_unlock(&mtx);\n\n    return NULL;\n}\n\nint main(void) {\n    pthread_t prod, cons;\n    pthread_create(&cons, NULL, consumer, NULL);\n    pthread_create(&prod, NULL, producer, NULL);\n\n    pthread_join(prod, NULL);\n    pthread_join(cons, NULL);\n\n    pthread_mutex_destroy(&mtx);\n    pthread_cond_destroy(&cond);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "pthread_cond_wait atomically unlocks mutex + sleeps + relocks on wake",
+            "ALWAYS check condition in a while loop (spurious wakeups)",
+            "signal wakes one waiter; broadcast wakes all",
+            "The mutex must be locked before calling cond_wait",
+            "Condition variables have no memory -- signal with no waiter is lost"
+          ],
+          "gotchas": [
+            "Using if instead of while leads to bugs with spurious wakeups",
+            "Signal with no waiting thread is a no-op (signal is not saved)",
+            "The mutex must be the SAME mutex for all waiters on the same condvar",
+            "Destroying a condvar while threads are waiting is undefined behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pthread_cond_wait(&cond, &mtx)` atomically unlocks mutex, sleeps, and re-locks on wake. Always use in a `while(!condition)` loop (spurious wakeups). `signal` wakes one, `broadcast` wakes all.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\npthread_cond_t c = PTHREAD_COND_INITIALIZER;\nint ready = 0;\n\nvoid *waiter(void *a) {\n    (void)a;\n    pthread_mutex_lock(&m);\n    while (!ready) pthread_cond_wait(&c, &m);\n    pthread_mutex_unlock(&m);\n    return NULL;\n}\n\nvoid *signaler(void *a) {\n    (void)a;\n    pthread_mutex_lock(&m);\n    ready = 1;\n    pthread_cond_signal(&c);\n    pthread_mutex_unlock(&m);\n    return NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always while(!condition), never if",
+            "cond_wait atomically unlocks + sleeps + relocks"
+          ],
+          "gotchas": [
+            "Spurious wakeups make if-check incorrect"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the producer-consumer pattern with mutexes and condition variables?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["producer-consumer", "condvar", "mutex", "bounded-buffer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The producer-consumer pattern with a bounded buffer uses a mutex for mutual exclusion and two condition variables: one for \"not full\" (producer waits when buffer is full) and one for \"not empty\" (consumer waits when buffer is empty).\n\n**Components:**\n- Circular buffer with `in` and `out` indices\n- `count` -- number of items currently in buffer\n- `mutex` -- protects buffer, count, and indices\n- `not_full` -- producer waits on this when buffer is full\n- `not_empty` -- consumer waits on this when buffer is empty\n\n**Producer:**\n```\nlock(mutex)\nwhile (count == BUFFER_SIZE)\n    cond_wait(not_full, mutex)\nbuffer[in] = item; in = (in+1) % SIZE; count++\ncond_signal(not_empty)\nunlock(mutex)\n```\n\n**Consumer:**\n```\nlock(mutex)\nwhile (count == 0)\n    cond_wait(not_empty, mutex)\nitem = buffer[out]; out = (out+1) % SIZE; count--\ncond_signal(not_full)\nunlock(mutex)\n```",
+          "pseudo_code": "Buffer: array[SIZE], in=0, out=0, count=0\nMutex: mutex\nCondvars: not_full, not_empty\n\nProduce:\n  lock(mutex)\n  while count == SIZE: wait(not_full, mutex)  // buffer full\n  buffer[in] = item; in = (in+1)%SIZE; count++\n  signal(not_empty)  // wake consumer\n  unlock(mutex)\n\nConsume:\n  lock(mutex)\n  while count == 0: wait(not_empty, mutex)   // buffer empty\n  item = buffer[out]; out = (out+1)%SIZE; count--\n  signal(not_full)  // wake producer\n  unlock(mutex)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\n#define BUF_SIZE 5\n#define NUM_ITEMS 20\n\nstatic int buffer[BUF_SIZE];\nstatic int in = 0, out = 0, count = 0;\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\nstatic pthread_cond_t not_full = PTHREAD_COND_INITIALIZER;\nstatic pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;\n\nvoid *producer(void *arg) {\n    (void)arg;\n    for (int i = 1; i <= NUM_ITEMS; i++) {\n        pthread_mutex_lock(&mtx);\n        while (count == BUF_SIZE)\n            pthread_cond_wait(&not_full, &mtx);\n\n        buffer[in] = i;\n        in = (in + 1) % BUF_SIZE;\n        count++;\n        printf(\"Produced: %d (count=%d)\\n\", i, count);\n\n        pthread_cond_signal(&not_empty);\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nvoid *consumer(void *arg) {\n    (void)arg;\n    for (int i = 0; i < NUM_ITEMS; i++) {\n        pthread_mutex_lock(&mtx);\n        while (count == 0)\n            pthread_cond_wait(&not_empty, &mtx);\n\n        int item = buffer[out];\n        out = (out + 1) % BUF_SIZE;\n        count--;\n        printf(\"Consumed: %d (count=%d)\\n\", item, count);\n\n        pthread_cond_signal(&not_full);\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t prod, cons;\n    pthread_create(&prod, NULL, producer, NULL);\n    pthread_create(&cons, NULL, consumer, NULL);\n    pthread_join(prod, NULL);\n    pthread_join(cons, NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two condition variables: not_full (for producer) and not_empty (for consumer)",
+            "One mutex protects the shared buffer, count, and indices",
+            "Producer signals not_empty after adding; consumer signals not_full after removing",
+            "while loops handle spurious wakeups and multiple producers/consumers",
+            "Circular buffer with modular arithmetic avoids buffer shifting"
+          ],
+          "gotchas": [
+            "Using signal when multiple consumers exist may wake the wrong one -- consider broadcast",
+            "Forgetting the while loop on cond_wait leads to buffer overrun/underrun",
+            "With multiple producers AND multiple consumers, broadcast may be more correct",
+            "The mutex must be held when signaling (or at least when modifying the condition)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Bounded buffer: mutex + two condvars (not_full, not_empty). Producer waits on not_full when full, signals not_empty after producing. Consumer waits on not_empty when empty, signals not_full after consuming.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\nint buf[5], in=0, out=0, cnt=0;\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\npthread_cond_t nf = PTHREAD_COND_INITIALIZER;\npthread_cond_t ne = PTHREAD_COND_INITIALIZER;\n\nvoid produce(int item) {\n    pthread_mutex_lock(&m);\n    while (cnt == 5) pthread_cond_wait(&nf, &m);\n    buf[in] = item; in = (in+1)%5; cnt++;\n    pthread_cond_signal(&ne);\n    pthread_mutex_unlock(&m);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two condvars: not_full and not_empty",
+            "while loop for cond_wait"
+          ],
+          "gotchas": [
+            "Use broadcast with multiple consumers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do reader-writer locks work (pthread_rwlock)?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["rwlock", "reader-writer", "pthread_rwlock"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reader-writer locks allow multiple concurrent readers OR one exclusive writer, optimizing for read-heavy workloads.\n\n**Key functions:**\n```c\nint pthread_rwlock_init(pthread_rwlock_t *rwlock, const pthread_rwlockattr_t *attr);\nint pthread_rwlock_rdlock(pthread_rwlock_t *rwlock);  /* shared/read lock */\nint pthread_rwlock_wrlock(pthread_rwlock_t *rwlock);  /* exclusive/write lock */\nint pthread_rwlock_unlock(pthread_rwlock_t *rwlock);\nint pthread_rwlock_destroy(pthread_rwlock_t *rwlock);\n```\n\n**Semantics:**\n- Multiple threads can hold read locks simultaneously\n- Only one thread can hold a write lock (exclusive)\n- A write lock blocks until all readers release\n- A read lock blocks if a writer is waiting (to prevent writer starvation on some implementations)\n\n**Static initialization:**\n```c\npthread_rwlock_t rwl = PTHREAD_RWLOCK_INITIALIZER;\n```\n\n**When to use:**\n- Data is read much more often than written\n- Read operations are expensive enough that concurrent execution matters\n- With few readers or fast reads, a plain mutex may be faster (rwlock has more overhead)",
+          "pseudo_code": "Multiple readers (concurrent):\n  pthread_rwlock_rdlock(&rwl)\n  /* read shared data */\n  pthread_rwlock_unlock(&rwl)\n\nSingle writer (exclusive):\n  pthread_rwlock_wrlock(&rwl)\n  /* modify shared data */\n  pthread_rwlock_unlock(&rwl)\n\nConcurrency:\n  N readers in parallel: OK\n  1 writer at a time: blocks all readers and other writers\n  Writer waiting: may block new readers (fairness)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <unistd.h>\n\nstatic int shared_data = 0;\nstatic pthread_rwlock_t rwl = PTHREAD_RWLOCK_INITIALIZER;\n\nvoid *reader(void *arg) {\n    int id = *(int *)arg;\n    for (int i = 0; i < 5; i++) {\n        pthread_rwlock_rdlock(&rwl);\n        printf(\"Reader %d: data = %d\\n\", id, shared_data);\n        pthread_rwlock_unlock(&rwl);\n        usleep(100000);\n    }\n    return NULL;\n}\n\nvoid *writer(void *arg) {\n    (void)arg;\n    for (int i = 0; i < 3; i++) {\n        pthread_rwlock_wrlock(&rwl);\n        shared_data += 10;\n        printf(\"Writer: data = %d\\n\", shared_data);\n        pthread_rwlock_unlock(&rwl);\n        usleep(200000);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t readers[3], wr;\n    int ids[] = {1, 2, 3};\n\n    for (int i = 0; i < 3; i++)\n        pthread_create(&readers[i], NULL, reader, &ids[i]);\n    pthread_create(&wr, NULL, writer, NULL);\n\n    for (int i = 0; i < 3; i++)\n        pthread_join(readers[i], NULL);\n    pthread_join(wr, NULL);\n\n    pthread_rwlock_destroy(&rwl);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Multiple concurrent readers OR one exclusive writer",
+            "rdlock for reading, wrlock for writing, unlock for both",
+            "Optimized for read-heavy workloads",
+            "Writer starvation possible (implementation-dependent fairness)",
+            "Higher overhead than mutex -- only use when reads greatly outnumber writes"
+          ],
+          "gotchas": [
+            "rwlock has more overhead than mutex -- do not use for trivial reads",
+            "Writer starvation: continuous readers may starve writers (check implementation)",
+            "Upgrading a read lock to write lock is not supported (must release and re-acquire)",
+            "Recursive read locks are allowed; recursive write locks are undefined"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Reader-writer lock: `rdlock` for shared read (many), `wrlock` for exclusive write (one). Better than mutex for read-heavy workloads. `PTHREAD_RWLOCK_INITIALIZER` for static init.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\nint data = 0;\npthread_rwlock_t rw = PTHREAD_RWLOCK_INITIALIZER;\n\nvoid read_data(void) {\n    pthread_rwlock_rdlock(&rw);\n    /* read data (many threads here) */\n    pthread_rwlock_unlock(&rw);\n}\n\nvoid write_data(int val) {\n    pthread_rwlock_wrlock(&rw);\n    data = val;  /* exclusive */\n    pthread_rwlock_unlock(&rw);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Multiple readers OR one writer",
+            "Better for read-heavy patterns"
+          ],
+          "gotchas": [
+            "Cannot upgrade rdlock to wrlock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does thread-specific data (TSD) work with pthread_key?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["thread-specific-data", "pthread_key", "TLS"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Thread-specific data (TSD) allows each thread to have its own copy of a global-like variable. All threads use the same key, but each gets a different value.\n\n**POSIX TSD API:**\n```c\nint pthread_key_create(pthread_key_t *key, void (*destructor)(void *));\nint pthread_setspecific(pthread_key_t key, const void *value);\nvoid *pthread_getspecific(pthread_key_t key);\nint pthread_key_delete(pthread_key_t key);\n```\n\n**How it works:**\n1. `pthread_key_create()` creates a key (called once, typically with `pthread_once()`)\n2. Each thread calls `pthread_setspecific()` to set its own value\n3. `pthread_getspecific()` returns the calling thread's value\n4. When a thread exits, the destructor is called with the thread's value (for cleanup)\n\n**C11 alternative -- _Thread_local / thread_local:**\n```c\n_Thread_local int per_thread_var = 0;  /* C11 */\n```\nSimpler but cannot have destructor functions and only works for static/global variables.\n\n**Use cases:**\n- Per-thread error codes or contexts\n- Per-thread allocators or caches\n- Making non-thread-safe libraries thread-safe (e.g., per-thread buffers)",
+          "pseudo_code": "1. pthread_key_create(&key, destructor)  -- once\n2. Each thread:\n   a. ptr = malloc(sizeof(my_data))\n   b. pthread_setspecific(key, ptr)  -- set this thread's value\n   c. ptr = pthread_getspecific(key) -- get this thread's value\n3. Thread exits -> destructor(ptr) called automatically\n\nC11 alternative:\n  _Thread_local int x;  // each thread gets its own x",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <stdlib.h>\n\nstatic pthread_key_t tsd_key;\nstatic pthread_once_t key_once = PTHREAD_ONCE_INIT;\n\nvoid destructor(void *ptr) {\n    printf(\"Destructor: freeing thread data\\n\");\n    free(ptr);\n}\n\nvoid init_key(void) {\n    pthread_key_create(&tsd_key, destructor);\n}\n\ntypedef struct {\n    int thread_id;\n    int call_count;\n} thread_data_t;\n\nthread_data_t *get_thread_data(void) {\n    /* Initialize key once (thread-safe) */\n    pthread_once(&key_once, init_key);\n\n    thread_data_t *data = pthread_getspecific(tsd_key);\n    if (data == NULL) {\n        /* First call in this thread -- allocate */\n        data = calloc(1, sizeof(thread_data_t));\n        pthread_setspecific(tsd_key, data);\n    }\n    return data;\n}\n\nvoid *worker(void *arg) {\n    int id = *(int *)arg;\n    thread_data_t *data = get_thread_data();\n    data->thread_id = id;\n\n    for (int i = 0; i < 3; i++) {\n        data->call_count++;\n        printf(\"Thread %d: call_count = %d\\n\", id, data->call_count);\n    }\n    /* destructor called automatically on thread exit */\n    return NULL;\n}\n\nint main(void) {\n    pthread_t threads[3];\n    int ids[] = {1, 2, 3};\n    for (int i = 0; i < 3; i++)\n        pthread_create(&threads[i], NULL, worker, &ids[i]);\n    for (int i = 0; i < 3; i++)\n        pthread_join(threads[i], NULL);\n    pthread_key_delete(tsd_key);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Same key, different value per thread",
+            "Destructor called automatically when thread exits",
+            "Use pthread_once to ensure key is created exactly once",
+            "C11 _Thread_local is simpler but lacks destructors",
+            "Max PTHREAD_KEYS_MAX keys per process (typically 128+)"
+          ],
+          "gotchas": [
+            "Destructor is NOT called for the main thread (it calls exit, not pthread_exit)",
+            "pthread_key_delete does not call destructors -- threads must exit first",
+            "If destructor sets TSD to non-NULL, it may be called again (up to PTHREAD_DESTRUCTOR_ITERATIONS times)",
+            "getspecific returns NULL before setspecific is called -- must check"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Thread-specific data: one key, each thread gets its own value. `pthread_key_create()` once, `setspecific/getspecific` per thread. Destructor called on thread exit. C11 `_Thread_local` is simpler.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdlib.h>\n\npthread_key_t key;\n\nvoid cleanup(void *p) { free(p); }\n\nvoid init(void) { pthread_key_create(&key, cleanup); }\n\nvoid *func(void *a) {\n    int *p = malloc(sizeof(int));\n    *p = *(int*)a;\n    pthread_setspecific(key, p);  /* my own copy */\n    int *mine = pthread_getspecific(key);\n    (void)mine;\n    return NULL; /* destructor frees p */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Same key, different value per thread",
+            "Destructor auto-cleans on thread exit"
+          ],
+          "gotchas": [
+            "Destructor not called for main thread"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does thread cancellation work (pthread_cancel and cleanup handlers)?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["pthread_cancel", "cleanup-handler", "cancellation-point"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Thread cancellation allows one thread to request that another thread terminate.\n\n**Key functions:**\n```c\nint pthread_cancel(pthread_t thread);\nint pthread_setcancelstate(int state, int *oldstate);  /* ENABLE/DISABLE */\nint pthread_setcanceltype(int type, int *oldtype);     /* DEFERRED/ASYNCHRONOUS */\nvoid pthread_testcancel(void);  /* explicit cancellation point */\n\nvoid pthread_cleanup_push(void (*routine)(void *), void *arg);\nvoid pthread_cleanup_pop(int execute);\n```\n\n**Cancellation states:**\n- `PTHREAD_CANCEL_ENABLE` (default): cancellation requests are honored\n- `PTHREAD_CANCEL_DISABLE`: requests are held pending\n\n**Cancellation types:**\n- `PTHREAD_CANCEL_DEFERRED` (default): cancellation only at cancellation points (read, write, sleep, pthread_cond_wait, etc.)\n- `PTHREAD_CANCEL_ASYNCHRONOUS`: cancellation can happen at any time (dangerous!)\n\n**Cleanup handlers** (push/pop) ensure resources are released even if the thread is cancelled:\n- `pthread_cleanup_push()` registers a cleanup function\n- `pthread_cleanup_pop()` removes it (executes if argument is non-zero)\n- Handlers are called in LIFO order when the thread is cancelled or calls `pthread_exit()`\n\n**Important:** push/pop must be matched and in the same lexical scope (they may be implemented as macros with { and }).",
+          "pseudo_code": "Thread A: pthread_cancel(thread_B)  -- request cancellation\n\nThread B (deferred cancellation):\n  pthread_cleanup_push(cleanup_func, resource)\n  /* ... work ... */\n  read()   // <-- cancellation point: thread B terminated here\n  pthread_cleanup_pop(1)  // cleanup_func called if cancelled\n\nCleanup handlers called in LIFO order:\n  push(handler1)  push(handler2)  push(handler3)\n  cancel -> handler3, handler2, handler1 called",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <stdlib.h>\n\nvoid cleanup_handler(void *arg) {\n    char *resource = (char *)arg;\n    printf(\"Cleanup: freeing %s\\n\", resource);\n    free(resource);\n}\n\nvoid *worker(void *arg) {\n    (void)arg;\n    char *buf = malloc(1024);\n    snprintf(buf, 1024, \"allocated buffer\");\n\n    /* Register cleanup handler */\n    pthread_cleanup_push(cleanup_handler, buf);\n\n    printf(\"Worker: starting long operation...\\n\");\n    for (int i = 0; ; i++) {\n        /* sleep is a cancellation point */\n        sleep(1);\n        printf(\"Worker: iteration %d\\n\", i);\n    }\n\n    /* This would be called if we reach here normally */\n    pthread_cleanup_pop(1);  /* 1 = execute handler */\n    return NULL;\n}\n\nint main(void) {\n    pthread_t tid;\n    pthread_create(&tid, NULL, worker, NULL);\n\n    sleep(3);  /* let worker run a bit */\n\n    printf(\"Main: cancelling worker\\n\");\n    pthread_cancel(tid);\n\n    void *retval;\n    pthread_join(tid, &retval);\n    if (retval == PTHREAD_CANCELED)\n        printf(\"Main: worker was cancelled\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "pthread_cancel requests termination at the next cancellation point",
+            "Deferred (default): only cancelled at defined points (read, write, sleep, etc.)",
+            "Cleanup handlers ensure resource release on cancellation",
+            "push/pop must be paired in the same lexical scope",
+            "Cancelled thread returns PTHREAD_CANCELED to pthread_join"
+          ],
+          "gotchas": [
+            "PTHREAD_CANCEL_ASYNCHRONOUS is almost impossible to use safely",
+            "pthread_cleanup_push/pop are macros that expand to { and } -- must match scope",
+            "Cancellation during mutex hold leaves the mutex locked -- use cleanup to unlock",
+            "C++ exceptions and pthread cancellation interact poorly -- use C++ thread cancellation mechanisms instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pthread_cancel(tid)` requests termination. Deferred (default): only at cancellation points (read, sleep, etc.). Use `cleanup_push/pop` to free resources. Cancelled thread returns `PTHREAD_CANCELED` to joiner.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <unistd.h>\n#include <stdlib.h>\n\nvoid cleanup(void *p) { free(p); }\n\nvoid *worker(void *a) {\n    (void)a;\n    char *buf = malloc(100);\n    pthread_cleanup_push(cleanup, buf);\n    while (1) sleep(1);  /* cancellation point */\n    pthread_cleanup_pop(1);\n    return NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Deferred: cancel only at cancellation points",
+            "Cleanup handlers free resources"
+          ],
+          "gotchas": [
+            "push/pop must be matched in same scope"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between thread safety and reentrancy?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["thread-safety", "reentrancy", "reentrant"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Thread safety and reentrancy are related but different concepts:\n\n**Thread-safe function:**\n- Can be called concurrently by multiple threads without causing data corruption\n- May use synchronization (mutexes, locks) to protect shared state\n- Example: `malloc()` is thread-safe (uses internal locks)\n\n**Reentrant function:**\n- Can be safely interrupted (e.g., by a signal) and called again before the first invocation completes\n- Does NOT use any global or static data\n- Does NOT call non-reentrant functions\n- Example: `strtok_r()` is reentrant (takes explicit state parameter)\n\n**Key relationship:**\n- All reentrant functions are thread-safe (no shared state = no conflicts)\n- NOT all thread-safe functions are reentrant (locks can cause deadlock if interrupted)\n\n**Example: strtok vs strtok_r:**\n- `strtok()` uses a static internal pointer -- not thread-safe, not reentrant\n- `strtok_r()` takes an explicit save pointer -- reentrant and thread-safe\n\n**Making functions thread-safe:**\n1. Use local variables instead of static/global\n2. Use thread-specific data (TSD)\n3. Use mutexes to protect shared state\n4. Provide `_r` variants with explicit state parameters",
+          "pseudo_code": "NOT thread-safe, NOT reentrant:\n  char *strtok(char *str, const char *delim) {\n    static char *save;  // shared state!\n    // ...\n  }\n\nThread-safe (with lock), NOT reentrant:\n  void increment(void) {\n    pthread_mutex_lock(&mtx);  // signal -> handler -> increment -> DEADLOCK\n    counter++;\n    pthread_mutex_unlock(&mtx);\n  }\n\nReentrant AND thread-safe:\n  char *strtok_r(char *str, const char *delim, char **saveptr) {\n    // uses *saveptr instead of static variable\n  }",
+          "actual_code": "#include <string.h>\n#include <stdio.h>\n#include <pthread.h>\n\n/* NOT thread-safe: static internal state */\nvoid demo_strtok(const char *input) {\n    char buf[128];\n    strncpy(buf, input, sizeof(buf) - 1);\n    buf[sizeof(buf) - 1] = '\\0';\n    char *token = strtok(buf, \" \");\n    while (token) {\n        printf(\"%s\\n\", token);\n        token = strtok(NULL, \" \");\n    }\n}\n\n/* Thread-safe AND reentrant: explicit state */\nvoid demo_strtok_r(const char *input) {\n    char buf[128];\n    strncpy(buf, input, sizeof(buf) - 1);\n    buf[sizeof(buf) - 1] = '\\0';\n    char *saveptr;  /* caller provides state */\n    char *token = strtok_r(buf, \" \", &saveptr);\n    while (token) {\n        printf(\"%s\\n\", token);\n        token = strtok_r(NULL, \" \", &saveptr);\n    }\n}\n\n/* Thread-safe via mutex (but NOT reentrant) */\nstatic int counter = 0;\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\n\nvoid safe_increment(void) {\n    pthread_mutex_lock(&mtx);\n    counter++;  /* protected */\n    pthread_mutex_unlock(&mtx);\n    /* If a signal handler called safe_increment while lock is held\n       -> DEADLOCK (not reentrant) */\n}\n\nint main(void) {\n    demo_strtok_r(\"hello world foo\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Thread-safe: safe for concurrent calls (may use locks)",
+            "Reentrant: safe for interruption and re-call (no shared state, no locks)",
+            "All reentrant functions are thread-safe; not vice versa",
+            "Use _r variants (strtok_r, ctime_r, etc.) for reentrant versions",
+            "Reentrant is a stronger guarantee than thread-safe"
+          ],
+          "gotchas": [
+            "A function using a mutex is thread-safe but NOT reentrant (signal handler could deadlock)",
+            "strtok, ctime, localtime, readdir are NOT thread-safe -- use _r variants",
+            "errno was historically a global variable, now thread-local (thread-safe)",
+            "printf is thread-safe (locked internally) but not reentrant"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Thread-safe: safe for concurrent calls (may use locks). Reentrant: safe for interrupted re-call (no static state, no locks). Reentrant implies thread-safe, but not vice versa. Use `_r` variants (strtok_r, etc.).",
+          "pseudo_code": "",
+          "actual_code": "#include <string.h>\n#include <stdio.h>\n\nint main(void) {\n    char buf[] = \"a b c\";\n    char *save;\n    /* strtok_r: reentrant + thread-safe */\n    char *tok = strtok_r(buf, \" \", &save);\n    while (tok) {\n        printf(\"%s\\n\", tok);\n        tok = strtok_r(NULL, \" \", &save);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Reentrant > thread-safe (stronger guarantee)",
+            "Use _r variants for reentrant functions"
+          ],
+          "gotchas": [
+            "Mutex-protected code is thread-safe but not reentrant"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a race condition, and can you give a concrete example?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["race-condition", "data-race", "concurrency-bug"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **race condition** occurs when the behavior of a program depends on the relative timing of events (e.g., thread scheduling). The outcome is non-deterministic.\n\nA **data race** is a specific type of race condition where two or more threads access the same memory location concurrently, at least one access is a write, and no synchronization is used. Data races are **undefined behavior** in C11.\n\n**Classic example -- lost update:**\n```\nThread A: read counter (value = 5)\nThread B: read counter (value = 5)\nThread A: write counter = 5 + 1 = 6\nThread B: write counter = 5 + 1 = 6  (should be 7!)\n```\n\nBoth threads read the same value before either writes back, so one increment is lost.\n\n**Why it is hard to debug:**\n- May not manifest in testing (timing-dependent)\n- May only appear under heavy load or on different hardware\n- Can produce different wrong results each run\n\n**Detection tools:**\n- ThreadSanitizer (`-fsanitize=thread`)\n- Valgrind Helgrind/DRD\n- Code review focusing on shared mutable state",
+          "pseudo_code": "Race condition (lost update):\n  counter = 5\n  Thread A: temp_a = counter  (5)\n  Thread B: temp_b = counter  (5)\n  Thread A: counter = temp_a + 1 = 6\n  Thread B: counter = temp_b + 1 = 6  // WRONG! Should be 7\n\nFix:\n  Thread A: lock(mutex); counter++; unlock(mutex)\n  Thread B: lock(mutex); counter++; unlock(mutex)\n  // counter = 7 (correct)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\n#define NTHREADS 10\n#define ITERATIONS 1000000\n\nstatic int counter = 0;\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\n\n/* BUGGY: data race on counter */\nvoid *unsafe_increment(void *arg) {\n    (void)arg;\n    for (int i = 0; i < ITERATIONS; i++)\n        counter++;  /* NOT atomic: read + modify + write */\n    return NULL;\n}\n\n/* CORRECT: mutex-protected */\nvoid *safe_increment(void *arg) {\n    (void)arg;\n    for (int i = 0; i < ITERATIONS; i++) {\n        pthread_mutex_lock(&mtx);\n        counter++;\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t threads[NTHREADS];\n\n    /* Unsafe version */\n    counter = 0;\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_create(&threads[i], NULL, unsafe_increment, NULL);\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_join(threads[i], NULL);\n    printf(\"Unsafe: %d (expected %d)\\n\", counter, NTHREADS * ITERATIONS);\n    /* Typically less than expected */\n\n    /* Safe version */\n    counter = 0;\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_create(&threads[i], NULL, safe_increment, NULL);\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_join(threads[i], NULL);\n    printf(\"Safe:   %d (expected %d)\\n\", counter, NTHREADS * ITERATIONS);\n    /* Exactly expected */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Race condition: outcome depends on thread scheduling timing",
+            "Data race: concurrent unsynchronized access with at least one write",
+            "counter++ is NOT atomic (read-modify-write = 3 operations)",
+            "Fix with mutex, or C11 atomic_int",
+            "Detect with -fsanitize=thread or Valgrind Helgrind"
+          ],
+          "gotchas": [
+            "Data races are undefined behavior in C11 (anything can happen)",
+            "Race conditions may not manifest in testing but crash in production",
+            "Even simple operations like ++ and = can race on multi-core CPUs",
+            "Volatile does NOT prevent data races (it only prevents compiler optimization)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Race condition: program correctness depends on thread timing. Classic: `counter++` by two threads (read-modify-write is not atomic). Fix: mutex or atomics. Detect: `-fsanitize=thread`.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n\nint count = 0;\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\n\nvoid *bad(void *a)  { (void)a; for(int i=0;i<1000000;i++) count++;        return NULL; }\nvoid *good(void *a) { (void)a; for(int i=0;i<1000000;i++) { pthread_mutex_lock(&m); count++; pthread_mutex_unlock(&m); } return NULL; }",
+          "code_language": "c",
+          "key_points": [
+            "counter++ is not atomic",
+            "Fix with mutex or atomics"
+          ],
+          "gotchas": [
+            "volatile does NOT prevent data races"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do C11 atomic operations work (stdatomic.h)?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["atomic", "stdatomic", "C11", "lock-free"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C11 introduced `<stdatomic.h>` for lock-free atomic operations, eliminating data races without mutexes for simple operations.\n\n**Atomic types:**\n```c\n#include <stdatomic.h>\natomic_int counter = 0;\natomic_flag lock = ATOMIC_FLAG_INIT;\n_Atomic int x;  /* generic syntax */\n```\n\n**Key operations:**\n```c\natomic_store(&var, value);         /* atomic write */\nint v = atomic_load(&var);         /* atomic read */\natomic_fetch_add(&var, 1);         /* atomic increment, returns old value */\natomic_fetch_sub(&var, 1);         /* atomic decrement */\natomic_compare_exchange_strong(&var, &expected, desired); /* CAS */\n```\n\n**Memory ordering (optional parameter):**\n- `memory_order_relaxed` -- no ordering guarantees (just atomicity)\n- `memory_order_acquire` -- subsequent reads see all writes from the releasing thread\n- `memory_order_release` -- prior writes visible to acquiring threads\n- `memory_order_seq_cst` -- sequential consistency (default, strongest)\n\n**When to use atomics vs mutexes:**\n- Atomics: simple counters, flags, single-variable operations\n- Mutexes: compound operations involving multiple variables\n- Lock-free algorithms: use CAS (compare-and-swap) for complex patterns\n\nAtomics are typically faster than mutexes for simple operations because they use hardware instructions (e.g., `lock xadd` on x86) without kernel involvement.",
+          "pseudo_code": "Without atomics (data race):\n  counter++  ->  temp = counter; temp++; counter = temp;\n  // Two threads can read same value -> lost update\n\nWith atomics (no data race):\n  atomic_fetch_add(&counter, 1)\n  // Single hardware instruction, no race possible\n\nCAS (compare and swap):\n  expected = atomic_load(&var);\n  desired = expected + 1;\n  atomic_compare_exchange_strong(&var, &expected, desired);\n  // Sets var=desired only if var==expected, atomically",
+          "actual_code": "#include <stdatomic.h>\n#include <pthread.h>\n#include <stdio.h>\n\n#define NTHREADS 10\n#define ITERATIONS 1000000\n\nstatic atomic_int counter = 0;\n\nvoid *increment(void *arg) {\n    (void)arg;\n    for (int i = 0; i < ITERATIONS; i++)\n        atomic_fetch_add(&counter, 1);  /* lock-free, no mutex */\n    return NULL;\n}\n\n/* Spinlock using atomic_flag */\nstatic atomic_flag spinlock = ATOMIC_FLAG_INIT;\nstatic int protected_data = 0;\n\nvoid spin_lock(atomic_flag *lock) {\n    while (atomic_flag_test_and_set(lock))  /* returns old value */\n        ;  /* spin */\n}\n\nvoid spin_unlock(atomic_flag *lock) {\n    atomic_flag_clear(lock);\n}\n\nvoid *spin_worker(void *arg) {\n    (void)arg;\n    for (int i = 0; i < 100000; i++) {\n        spin_lock(&spinlock);\n        protected_data++;\n        spin_unlock(&spinlock);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t threads[NTHREADS];\n\n    /* Atomic counter (no mutex needed) */\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_create(&threads[i], NULL, increment, NULL);\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_join(threads[i], NULL);\n    printf(\"Atomic counter: %d (expected %d)\\n\",\n           atomic_load(&counter), NTHREADS * ITERATIONS);\n\n    /* Spinlock example */\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_create(&threads[i], NULL, spin_worker, NULL);\n    for (int i = 0; i < NTHREADS; i++)\n        pthread_join(threads[i], NULL);\n    printf(\"Spinlock data: %d (expected %d)\\n\",\n           protected_data, NTHREADS * 100000);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C11 stdatomic.h provides lock-free atomic operations",
+            "atomic_fetch_add/sub are hardware-level atomic read-modify-write",
+            "Default memory order is seq_cst (strongest, safest)",
+            "Faster than mutexes for simple counters and flags",
+            "atomic_flag + test_and_set can implement a spinlock"
+          ],
+          "gotchas": [
+            "Atomics only protect single variables -- use mutexes for multi-variable invariants",
+            "Relaxed memory ordering is tricky and error-prone -- stick with seq_cst unless profiling shows need",
+            "Not all types can be lock-free on all platforms (check atomic_is_lock_free)",
+            "Spinlocks waste CPU -- only use when lock hold time is very short"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C11 `<stdatomic.h>`: `atomic_int`, `atomic_fetch_add()`, `atomic_load()`, `atomic_store()`. Lock-free, faster than mutexes for simple operations. Default memory order: sequential consistency.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdatomic.h>\n#include <pthread.h>\n\natomic_int counter = 0;\n\nvoid *func(void *a) {\n    (void)a;\n    for (int i = 0; i < 1000000; i++)\n        atomic_fetch_add(&counter, 1);  /* lock-free */\n    return NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "atomic_fetch_add is a single hardware instruction",
+            "No mutex needed for simple counters"
+          ],
+          "gotchas": [
+            "Only protects single variables, not multi-variable invariants"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a thread pool pattern, and how would you implement one in C?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["thread-pool", "work-queue", "concurrency-pattern"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A thread pool is a set of pre-created worker threads that pull tasks from a shared work queue. This avoids the overhead of creating and destroying threads for each task.\n\n**Components:**\n1. **Work queue:** A linked list or array of pending tasks (function pointer + argument)\n2. **Worker threads:** Fixed number of threads that loop: take task from queue, execute, repeat\n3. **Mutex:** Protects the work queue\n4. **Condition variable:** Workers wait when queue is empty\n5. **Shutdown flag:** Signals workers to exit\n\n**Advantages:**\n- Bounded thread count (prevents thread explosion)\n- Amortized thread creation cost\n- Controlled concurrency level\n- Reuse of threads across tasks\n\n**Usage pattern:**\n```c\npool = threadpool_create(num_threads);\nthreadpool_submit(pool, task_function, task_arg);\n...\nthreadpool_destroy(pool);  /* signal shutdown, join all threads */\n```",
+          "pseudo_code": "Worker thread loop:\n  lock(mutex)\n  while (queue is empty AND not shutdown)\n    cond_wait(not_empty, mutex)\n  if (shutdown) { unlock; return; }\n  task = dequeue()\n  unlock(mutex)\n  task.function(task.arg)  // execute task\n  goto loop\n\nSubmit task:\n  lock(mutex)\n  enqueue(task)\n  cond_signal(not_empty)  // wake one worker\n  unlock(mutex)\n\nShutdown:\n  lock(mutex)\n  shutdown = true\n  cond_broadcast(not_empty)  // wake all workers\n  unlock(mutex)\n  join all threads",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n\ntypedef struct task {\n    void (*function)(void *arg);\n    void *arg;\n    struct task *next;\n} task_t;\n\ntypedef struct {\n    pthread_t *threads;\n    int thread_count;\n    task_t *queue_head;\n    task_t *queue_tail;\n    pthread_mutex_t mutex;\n    pthread_cond_t not_empty;\n    int shutdown;\n} threadpool_t;\n\nvoid *worker(void *arg) {\n    threadpool_t *pool = (threadpool_t *)arg;\n    for (;;) {\n        pthread_mutex_lock(&pool->mutex);\n        while (pool->queue_head == NULL && !pool->shutdown)\n            pthread_cond_wait(&pool->not_empty, &pool->mutex);\n\n        if (pool->shutdown && pool->queue_head == NULL) {\n            pthread_mutex_unlock(&pool->mutex);\n            return NULL;\n        }\n\n        task_t *task = pool->queue_head;\n        pool->queue_head = task->next;\n        if (pool->queue_head == NULL) pool->queue_tail = NULL;\n        pthread_mutex_unlock(&pool->mutex);\n\n        task->function(task->arg);\n        free(task);\n    }\n}\n\nthreadpool_t *threadpool_create(int num_threads) {\n    threadpool_t *pool = calloc(1, sizeof(threadpool_t));\n    pool->thread_count = num_threads;\n    pool->threads = malloc(sizeof(pthread_t) * (size_t)num_threads);\n    pthread_mutex_init(&pool->mutex, NULL);\n    pthread_cond_init(&pool->not_empty, NULL);\n    for (int i = 0; i < num_threads; i++)\n        pthread_create(&pool->threads[i], NULL, worker, pool);\n    return pool;\n}\n\nvoid threadpool_submit(threadpool_t *pool, void (*fn)(void*), void *arg) {\n    task_t *task = malloc(sizeof(task_t));\n    task->function = fn;\n    task->arg = arg;\n    task->next = NULL;\n    pthread_mutex_lock(&pool->mutex);\n    if (pool->queue_tail)\n        pool->queue_tail->next = task;\n    else\n        pool->queue_head = task;\n    pool->queue_tail = task;\n    pthread_cond_signal(&pool->not_empty);\n    pthread_mutex_unlock(&pool->mutex);\n}\n\nvoid threadpool_destroy(threadpool_t *pool) {\n    pthread_mutex_lock(&pool->mutex);\n    pool->shutdown = 1;\n    pthread_cond_broadcast(&pool->not_empty);\n    pthread_mutex_unlock(&pool->mutex);\n    for (int i = 0; i < pool->thread_count; i++)\n        pthread_join(pool->threads[i], NULL);\n    free(pool->threads);\n    pthread_mutex_destroy(&pool->mutex);\n    pthread_cond_destroy(&pool->not_empty);\n    free(pool);\n}\n\n/* Example task */\nvoid print_task(void *arg) {\n    int n = *(int *)arg;\n    printf(\"Task %d on thread %lu\\n\", n, (unsigned long)pthread_self());\n    free(arg);\n}\n\nint main(void) {\n    threadpool_t *pool = threadpool_create(4);\n    for (int i = 0; i < 20; i++) {\n        int *n = malloc(sizeof(int));\n        *n = i;\n        threadpool_submit(pool, print_task, n);\n    }\n    sleep(1);\n    threadpool_destroy(pool);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Thread pool: fixed worker threads + shared task queue",
+            "Workers wait on condvar when queue is empty",
+            "Submit enqueues a task and signals one worker",
+            "Shutdown: set flag, broadcast to wake all, join all threads",
+            "Avoids thread creation overhead for frequent short tasks"
+          ],
+          "gotchas": [
+            "Must use broadcast (not signal) for shutdown to wake ALL waiting workers",
+            "Memory management: who frees task arguments? (caller or task function)",
+            "Queue can grow unbounded if tasks arrive faster than processed -- consider queue limits",
+            "Worker should check shutdown AFTER waking, even if queue is non-empty"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Thread pool: pre-created worker threads loop on a shared task queue. Mutex + condvar for synchronization. `submit()` enqueues + signals; workers dequeue + execute. `destroy()` sets shutdown flag + broadcast + join.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdlib.h>\n\ntypedef struct { void (*fn)(void*); void *arg; } task_t;\n/* Workers: lock, while(empty && !shutdown) wait, dequeue, unlock, execute */\n/* Submit: lock, enqueue, signal, unlock */\n/* Destroy: lock, shutdown=1, broadcast, unlock, join all */",
+          "code_language": "c",
+          "key_points": [
+            "Fixed threads + shared queue",
+            "Avoids per-task thread creation overhead"
+          ],
+          "gotchas": [
+            "Use broadcast for shutdown, not signal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common pthreads interview problems and how do you solve them?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["interview", "pthreads", "concurrency-problems"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Common pthreads interview problems test understanding of synchronization primitives:\n\n**1. Print alternating (Thread A prints odd, Thread B prints even):**\nUse a mutex + condvar + shared turn variable. Each thread waits for its turn.\n\n**2. Dining Philosophers:**\nN philosophers sit around a table with N forks. Each needs two forks to eat. Solve with lock ordering (always pick up lower-numbered fork first) or a mutex that limits concurrent eaters.\n\n**3. Reader-Writer Problem:**\nMultiple readers can read concurrently, but writers need exclusive access. Use rwlocks or implement with mutex + condvar + reader count.\n\n**4. Barrier (all threads wait until all arrive):**\nUse `pthread_barrier_t` or implement with mutex + condvar + count.\n\n**5. H2O Problem (Google):**\nThreads represent H or O atoms. Must form groups of 2H + 1O before any can proceed. Use semaphores or condvars.\n\n**6. Bounded Buffer (Producer-Consumer):**\nSee separate answer on producer-consumer pattern.\n\nThe key insight for all these problems: identify the shared state, determine the invariant that must hold, and use the minimal synchronization to enforce it.",
+          "pseudo_code": "Print 1-10 alternating between two threads:\n  int turn = 1;  // odd thread goes first\n  \n  odd_thread:\n    for n = 1,3,5,7,9:\n      lock(mutex)\n      while (turn != 1) wait(cond, mutex)\n      print(n)\n      turn = 2\n      signal(cond)\n      unlock(mutex)\n\n  even_thread:\n    for n = 2,4,6,8,10:\n      lock(mutex)\n      while (turn != 2) wait(cond, mutex)\n      print(n)\n      turn = 1\n      signal(cond)\n      unlock(mutex)",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\n/* Problem: Print 1-20 alternating between two threads */\nstatic int number = 1;\nstatic int turn = 1;  /* 1 = odd's turn, 2 = even's turn */\nstatic pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;\nstatic pthread_cond_t cond = PTHREAD_COND_INITIALIZER;\n\nvoid *print_odd(void *arg) {\n    (void)arg;\n    while (1) {\n        pthread_mutex_lock(&mtx);\n        while (turn != 1 && number <= 20)\n            pthread_cond_wait(&cond, &mtx);\n        if (number > 20) {\n            pthread_mutex_unlock(&mtx);\n            break;\n        }\n        printf(\"Odd thread:  %d\\n\", number++);\n        turn = 2;\n        pthread_cond_signal(&cond);\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nvoid *print_even(void *arg) {\n    (void)arg;\n    while (1) {\n        pthread_mutex_lock(&mtx);\n        while (turn != 2 && number <= 20)\n            pthread_cond_wait(&cond, &mtx);\n        if (number > 20) {\n            pthread_mutex_unlock(&mtx);\n            break;\n        }\n        printf(\"Even thread: %d\\n\", number++);\n        turn = 1;\n        pthread_cond_signal(&cond);\n        pthread_mutex_unlock(&mtx);\n    }\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t1, t2;\n    pthread_create(&t1, NULL, print_odd, NULL);\n    pthread_create(&t2, NULL, print_even, NULL);\n    pthread_join(t1, NULL);\n    pthread_join(t2, NULL);\n    printf(\"Done: printed 1-20 alternating\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Alternating print: mutex + condvar + turn variable",
+            "Dining philosophers: lock ordering on forks prevents deadlock",
+            "Reader-writer: rwlock or manual implementation with condvar",
+            "All problems: identify shared state, determine invariant, enforce with minimal sync",
+            "Common mistake: using if instead of while for cond_wait"
+          ],
+          "gotchas": [
+            "Termination: both threads must check the exit condition under the lock",
+            "Use broadcast (not signal) when multiple threads might need to wake up",
+            "The turn variable must be checked in a while loop (spurious wakeups)",
+            "Dining philosophers: picking up both forks atomically (lock ordering) is the simplest solution"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Common problems: alternating print (mutex+condvar+turn), dining philosophers (lock ordering), producer-consumer (bounded buffer+condvar), barrier (count+condvar). Key: identify shared state, enforce invariant with minimal synchronization.",
+          "pseudo_code": "",
+          "actual_code": "#include <pthread.h>\n#include <stdio.h>\n\nint turn = 1;\npthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;\npthread_cond_t c = PTHREAD_COND_INITIALIZER;\n\nvoid *odd(void *a) {\n    (void)a;\n    for (int i=1; i<=9; i+=2) {\n        pthread_mutex_lock(&m);\n        while(turn!=1) pthread_cond_wait(&c,&m);\n        printf(\"%d \",i); turn=2;\n        pthread_cond_signal(&c);\n        pthread_mutex_unlock(&m);\n    }\n    return NULL;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Turn variable + condvar for ordering",
+            "Lock ordering for deadlock prevention"
+          ],
+          "gotchas": [
+            "Always while-loop on cond_wait"
+          ]
+        }
+      ]
+    }
+  ]
+}

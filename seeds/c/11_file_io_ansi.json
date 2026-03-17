@@ -1,0 +1,509 @@
+{
+  "concept_slug": "file-io-ansi",
+  "questions": [
+    {
+      "title": "What are the different fopen() modes and when do you use each?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["fopen", "file-modes", "read-write", "binary"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`fopen(const char *path, const char *mode)`** opens a file and returns a `FILE *` stream. The mode string controls read/write access and how the file is created or truncated.\n\n**Text modes:**\n| Mode | Description | File exists | File missing |\n|------|-------------|-------------|-------------|\n| `\"r\"` | Read only | Opens | Returns NULL |\n| `\"w\"` | Write only (truncates) | Truncates to 0 | Creates new |\n| `\"a\"` | Append only | Appends at end | Creates new |\n| `\"r+\"` | Read + write | Opens | Returns NULL |\n| `\"w+\"` | Read + write (truncates) | Truncates to 0 | Creates new |\n| `\"a+\"` | Read + append | Opens (writes at end) | Creates new |\n\n**Binary modes:** Add `b` to any mode: `\"rb\"`, `\"wb\"`, `\"ab\"`, `\"r+b\"` (or `\"rb+\"`), etc.\n- On Unix/Linux: binary and text modes are identical\n- On Windows: text mode translates `\\n` to `\\r\\n` and treats Ctrl+Z as EOF; binary mode does not\n\n**C11 exclusive mode:** `\"wx\"`, `\"wbx\"` -- fails if file already exists (prevents accidental overwrite). Like `O_CREAT | O_EXCL` in POSIX.\n\n**Critical rule:** Always check the return value for NULL.",
+          "pseudo_code": "Read existing file:      fopen(\"data.txt\", \"r\")\nCreate/overwrite file:   fopen(\"data.txt\", \"w\")\nAppend to file:          fopen(\"data.txt\", \"a\")\nRead + write existing:   fopen(\"data.txt\", \"r+\")\nCreate + read/write:     fopen(\"data.txt\", \"w+\")\nBinary read:             fopen(\"data.bin\", \"rb\")\nBinary write:            fopen(\"data.bin\", \"wb\")\nExclusive create (C11):  fopen(\"data.txt\", \"wx\")",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp;\n\n    /* Write mode: creates or truncates */\n    fp = fopen(\"test.txt\", \"w\");\n    if (!fp) { perror(\"fopen w\"); return 1; }\n    fprintf(fp, \"Line 1\\n\");\n    fprintf(fp, \"Line 2\\n\");\n    fclose(fp);\n\n    /* Append mode: adds to end */\n    fp = fopen(\"test.txt\", \"a\");\n    if (!fp) { perror(\"fopen a\"); return 1; }\n    fprintf(fp, \"Line 3\\n\");\n    fclose(fp);\n\n    /* Read mode: reads existing */\n    fp = fopen(\"test.txt\", \"r\");\n    if (!fp) { perror(\"fopen r\"); return 1; }\n    char buf[100];\n    while (fgets(buf, sizeof(buf), fp)) {\n        printf(\"%s\", buf);\n    }\n    /* Output: Line 1\\nLine 2\\nLine 3 */\n    fclose(fp);\n\n    /* Read+Write mode */\n    fp = fopen(\"test.txt\", \"r+\");\n    if (!fp) { perror(\"fopen r+\"); return 1; }\n    fprintf(fp, \"MODIFIED\"); /* overwrites first 8 bytes */\n    fclose(fp);\n\n    /* Binary mode */\n    fp = fopen(\"data.bin\", \"wb\");\n    if (!fp) { perror(\"fopen wb\"); return 1; }\n    int nums[] = {1, 2, 3, 4, 5};\n    fwrite(nums, sizeof(int), 5, fp);\n    fclose(fp);\n\n    /* Cleanup */\n    remove(\"test.txt\");\n    remove(\"data.bin\");\n\n    printf(\"All modes demonstrated successfully\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "\"r\" reads existing; \"w\" creates/truncates; \"a\" appends; + adds the other direction",
+            "Always check fopen return for NULL before using the FILE pointer",
+            "Binary mode (\"rb\"/\"wb\") matters on Windows (no \\r\\n translation)",
+            "On Unix, binary and text modes are identical",
+            "\"wx\" (C11) fails if file exists -- prevents accidental overwrite"
+          ],
+          "gotchas": [
+            "\"w\" destroys existing file contents immediately on open -- there is no undo",
+            "\"a\" mode always writes at end, even after fseek -- you cannot overwrite earlier content",
+            "Forgetting to check fopen return for NULL leads to NULL pointer dereference crash",
+            "On Windows, reading binary files in text mode corrupts data (\\r\\n translation and Ctrl+Z EOF)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`\"r\"` reads, `\"w\"` writes (truncates), `\"a\"` appends. Add `+` for read+write, `b` for binary. Always check for NULL. `\"w\"` destroys existing content on open.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"demo.txt\", \"w\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n    fprintf(fp, \"Hello\\n\");\n    fclose(fp);\n\n    fp = fopen(\"demo.txt\", \"r\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n    char buf[64];\n    while (fgets(buf, sizeof(buf), fp))\n        printf(\"%s\", buf);\n    fclose(fp);\n    remove(\"demo.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "r=read, w=write(truncate), a=append, +=both, b=binary",
+            "Always check fopen return for NULL"
+          ],
+          "gotchas": [
+            "\"w\" destroys existing file contents immediately"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why is fclose() important and what happens if you forget it?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["fclose", "resource-cleanup", "buffering", "file-descriptor"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`fclose(FILE *fp)`** flushes the stream's buffer, releases the FILE object, and closes the underlying file descriptor.\n\n**What fclose does:**\n1. Flushes write buffers -- ensures all data is written to disk\n2. Releases the FILE structure memory\n3. Closes the file descriptor (returns it to the OS)\n4. Returns 0 on success, EOF on error\n\n**What happens if you forget fclose:**\n1. **Data loss:** Buffered writes may never reach disk (data sitting in userspace buffer)\n2. **File descriptor leak:** OS has a per-process limit (typically 1024 by default). Opening files without closing eventually causes `fopen` to fail with `EMFILE`.\n3. **Resource exhaustion:** Long-running programs (servers) accumulate leaked descriptors\n4. **On normal exit:** The C runtime calls `fclose` on all open streams during `exit()`, so data is usually flushed. But abnormal termination (crash, `_exit()`, `abort()`) skips this.\n\n**Best practices:**\n- Close files as soon as you are done with them\n- Check fclose return value for write streams (write errors detected at flush time)\n- Use a consistent pattern: open, use, close in the same scope",
+          "pseudo_code": "Proper pattern:\n  FILE *fp = fopen(\"file.txt\", \"w\");\n  if (!fp) { handle_error(); }\n  /* write to fp */\n  if (fclose(fp) != 0) {\n      perror(\"fclose\");  /* write error detected at flush */\n  }\n\nWhat fclose does internally:\n  1. fflush(fp)      -- write buffer to kernel\n  2. close(fd)        -- release file descriptor\n  3. free(fp)         -- release FILE struct\n\nForgetting fclose:\n  - Buffered data may be lost on crash\n  - File descriptors accumulate until limit (EMFILE)",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Always check fclose return on write streams */\n    FILE *fp = fopen(\"output.txt\", \"w\");\n    if (!fp) {\n        perror(\"fopen\");\n        return 1;\n    }\n\n    fprintf(fp, \"Important data\\n\");\n\n    /* fclose flushes buffer and returns 0 on success */\n    if (fclose(fp) != 0) {\n        perror(\"fclose\"); /* disk full, I/O error, etc. */\n        return 1;\n    }\n    /* fp is now invalid -- do not use it */\n\n    /* Demonstrate: open many files without closing */\n    int count = 0;\n    for (int i = 0; i < 2000; i++) {\n        FILE *f = fopen(\"output.txt\", \"r\");\n        if (!f) {\n            printf(\"Failed to open at iteration %d\\n\", i);\n            break;\n        }\n        count++;\n        /* intentionally NOT closing -- fd leak! */\n        /* In real code: fclose(f); */\n    }\n    printf(\"Opened %d files before exhaustion\\n\", count);\n    /* Process now has ~count leaked file descriptors */\n\n    remove(\"output.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fclose flushes buffers, closes the file descriptor, and frees the FILE struct",
+            "Forgetting fclose risks data loss (unflushed buffers) and file descriptor exhaustion",
+            "Always check fclose return value on write streams -- errors may only appear at flush time",
+            "exit() calls fclose on all open streams, but crash/abort/_exit do not",
+            "Per-process file descriptor limit is typically 1024 (ulimit -n)"
+          ],
+          "gotchas": [
+            "fclose on a NULL pointer is undefined behavior -- always check fopen's return first",
+            "Double-fclose is undefined behavior, like double-free",
+            "Write errors (disk full) may only be reported by fclose, not by fprintf/fwrite",
+            "On crash or _exit(), buffered data is lost because fclose is never called"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fclose()` flushes buffers and releases the file descriptor. Without it: data loss (unflushed writes), file descriptor exhaustion. Always check its return on write streams.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"out.txt\", \"w\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n    fprintf(fp, \"data\\n\");\n    if (fclose(fp) != 0) { /* check for write errors */\n        perror(\"fclose\");\n        return 1;\n    }\n    remove(\"out.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fclose flushes and releases resources; check return on write streams",
+            "Forgetting fclose leaks file descriptors"
+          ],
+          "gotchas": [
+            "Double-fclose is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do fread() and fwrite() work for binary I/O?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["fread", "fwrite", "binary-io", "serialization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)`**\nWrites `nmemb` elements of `size` bytes each from `ptr` to the stream. Returns the number of elements successfully written.\n\n**`fread(void *ptr, size_t size, size_t nmemb, FILE *stream)`**\nReads up to `nmemb` elements of `size` bytes each into `ptr`. Returns the number of elements successfully read.\n\n**Parameters:**\n- `ptr` -- buffer to write from / read into\n- `size` -- size of each element in bytes\n- `nmemb` -- number of elements\n- `stream` -- FILE pointer opened in binary mode\n\n**Return value:** The number of **elements** (not bytes) successfully transferred. Check this against `nmemb` to detect short reads/writes. On error or EOF, it is less than `nmemb`.\n\n**Use cases:**\n- Serializing structs/arrays to files\n- Reading/writing binary file formats (BMP, WAV headers)\n- Bulk data transfer (faster than character-by-character)\n\n**Important:** Data written with fwrite is not portable across architectures (endianness, padding, pointer sizes differ).",
+          "pseudo_code": "Write array to binary file:\n  FILE *fp = fopen(\"data.bin\", \"wb\");\n  int arr[5] = {1,2,3,4,5};\n  size_t written = fwrite(arr, sizeof(int), 5, fp);\n  if (written != 5) handle_error();\n  fclose(fp);\n\nRead array from binary file:\n  FILE *fp = fopen(\"data.bin\", \"rb\");\n  int arr[5];\n  size_t read = fread(arr, sizeof(int), 5, fp);\n  if (read != 5) handle_error();\n  fclose(fp);",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\ntypedef struct {\n    char name[32];\n    int age;\n    double gpa;\n} Student;\n\nint main(void) {\n    /* Write binary data */\n    Student students[] = {\n        {\"Alice\", 20, 3.8},\n        {\"Bob\", 22, 3.5},\n        {\"Charlie\", 21, 3.9}\n    };\n    int n = sizeof(students) / sizeof(students[0]);\n\n    FILE *fp = fopen(\"students.bin\", \"wb\");\n    if (!fp) { perror(\"fopen wb\"); return 1; }\n\n    /* Write count first, then array */\n    fwrite(&n, sizeof(int), 1, fp);\n    size_t written = fwrite(students, sizeof(Student), n, fp);\n    if ((int)written != n) {\n        fprintf(stderr, \"Write error: only %zu of %d\\n\", written, n);\n    }\n    fclose(fp);\n\n    /* Read binary data back */\n    fp = fopen(\"students.bin\", \"rb\");\n    if (!fp) { perror(\"fopen rb\"); return 1; }\n\n    int count;\n    fread(&count, sizeof(int), 1, fp);\n    printf(\"Reading %d students:\\n\", count);\n\n    Student buf[10];\n    size_t nread = fread(buf, sizeof(Student), count, fp);\n    fclose(fp);\n\n    for (size_t i = 0; i < nread; i++) {\n        printf(\"  %s, age %d, GPA %.1f\\n\",\n               buf[i].name, buf[i].age, buf[i].gpa);\n    }\n\n    /* Write/read raw integer array */\n    fp = fopen(\"ints.bin\", \"wb\");\n    if (fp) {\n        int arr[] = {10, 20, 30, 40, 50};\n        fwrite(arr, sizeof(int), 5, fp);\n        fclose(fp);\n    }\n\n    fp = fopen(\"ints.bin\", \"rb\");\n    if (fp) {\n        int arr[5];\n        fread(arr, sizeof(int), 5, fp);\n        printf(\"Ints: %d %d %d %d %d\\n\",\n               arr[0], arr[1], arr[2], arr[3], arr[4]);\n        fclose(fp);\n    }\n\n    remove(\"students.bin\");\n    remove(\"ints.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fwrite/fread transfer blocks of binary data; return element count, not byte count",
+            "Always check return value against expected nmemb to detect short reads/writes",
+            "Open files in binary mode (\"wb\"/\"rb\") for binary I/O",
+            "fwrite/fread can serialize entire arrays and structs in one call",
+            "Binary files are NOT portable across architectures (endianness, padding)"
+          ],
+          "gotchas": [
+            "fread/fwrite return element count, not byte count -- misinterpreting this is a common bug",
+            "Binary files written on one platform may not be readable on another (endianness, struct padding)",
+            "Using text mode for binary I/O corrupts data on Windows (\\n <-> \\r\\n translation)",
+            "fread does not distinguish between EOF and error -- use feof() and ferror() to check"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fwrite(buf, elem_size, count, fp)` writes binary data; `fread(buf, elem_size, count, fp)` reads it. Return value is the number of elements transferred. Open in binary mode (`\"wb\"`/`\"rb\"`).",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[] = {10, 20, 30};\n    FILE *fp = fopen(\"data.bin\", \"wb\");\n    fwrite(arr, sizeof(int), 3, fp);\n    fclose(fp);\n\n    int buf[3];\n    fp = fopen(\"data.bin\", \"rb\");\n    size_t n = fread(buf, sizeof(int), 3, fp);\n    fclose(fp);\n    printf(\"Read %zu: %d %d %d\\n\", n, buf[0], buf[1], buf[2]);\n    remove(\"data.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Return value is element count, not byte count",
+            "Use binary mode (\"rb\"/\"wb\") for binary data"
+          ],
+          "gotchas": [
+            "Binary files are not portable across architectures"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do fprintf() and fscanf() work for formatted file I/O?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["fprintf", "fscanf", "formatted-io", "text-file"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`fprintf(FILE *stream, const char *format, ...)`** writes formatted text to a file stream. Same format specifiers as `printf` but writes to any FILE* instead of stdout.\n\n**`fscanf(FILE *stream, const char *format, ...)`** reads formatted input from a file stream. Same format specifiers as `scanf` but reads from any FILE*.\n\n**fprintf returns** the number of characters written, or a negative value on error.\n\n**fscanf returns** the number of input items successfully matched, or EOF on input failure before any matching.\n\n**Common format specifiers:**\n- `%d` -- int, `%ld` -- long, `%f` -- float, `%lf` -- double\n- `%s` -- string (word), `%c` -- char, `%zu` -- size_t\n- `%[^\\n]` -- read until newline (like fgets but with scanf)\n\n**fprintf vs fwrite:** fprintf produces human-readable text; fwrite produces binary. Text files are portable but slower and larger. Binary is fast and compact but not portable.",
+          "pseudo_code": "Write formatted data:\n  fprintf(fp, \"Name: %s, Age: %d, GPA: %.2f\\n\", name, age, gpa);\n\nRead formatted data:\n  int n = fscanf(fp, \"%s %d %lf\", name, &age, &gpa);\n  if (n != 3) handle_error();\n\nfprintf returns: characters written (or negative on error)\nfscanf returns: items matched (or EOF on end/error)",
+          "actual_code": "#include <stdio.h>\n\ntypedef struct {\n    char name[50];\n    int age;\n    double gpa;\n} Student;\n\nint main(void) {\n    /* Write formatted text file */\n    Student data[] = {\n        {\"Alice\", 20, 3.80},\n        {\"Bob\", 22, 3.50},\n        {\"Charlie\", 21, 3.95}\n    };\n    int n = 3;\n\n    FILE *fp = fopen(\"students.csv\", \"w\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n\n    fprintf(fp, \"name,age,gpa\\n\"); /* header */\n    for (int i = 0; i < n; i++) {\n        fprintf(fp, \"%s,%d,%.2f\\n\",\n                data[i].name, data[i].age, data[i].gpa);\n    }\n    fclose(fp);\n\n    /* Read formatted text file */\n    fp = fopen(\"students.csv\", \"r\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n\n    char header[100];\n    fgets(header, sizeof(header), fp); /* skip header */\n\n    Student buf;\n    printf(\"Students:\\n\");\n    while (fscanf(fp, \"%[^,],%d,%lf\\n\",\n                  buf.name, &buf.age, &buf.gpa) == 3) {\n        printf(\"  %s (age %d) GPA=%.2f\\n\",\n               buf.name, buf.age, buf.gpa);\n    }\n    fclose(fp);\n\n    /* fprintf to stderr (diagnostic output) */\n    fprintf(stderr, \"Processing complete\\n\");\n\n    remove(\"students.csv\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fprintf writes formatted text to any FILE*; fscanf reads formatted input",
+            "Same format specifiers as printf/scanf",
+            "fprintf returns character count; fscanf returns matched item count",
+            "Always check fscanf return to detect parsing failures",
+            "Text format is portable but larger/slower than binary"
+          ],
+          "gotchas": [
+            "fscanf %s stops at whitespace -- cannot read strings with spaces",
+            "fscanf does not consume the trailing newline by default -- can cause issues with subsequent reads",
+            "Buffer overflow: fscanf %s has no length limit -- use %49s for a 50-char buffer",
+            "fprintf to a full disk may silently fail -- check return value or fclose return"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fprintf(fp, fmt, ...)` writes formatted text; `fscanf(fp, fmt, ...)` reads it. Same specifiers as printf/scanf. Check fscanf return for matched item count.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"data.txt\", \"w\");\n    fprintf(fp, \"%s %d %.2f\\n\", \"Alice\", 20, 3.8);\n    fclose(fp);\n\n    fp = fopen(\"data.txt\", \"r\");\n    char name[50]; int age; double gpa;\n    if (fscanf(fp, \"%49s %d %lf\", name, &age, &gpa) == 3)\n        printf(\"%s age=%d gpa=%.2f\\n\", name, age, gpa);\n    fclose(fp);\n    remove(\"data.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fprintf/fscanf: formatted text I/O to files",
+            "Always check fscanf return value"
+          ],
+          "gotchas": [
+            "fscanf %s has no length limit -- always specify width like %49s"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you safely read lines from a file using fgets()?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["fgets", "line-reading", "buffer-safety", "gets"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`fgets(char *buf, int n, FILE *stream)`** reads at most `n-1` characters from the stream into `buf`, stopping at a newline or EOF. It always null-terminates the buffer.\n\n**Returns:** `buf` on success, `NULL` on EOF or error.\n\n**Why fgets, not gets:**\n`gets()` was removed from C11 because it has no buffer size parameter -- guaranteed buffer overflow vulnerability. `fgets()` is the safe replacement.\n\n**Behavior details:**\n- Reads up to `n-1` chars (reserves 1 for `\\0`)\n- Includes the `\\n` in the buffer if the line fits\n- If the line is longer than n-1, the `\\n` is NOT included (line was truncated)\n- Returns NULL at EOF (or error)\n\n**Removing the trailing newline:**\n```c\nbuf[strcspn(buf, \"\\n\")] = '\\0';\n```\nThis is the safest one-liner to strip the newline.",
+          "pseudo_code": "Read all lines from a file:\n  char buf[256];\n  while (fgets(buf, sizeof(buf), fp) != NULL) {\n      buf[strcspn(buf, \"\\n\")] = '\\0';  /* strip newline */\n      process(buf);\n  }\n\nfgets behavior:\n  Buffer size 10, line \"Hello\\n\":\n    buf = \"Hello\\n\\0\"  (7 chars + null)\n  Buffer size 4, line \"Hello\\n\":\n    buf = \"Hel\\0\"  (3 chars + null, line truncated)\n    Next fgets: buf = \"lo\\n\\0\"",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Create a test file */\n    FILE *fp = fopen(\"lines.txt\", \"w\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n    fprintf(fp, \"First line\\n\");\n    fprintf(fp, \"Second line\\n\");\n    fprintf(fp, \"Third line with no trailing newline\");\n    fclose(fp);\n\n    /* Read lines safely with fgets */\n    fp = fopen(\"lines.txt\", \"r\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n\n    char buf[256];\n    int line_num = 0;\n    while (fgets(buf, sizeof(buf), fp) != NULL) {\n        line_num++;\n        /* Remove trailing newline if present */\n        buf[strcspn(buf, \"\\n\")] = '\\0';\n        printf(\"Line %d: [%s]\\n\", line_num, buf);\n    }\n    fclose(fp);\n\n    /* Demonstrating truncation with small buffer */\n    fp = fopen(\"lines.txt\", \"r\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n\n    char small[8]; /* small buffer */\n    printf(\"\\nSmall buffer reads:\\n\");\n    while (fgets(small, sizeof(small), fp) != NULL) {\n        printf(\"  [%s]\\n\", small);\n        /* Long lines are read in multiple chunks */\n    }\n    fclose(fp);\n\n    /* NEVER use gets() -- removed from C11 */\n    /* char buf[100]; gets(buf); -- BUFFER OVERFLOW! */\n\n    /* Safe stdin reading with fgets */\n    /* printf(\"Enter name: \");\n    if (fgets(buf, sizeof(buf), stdin)) {\n        buf[strcspn(buf, \"\\n\")] = '\\0';\n        printf(\"Hello, %s!\\n\", buf);\n    } */\n\n    remove(\"lines.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fgets reads at most n-1 chars and always null-terminates",
+            "Includes the newline in buffer if line fits; omits it if truncated",
+            "Returns NULL at EOF or error -- use as loop condition",
+            "Strip newline with buf[strcspn(buf, \"\\n\")] = '\\0'",
+            "gets() was removed from C11 -- never use it"
+          ],
+          "gotchas": [
+            "fgets includes the \\n character -- you must strip it yourself",
+            "If the line does not fit in the buffer, fgets returns a partial line (no \\n at end)",
+            "fgets returns NULL on both EOF and error -- use feof/ferror to distinguish",
+            "The size parameter is int (not size_t) -- passing INT_MAX+1 is undefined"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fgets(buf, size, fp)` reads up to `size-1` chars, null-terminates, includes `\\n`. Returns NULL at EOF. Strip newline with `buf[strcspn(buf, \"\\n\")] = '\\0';`. Never use `gets()`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    FILE *fp = fopen(\"test.txt\", \"w\");\n    fprintf(fp, \"Hello World\\n\");\n    fclose(fp);\n\n    fp = fopen(\"test.txt\", \"r\");\n    char buf[64];\n    while (fgets(buf, sizeof(buf), fp)) {\n        buf[strcspn(buf, \"\\n\")] = '\\0';\n        printf(\"[%s]\\n\", buf); /* [Hello World] */\n    }\n    fclose(fp);\n    remove(\"test.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Reads up to n-1 chars with null termination; includes \\n",
+            "Strip newline with strcspn; never use gets()"
+          ],
+          "gotchas": [
+            "fgets includes the \\n -- always strip it if you do not want it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do fseek(), ftell(), and rewind() work for random file access?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["fseek", "ftell", "rewind", "random-access"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Random access** functions let you move the file position indicator to arbitrary locations instead of reading/writing sequentially.\n\n**`fseek(FILE *fp, long offset, int whence)`**\nMoves the file position. Returns 0 on success, nonzero on error.\n- `SEEK_SET` -- offset from beginning of file\n- `SEEK_CUR` -- offset from current position\n- `SEEK_END` -- offset from end of file\n\n**`ftell(FILE *fp)`**\nReturns the current file position as a `long`, or -1L on error.\n\n**`rewind(FILE *fp)`**\nEquivalent to `fseek(fp, 0, SEEK_SET)` but also clears the error indicator. Returns void (cannot fail).\n\n**For large files (>2GB):** Use `fseeko`/`ftello` with `off_t` type, or the C99 `fgetpos`/`fsetpos` with `fpos_t`.\n\n**Common patterns:**\n- Get file size: `fseek(fp, 0, SEEK_END); long size = ftell(fp); rewind(fp);`\n- Skip N bytes: `fseek(fp, N, SEEK_CUR);`\n- Read from specific offset: `fseek(fp, offset, SEEK_SET); fread(...);`",
+          "pseudo_code": "Get file size:\n  fseek(fp, 0, SEEK_END);  /* go to end */\n  long size = ftell(fp);    /* position = file size */\n  rewind(fp);               /* go back to start */\n\nRead record N from binary file:\n  fseek(fp, N * sizeof(record), SEEK_SET);\n  fread(&record, sizeof(record), 1, fp);\n\nAppend then re-read:\n  fseek(fp, 0, SEEK_END);  /* go to end */\n  fwrite(data, ...);\n  rewind(fp);               /* back to start */\n  fread(buf, ...);          /* read from beginning */",
+          "actual_code": "#include <stdio.h>\n\ntypedef struct {\n    int id;\n    char name[20];\n} Record;\n\nint main(void) {\n    /* Create a binary file with records */\n    FILE *fp = fopen(\"records.bin\", \"w+b\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n\n    Record records[] = {\n        {1, \"Alice\"}, {2, \"Bob\"}, {3, \"Charlie\"}, {4, \"Diana\"}\n    };\n    fwrite(records, sizeof(Record), 4, fp);\n\n    /* Get file size using fseek + ftell */\n    fseek(fp, 0, SEEK_END);\n    long file_size = ftell(fp);\n    printf(\"File size: %ld bytes\\n\", file_size);\n    printf(\"Records: %ld\\n\", file_size / (long)sizeof(Record));\n\n    /* Random access: read record #2 (index 2) directly */\n    fseek(fp, 2 * sizeof(Record), SEEK_SET);\n    Record r;\n    fread(&r, sizeof(Record), 1, fp);\n    printf(\"Record 2: id=%d name=%s\\n\", r.id, r.name); /* Charlie */\n\n    /* Read record #0 */\n    rewind(fp); /* same as fseek(fp, 0, SEEK_SET) + clear error */\n    fread(&r, sizeof(Record), 1, fp);\n    printf(\"Record 0: id=%d name=%s\\n\", r.id, r.name); /* Alice */\n\n    /* Move relative to current position */\n    fseek(fp, sizeof(Record), SEEK_CUR); /* skip one record */\n    long pos = ftell(fp);\n    printf(\"Current position: %ld (record index %ld)\\n\",\n           pos, pos / (long)sizeof(Record)); /* record 2 */\n\n    /* Update a specific record in place */\n    Record updated = {2, \"Robert\"};\n    fseek(fp, 1 * sizeof(Record), SEEK_SET);\n    fwrite(&updated, sizeof(Record), 1, fp);\n\n    /* Verify update */\n    fseek(fp, 1 * sizeof(Record), SEEK_SET);\n    fread(&r, sizeof(Record), 1, fp);\n    printf(\"Updated record 1: id=%d name=%s\\n\", r.id, r.name); /* Robert */\n\n    fclose(fp);\n    remove(\"records.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fseek moves position: SEEK_SET (absolute), SEEK_CUR (relative), SEEK_END (from end)",
+            "ftell returns current position as long; -1L on error",
+            "rewind = fseek(fp, 0, SEEK_SET) + clear error indicator",
+            "File size pattern: fseek to end, ftell, rewind",
+            "Binary random access: fseek(fp, index * sizeof(record), SEEK_SET)"
+          ],
+          "gotchas": [
+            "ftell returns long -- files >2GB overflow on 32-bit systems; use fgetpos/fsetpos or fseeko/ftello",
+            "fseek on text streams: only fseek(fp, 0, SEEK_SET) and fseek(fp, ftell_value, SEEK_SET) are portable",
+            "fseek with SEEK_END on binary streams is not guaranteed by the C standard (but works on POSIX)",
+            "After switching between read and write on r+/w+ streams, fseek or fflush is required"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fseek(fp, offset, SEEK_SET/CUR/END)` positions the file. `ftell(fp)` returns position. `rewind(fp)` resets to start. File size: seek to end, ftell, rewind.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"test.bin\", \"w+b\");\n    int arr[] = {10, 20, 30};\n    fwrite(arr, sizeof(int), 3, fp);\n\n    fseek(fp, 0, SEEK_END);\n    printf(\"Size: %ld\\n\", ftell(fp)); /* 12 */\n\n    fseek(fp, sizeof(int), SEEK_SET); /* seek to 2nd element */\n    int val;\n    fread(&val, sizeof(int), 1, fp);\n    printf(\"val: %d\\n\", val); /* 20 */\n\n    fclose(fp);\n    remove(\"test.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SEEK_SET=absolute, SEEK_CUR=relative, SEEK_END=from end",
+            "File size: fseek end + ftell"
+          ],
+          "gotchas": [
+            "ftell uses long -- overflows for files >2GB on 32-bit systems"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the pitfalls of feof() for EOF detection?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["feof", "eof", "pitfall", "read-loop"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**The #1 C file I/O mistake:** Using `feof()` to control a read loop.\n\n**Why `while (!feof(fp))` is wrong:**\n`feof()` returns true **only after** a read operation has already failed due to EOF. It does not predict the next read. This means:\n1. The last successful read fills the buffer\n2. `feof()` is still false (EOF not yet encountered)\n3. The loop executes one more iteration\n4. The next read fails (now at EOF)\n5. Code processes stale data from the previous read\n6. Then `feof()` becomes true and the loop exits\n\n**Result:** The last item is processed twice.\n\n**Correct patterns:**\n```c\nwhile (fgets(buf, sizeof(buf), fp) != NULL) { ... }\nwhile (fread(&rec, sizeof(rec), 1, fp) == 1) { ... }\nwhile (fscanf(fp, \"%d\", &val) == 1) { ... }\nint ch; while ((ch = fgetc(fp)) != EOF) { ... }\n```\n\n**When feof IS useful:** After a read loop exits, to distinguish between EOF (normal) and error (abnormal):\n```c\nif (feof(fp)) printf(\"End of file\\n\");\nelse if (ferror(fp)) printf(\"Read error\\n\");\n```",
+          "pseudo_code": "WRONG:\n  while (!feof(fp)) {\n      fread(&data, sizeof(data), 1, fp);\n      process(data);  /* BUG: processes stale data on last iteration */\n  }\n\nCORRECT:\n  while (fread(&data, sizeof(data), 1, fp) == 1) {\n      process(data);  /* only processes successful reads */\n  }\n  /* After loop: check why it ended */\n  if (ferror(fp)) handle_error();\n  /* else: normal EOF */",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Create test file */\n    FILE *fp = fopen(\"nums.txt\", \"w\");\n    fprintf(fp, \"10 20 30\");\n    fclose(fp);\n\n    /* WRONG: while (!feof(fp)) -- processes last value twice */\n    printf(\"WRONG approach:\\n\");\n    fp = fopen(\"nums.txt\", \"r\");\n    int val;\n    while (!feof(fp)) {\n        fscanf(fp, \"%d\", &val);\n        printf(\"  read: %d\\n\", val);\n    }\n    fclose(fp);\n    /* Output: 10, 20, 30, 30 (30 appears twice!) */\n\n    /* CORRECT: check fscanf return value */\n    printf(\"CORRECT approach:\\n\");\n    fp = fopen(\"nums.txt\", \"r\");\n    while (fscanf(fp, \"%d\", &val) == 1) {\n        printf(\"  read: %d\\n\", val);\n    }\n    /* Distinguish EOF from error */\n    if (feof(fp)) {\n        printf(\"  (reached end of file)\\n\");\n    } else if (ferror(fp)) {\n        printf(\"  (read error occurred)\\n\");\n    }\n    fclose(fp);\n    /* Output: 10, 20, 30 (correct!) */\n\n    /* CORRECT: fgets pattern */\n    printf(\"fgets approach:\\n\");\n    fp = fopen(\"nums.txt\", \"r\");\n    char buf[100];\n    while (fgets(buf, sizeof(buf), fp) != NULL) {\n        printf(\"  line: [%s]\\n\", buf);\n    }\n    fclose(fp);\n\n    remove(\"nums.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "while (!feof(fp)) is almost always wrong -- processes last item twice",
+            "feof returns true only AFTER a read has already failed",
+            "Correct: use the read function's return value as the loop condition",
+            "feof is useful AFTER the loop to distinguish EOF from error",
+            "ferror() checks for read/write errors (as opposed to normal EOF)"
+          ],
+          "gotchas": [
+            "while (!feof(fp)) is the single most common C file I/O bug",
+            "feof does not predict the next read -- it reports the last read's result",
+            "fgetc returns int (not char) so it can represent EOF (-1) distinctly from all char values",
+            "On error, feof may not be set -- always check ferror too"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`while (!feof(fp))` is wrong -- it processes the last item twice because feof only becomes true after a failed read. Instead, check the read function's return: `while (fgets(buf, n, fp))` or `while (fread(...) == 1)`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"test.txt\", \"w\");\n    fprintf(fp, \"10 20 30\");\n    fclose(fp);\n\n    /* CORRECT: check return value */\n    fp = fopen(\"test.txt\", \"r\");\n    int val;\n    while (fscanf(fp, \"%d\", &val) == 1)\n        printf(\"%d \", val); /* 10 20 30 */\n    printf(\"\\n\");\n    if (feof(fp)) printf(\"EOF\\n\"); /* distinguish from error */\n    fclose(fp);\n    remove(\"test.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use read function return as loop condition, not feof",
+            "feof is for post-loop EOF vs error distinction"
+          ],
+          "gotchas": [
+            "while (!feof(fp)) duplicates the last item -- never use as loop condition"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between binary mode and text mode in C file I/O?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["binary-mode", "text-mode", "newline", "portability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When opening a file with `fopen`, the mode can be text (default) or binary (add `b`).\n\n**Text mode (default):**\n- Performs newline translation:\n  - On Windows: `\\n` is written as `\\r\\n` (CR+LF), and `\\r\\n` is read as `\\n`\n  - On Unix/Linux: no translation (CR is not used)\n- May treat Ctrl+Z (0x1A) as EOF on Windows\n- `fseek`/`ftell` behavior is limited: only `fseek(fp, 0, SEEK_SET)` and `fseek(fp, ftell_val, SEEK_SET)` are portable\n\n**Binary mode (`\"rb\"`, `\"wb\"`, etc.):**\n- No translation: bytes are read/written exactly as-is\n- No special EOF character\n- `fseek`/`ftell` work with exact byte offsets\n- Required for non-text data: images, executables, network protocols\n\n**On Unix/Linux:** Text and binary modes are identical (no `\\r\\n` translation). The `b` flag is accepted but has no effect.\n\n**On Windows:** The difference is critical. Reading a binary file in text mode corrupts data, and writing text in binary mode produces files without proper `\\r\\n` line endings.",
+          "pseudo_code": "Text mode (Windows):\n  Write \"Hello\\n\"  -> file contains \"Hello\\r\\n\" (6 bytes)\n  Read \"Hello\\r\\n\" -> program sees \"Hello\\n\" (5 chars)\n  Ctrl+Z (0x1A)   -> treated as EOF\n\nBinary mode:\n  Write \"Hello\\n\"  -> file contains \"Hello\\n\" (6 bytes)\n  Read \"Hello\\r\\n\" -> program sees \"Hello\\r\\n\" (7 bytes)\n  0x1A             -> just another byte, not EOF\n\nUnix: both modes are identical",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    const char *text = \"Line 1\\nLine 2\\nLine 3\\n\";\n\n    /* Write in text mode */\n    FILE *fp = fopen(\"text_mode.txt\", \"w\"); /* text mode */\n    if (!fp) return 1;\n    fputs(text, fp);\n    fclose(fp);\n\n    /* Write same data in binary mode */\n    fp = fopen(\"binary_mode.txt\", \"wb\"); /* binary mode */\n    if (!fp) return 1;\n    fputs(text, fp);\n    fclose(fp);\n\n    /* Compare file sizes (differ on Windows, same on Unix) */\n    fp = fopen(\"text_mode.txt\", \"rb\");\n    fseek(fp, 0, SEEK_END);\n    long text_size = ftell(fp);\n    fclose(fp);\n\n    fp = fopen(\"binary_mode.txt\", \"rb\");\n    fseek(fp, 0, SEEK_END);\n    long bin_size = ftell(fp);\n    fclose(fp);\n\n    printf(\"Text mode file size:   %ld bytes\\n\", text_size);\n    printf(\"Binary mode file size: %ld bytes\\n\", bin_size);\n    /* On Windows: text_size > bin_size (\\r\\n vs \\n) */\n    /* On Unix: sizes are equal */\n\n    /* Binary I/O for non-text data */\n    unsigned char data[] = {0x00, 0x1A, 0xFF, 0x0D, 0x0A};\n    fp = fopen(\"raw.bin\", \"wb\");\n    fwrite(data, 1, sizeof(data), fp);\n    fclose(fp);\n\n    /* Read back in binary mode -- all bytes preserved */\n    unsigned char buf[5];\n    fp = fopen(\"raw.bin\", \"rb\");\n    fread(buf, 1, 5, fp);\n    fclose(fp);\n    printf(\"Binary read: \");\n    for (int i = 0; i < 5; i++) printf(\"0x%02X \", buf[i]);\n    printf(\"\\n\"); /* 0x00 0x1A 0xFF 0x0D 0x0A */\n\n    remove(\"text_mode.txt\");\n    remove(\"binary_mode.txt\");\n    remove(\"raw.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Text mode translates \\n to \\r\\n on Windows (no effect on Unix)",
+            "Binary mode transfers bytes exactly -- no translation",
+            "On Unix, text and binary modes are identical",
+            "Always use binary mode for non-text data (images, structs, protocols)",
+            "Text mode may treat 0x1A (Ctrl+Z) as EOF on Windows"
+          ],
+          "gotchas": [
+            "Reading a binary file in text mode on Windows corrupts data (0x1A stops reading, \\r\\n mangled)",
+            "ftell in text mode may not return exact byte count on Windows",
+            "Cross-platform code should always use \"rb\"/\"wb\" for binary data",
+            "Git's autocrlf setting can cause similar \\r\\n confusion in source files"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Text mode: translates `\\n` to `\\r\\n` on Windows; binary mode: no translation. On Unix, both are identical. Always use `\"rb\"`/`\"wb\"` for non-text data to prevent corruption on Windows.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* Text mode: \\n may become \\r\\n on Windows */\n    FILE *t = fopen(\"text.txt\", \"w\");\n    fprintf(t, \"Hello\\n\");\n    fclose(t);\n\n    /* Binary mode: bytes written exactly as-is */\n    FILE *b = fopen(\"data.bin\", \"wb\");\n    unsigned char raw[] = {0x00, 0x1A, 0xFF};\n    fwrite(raw, 1, 3, b);\n    fclose(b);\n\n    remove(\"text.txt\");\n    remove(\"data.bin\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Binary mode: no translation; text mode: newline translation on Windows",
+            "Always use binary mode for non-text data"
+          ],
+          "gotchas": [
+            "Ctrl+Z (0x1A) is treated as EOF in text mode on Windows"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does tmpfile() work for creating temporary files?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["tmpfile", "temporary-file", "security", "auto-delete"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`tmpfile(void)`** creates a temporary binary file that is automatically deleted when it is closed or the program terminates.\n\n**Returns:** A `FILE *` opened in `\"w+b\"` mode (binary read+write), or `NULL` on failure.\n\n**Properties:**\n- File is automatically deleted on fclose or program exit\n- Opened in binary read+write mode\n- The file has no visible name in the filesystem (on most systems)\n- Thread-safe (each call creates a unique file)\n\n**Security advantages over tmpnam()/mktemp():**\n- No TOCTOU (time-of-check-time-of-use) race condition\n- File is opened atomically -- no window for an attacker to replace it\n- tmpnam() is deprecated due to security vulnerabilities\n\n**For named temporary files:** Use `mkstemp()` (POSIX) which creates and opens a file with a unique name atomically.\n\n**Limitations:**\n- Cannot get the file path (unnamed file)\n- Binary mode only (no text mode option)\n- Maximum number of simultaneous tmp files is implementation-defined (TMP_MAX)",
+          "pseudo_code": "tmpfile():\n  1. Creates a unique temporary file\n  2. Opens it in \"w+b\" mode\n  3. Returns FILE* (or NULL)\n  4. Auto-deleted on fclose or exit\n\nUsage:\n  FILE *tmp = tmpfile();\n  fwrite(data, ...);\n  rewind(tmp);\n  fread(data, ...);\n  fclose(tmp);  /* file is automatically deleted */",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Create a temporary file */\n    FILE *tmp = tmpfile();\n    if (!tmp) {\n        perror(\"tmpfile\");\n        return 1;\n    }\n\n    /* Write data to temporary file */\n    const char *data = \"Temporary data for processing\";\n    fwrite(data, 1, strlen(data), tmp);\n    printf(\"Wrote %zu bytes to temp file\\n\", strlen(data));\n\n    /* Seek back to beginning and read */\n    rewind(tmp);\n    char buf[100] = {0};\n    size_t nread = fread(buf, 1, sizeof(buf) - 1, tmp);\n    printf(\"Read back: [%s] (%zu bytes)\\n\", buf, nread);\n\n    /* Use as scratch space for sorting or processing */\n    int numbers[] = {50, 10, 40, 20, 30};\n    rewind(tmp);\n    fwrite(numbers, sizeof(int), 5, tmp);\n\n    rewind(tmp);\n    int sorted[5];\n    fread(sorted, sizeof(int), 5, tmp);\n    printf(\"Numbers: %d %d %d %d %d\\n\",\n           sorted[0], sorted[1], sorted[2], sorted[3], sorted[4]);\n\n    /* File is automatically deleted when closed */\n    fclose(tmp);\n    printf(\"Temp file automatically cleaned up\\n\");\n\n    /* AVOID: tmpnam is insecure (TOCTOU race) */\n    /* char *name = tmpnam(NULL); -- DEPRECATED */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "tmpfile() creates an auto-deleting temporary file opened in w+b mode",
+            "Returns FILE* or NULL; no visible filename in the filesystem",
+            "Auto-deleted on fclose or program exit -- no cleanup needed",
+            "Secure: no TOCTOU race condition (unlike tmpnam/mktemp)",
+            "Use mkstemp() (POSIX) if you need a named temporary file"
+          ],
+          "gotchas": [
+            "tmpfile opens in binary mode only -- cannot use text mode",
+            "Cannot get the path of the temporary file (it may be unnamed)",
+            "On some systems, tmpfile may fail if /tmp is full or has wrong permissions",
+            "tmpnam() is deprecated and insecure -- never use it in production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`tmpfile()` creates an anonymous temporary file in `\"w+b\"` mode that auto-deletes on close. Returns `FILE *` or NULL. Secure (no race condition). Use `mkstemp()` for named temp files.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    FILE *tmp = tmpfile();\n    if (!tmp) { perror(\"tmpfile\"); return 1; }\n\n    const char *msg = \"scratch data\";\n    fwrite(msg, 1, strlen(msg), tmp);\n    rewind(tmp);\n\n    char buf[64] = {0};\n    fread(buf, 1, sizeof(buf) - 1, tmp);\n    printf(\"%s\\n\", buf); /* scratch data */\n\n    fclose(tmp); /* auto-deleted */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Auto-deleting temp file in w+b mode",
+            "Secure alternative to deprecated tmpnam()"
+          ],
+          "gotchas": [
+            "Binary mode only; cannot retrieve the file path"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle file errors using ferror(), perror(), and errno?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["ferror", "perror", "errno", "error-handling"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C provides multiple mechanisms for detecting and reporting file I/O errors:\n\n**`ferror(FILE *fp)`**\nReturns nonzero if the error indicator is set on the stream. Use after a read/write to check if an error occurred. Reset with `clearerr(fp)`.\n\n**`errno`** (from `<errno.h>`)\nA global variable set by system calls and library functions on failure. Common values:\n- `ENOENT` -- file not found\n- `EACCES` -- permission denied\n- `ENOMEM` -- out of memory\n- `ENOSPC` -- no space on device\n- `EMFILE` -- too many open files\n\n**`perror(const char *prefix)`**\nPrints `prefix: error_message\\n` to stderr, where error_message corresponds to current errno. Example: `perror(\"fopen\")` might print `fopen: No such file or directory`.\n\n**`strerror(int errnum)`** (from `<string.h>`)\nReturns a string describing the error number. Useful for custom error messages.\n\n**Error checking pattern:**\n```c\nFILE *fp = fopen(path, \"r\");\nif (!fp) { perror(path); return -1; }\n/* ... read ... */\nif (ferror(fp)) { fprintf(stderr, \"Read error\\n\"); }\n```",
+          "pseudo_code": "Error handling workflow:\n  1. Attempt operation (fopen, fread, fwrite)\n  2. Check return value for failure indication\n  3. On failure: check errno for specific error code\n  4. Report: perror(\"context\") or strerror(errno)\n  5. For streams: ferror(fp) checks stream error flag\n  6. clearerr(fp) resets both error and EOF flags\n\nerrno pitfall:\n  errno is only valid immediately after a failed call\n  Successful calls may or may not reset errno",
+          "actual_code": "#include <stdio.h>\n#include <errno.h>\n#include <string.h>\n\nint main(void) {\n    /* Attempt to open nonexistent file */\n    FILE *fp = fopen(\"nonexistent.txt\", \"r\");\n    if (!fp) {\n        /* Method 1: perror -- prints to stderr */\n        perror(\"fopen nonexistent.txt\");\n        /* Output: fopen nonexistent.txt: No such file or directory */\n\n        /* Method 2: strerror -- for custom messages */\n        fprintf(stderr, \"Error %d: %s\\n\", errno, strerror(errno));\n\n        /* Method 3: check specific errno values */\n        if (errno == ENOENT) {\n            printf(\"File does not exist\\n\");\n        } else if (errno == EACCES) {\n            printf(\"Permission denied\\n\");\n        }\n    }\n\n    /* Write to read-only location (if possible) */\n    fp = fopen(\"/dev/null\", \"r\"); /* read-only */\n    if (fp) {\n        int result = fputc('x', fp); /* write to read-only stream */\n        if (result == EOF) {\n            printf(\"fputc failed\\n\");\n        }\n        if (ferror(fp)) {\n            printf(\"Stream error flag is set\\n\");\n            clearerr(fp); /* reset error and EOF flags */\n            printf(\"After clearerr: ferror=%d\\n\", ferror(fp)); /* 0 */\n        }\n        fclose(fp);\n    }\n\n    /* Proper error handling pattern */\n    const char *path = \"output.txt\";\n    fp = fopen(path, \"w\");\n    if (!fp) {\n        perror(path);\n        return 1;\n    }\n    if (fprintf(fp, \"data\\n\") < 0) {\n        perror(\"fprintf\");\n        fclose(fp);\n        return 1;\n    }\n    if (fclose(fp) != 0) {\n        perror(\"fclose\"); /* disk full detected at flush */\n        return 1;\n    }\n\n    remove(\"output.txt\");\n    printf(\"All error handling demonstrated\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "ferror(fp) checks the stream's error indicator flag",
+            "errno holds the error code from the last failed call",
+            "perror(prefix) prints 'prefix: error message' to stderr",
+            "strerror(errno) returns the error message string for custom formatting",
+            "clearerr(fp) resets both error and EOF indicators"
+          ],
+          "gotchas": [
+            "errno is only meaningful immediately after a failed call -- successful calls may change it",
+            "ferror does not clear itself -- must call clearerr to reset",
+            "perror is not thread-safe on some older systems (errno is thread-local since C11)",
+            "Check fclose return on write streams -- disk-full errors may only appear at flush time"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`ferror(fp)` checks stream errors. `errno` holds error codes. `perror(\"msg\")` prints error to stderr. `strerror(errno)` returns error string. Always check return values first, then use these for diagnosis.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <errno.h>\n#include <string.h>\n\nint main(void) {\n    FILE *fp = fopen(\"nonexistent.txt\", \"r\");\n    if (!fp) {\n        perror(\"fopen\"); /* fopen: No such file or directory */\n        printf(\"errno=%d: %s\\n\", errno, strerror(errno));\n        return 1;\n    }\n    fclose(fp);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "perror for quick error reporting; strerror for custom messages",
+            "errno valid only immediately after failure"
+          ],
+          "gotchas": [
+            "errno may be changed by successful calls -- save it immediately if needed"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the different file buffering modes and how does setvbuf() work?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["setvbuf", "buffering", "iofbf", "iolbf", "ionbf"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The C standard I/O library buffers data to reduce the number of system calls. **`setvbuf()`** controls how a stream is buffered.\n\n**Three buffering modes:**\n\n1. **`_IOFBF` (Fully buffered):**\n   - Data is written/read in large chunks (BUFSIZ bytes, typically 4096-8192)\n   - Flush occurs when buffer is full, on fclose, or on explicit fflush\n   - Default for regular files\n\n2. **`_IOLBF` (Line buffered):**\n   - Flush occurs on every newline `\\n`, when buffer is full, or on fflush\n   - Default for stdout when connected to a terminal\n   - Useful for log files where you want each line immediately visible\n\n3. **`_IONBF` (Unbuffered):**\n   - Every write/read goes directly to the OS (no buffering)\n   - Default for stderr\n   - Maximum I/O overhead but minimum latency\n\n**`setvbuf(FILE *fp, char *buf, int mode, size_t size)`**\n- `buf`: user-provided buffer (or NULL for auto-allocated)\n- Must be called **before** any I/O operation on the stream\n- Returns 0 on success, nonzero on failure\n\n**`setbuf(fp, buf)`** is an older, simpler version: `setbuf(fp, buf)` = `setvbuf(fp, buf, buf ? _IOFBF : _IONBF, BUFSIZ)`.",
+          "pseudo_code": "_IOFBF (full): flush when buffer full or fclose/fflush\n  Default for: regular files\n  Best for: bulk I/O performance\n\n_IOLBF (line): flush on \\n, buffer full, or fflush\n  Default for: stdout on terminal\n  Best for: interactive output, log files\n\n_IONBF (none): every I/O goes to OS immediately\n  Default for: stderr\n  Best for: debugging, error messages\n\nsetvbuf(fp, buf, mode, size):\n  Must call before first I/O on fp\n  buf=NULL lets library allocate\n  Returns 0 on success",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp;\n\n    /* Fully buffered with custom buffer size */\n    fp = fopen(\"full_buf.txt\", \"w\");\n    if (fp) {\n        char buf[1024];\n        setvbuf(fp, buf, _IOFBF, sizeof(buf));\n        fprintf(fp, \"Fully buffered - flushed on close or full buffer\\n\");\n        /* Data may not be on disk yet */\n        fflush(fp); /* force flush */\n        fclose(fp); /* also flushes */\n    }\n\n    /* Line buffered */\n    fp = fopen(\"line_buf.txt\", \"w\");\n    if (fp) {\n        setvbuf(fp, NULL, _IOLBF, 0); /* NULL buf = auto-allocate */\n        fprintf(fp, \"Line 1 - flushed at newline\\n\"); /* flushed now */\n        fprintf(fp, \"Line 2 - also flushed\\n\");        /* flushed now */\n        fclose(fp);\n    }\n\n    /* Unbuffered */\n    fp = fopen(\"unbuf.txt\", \"w\");\n    if (fp) {\n        setvbuf(fp, NULL, _IONBF, 0);\n        fprintf(fp, \"Every character goes to OS immediately\\n\");\n        /* Each write is a system call -- slow but immediate */\n        fclose(fp);\n    }\n\n    /* stderr is unbuffered by default */\n    fprintf(stderr, \"This appears immediately\\n\");\n\n    /* stdout may be line-buffered (terminal) or fully buffered (pipe) */\n    /* Force stdout to be unbuffered: */\n    /* setvbuf(stdout, NULL, _IONBF, 0); */\n\n    /* Demonstrate: stdout buffering affects output order */\n    printf(\"stdout (may be buffered)\");\n    fprintf(stderr, \"stderr (always immediate)\\n\");\n    printf(\"\\n\"); /* \\n may flush stdout if line-buffered */\n\n    remove(\"full_buf.txt\");\n    remove(\"line_buf.txt\");\n    remove(\"unbuf.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "_IOFBF: fully buffered (default for files), best throughput",
+            "_IOLBF: line buffered (default for terminal stdout), flush on newline",
+            "_IONBF: unbuffered (default for stderr), every write is immediate",
+            "setvbuf must be called before any I/O on the stream",
+            "Pass NULL for buf to let the library allocate the buffer"
+          ],
+          "gotchas": [
+            "Calling setvbuf after performing I/O is undefined behavior",
+            "stdout is fully buffered when redirected to a file (not line-buffered) -- can cause missing output on crash",
+            "User-provided buffer must remain valid for the lifetime of the stream",
+            "Unbuffered I/O (_IONBF) is very slow for bulk writes -- one system call per write"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Three modes: `_IOFBF` (full, default for files), `_IOLBF` (line, default for terminal stdout), `_IONBF` (none, default for stderr). Set with `setvbuf(fp, buf, mode, size)` before any I/O.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    FILE *fp = fopen(\"log.txt\", \"w\");\n    if (fp) {\n        setvbuf(fp, NULL, _IOLBF, 0); /* line buffered */\n        fprintf(fp, \"Each line flushed immediately\\n\");\n        fclose(fp);\n    }\n    /* stderr is unbuffered by default */\n    fprintf(stderr, \"Immediate output\\n\");\n    remove(\"log.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Files: fully buffered; terminal stdout: line buffered; stderr: unbuffered",
+            "setvbuf must be called before first I/O on the stream"
+          ],
+          "gotchas": [
+            "stdout becomes fully buffered when redirected to a file -- crash loses unflushed data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you read and parse a structured data file (like CSV) in C?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["csv-parsing", "strtok", "structured-data", "file-parsing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reading structured data files (CSV, TSV, config files) in C requires combining line reading with string parsing.\n\n**General approach:**\n1. Read lines with `fgets()` (safe, bounded)\n2. Parse each line with `strtok()`, `sscanf()`, or manual parsing\n3. Store parsed data in structs or arrays\n\n**Parsing tools:**\n\n- **`strtok(char *str, const char *delim)`**: Splits a string by delimiters. First call: pass the string. Subsequent calls: pass NULL. Modifies the original string (replaces delimiters with `\\0`).\n\n- **`sscanf(const char *str, const char *format, ...)`**: Like fscanf but reads from a string. Good for fixed-format data.\n\n- **Manual parsing with `strchr()`/`strstr()`**: Most control, no destructive modification.\n\n**strtok pitfalls:**\n- Modifies the original string\n- Not thread-safe (uses static internal state) -- use `strtok_r()` for thread safety\n- Cannot handle empty fields between consecutive delimiters (treats multiple delimiters as one)\n\n**For production CSV parsing:** Consider a library (libcsv, etc.) that handles quoting, escaping, and edge cases properly.",
+          "pseudo_code": "CSV parsing algorithm:\n  1. Open file: fp = fopen(\"data.csv\", \"r\")\n  2. Skip header: fgets(buf, ...)\n  3. For each line:\n     a. fgets(buf, sizeof(buf), fp)\n     b. Parse fields: strtok(buf, \",\") for first field\n     c. strtok(NULL, \",\") for subsequent fields\n     d. Convert types: atoi(), atof(), strcpy()\n     e. Store in struct array\n  4. fclose(fp)\n\nstrtok sequence:\n  strtok(\"Alice,20,3.8\", \",\")  -> \"Alice\"\n  strtok(NULL, \",\")             -> \"20\"\n  strtok(NULL, \",\")             -> \"3.8\"\n  strtok(NULL, \",\")             -> NULL (done)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\ntypedef struct {\n    char name[50];\n    int age;\n    double gpa;\n} Student;\n\n/* Method 1: Parse CSV with strtok */\nint parse_csv_strtok(const char *filename, Student *out, int max) {\n    FILE *fp = fopen(filename, \"r\");\n    if (!fp) { perror(filename); return -1; }\n\n    char line[256];\n    fgets(line, sizeof(line), fp); /* skip header */\n\n    int count = 0;\n    while (count < max && fgets(line, sizeof(line), fp)) {\n        line[strcspn(line, \"\\n\")] = '\\0'; /* strip newline */\n\n        char *name = strtok(line, \",\");\n        char *age_str = strtok(NULL, \",\");\n        char *gpa_str = strtok(NULL, \",\");\n\n        if (name && age_str && gpa_str) {\n            strncpy(out[count].name, name, sizeof(out[count].name) - 1);\n            out[count].name[sizeof(out[count].name) - 1] = '\\0';\n            out[count].age = atoi(age_str);\n            out[count].gpa = atof(gpa_str);\n            count++;\n        }\n    }\n    fclose(fp);\n    return count;\n}\n\n/* Method 2: Parse with sscanf (fixed format) */\nint parse_csv_sscanf(const char *filename, Student *out, int max) {\n    FILE *fp = fopen(filename, \"r\");\n    if (!fp) return -1;\n\n    char line[256];\n    fgets(line, sizeof(line), fp); /* skip header */\n\n    int count = 0;\n    while (count < max && fgets(line, sizeof(line), fp)) {\n        if (sscanf(line, \"%49[^,],%d,%lf\",\n                   out[count].name, &out[count].age,\n                   &out[count].gpa) == 3) {\n            count++;\n        }\n    }\n    fclose(fp);\n    return count;\n}\n\nint main(void) {\n    /* Create test CSV */\n    FILE *fp = fopen(\"students.csv\", \"w\");\n    fprintf(fp, \"name,age,gpa\\n\");\n    fprintf(fp, \"Alice,20,3.80\\n\");\n    fprintf(fp, \"Bob,22,3.50\\n\");\n    fprintf(fp, \"Charlie,21,3.95\\n\");\n    fclose(fp);\n\n    /* Parse with strtok */\n    Student students[10];\n    int n = parse_csv_strtok(\"students.csv\", students, 10);\n    printf(\"Parsed %d students (strtok):\\n\", n);\n    for (int i = 0; i < n; i++) {\n        printf(\"  %s, age %d, GPA %.2f\\n\",\n               students[i].name, students[i].age, students[i].gpa);\n    }\n\n    /* Parse with sscanf */\n    n = parse_csv_sscanf(\"students.csv\", students, 10);\n    printf(\"Parsed %d students (sscanf):\\n\", n);\n    for (int i = 0; i < n; i++) {\n        printf(\"  %s, age %d, GPA %.2f\\n\",\n               students[i].name, students[i].age, students[i].gpa);\n    }\n\n    remove(\"students.csv\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Read lines with fgets, parse with strtok or sscanf",
+            "strtok modifies the original string and returns tokens one at a time",
+            "sscanf with %[^,] pattern reads until a comma -- useful for CSV fields",
+            "Always strip the trailing newline from fgets output before parsing",
+            "Check that all expected fields were parsed before using the data"
+          ],
+          "gotchas": [
+            "strtok is not thread-safe -- use strtok_r for multithreaded code",
+            "strtok treats consecutive delimiters as one -- empty CSV fields are skipped",
+            "Real CSV has quoting rules (fields with commas, newlines) -- strtok cannot handle this",
+            "atoi/atof have no error detection -- use strtol/strtod for robust parsing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Read lines with `fgets()`, parse with `strtok(line, \",\")` or `sscanf(line, \"%[^,],%d,%lf\", ...)`. Strip newline first. `strtok` is destructive and not thread-safe; use `strtok_r` in threaded code.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n\nint main(void) {\n    FILE *fp = fopen(\"data.csv\", \"w\");\n    fprintf(fp, \"name,score\\nAlice,95\\nBob,87\\n\");\n    fclose(fp);\n\n    fp = fopen(\"data.csv\", \"r\");\n    char line[128];\n    fgets(line, sizeof(line), fp); /* skip header */\n    while (fgets(line, sizeof(line), fp)) {\n        line[strcspn(line, \"\\n\")] = '\\0';\n        char *name = strtok(line, \",\");\n        char *score = strtok(NULL, \",\");\n        if (name && score)\n            printf(\"%s: %d\\n\", name, atoi(score));\n    }\n    fclose(fp);\n    remove(\"data.csv\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fgets + strtok for basic CSV; sscanf for fixed formats",
+            "strtok modifies the string and is not thread-safe"
+          ],
+          "gotchas": [
+            "strtok skips empty fields; real CSV needs a proper parser for quoting"
+          ]
+        }
+      ]
+    }
+  ]
+}

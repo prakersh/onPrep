@@ -1,0 +1,620 @@
+{
+  "concept_slug": "sorting-searching",
+  "questions": [
+    {
+      "title": "How do you implement bubble sort in C and what optimizations can be applied?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "bubble-sort", "optimization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Bubble sort** repeatedly steps through the list, compares adjacent elements, and swaps them if they are in the wrong order. Each pass \"bubbles\" the largest unsorted element to its correct position.\n\n**Basic version:** Two nested loops, O(n^2) always.\n\n**Optimization 1 -- Early termination:** If no swaps occur in a pass, the array is already sorted. Add a `swapped` flag. Best case becomes O(n) for nearly sorted data.\n\n**Optimization 2 -- Shrinking range:** After each pass, the last element is in place. Reduce the inner loop range by 1 each pass.\n\n**Time:** O(n^2) worst/average, O(n) best (with flag). **Space:** O(1). **Stable:** Yes (equal elements maintain relative order).",
+          "pseudo_code": "BubbleSort(arr, n):\n  for i = 0 to n-2:\n    swapped = false\n    for j = 0 to n-2-i:\n      if arr[j] > arr[j+1]:\n        swap(arr[j], arr[j+1])\n        swapped = true\n    if not swapped: break  // already sorted",
+          "actual_code": "#include <stdio.h>\n\n/* Optimized bubble sort with early termination */\nvoid bubbleSort(int arr[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        int swapped = 0;\n        for (int j = 0; j < n - 1 - i; j++) {\n            if (arr[j] > arr[j + 1]) {\n                /* Swap */\n                int temp = arr[j];\n                arr[j] = arr[j + 1];\n                arr[j + 1] = temp;\n                swapped = 1;\n            }\n        }\n        if (!swapped) break;  /* array is sorted */\n    }\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {64, 34, 25, 12, 22, 11, 90};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Before: \");\n    printArray(arr, n);\n\n    bubbleSort(arr, n);\n\n    printf(\"After:  \");\n    printArray(arr, n);  /* 11 12 22 25 34 64 90 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Repeatedly swap adjacent out-of-order elements",
+            "O(n^2) worst/average, O(n) best with early termination flag",
+            "Stable sort: equal elements keep their original order",
+            "O(1) space -- in-place sorting",
+            "Inner loop range shrinks by 1 each pass (last i elements are sorted)"
+          ],
+          "gotchas": [
+            "Without the swapped flag, bubble sort is always O(n^2) even for sorted input",
+            "Bubble sort is almost never used in production -- it is the slowest O(n^2) sort in practice",
+            "n-1-i in inner loop: forgetting -i means extra unnecessary comparisons",
+            "Confusing bubble sort with selection sort -- bubble sort swaps adjacent, selection finds minimum"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compare and swap adjacent elements. Each pass bubbles the largest to the end. Add a `swapped` flag for O(n) best case. O(n^2) worst, stable, in-place.",
+          "pseudo_code": "",
+          "actual_code": "void bubbleSort(int arr[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        int swapped = 0;\n        for (int j = 0; j < n - 1 - i; j++) {\n            if (arr[j] > arr[j+1]) {\n                int t = arr[j]; arr[j] = arr[j+1]; arr[j+1] = t;\n                swapped = 1;\n            }\n        }\n        if (!swapped) break;\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n^2) worst, O(n) best with flag, stable, in-place"
+          ],
+          "gotchas": [
+            "Without swapped flag, always O(n^2) even on sorted input"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement selection sort in C?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "selection-sort"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Selection sort** divides the array into sorted (left) and unsorted (right) portions. In each pass, it finds the **minimum** element in the unsorted portion and swaps it with the first unsorted element.\n\n**Algorithm:**\n1. For i from 0 to n-2:\n2. Find the index of the minimum element in arr[i..n-1]\n3. Swap arr[i] with arr[minIndex]\n\n**Time:** O(n^2) always (no early termination possible). **Space:** O(1).\n**Stable?** No -- swapping can change the relative order of equal elements.\n\n**Advantage:** Minimizes the number of swaps (exactly n-1 swaps). Good when writes are expensive (e.g., flash memory).",
+          "pseudo_code": "SelectionSort(arr, n):\n  for i = 0 to n-2:\n    minIdx = i\n    for j = i+1 to n-1:\n      if arr[j] < arr[minIdx]:\n        minIdx = j\n    swap(arr[i], arr[minIdx])",
+          "actual_code": "#include <stdio.h>\n\nvoid selectionSort(int arr[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        int minIdx = i;\n        for (int j = i + 1; j < n; j++) {\n            if (arr[j] < arr[minIdx])\n                minIdx = j;\n        }\n        /* Swap only if minimum is not already in place */\n        if (minIdx != i) {\n            int temp = arr[i];\n            arr[i] = arr[minIdx];\n            arr[minIdx] = temp;\n        }\n    }\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {64, 25, 12, 22, 11};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Before: \");\n    printArray(arr, n);\n\n    selectionSort(arr, n);\n\n    printf(\"After:  \");\n    printArray(arr, n);  /* 11 12 22 25 64 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Find minimum in unsorted portion, swap with first unsorted element",
+            "O(n^2) always -- no best case optimization",
+            "Exactly n-1 swaps -- minimum number of writes",
+            "NOT stable: swapping disrupts relative order of equal elements",
+            "Simple to implement, useful when swap cost is high"
+          ],
+          "gotchas": [
+            "Always O(n^2) even on sorted input -- no early termination",
+            "Not stable: can change relative order of equal elements",
+            "Swapping arr[i] with itself when minIdx == i is harmless but wasteful",
+            "Often confused with insertion sort -- selection finds min, insertion shifts elements"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Find minimum in unsorted portion, swap to front. Always O(n^2), not stable, but only n-1 swaps total. In-place.",
+          "pseudo_code": "",
+          "actual_code": "void selectionSort(int arr[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        int min = i;\n        for (int j = i + 1; j < n; j++)\n            if (arr[j] < arr[min]) min = j;\n        if (min != i) {\n            int t = arr[i]; arr[i] = arr[min]; arr[min] = t;\n        }\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always O(n^2), not stable, minimal swaps"
+          ],
+          "gotchas": [
+            "No early termination -- always does n^2/2 comparisons"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement insertion sort in C?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "insertion-sort", "adaptive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Insertion sort** builds the sorted array one element at a time by inserting each element into its correct position in the already-sorted portion.\n\n**Algorithm:**\n1. Start from index 1 (index 0 is trivially sorted)\n2. Take the current element (key)\n3. Shift all larger elements in the sorted portion one position right\n4. Insert key into the correct position\n\n**Time:** O(n^2) worst/average, O(n) best (already sorted). **Space:** O(1). **Stable:** Yes.\n\n**Best for:** Small arrays (n < ~50), nearly sorted data, online sorting (can sort as data arrives). Often used as the base case in hybrid sorts (e.g., Timsort, introsort).",
+          "pseudo_code": "InsertionSort(arr, n):\n  for i = 1 to n-1:\n    key = arr[i]\n    j = i - 1\n    while j >= 0 and arr[j] > key:\n      arr[j+1] = arr[j]  // shift right\n      j--\n    arr[j+1] = key  // insert",
+          "actual_code": "#include <stdio.h>\n\nvoid insertionSort(int arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        int key = arr[i];\n        int j = i - 1;\n\n        /* Shift elements greater than key to the right */\n        while (j >= 0 && arr[j] > key) {\n            arr[j + 1] = arr[j];\n            j--;\n        }\n        arr[j + 1] = key;  /* insert key at correct position */\n    }\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {12, 11, 13, 5, 6};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Before: \");\n    printArray(arr, n);\n\n    insertionSort(arr, n);\n\n    printf(\"After:  \");\n    printArray(arr, n);  /* 5 6 11 12 13 */\n\n    /* Best case: already sorted */\n    int sorted[] = {1, 2, 3, 4, 5};\n    insertionSort(sorted, 5);  /* O(n) -- inner loop never executes */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Shift elements right to make room, then insert key",
+            "O(n) best case (sorted input), O(n^2) worst case (reverse sorted)",
+            "Stable sort: equal elements keep original order (uses > not >=)",
+            "Adaptive: performance improves on nearly sorted data",
+            "Preferred for small arrays and as base case in hybrid sorts"
+          ],
+          "gotchas": [
+            "Using >= instead of > in the comparison makes it unstable",
+            "Starting loop at i=0 instead of i=1 causes unnecessary work",
+            "Must save arr[i] in key before shifting -- shifting overwrites arr[i]",
+            "O(n^2) on reverse-sorted input -- every element shifts to position 0"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Take each element, shift larger elements right, insert at correct position. O(n) best (sorted), O(n^2) worst. Stable, in-place, adaptive.",
+          "pseudo_code": "",
+          "actual_code": "void insertionSort(int arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        int key = arr[i], j = i - 1;\n        while (j >= 0 && arr[j] > key) {\n            arr[j+1] = arr[j];\n            j--;\n        }\n        arr[j+1] = key;\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n) best, O(n^2) worst, stable, adaptive"
+          ],
+          "gotchas": [
+            "Must save arr[i] as key before shifting -- shifting overwrites it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement merge sort in C with a recursive approach?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "merge-sort", "divide-and-conquer", "recursive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Merge sort** is a divide-and-conquer algorithm:\n1. **Divide:** Split the array into two halves\n2. **Conquer:** Recursively sort each half\n3. **Combine:** Merge the two sorted halves\n\nThe **merge** step is the key: use two pointers to scan both halves, always picking the smaller element.\n\n**Time:** O(n log n) always (worst, average, best). **Space:** O(n) for the auxiliary array.\n**Stable:** Yes. **Not in-place:** Requires O(n) extra memory.\n\n**Merge sort is optimal** for linked lists (no random access needed) and is the basis for external sorting (sorting data too large for RAM).",
+          "pseudo_code": "MergeSort(arr, left, right):\n  if left >= right: return\n  mid = (left + right) / 2\n  MergeSort(arr, left, mid)\n  MergeSort(arr, mid+1, right)\n  Merge(arr, left, mid, right)\n\nMerge(arr, left, mid, right):\n  Create temp arrays L[] and R[]\n  Copy arr[left..mid] to L[]\n  Copy arr[mid+1..right] to R[]\n  Merge L[] and R[] back into arr[left..right]",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Merge two sorted subarrays: arr[left..mid] and arr[mid+1..right] */\nvoid merge(int arr[], int left, int mid, int right) {\n    int n1 = mid - left + 1;\n    int n2 = right - mid;\n\n    /* Allocate temp arrays */\n    int *L = (int *)malloc(n1 * sizeof(int));\n    int *R = (int *)malloc(n2 * sizeof(int));\n\n    /* Copy data */\n    for (int i = 0; i < n1; i++) L[i] = arr[left + i];\n    for (int j = 0; j < n2; j++) R[j] = arr[mid + 1 + j];\n\n    /* Merge back */\n    int i = 0, j = 0, k = left;\n    while (i < n1 && j < n2) {\n        if (L[i] <= R[j])     /* <= ensures stability */\n            arr[k++] = L[i++];\n        else\n            arr[k++] = R[j++];\n    }\n\n    /* Copy remaining elements */\n    while (i < n1) arr[k++] = L[i++];\n    while (j < n2) arr[k++] = R[j++];\n\n    free(L);\n    free(R);\n}\n\nvoid mergeSort(int arr[], int left, int right) {\n    if (left >= right) return;\n\n    int mid = left + (right - left) / 2;  /* avoid overflow */\n    mergeSort(arr, left, mid);\n    mergeSort(arr, mid + 1, right);\n    merge(arr, left, mid, right);\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {38, 27, 43, 3, 9, 82, 10};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Before: \");\n    printArray(arr, n);\n\n    mergeSort(arr, 0, n - 1);\n\n    printf(\"After:  \");\n    printArray(arr, n);  /* 3 9 10 27 38 43 82 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Divide and conquer: split, sort halves, merge",
+            "O(n log n) guaranteed -- same for worst, average, best",
+            "Stable sort: uses <= in merge to preserve relative order",
+            "O(n) extra space for auxiliary arrays",
+            "mid = left + (right - left) / 2 avoids integer overflow"
+          ],
+          "gotchas": [
+            "Using (left + right) / 2 for mid can overflow for large indices -- use left + (right - left) / 2",
+            "Forgetting to free temp arrays causes memory leak (especially in recursive calls)",
+            "Using < instead of <= in merge makes it unstable",
+            "O(n) extra space is a significant disadvantage for memory-constrained systems"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Divide in half, recursively sort each half, merge. Always O(n log n). Stable. Requires O(n) extra space for merge.",
+          "pseudo_code": "",
+          "actual_code": "void merge(int a[], int l, int m, int r) {\n    int n1 = m-l+1, n2 = r-m;\n    int L[n1], R[n2];  /* VLA */\n    for (int i=0;i<n1;i++) L[i]=a[l+i];\n    for (int j=0;j<n2;j++) R[j]=a[m+1+j];\n    int i=0,j=0,k=l;\n    while (i<n1 && j<n2) a[k++] = L[i]<=R[j] ? L[i++] : R[j++];\n    while (i<n1) a[k++]=L[i++];\n    while (j<n2) a[k++]=R[j++];\n}\nvoid mergeSort(int a[], int l, int r) {\n    if (l>=r) return;\n    int m = l+(r-l)/2;\n    mergeSort(a,l,m); mergeSort(a,m+1,r);\n    merge(a,l,m,r);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always O(n log n), stable, O(n) extra space"
+          ],
+          "gotchas": [
+            "VLAs may cause stack overflow for large arrays -- prefer malloc"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement quicksort with Lomuto and Hoare partition schemes?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "quicksort", "partition", "divide-and-conquer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Quicksort** picks a pivot, partitions the array so elements less than pivot are on the left and greater on the right, then recursively sorts both sides.\n\n**Lomuto partition** (simpler, slower):\n- Pivot = last element\n- Maintain index `i` for boundary of \"less than pivot\" region\n- Scan `j` from left to right, swap smaller elements to the left side\n- Final swap places pivot at boundary\n\n**Hoare partition** (original, faster):\n- Pivot = first element (or median)\n- Two pointers start at opposite ends, move inward\n- Swap when left finds element >= pivot and right finds element <= pivot\n- Fewer swaps on average (3x fewer than Lomuto)\n\n**Time:** O(n log n) average, O(n^2) worst (already sorted with bad pivot). **Space:** O(log n) average (stack). **Not stable.**\n\n**Pivot choice matters:** Random pivot or median-of-three avoids worst case on sorted input.",
+          "pseudo_code": "Lomuto Partition(arr, low, high):\n  pivot = arr[high]\n  i = low - 1\n  for j = low to high-1:\n    if arr[j] <= pivot:\n      i++\n      swap(arr[i], arr[j])\n  swap(arr[i+1], arr[high])\n  return i+1\n\nHoare Partition(arr, low, high):\n  pivot = arr[low]\n  i = low - 1, j = high + 1\n  while true:\n    do i++ while arr[i] < pivot\n    do j-- while arr[j] > pivot\n    if i >= j: return j\n    swap(arr[i], arr[j])",
+          "actual_code": "#include <stdio.h>\n\nvoid swap(int *a, int *b) {\n    int t = *a; *a = *b; *b = t;\n}\n\n/* Lomuto partition: pivot = last element */\nint lomutoPartition(int arr[], int low, int high) {\n    int pivot = arr[high];\n    int i = low - 1;\n\n    for (int j = low; j < high; j++) {\n        if (arr[j] <= pivot) {\n            i++;\n            swap(&arr[i], &arr[j]);\n        }\n    }\n    swap(&arr[i + 1], &arr[high]);\n    return i + 1;\n}\n\nvoid quicksortLomuto(int arr[], int low, int high) {\n    if (low < high) {\n        int pi = lomutoPartition(arr, low, high);\n        quicksortLomuto(arr, low, pi - 1);\n        quicksortLomuto(arr, pi + 1, high);\n    }\n}\n\n/* Hoare partition: pivot = first element */\nint hoarePartition(int arr[], int low, int high) {\n    int pivot = arr[low];\n    int i = low - 1;\n    int j = high + 1;\n\n    while (1) {\n        do { i++; } while (arr[i] < pivot);\n        do { j--; } while (arr[j] > pivot);\n        if (i >= j) return j;\n        swap(&arr[i], &arr[j]);\n    }\n}\n\nvoid quicksortHoare(int arr[], int low, int high) {\n    if (low < high) {\n        int p = hoarePartition(arr, low, high);\n        quicksortHoare(arr, low, p);\n        quicksortHoare(arr, p + 1, high);\n    }\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr1[] = {10, 7, 8, 9, 1, 5};\n    int n = 6;\n    quicksortLomuto(arr1, 0, n - 1);\n    printf(\"Lomuto: \");\n    printArray(arr1, n);  /* 1 5 7 8 9 10 */\n\n    int arr2[] = {10, 7, 8, 9, 1, 5};\n    quicksortHoare(arr2, 0, n - 1);\n    printf(\"Hoare:  \");\n    printArray(arr2, n);  /* 1 5 7 8 9 10 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Lomuto: simpler, pivot at end, i tracks boundary of small elements",
+            "Hoare: two pointers from ends, fewer swaps (~3x fewer), faster in practice",
+            "O(n log n) average, O(n^2) worst (bad pivot choices)",
+            "Not stable: partitioning can change relative order of equal elements",
+            "Random pivot or median-of-three helps avoid worst case"
+          ],
+          "gotchas": [
+            "Hoare partition returns j (not the pivot's final position) -- must recurse on [low..p] and [p+1..high], NOT [low..p-1]",
+            "Lomuto on already-sorted input with last element as pivot gives O(n^2)",
+            "Using Hoare partition with Lomuto-style recursive calls causes infinite recursion",
+            "Stack overflow on O(n^2) worst case -- tail call optimization or iterative fallback needed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pick pivot, partition so left < pivot < right, recurse on both halves. Lomuto: pivot at end, single scan. Hoare: two pointers from ends, fewer swaps. O(n log n) average, O(n^2) worst.",
+          "pseudo_code": "",
+          "actual_code": "int lomutoPartition(int a[], int lo, int hi) {\n    int pivot = a[hi], i = lo - 1;\n    for (int j = lo; j < hi; j++)\n        if (a[j] <= pivot) { i++; int t=a[i]; a[i]=a[j]; a[j]=t; }\n    int t=a[i+1]; a[i+1]=a[hi]; a[hi]=t;\n    return i + 1;\n}\nvoid quicksort(int a[], int lo, int hi) {\n    if (lo < hi) {\n        int p = lomutoPartition(a, lo, hi);\n        quicksort(a, lo, p-1);\n        quicksort(a, p+1, hi);\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n log n) average, not stable, in-place"
+          ],
+          "gotchas": [
+            "Already-sorted input with last-element pivot gives O(n^2)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement binary search iteratively and recursively in C?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["searching", "binary-search", "iterative", "recursive"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Binary search** works on a **sorted** array. It repeatedly halves the search space by comparing the target with the middle element.\n\n**Algorithm:**\n1. Set `low = 0`, `high = n - 1`\n2. While `low <= high`:\n   - Compute `mid = low + (high - low) / 2`\n   - If `arr[mid] == target`: found\n   - If `arr[mid] < target`: search right half (`low = mid + 1`)\n   - If `arr[mid] > target`: search left half (`high = mid - 1`)\n3. If not found, return -1\n\n**Time:** O(log n). **Space:** O(1) iterative, O(log n) recursive.\n\n**Critical:** Use `low + (high - low) / 2` instead of `(low + high) / 2` to avoid integer overflow.",
+          "pseudo_code": "BinarySearch(arr, n, target):\n  low = 0, high = n - 1\n  while low <= high:\n    mid = low + (high - low) / 2\n    if arr[mid] == target: return mid\n    if arr[mid] < target: low = mid + 1\n    else: high = mid - 1\n  return -1  // not found\n\nBinarySearchRecursive(arr, low, high, target):\n  if low > high: return -1\n  mid = low + (high - low) / 2\n  if arr[mid] == target: return mid\n  if arr[mid] < target: return BSR(arr, mid+1, high, target)\n  else: return BSR(arr, low, mid-1, target)",
+          "actual_code": "#include <stdio.h>\n\n/* Iterative binary search */\nint binarySearch(int arr[], int n, int target) {\n    int low = 0, high = n - 1;\n\n    while (low <= high) {\n        int mid = low + (high - low) / 2;  /* overflow-safe */\n\n        if (arr[mid] == target)\n            return mid;\n        else if (arr[mid] < target)\n            low = mid + 1;\n        else\n            high = mid - 1;\n    }\n    return -1;  /* not found */\n}\n\n/* Recursive binary search */\nint binarySearchRecursive(int arr[], int low, int high, int target) {\n    if (low > high)\n        return -1;\n\n    int mid = low + (high - low) / 2;\n\n    if (arr[mid] == target)\n        return mid;\n    else if (arr[mid] < target)\n        return binarySearchRecursive(arr, mid + 1, high, target);\n    else\n        return binarySearchRecursive(arr, low, mid - 1, target);\n}\n\nint main(void) {\n    int arr[] = {2, 3, 4, 10, 40, 50, 70};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    int idx = binarySearch(arr, n, 10);\n    printf(\"Found 10 at index: %d\\n\", idx);  /* 3 */\n\n    idx = binarySearch(arr, n, 5);\n    printf(\"Found 5 at index: %d\\n\", idx);   /* -1 */\n\n    idx = binarySearchRecursive(arr, 0, n - 1, 40);\n    printf(\"Found 40 at index: %d\\n\", idx);  /* 4 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array MUST be sorted for binary search to work",
+            "O(log n) time -- halves search space each step",
+            "Use low + (high - low) / 2 to avoid integer overflow",
+            "Iterative preferred: O(1) space vs O(log n) for recursive",
+            "Returns index of found element, -1 if not found"
+          ],
+          "gotchas": [
+            "(low + high) / 2 can overflow for large arrays -- always use low + (high - low) / 2",
+            "Using binary search on an unsorted array gives wrong results",
+            "Off-by-one: low <= high (not <) is the correct condition",
+            "Using mid - 1 and mid + 1 (not just mid) is critical to avoid infinite loops"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "On a sorted array: compute mid, compare, search left or right half. O(log n). Use `low + (high - low) / 2` to avoid overflow.",
+          "pseudo_code": "",
+          "actual_code": "int binarySearch(int arr[], int n, int target) {\n    int lo = 0, hi = n - 1;\n    while (lo <= hi) {\n        int mid = lo + (hi - lo) / 2;\n        if (arr[mid] == target) return mid;\n        if (arr[mid] < target) lo = mid + 1;\n        else hi = mid - 1;\n    }\n    return -1;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(log n), array must be sorted"
+          ],
+          "gotchas": [
+            "(low + high) / 2 overflows; use low + (high - low) / 2"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement linear search in C and when is it preferred over binary search?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["searching", "linear-search", "sequential"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Linear search** scans elements one by one from start to end. It works on **any** array (sorted or unsorted).\n\n**Time:** O(n) worst/average, O(1) best (found at first position). **Space:** O(1).\n\n**When to use linear search:**\n- Array is unsorted (binary search requires sorted)\n- Array is very small (n < ~10, overhead of binary search not worth it)\n- Searching in a linked list (no random access)\n- Searching only once (sorting first would be O(n log n))\n\n**Sentinel optimization:** Place the target at the end of the array, eliminating the bounds check in the loop. Reduces comparisons per iteration from 2 to 1.",
+          "pseudo_code": "LinearSearch(arr, n, target):\n  for i = 0 to n-1:\n    if arr[i] == target:\n      return i\n  return -1\n\nSentinelSearch(arr, n, target):\n  last = arr[n-1]\n  arr[n-1] = target  // sentinel\n  i = 0\n  while arr[i] != target:\n    i++\n  arr[n-1] = last    // restore\n  if i < n-1 or arr[n-1] == target:\n    return i\n  return -1",
+          "actual_code": "#include <stdio.h>\n\n/* Standard linear search */\nint linearSearch(int arr[], int n, int target) {\n    for (int i = 0; i < n; i++) {\n        if (arr[i] == target)\n            return i;\n    }\n    return -1;\n}\n\n/* Sentinel linear search (eliminates bounds check) */\nint sentinelSearch(int arr[], int n, int target) {\n    int last = arr[n - 1];\n    arr[n - 1] = target;  /* place sentinel */\n\n    int i = 0;\n    while (arr[i] != target)  /* no bounds check needed */\n        i++;\n\n    arr[n - 1] = last;  /* restore original value */\n\n    if (i < n - 1 || arr[n - 1] == target)\n        return i;\n    return -1;\n}\n\nint main(void) {\n    int arr[] = {2, 3, 4, 10, 40};\n    int n = 5;\n\n    printf(\"Found 10 at: %d\\n\", linearSearch(arr, n, 10));  /* 3 */\n    printf(\"Found 5 at: %d\\n\", linearSearch(arr, n, 5));    /* -1 */\n\n    printf(\"Sentinel 40 at: %d\\n\", sentinelSearch(arr, n, 40));  /* 4 */\n    printf(\"Sentinel 99 at: %d\\n\", sentinelSearch(arr, n, 99));  /* -1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Works on sorted AND unsorted arrays",
+            "O(n) time, O(1) space",
+            "Sentinel optimization removes bounds check (one comparison per iteration instead of two)",
+            "Preferred for small arrays, unsorted data, one-time searches",
+            "Simplest searching algorithm"
+          ],
+          "gotchas": [
+            "Sentinel search modifies the array -- not safe for const arrays or concurrent access",
+            "Linear search on large sorted arrays is wasteful -- use binary search",
+            "For repeated searches, sorting once O(n log n) + binary search O(log n) beats repeated linear O(n)",
+            "Sentinel search requires the array to have at least one element"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Scan elements one by one. O(n) time, works on unsorted arrays. Use when array is small, unsorted, or searched only once.",
+          "pseudo_code": "",
+          "actual_code": "int linearSearch(int arr[], int n, int target) {\n    for (int i = 0; i < n; i++)\n        if (arr[i] == target) return i;\n    return -1;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n), works on unsorted arrays"
+          ],
+          "gotchas": [
+            "Inefficient on large sorted arrays -- use binary search instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the time complexity analysis of common sorting algorithms?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "time-complexity", "big-o", "analysis"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Understanding time complexity is critical for choosing the right sorting algorithm.\n\n| Algorithm | Best | Average | Worst | Space | Stable? |\n|-----------|------|---------|-------|-------|---------|\n| Bubble Sort | O(n) | O(n^2) | O(n^2) | O(1) | Yes |\n| Selection Sort | O(n^2) | O(n^2) | O(n^2) | O(1) | No |\n| Insertion Sort | O(n) | O(n^2) | O(n^2) | O(1) | Yes |\n| Merge Sort | O(n log n) | O(n log n) | O(n log n) | O(n) | Yes |\n| Quick Sort | O(n log n) | O(n log n) | O(n^2) | O(log n) | No |\n| Counting Sort | O(n+k) | O(n+k) | O(n+k) | O(n+k) | Yes |\n| Heap Sort | O(n log n) | O(n log n) | O(n log n) | O(1) | No |\n\n**Comparison-based lower bound:** Any comparison-based sort must be at least O(n log n) in the worst case (proven via decision tree model).\n\n**Key insights:**\n- O(n^2) sorts are good for small n or nearly sorted data (insertion sort)\n- Merge sort is the only O(n log n) stable sort with guaranteed performance\n- Quick sort is fastest in practice (good cache locality) but O(n^2) worst case\n- Counting sort breaks the O(n log n) barrier but requires integer keys in limited range",
+          "pseudo_code": "Comparison-based sorting lower bound: Omega(n log n)\n\nBest for small n: Insertion sort (low overhead, adaptive)\nBest guaranteed: Merge sort (always n log n, stable)\nBest average: Quick sort (good cache, in-place)\nBest for integers in range k: Counting sort (O(n+k))\n\nCommon interview answer for 'best sort':\n  It depends on the data characteristics and constraints.",
+          "actual_code": "#include <stdio.h>\n#include <time.h>\n#include <stdlib.h>\n\n/* Demonstrate complexity difference with timing */\nvoid insertionSort(int arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        int key = arr[i], j = i - 1;\n        while (j >= 0 && arr[j] > key) {\n            arr[j + 1] = arr[j];\n            j--;\n        }\n        arr[j + 1] = key;\n    }\n}\n\nvoid merge(int arr[], int l, int m, int r) {\n    int n1 = m - l + 1, n2 = r - m;\n    int *L = (int *)malloc(n1 * sizeof(int));\n    int *R = (int *)malloc(n2 * sizeof(int));\n    for (int i = 0; i < n1; i++) L[i] = arr[l + i];\n    for (int j = 0; j < n2; j++) R[j] = arr[m + 1 + j];\n    int i = 0, j = 0, k = l;\n    while (i < n1 && j < n2)\n        arr[k++] = (L[i] <= R[j]) ? L[i++] : R[j++];\n    while (i < n1) arr[k++] = L[i++];\n    while (j < n2) arr[k++] = R[j++];\n    free(L); free(R);\n}\n\nvoid mergeSort(int arr[], int l, int r) {\n    if (l >= r) return;\n    int m = l + (r - l) / 2;\n    mergeSort(arr, l, m);\n    mergeSort(arr, m + 1, r);\n    merge(arr, l, m, r);\n}\n\nint main(void) {\n    int n = 10000;\n    int *arr1 = (int *)malloc(n * sizeof(int));\n    int *arr2 = (int *)malloc(n * sizeof(int));\n\n    srand(42);\n    for (int i = 0; i < n; i++)\n        arr1[i] = arr2[i] = rand();\n\n    clock_t start = clock();\n    insertionSort(arr1, n);\n    double t1 = (double)(clock() - start) / CLOCKS_PER_SEC;\n\n    start = clock();\n    mergeSort(arr2, 0, n - 1);\n    double t2 = (double)(clock() - start) / CLOCKS_PER_SEC;\n\n    printf(\"Insertion sort (n=%d): %.4f sec\\n\", n, t1);\n    printf(\"Merge sort    (n=%d): %.4f sec\\n\", n, t2);\n    /* Merge sort is dramatically faster for large n */\n\n    free(arr1); free(arr2);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Comparison-based sorts have Omega(n log n) lower bound",
+            "Insertion sort: best for small/nearly-sorted data",
+            "Merge sort: guaranteed O(n log n), stable, but O(n) space",
+            "Quick sort: fastest in practice (cache-friendly), but O(n^2) worst",
+            "Counting sort: O(n+k) breaks the n log n barrier for integer keys"
+          ],
+          "gotchas": [
+            "Quick sort's O(n^2) worst case can be triggered by sorted input with bad pivot",
+            "O(n log n) is NOT always faster than O(n^2) for small n due to constant factors",
+            "Merge sort's O(n) extra space is a real concern for embedded/memory-limited systems",
+            "Stability matters when sorting objects by multiple keys"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "O(n^2): bubble, selection, insertion. O(n log n): merge (stable, O(n) space), quick (in-place, unstable, O(n^2) worst), heap. Comparison-based lower bound: O(n log n).",
+          "pseudo_code": "",
+          "actual_code": "/* Time complexity summary:\n * Bubble:    O(n^2) avg/worst, O(n) best  -- stable\n * Selection: O(n^2) always               -- unstable\n * Insertion: O(n^2) avg/worst, O(n) best  -- stable\n * Merge:     O(n log n) always            -- stable, O(n) space\n * Quick:     O(n log n) avg, O(n^2) worst -- unstable, O(log n) space\n * Counting:  O(n+k)                       -- stable, O(n+k) space\n */\nint placeholder = 0;  /* valid C */",
+          "code_language": "c",
+          "key_points": [
+            "O(n log n) is the lower bound for comparison-based sorts"
+          ],
+          "gotchas": [
+            "Quick sort's O(n^2) worst case is easily triggered on sorted input"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the space complexity comparison of common sorting algorithms?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "space-complexity", "in-place"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Space complexity determines how much extra memory a sorting algorithm needs beyond the input array.\n\n**In-place sorts (O(1) extra space):**\n- Bubble sort, selection sort, insertion sort, heap sort\n- Modify the array directly with only a few temporary variables\n\n**O(log n) extra space:**\n- Quick sort: recursive call stack depth is O(log n) average, O(n) worst\n- Can be reduced to O(log n) worst with tail recursion optimization\n\n**O(n) extra space:**\n- Merge sort: needs auxiliary array for merging\n- Counting sort: needs count array of size k (range of values)\n\n**Practical considerations:**\n- Embedded systems with limited RAM prefer in-place sorts\n- Merge sort on linked lists is O(1) extra space (no auxiliary array needed)\n- Quick sort's stack space can be reduced by recursing on the smaller partition first",
+          "pseudo_code": "Space complexity:\n  O(1):      Bubble, Selection, Insertion, Heap sort\n  O(log n):  Quick sort (average stack depth)\n  O(n):      Merge sort (auxiliary array), Quick sort (worst stack)\n  O(n+k):   Counting sort (count array)\n\nIn-place means O(1) auxiliary space.\nRecursive stack counts as space.",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* In-place sort: O(1) extra space */\nvoid insertionSort(int arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        int key = arr[i], j = i - 1;\n        while (j >= 0 && arr[j] > key) {\n            arr[j + 1] = arr[j];\n            j--;\n        }\n        arr[j + 1] = key;\n    }\n}\n\n/* O(n) space: merge sort needs auxiliary array */\nvoid merge(int arr[], int l, int m, int r) {\n    int n1 = m - l + 1, n2 = r - m;\n    int *L = (int *)malloc(n1 * sizeof(int));  /* O(n) extra */\n    int *R = (int *)malloc(n2 * sizeof(int));\n    for (int i = 0; i < n1; i++) L[i] = arr[l + i];\n    for (int j = 0; j < n2; j++) R[j] = arr[m + 1 + j];\n    int i = 0, j = 0, k = l;\n    while (i < n1 && j < n2)\n        arr[k++] = (L[i] <= R[j]) ? L[i++] : R[j++];\n    while (i < n1) arr[k++] = L[i++];\n    while (j < n2) arr[k++] = R[j++];\n    free(L); free(R);\n}\n\n/* Quick sort with tail recursion optimization: O(log n) stack */\nvoid swap(int *a, int *b) { int t = *a; *a = *b; *b = t; }\n\nint partition(int arr[], int lo, int hi) {\n    int pivot = arr[hi], i = lo - 1;\n    for (int j = lo; j < hi; j++)\n        if (arr[j] <= pivot) swap(&arr[++i], &arr[j]);\n    swap(&arr[i + 1], &arr[hi]);\n    return i + 1;\n}\n\n/* Tail-call optimized: always recurse on smaller half */\nvoid quicksortOptimized(int arr[], int lo, int hi) {\n    while (lo < hi) {\n        int p = partition(arr, lo, hi);\n        /* Recurse on smaller half, iterate on larger */\n        if (p - lo < hi - p) {\n            quicksortOptimized(arr, lo, p - 1);\n            lo = p + 1;  /* tail call elimination */\n        } else {\n            quicksortOptimized(arr, p + 1, hi);\n            hi = p - 1;  /* tail call elimination */\n        }\n    }\n}\n\nint main(void) {\n    int arr[] = {5, 2, 8, 1, 9, 3};\n    int n = 6;\n\n    insertionSort(arr, n);\n    for (int i = 0; i < n; i++) printf(\"%d \", arr[i]);\n    printf(\"\\n\");  /* 1 2 3 5 8 9 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "In-place (O(1)): bubble, selection, insertion, heap sort",
+            "Quick sort: O(log n) average stack, O(n) worst -- optimizable with tail recursion",
+            "Merge sort: O(n) auxiliary array -- cannot be avoided for arrays",
+            "Recursive stack space counts toward space complexity",
+            "Merge sort on linked lists uses O(1) extra space (O(log n) stack)"
+          ],
+          "gotchas": [
+            "Quick sort's O(log n) is AVERAGE -- worst case is O(n) stack depth",
+            "In-place does NOT mean O(0) -- it means O(1) auxiliary space",
+            "Merge sort's O(n) space is per merge call but reusable -- total extra is O(n)",
+            "Tail-call optimization for quick sort is not automatic in C -- must be done manually"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "In-place O(1): bubble, selection, insertion, heap. Quick sort: O(log n) avg stack. Merge sort: O(n) auxiliary. Counting sort: O(n+k). Recursive stack counts as space.",
+          "pseudo_code": "",
+          "actual_code": "/* Space complexity:\n * O(1):     bubble, selection, insertion, heap (in-place)\n * O(log n): quick sort (average call stack)\n * O(n):    merge sort (auxiliary array), quick (worst stack)\n * O(n+k):  counting sort\n *\n * Tail-call optimization for quicksort:\n *   Always recurse on smaller partition, loop on larger.\n */\nint placeholder = 0;",
+          "code_language": "c",
+          "key_points": [
+            "In-place = O(1) extra, not O(0)"
+          ],
+          "gotchas": [
+            "Quick sort worst-case stack depth is O(n), not O(log n)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Which sorting algorithms are stable and why does stability matter?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "stability", "stable-sort"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **stable** sort preserves the relative order of elements with equal keys. If two elements have the same sort key, they appear in the same order in the output as they did in the input.\n\n**Stable sorts:** Bubble sort, insertion sort, merge sort, counting sort, Timsort.\n\n**Unstable sorts:** Selection sort, quick sort, heap sort.\n\n**Why stability matters:**\n1. **Multi-key sorting:** Sort by last name, then by first name. If the second sort is stable, people with the same first name stay in last-name order.\n2. **Preserving prior work:** When re-sorting already partially sorted data.\n3. **Correctness requirements:** Some algorithms and data structures depend on stable sorting.\n\n**Making unstable sorts stable:**\n- Add the original index as a secondary key (extra O(n) space)\n- Quick sort can be made stable with extra space (but defeats its in-place advantage)",
+          "pseudo_code": "Stability definition:\n  If a[i] == a[j] and i < j in input,\n  then a[i] appears before a[j] in output.\n\nStable:   Bubble, Insertion, Merge, Counting, Timsort\nUnstable: Selection, Quick, Heap\n\nExample: Sorting students by grade (stable):\n  Input:  [(Alice, B), (Bob, A), (Carol, B), (Dave, A)]\n  Stable: [(Bob, A), (Dave, A), (Alice, B), (Carol, B)]\n  Unstable might give: [(Dave, A), (Bob, A), (Carol, B), (Alice, B)]",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\ntypedef struct {\n    char name[20];\n    int grade;\n} Student;\n\n/* Stable insertion sort (preserves order of equal grades) */\nvoid stableSort(Student arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        Student key = arr[i];\n        int j = i - 1;\n        /* > (not >=) ensures stability */\n        while (j >= 0 && arr[j].grade > key.grade) {\n            arr[j + 1] = arr[j];\n            j--;\n        }\n        arr[j + 1] = key;\n    }\n}\n\n/* Unstable selection sort (may change relative order) */\nvoid unstableSort(Student arr[], int n) {\n    for (int i = 0; i < n - 1; i++) {\n        int min = i;\n        for (int j = i + 1; j < n; j++)\n            if (arr[j].grade < arr[min].grade)\n                min = j;\n        if (min != i) {\n            Student temp = arr[i];\n            arr[i] = arr[min];\n            arr[min] = temp;\n        }\n    }\n}\n\nint main(void) {\n    Student s1[] = {\n        {\"Alice\", 2}, {\"Bob\", 1}, {\"Carol\", 2}, {\"Dave\", 1}\n    };\n    Student s2[] = {\n        {\"Alice\", 2}, {\"Bob\", 1}, {\"Carol\", 2}, {\"Dave\", 1}\n    };\n\n    stableSort(s1, 4);\n    printf(\"Stable sort:\\n\");\n    for (int i = 0; i < 4; i++)\n        printf(\"  %s (grade %d)\\n\", s1[i].name, s1[i].grade);\n    /* Bob(1), Dave(1), Alice(2), Carol(2) -- original order preserved */\n\n    unstableSort(s2, 4);\n    printf(\"Unstable sort:\\n\");\n    for (int i = 0; i < 4; i++)\n        printf(\"  %s (grade %d)\\n\", s2[i].name, s2[i].grade);\n    /* May give Dave(1), Bob(1) -- relative order not guaranteed */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stable sort preserves relative order of equal elements",
+            "Stable: bubble, insertion, merge, counting. Unstable: selection, quick, heap",
+            "Using > (not >=) in comparison makes insertion sort stable",
+            "Matters for multi-key sorting and preserving prior orderings",
+            "Can make any sort stable by adding original index as tiebreaker"
+          ],
+          "gotchas": [
+            "Using >= instead of > in insertion sort's comparison breaks stability",
+            "Quick sort is unstable due to partitioning swaps -- cannot be made stable without extra space",
+            "Selection sort is unstable because the swap can jump over equal elements",
+            "qsort() from stdlib does NOT guarantee stability"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stable sort preserves order of equal elements. Stable: bubble, insertion, merge, counting. Unstable: selection, quick, heap. Matters for multi-key sorting.",
+          "pseudo_code": "",
+          "actual_code": "/* Stability: using > (not >=) preserves order of equal keys */\nvoid stableInsertionSort(int arr[], int n) {\n    for (int i = 1; i < n; i++) {\n        int key = arr[i], j = i - 1;\n        while (j >= 0 && arr[j] > key) {  /* > not >= for stability */\n            arr[j+1] = arr[j];\n            j--;\n        }\n        arr[j+1] = key;\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stable: bubble, insertion, merge. Unstable: selection, quick, heap"
+          ],
+          "gotchas": [
+            "Using >= instead of > breaks stability in insertion sort"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use qsort() from stdlib.h and write comparator functions?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "qsort", "stdlib", "comparator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C's `qsort()` from `<stdlib.h>` is a generic sorting function that works with any data type via a **comparator function**.\n\n**Signature:**\n```\nvoid qsort(void *base, size_t nmemb, size_t size,\n           int (*compar)(const void *, const void *));\n```\n\n**Comparator contract:**\n- Return negative if a < b\n- Return 0 if a == b\n- Return positive if a > b\n\n**Common patterns:**\n- Integers: `return *(int*)a - *(int*)b;`\n- Strings: `return strcmp(*(char**)a, *(char**)b);`\n- Structs: Cast to struct pointer, compare the desired field\n- Reverse order: swap a and b, or negate the result\n\n**Note:** qsort is NOT guaranteed to be stable. The implementation varies (typically quicksort or introsort).",
+          "pseudo_code": "qsort(array, count, element_size, comparator)\n\nComparator signature:\n  int compare(const void *a, const void *b)\n  return < 0 if a < b\n  return 0   if a == b\n  return > 0 if a > b\n\nFor integers: *(int*)a - *(int*)b\nFor strings: strcmp(*(char**)a, *(char**)b)\nFor descending: swap a and b in the comparison",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Compare integers (ascending) */\nint compareInt(const void *a, const void *b) {\n    return (*(int *)a - *(int *)b);\n}\n\n/* Compare integers (descending) */\nint compareIntDesc(const void *a, const void *b) {\n    return (*(int *)b - *(int *)a);\n}\n\n/* Compare strings */\nint compareStr(const void *a, const void *b) {\n    return strcmp(*(const char **)a, *(const char **)b);\n}\n\n/* Compare structs by field */\ntypedef struct {\n    char name[50];\n    int score;\n} Player;\n\nint compareByScore(const void *a, const void *b) {\n    const Player *pa = (const Player *)a;\n    const Player *pb = (const Player *)b;\n    return pa->score - pb->score;\n}\n\n/* Overflow-safe integer comparison */\nint compareIntSafe(const void *a, const void *b) {\n    int ia = *(const int *)a;\n    int ib = *(const int *)b;\n    if (ia < ib) return -1;\n    if (ia > ib) return 1;\n    return 0;\n}\n\nint main(void) {\n    /* Sort integers */\n    int nums[] = {40, 10, 100, 90, 20};\n    int n = 5;\n    qsort(nums, n, sizeof(int), compareInt);\n    for (int i = 0; i < n; i++) printf(\"%d \", nums[i]);\n    printf(\"\\n\");  /* 10 20 40 90 100 */\n\n    /* Sort strings */\n    const char *words[] = {\"banana\", \"apple\", \"cherry\"};\n    qsort(words, 3, sizeof(char *), compareStr);\n    for (int i = 0; i < 3; i++) printf(\"%s \", words[i]);\n    printf(\"\\n\");  /* apple banana cherry */\n\n    /* Sort structs */\n    Player players[] = {{\"Alice\", 90}, {\"Bob\", 75}, {\"Carol\", 88}};\n    qsort(players, 3, sizeof(Player), compareByScore);\n    for (int i = 0; i < 3; i++)\n        printf(\"%s(%d) \", players[i].name, players[i].score);\n    printf(\"\\n\");  /* Bob(75) Carol(88) Alice(90) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "qsort() works with any type via void pointers and a comparator function",
+            "Comparator returns negative (a<b), zero (a==b), positive (a>b)",
+            "Must cast void pointers to the correct type inside comparator",
+            "For strings (char**), dereference twice: *(const char**)a",
+            "qsort is NOT guaranteed to be stable"
+          ],
+          "gotchas": [
+            "a - b for integers can OVERFLOW (e.g., INT_MIN - 1) -- use if/else comparison for safety",
+            "For array of strings (char*[]), comparator receives char**, not char* -- must dereference",
+            "Passing wrong element size to qsort silently corrupts memory",
+            "qsort modifies the array in-place -- cannot sort const arrays"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`qsort(arr, n, sizeof(elem), comparator)`. Comparator takes two `const void*`, returns negative/zero/positive. Cast void pointers to correct type inside comparator.",
+          "pseudo_code": "",
+          "actual_code": "int cmpInt(const void *a, const void *b) {\n    return *(int*)a - *(int*)b;  /* ascending */\n}\nint cmpStr(const void *a, const void *b) {\n    return strcmp(*(const char**)a, *(const char**)b);\n}\n\nint arr[] = {5, 2, 8, 1};\nqsort(arr, 4, sizeof(int), cmpInt);  /* 1 2 5 8 */",
+          "code_language": "c",
+          "key_points": [
+            "Generic sorting via void* and comparator function"
+          ],
+          "gotchas": [
+            "a - b overflows for large ints -- use if/else for safety"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use bsearch() from stdlib.h for binary search?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["searching", "bsearch", "stdlib", "binary-search"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C's `bsearch()` from `<stdlib.h>` performs binary search on a **sorted** array using the same comparator concept as `qsort()`.\n\n**Signature:**\n```\nvoid *bsearch(const void *key, const void *base, size_t nmemb,\n              size_t size, int (*compar)(const void *, const void *));\n```\n\n**Parameters:**\n- `key`: pointer to the value to search for\n- `base`: pointer to the sorted array\n- `nmemb`: number of elements\n- `size`: size of each element\n- `compar`: comparator function (same as qsort)\n\n**Return:** Pointer to the found element, or `NULL` if not found.\n\n**Important:** The array MUST be sorted in the same order as the comparator expects. If duplicates exist, bsearch may return ANY of them (not necessarily the first).",
+          "pseudo_code": "bsearch(key_ptr, array, count, elem_size, comparator)\n\nReturns:\n  Pointer to matching element, or NULL\n\nRequirements:\n  Array must be sorted (ascending by comparator)\n  Same comparator used for qsort and bsearch\n\nUsage pattern:\n  qsort(arr, n, sizeof(T), cmp);  // sort first\n  T *found = bsearch(&key, arr, n, sizeof(T), cmp);",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nint cmpInt(const void *a, const void *b) {\n    return *(const int *)a - *(const int *)b;\n}\n\nint cmpStr(const void *a, const void *b) {\n    return strcmp(*(const char **)a, *(const char **)b);\n}\n\ntypedef struct {\n    int id;\n    char name[50];\n} Record;\n\nint cmpRecord(const void *a, const void *b) {\n    return ((const Record *)a)->id - ((const Record *)b)->id;\n}\n\nint main(void) {\n    /* Search in sorted integer array */\n    int nums[] = {2, 5, 8, 12, 16, 23, 38, 56, 72, 91};\n    int n = 10;\n    int key = 23;\n    int *found = (int *)bsearch(&key, nums, n, sizeof(int), cmpInt);\n    if (found)\n        printf(\"Found %d at index %ld\\n\", *found, found - nums);  /* index 5 */\n    else\n        printf(\"Not found\\n\");\n\n    /* Search for non-existent value */\n    key = 25;\n    found = (int *)bsearch(&key, nums, n, sizeof(int), cmpInt);\n    printf(\"25: %s\\n\", found ? \"found\" : \"not found\");  /* not found */\n\n    /* Search in sorted string array */\n    const char *words[] = {\"apple\", \"banana\", \"cherry\", \"date\", \"fig\"};\n    const char *target = \"cherry\";\n    const char **result = (const char **)bsearch(&target, words, 5,\n                                                  sizeof(char *), cmpStr);\n    if (result)\n        printf(\"Found: %s\\n\", *result);  /* cherry */\n\n    /* Search in struct array */\n    Record records[] = {{1, \"Alice\"}, {5, \"Bob\"}, {10, \"Carol\"}, {15, \"Dave\"}};\n    Record searchKey = {10, \"\"};\n    Record *rec = (Record *)bsearch(&searchKey, records, 4,\n                                     sizeof(Record), cmpRecord);\n    if (rec)\n        printf(\"Found: id=%d name=%s\\n\", rec->id, rec->name);  /* Carol */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "bsearch() returns a pointer to the found element or NULL",
+            "Array MUST be sorted (same order as comparator)",
+            "Same comparator pattern as qsort()",
+            "First argument is pointer to the key (not the key value itself)",
+            "Returns void* -- must cast to the correct type"
+          ],
+          "gotchas": [
+            "Array must be sorted BEFORE calling bsearch -- calling on unsorted gives undefined results",
+            "For duplicates, bsearch may return ANY matching element (not necessarily the first)",
+            "key is a pointer: pass &key, not key directly",
+            "Using a different comparator for qsort and bsearch is undefined behavior"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`bsearch(&key, arr, n, sizeof(elem), cmp)` searches a sorted array. Returns pointer to found element or NULL. Same comparator as qsort.",
+          "pseudo_code": "",
+          "actual_code": "int cmp(const void *a, const void *b) {\n    return *(int*)a - *(int*)b;\n}\n\nint arr[] = {1, 3, 5, 7, 9};\nint key = 5;\nint *found = (int *)bsearch(&key, arr, 5, sizeof(int), cmp);\nif (found) printf(\"Found at index %ld\\n\", found - arr);  /* 2 */",
+          "code_language": "c",
+          "key_points": [
+            "Returns pointer to match or NULL, array must be sorted"
+          ],
+          "gotchas": [
+            "Pass &key (pointer to key), not the key value itself"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement counting sort in C?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "counting-sort", "non-comparison", "linear"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Counting sort** is a non-comparison-based sorting algorithm that works by counting the frequency of each distinct value.\n\n**Algorithm:**\n1. Find the range of values (min to max)\n2. Create a count array of size (max - min + 1)\n3. Count occurrences of each value\n4. Compute prefix sums (cumulative count)\n5. Build the output array using the counts\n\n**Time:** O(n + k) where k is the range of values. **Space:** O(n + k). **Stable:** Yes (when implemented with prefix sums and backward iteration).\n\n**Best for:** Integer keys in a known, limited range. Beats comparison sorts when k = O(n).\n\n**Not suitable for:** Floating-point data, very large ranges, or when values are spread over a huge range.",
+          "pseudo_code": "CountingSort(arr, n):\n  Find min and max of arr\n  k = max - min + 1\n  Create count[k] initialized to 0\n  For each element: count[arr[i] - min]++\n  Prefix sum: count[i] += count[i-1]\n  Build output (iterate backwards for stability):\n    output[count[arr[i]-min] - 1] = arr[i]\n    count[arr[i]-min]--\n  Copy output back to arr",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Counting sort for non-negative integers */\nvoid countingSort(int arr[], int n) {\n    if (n <= 1) return;\n\n    /* Find range */\n    int max = arr[0], min = arr[0];\n    for (int i = 1; i < n; i++) {\n        if (arr[i] > max) max = arr[i];\n        if (arr[i] < min) min = arr[i];\n    }\n\n    int range = max - min + 1;\n    int *count = (int *)calloc(range, sizeof(int));\n    int *output = (int *)malloc(n * sizeof(int));\n\n    /* Count occurrences */\n    for (int i = 0; i < n; i++)\n        count[arr[i] - min]++;\n\n    /* Prefix sum */\n    for (int i = 1; i < range; i++)\n        count[i] += count[i - 1];\n\n    /* Build output (iterate backwards for stability) */\n    for (int i = n - 1; i >= 0; i--) {\n        output[count[arr[i] - min] - 1] = arr[i];\n        count[arr[i] - min]--;\n    }\n\n    /* Copy back */\n    for (int i = 0; i < n; i++)\n        arr[i] = output[i];\n\n    free(count);\n    free(output);\n}\n\nvoid printArray(int arr[], int n) {\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int arr[] = {4, 2, 2, 8, 3, 3, 1};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    printf(\"Before: \");\n    printArray(arr, n);\n\n    countingSort(arr, n);\n\n    printf(\"After:  \");\n    printArray(arr, n);  /* 1 2 2 3 3 4 8 */\n\n    /* Works with negative numbers too */\n    int arr2[] = {-5, -2, 3, 0, -1, 2};\n    int n2 = 6;\n    countingSort(arr2, n2);\n    printf(\"Neg:    \");\n    printArray(arr2, n2);  /* -5 -2 -1 0 2 3 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n + k) time where k = range of values",
+            "Not comparison-based -- breaks the O(n log n) lower bound",
+            "Stable when iterating backwards to build output",
+            "Best for integer keys in a limited range",
+            "Prefix sum step transforms counts into positions"
+          ],
+          "gotchas": [
+            "Huge range (e.g., 0 to 10^9) makes count array impractical -- O(k) space",
+            "Forward iteration in the output step breaks stability",
+            "Forgetting to handle negative numbers (use min offset)",
+            "calloc vs malloc: count array MUST be initialized to 0"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Count frequency of each value, prefix sum to get positions, build output backward (for stability). O(n+k) time/space. Only for integers in limited range.",
+          "pseudo_code": "",
+          "actual_code": "void countingSort(int arr[], int n) {\n    int max = arr[0], min = arr[0];\n    for (int i = 1; i < n; i++) {\n        if (arr[i] > max) max = arr[i];\n        if (arr[i] < min) min = arr[i];\n    }\n    int range = max - min + 1;\n    int *count = (int *)calloc(range, sizeof(int));\n    int *output = (int *)malloc(n * sizeof(int));\n    for (int i = 0; i < n; i++) count[arr[i]-min]++;\n    for (int i = 1; i < range; i++) count[i] += count[i-1];\n    for (int i = n-1; i >= 0; i--)\n        output[--count[arr[i]-min]] = arr[i];\n    for (int i = 0; i < n; i++) arr[i] = output[i];\n    free(count); free(output);\n}",
+          "code_language": "c",
+          "key_points": [
+            "O(n+k), stable, non-comparison-based"
+          ],
+          "gotchas": [
+            "Impractical when range k >> n"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use which sorting algorithm in practice?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["sorting", "algorithm-selection", "practical"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Choosing the right sorting algorithm depends on data characteristics and constraints.\n\n**Use Insertion Sort when:**\n- Array is small (n < 50)\n- Data is nearly sorted (O(n) in this case)\n- Online sorting (elements arrive one at a time)\n- Used as base case inside quicksort/mergesort\n\n**Use Merge Sort when:**\n- Stability is required\n- Guaranteed O(n log n) is needed (no worst-case degradation)\n- Sorting linked lists (no random access needed, O(1) extra space)\n- External sorting (data too large for RAM)\n\n**Use Quick Sort when:**\n- Average-case performance matters most\n- In-place sorting is needed\n- Cache performance is important\n- Used in most standard libraries (C's qsort, etc.)\n\n**Use Counting/Radix Sort when:**\n- Keys are integers in a known, limited range\n- O(n) time is needed\n\n**Use Heap Sort when:**\n- Guaranteed O(n log n) AND in-place (O(1) space) are both needed\n- Worst-case guarantee without extra memory\n\n**In practice:** Most standard libraries use hybrid algorithms (Timsort = merge + insertion, Introsort = quick + heap + insertion).",
+          "pseudo_code": "Decision tree:\n  Is n small (< 50)?          -> Insertion sort\n  Is data nearly sorted?       -> Insertion sort\n  Need stability?              -> Merge sort\n  Need guaranteed O(n log n)?  -> Merge sort or Heap sort\n  Need O(1) space + O(n log n)? -> Heap sort\n  Integer keys, small range?   -> Counting sort\n  General purpose?             -> Quick sort (or introsort)\n  Sorting linked list?         -> Merge sort\n  External sorting (disk)?     -> Merge sort",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Hybrid approach: use insertion sort for small subarrays */\n#define INSERTION_THRESHOLD 16\n\nvoid insertionSort(int arr[], int lo, int hi) {\n    for (int i = lo + 1; i <= hi; i++) {\n        int key = arr[i], j = i - 1;\n        while (j >= lo && arr[j] > key) {\n            arr[j + 1] = arr[j];\n            j--;\n        }\n        arr[j + 1] = key;\n    }\n}\n\nvoid swap(int *a, int *b) { int t = *a; *a = *b; *b = t; }\n\nint partition(int arr[], int lo, int hi) {\n    /* Median-of-three pivot */\n    int mid = lo + (hi - lo) / 2;\n    if (arr[lo] > arr[mid]) swap(&arr[lo], &arr[mid]);\n    if (arr[lo] > arr[hi]) swap(&arr[lo], &arr[hi]);\n    if (arr[mid] > arr[hi]) swap(&arr[mid], &arr[hi]);\n    swap(&arr[mid], &arr[hi - 1]);  /* pivot at hi-1 */\n    int pivot = arr[hi - 1];\n    int i = lo, j = hi - 1;\n    while (1) {\n        while (arr[++i] < pivot);\n        while (arr[--j] > pivot);\n        if (i >= j) break;\n        swap(&arr[i], &arr[j]);\n    }\n    swap(&arr[i], &arr[hi - 1]);\n    return i;\n}\n\n/* Hybrid quicksort: switches to insertion sort for small partitions */\nvoid hybridSort(int arr[], int lo, int hi) {\n    if (hi - lo < INSERTION_THRESHOLD) {\n        insertionSort(arr, lo, hi);\n        return;\n    }\n    int p = partition(arr, lo, hi);\n    hybridSort(arr, lo, p - 1);\n    hybridSort(arr, p + 1, hi);\n}\n\nint main(void) {\n    int arr[] = {38, 27, 43, 3, 9, 82, 10, 15, 44, 2, 7, 1};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    hybridSort(arr, 0, n - 1);\n\n    for (int i = 0; i < n; i++)\n        printf(\"%d \", arr[i]);\n    printf(\"\\n\");  /* 1 2 3 7 9 10 15 27 38 43 44 82 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "No single best sorting algorithm -- depends on constraints",
+            "Insertion sort for small arrays and nearly sorted data",
+            "Merge sort for stability and guaranteed O(n log n)",
+            "Quick sort for best average-case performance",
+            "Real-world libraries use hybrid approaches (introsort, timsort)"
+          ],
+          "gotchas": [
+            "Quick sort degrades to O(n^2) on already-sorted input without good pivot selection",
+            "Merge sort's O(n) extra space is prohibitive for embedded systems",
+            "Counting sort is useless when key range >> n",
+            "Heap sort has poor cache locality despite O(n log n) guarantee"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Small/nearly-sorted: insertion sort. Need stability: merge sort. General purpose: quicksort. Integer keys, small range: counting sort. In-place + guaranteed: heap sort. Real libraries use hybrids.",
+          "pseudo_code": "",
+          "actual_code": "/* Algorithm selection guide:\n * Small n (<50):         Insertion sort\n * Nearly sorted:         Insertion sort  O(n)\n * Need stability:        Merge sort      O(n log n)\n * General purpose:       Quick sort      O(n log n) avg\n * In-place + guarantee:  Heap sort       O(n log n)\n * Integer, small range:  Counting sort   O(n+k)\n * Linked list:           Merge sort      O(1) space\n * Hybrid (production):   Introsort or Timsort\n */\nint placeholder = 0;",
+          "code_language": "c",
+          "key_points": [
+            "Choice depends on data size, distribution, stability needs, and memory constraints"
+          ],
+          "gotchas": [
+            "No single algorithm is best for all cases -- interviewers expect nuanced answers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you solve common interview problems like finding the kth largest element and searching in a rotated sorted array?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["searching", "kth-largest", "rotated-array", "interview"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Finding kth largest element:**\n- **Sort approach:** Sort descending, return arr[k-1]. O(n log n)\n- **Quickselect (optimal):** Partition-based selection. Average O(n), worst O(n^2). Uses the same partition as quicksort but only recurses on the relevant side.\n\n**Search in rotated sorted array:**\nA sorted array rotated at some pivot (e.g., [4,5,6,7,0,1,2]). Binary search with modification:\n- At each step, one half is always sorted\n- Check if the target is in the sorted half\n- If yes, search that half; otherwise search the other half\n\nBoth are extremely common interview questions that combine sorting/searching concepts.",
+          "pseudo_code": "Quickselect(arr, left, right, k):\n  if left == right: return arr[left]\n  pivotIndex = partition(arr, left, right)\n  if k == pivotIndex: return arr[k]\n  if k < pivotIndex: return Quickselect(arr, left, pivotIndex-1, k)\n  else: return Quickselect(arr, pivotIndex+1, right, k)\n\nSearchRotated(arr, n, target):\n  lo = 0, hi = n-1\n  while lo <= hi:\n    mid = lo + (hi-lo)/2\n    if arr[mid] == target: return mid\n    if arr[lo] <= arr[mid]:  // left half sorted\n      if arr[lo] <= target < arr[mid]: hi = mid-1\n      else: lo = mid+1\n    else:  // right half sorted\n      if arr[mid] < target <= arr[hi]: lo = mid+1\n      else: hi = mid-1",
+          "actual_code": "#include <stdio.h>\n\nvoid swap(int *a, int *b) { int t = *a; *a = *b; *b = t; }\n\nint partition(int arr[], int lo, int hi) {\n    int pivot = arr[hi], i = lo - 1;\n    for (int j = lo; j < hi; j++)\n        if (arr[j] <= pivot)\n            swap(&arr[++i], &arr[j]);\n    swap(&arr[i + 1], &arr[hi]);\n    return i + 1;\n}\n\n/* Find kth smallest element (0-indexed) using Quickselect: avg O(n) */\nint quickselect(int arr[], int lo, int hi, int k) {\n    if (lo == hi) return arr[lo];\n\n    int pivotIdx = partition(arr, lo, hi);\n\n    if (k == pivotIdx)\n        return arr[k];\n    else if (k < pivotIdx)\n        return quickselect(arr, lo, pivotIdx - 1, k);\n    else\n        return quickselect(arr, pivotIdx + 1, hi, k);\n}\n\n/* Find kth largest: kth largest = (n-k)th smallest */\nint findKthLargest(int arr[], int n, int k) {\n    return quickselect(arr, 0, n - 1, n - k);\n}\n\n/* Search in rotated sorted array: O(log n) */\nint searchRotated(int arr[], int n, int target) {\n    int lo = 0, hi = n - 1;\n\n    while (lo <= hi) {\n        int mid = lo + (hi - lo) / 2;\n\n        if (arr[mid] == target)\n            return mid;\n\n        /* Left half is sorted */\n        if (arr[lo] <= arr[mid]) {\n            if (target >= arr[lo] && target < arr[mid])\n                hi = mid - 1;\n            else\n                lo = mid + 1;\n        }\n        /* Right half is sorted */\n        else {\n            if (target > arr[mid] && target <= arr[hi])\n                lo = mid + 1;\n            else\n                hi = mid - 1;\n        }\n    }\n    return -1;\n}\n\nint main(void) {\n    /* Kth largest */\n    int arr1[] = {3, 2, 1, 5, 6, 4};\n    printf(\"2nd largest: %d\\n\", findKthLargest(arr1, 6, 2));  /* 5 */\n\n    int arr2[] = {3, 2, 3, 1, 2, 4, 5, 5, 6};\n    printf(\"4th largest: %d\\n\", findKthLargest(arr2, 9, 4));  /* 4 */\n\n    /* Rotated array search */\n    int rotated[] = {4, 5, 6, 7, 0, 1, 2};\n    int n = 7;\n    printf(\"Search 0: index %d\\n\", searchRotated(rotated, n, 0));  /* 4 */\n    printf(\"Search 3: index %d\\n\", searchRotated(rotated, n, 3));  /* -1 */\n    printf(\"Search 6: index %d\\n\", searchRotated(rotated, n, 6));  /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Quickselect: average O(n), uses partition but only recurses on one side",
+            "kth largest = (n-k)th smallest",
+            "Rotated array: one half is always sorted -- binary search with extra condition",
+            "Both are top-10 most asked interview questions",
+            "Quickselect modifies the array (partial sorting)"
+          ],
+          "gotchas": [
+            "Quickselect worst case is O(n^2) -- random pivot helps",
+            "Quickselect modifies the input array -- make a copy if original order matters",
+            "Rotated array with duplicates requires O(n) worst case -- the O(log n) approach fails",
+            "Off-by-one in kth largest: 1st largest is the max, not the 0th"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Kth largest:** Quickselect with `k = n-k` for 0-indexed. Average O(n). **Rotated array:** Modified binary search -- one half is always sorted, check if target is in that range. O(log n).",
+          "pseudo_code": "",
+          "actual_code": "int searchRotated(int arr[], int n, int target) {\n    int lo = 0, hi = n - 1;\n    while (lo <= hi) {\n        int mid = lo + (hi-lo)/2;\n        if (arr[mid] == target) return mid;\n        if (arr[lo] <= arr[mid]) {\n            if (target >= arr[lo] && target < arr[mid]) hi = mid-1;\n            else lo = mid+1;\n        } else {\n            if (target > arr[mid] && target <= arr[hi]) lo = mid+1;\n            else hi = mid-1;\n        }\n    }\n    return -1;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Quickselect O(n) avg, rotated search O(log n)"
+          ],
+          "gotchas": [
+            "Rotated array with duplicates degrades to O(n)"
+          ]
+        }
+      ]
+    }
+  ]
+}

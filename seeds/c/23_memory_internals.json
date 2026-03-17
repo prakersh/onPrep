@@ -1,0 +1,509 @@
+{
+  "concept_slug": "memory-internals",
+  "questions": [
+    {
+      "title": "What is virtual memory and how do pages, page tables, and the TLB work?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["virtual-memory", "page-table", "TLB", "MMU", "paging"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Virtual memory** gives each process the illusion of a large, contiguous address space, even though physical RAM is finite and shared.\n\n**Pages**: Virtual memory is divided into fixed-size blocks called **pages** (typically 4KB on x86). Physical memory is divided into **page frames** of the same size. The OS maps virtual pages to physical frames.\n\n**Page table**: A per-process data structure that maps virtual page numbers to physical frame numbers. On 64-bit systems, page tables are multi-level (4-level on x86_64) to avoid storing entries for unmapped regions.\n\nEach page table entry (PTE) contains:\n- Physical frame number\n- Present/valid bit (is the page in RAM?)\n- Read/Write/Execute permission bits\n- Dirty bit (has the page been written to?)\n- Accessed bit (has it been read?)\n\n**TLB (Translation Lookaside Buffer)**: A small, fast hardware cache of recent page table lookups. Without TLB, every memory access would require 4 page table lookups (on x86_64). TLB hit rate is typically >99% due to locality of reference.\n\n**Page fault**: When a virtual page is not in RAM (present bit = 0), the MMU raises a page fault. The OS loads the page from disk (swap) into RAM, updates the page table, and retransmits the instruction. This is transparent to the process.\n\n**Benefits**: Process isolation (each process has its own address space), memory overcommit (more virtual memory than physical RAM), demand paging (load pages only when accessed), shared libraries (same physical page mapped into multiple processes).",
+          "pseudo_code": "Virtual address -> MMU:\n1. Split address: [VPN (virtual page number)] [offset]\n2. Check TLB for VPN:\n   - TLB hit: get physical frame number instantly\n   - TLB miss: walk the page table (4 levels on x86_64)\n3. If PTE present bit = 0: page fault\n   - OS loads page from disk to RAM\n   - Updates PTE and TLB\n4. Physical address = [frame number][offset]",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <unistd.h>\n\nint main(void) {\n    /* Each process sees its own virtual address space */\n    int x = 42;\n    printf(\"Virtual address of x: %p\\n\", (void *)&x);\n    /* Same virtual address in different processes\n       maps to different physical frames */\n\n    /* Page size is typically 4096 bytes */\n    long page_size = sysconf(_SC_PAGESIZE);\n    printf(\"Page size: %ld bytes\\n\", page_size); /* 4096 */\n\n    /* Total physical pages */\n    long phys_pages = sysconf(_SC_PHYS_PAGES);\n    printf(\"Physical memory: %ld MB\\n\",\n           (phys_pages * page_size) / (1024 * 1024));\n\n    /* Allocate memory -- pages are NOT allocated until accessed */\n    /* (demand paging) */\n    size_t size = 100 * 1024 * 1024; /* 100 MB */\n    char *p = malloc(size);\n    if (!p) { perror(\"malloc\"); return 1; }\n\n    /* At this point, no physical pages are allocated.\n       Only virtual address space is reserved. */\n\n    /* Touching a page triggers a page fault,\n       which allocates a physical frame */\n    p[0] = 'A';              /* page fault -> allocate 1 page */\n    p[page_size] = 'B';      /* page fault -> allocate another page */\n    p[2 * page_size] = 'C';  /* page fault -> allocate another page */\n\n    /* Only 3 physical pages used, not 100MB worth */\n\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Virtual memory maps virtual pages to physical frames via page tables",
+            "Pages are typically 4KB; x86_64 uses 4-level page tables",
+            "TLB caches recent translations for fast address lookup (>99% hit rate)",
+            "Page fault occurs when a page is not in RAM -- OS loads it transparently",
+            "Demand paging: physical memory is not allocated until a page is first accessed"
+          ],
+          "gotchas": [
+            "malloc does not allocate physical memory -- only virtual address space is reserved until first access",
+            "TLB is per-CPU and flushed on context switch (or per-ASID on modern CPUs) -- frequent switches hurt performance",
+            "Huge pages (2MB/1GB) reduce TLB misses for large allocations but increase internal fragmentation",
+            "Virtual address space is much larger than physical RAM -- processes can map more than available memory"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Virtual memory maps virtual pages (4KB) to physical frames via page tables. The TLB caches recent translations. Page faults load missing pages from disk. Each process has its own isolated virtual address space.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n\nint main(void) {\n    printf(\"Page size: %ld\\n\", sysconf(_SC_PAGESIZE)); /* 4096 */\n    int x = 42;\n    printf(\"Virtual addr: %p\\n\", (void *)&x);\n    /* Same virtual addr in 2 processes -> different physical pages */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Page table maps virtual pages to physical frames; TLB caches this",
+            "Demand paging: physical RAM allocated only on first access"
+          ],
+          "gotchas": [
+            "malloc reserves virtual space only -- physical pages are allocated on first touch (page fault)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the process memory layout (text, data, BSS, heap, and stack segments)?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["memory-layout", "text", "data", "bss", "heap", "stack", "segments"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A process's virtual address space is divided into well-defined segments:\n\n**From low addresses to high** (typical layout):\n\n1. **Text segment** (code): Contains the compiled machine instructions. Read-only and executable. Shared between processes running the same program.\n\n2. **Data segment** (initialized data): Global and static variables that have explicit initializers (e.g., `int x = 5;`). Read-write.\n\n3. **BSS segment** (Block Started by Symbol): Global and static variables that are uninitialized or zero-initialized (e.g., `static int count;`). Takes no space in the executable file -- the OS zero-fills it at load time.\n\n4. **Heap**: Grows upward (toward higher addresses). Managed by `malloc()`/`free()`. The `brk`/`sbrk` system calls (or `mmap`) expand the heap.\n\n5. **Memory-mapped region**: Between heap and stack. Used for shared libraries, `mmap()` files, and large `malloc()` allocations.\n\n6. **Stack**: Grows downward (toward lower addresses). Contains function call frames: local variables, return addresses, saved registers. Each thread has its own stack.\n\n**Between heap and stack** is a large unmapped region. Growing into it (stack overflow or heap exhaustion) causes a segmentation fault.\n\nOn Linux, `/proc/[pid]/maps` shows the exact memory layout of a running process.",
+          "pseudo_code": "High addresses:\n  [Stack]        <- grows downward\n  [  ...  ]      <- unmapped gap\n  [mmap region]  <- shared libs, mmap files\n  [  ...  ]      <- unmapped gap\n  [Heap]         <- grows upward (brk/sbrk)\n  [BSS]          <- uninitialized globals (zeroed)\n  [Data]         <- initialized globals\n  [Text]         <- code (read-only, executable)\nLow addresses:\n  [NULL page]    <- unmapped (catches NULL pointer dereference)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Text segment: code (read-only) */\n\n/* Data segment: initialized globals */\nint global_init = 42;\nstatic int static_init = 100;\n\n/* BSS segment: uninitialized globals (zeroed) */\nint global_uninit;\nstatic int static_uninit;\n\nint main(void) {\n    /* Stack: local variables */\n    int local_var = 10;\n\n    /* Heap: dynamically allocated */\n    int *heap_var = malloc(sizeof(int));\n    *heap_var = 20;\n\n    printf(\"--- Process Memory Layout ---\\n\");\n    printf(\"Text  (code):  %p (main function)\\n\", (void *)main);\n    printf(\"Data  (init):  %p (global_init=%d)\\n\",\n           (void *)&global_init, global_init);\n    printf(\"BSS   (zero):  %p (global_uninit=%d)\\n\",\n           (void *)&global_uninit, global_uninit);\n    printf(\"Heap  (malloc): %p (*heap_var=%d)\\n\",\n           (void *)heap_var, *heap_var);\n    printf(\"Stack (local):  %p (local_var=%d)\\n\",\n           (void *)&local_var, local_var);\n\n    /* Verify ordering: text < data < bss < heap < ... < stack */\n    printf(\"\\nAddresses increase: text < data < bss < heap\\n\");\n    printf(\"Stack is at a much higher address\\n\");\n\n    free(heap_var);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Text = code (read-only), Data = initialized globals, BSS = zero-initialized globals",
+            "Heap grows upward from low addresses; stack grows downward from high addresses",
+            "BSS takes no space in the executable -- OS zeroes it at load time",
+            "Each thread has its own stack but shares the same heap",
+            "/proc/[pid]/maps shows the exact layout on Linux"
+          ],
+          "gotchas": [
+            "The exact layout varies by OS and ASLR (Address Space Layout Randomization) randomizes segment positions",
+            "BSS variables are guaranteed to be zero at program start -- C standard requires it",
+            "Stack size is limited (typically 8MB on Linux) -- large local arrays can overflow it",
+            "String literals are in the text segment (read-only) even though they look like data"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Low to high: Text (code, read-only) -> Data (initialized globals) -> BSS (zeroed globals) -> Heap (grows up, malloc) -> ... -> Stack (grows down, local vars).",
+          "pseudo_code": "",
+          "actual_code": "int global = 42;          /* Data segment */\nstatic int uninit;        /* BSS segment (zeroed) */\n\nint main(void) {\n    int local = 10;       /* Stack */\n    int *p = malloc(4);   /* Heap */\n    /* main() code is in Text segment */\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Text < Data < BSS < Heap ... Stack (high to low for stack)",
+            "BSS is zeroed at load time and takes no space in the binary"
+          ],
+          "gotchas": [
+            "ASLR randomizes the base addresses of segments for security"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does mmap() work for memory-mapped files and anonymous mappings?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["mmap", "munmap", "MAP_SHARED", "MAP_PRIVATE", "MAP_ANONYMOUS"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`mmap()` maps files or devices into the process's virtual address space, or creates anonymous (non-file-backed) mappings.\n\n**Signature**:\n```c\nvoid *mmap(void *addr, size_t length, int prot, int flags,\n           int fd, off_t offset);\n```\n\n**Parameters**:\n- `addr` -- Suggested address (usually NULL to let the kernel choose).\n- `length` -- Size of the mapping.\n- `prot` -- Protection: `PROT_READ`, `PROT_WRITE`, `PROT_EXEC`, `PROT_NONE`.\n- `flags` -- `MAP_SHARED` (changes visible to other processes and written to file) or `MAP_PRIVATE` (copy-on-write, changes are private).\n- `fd` -- File descriptor (or -1 for anonymous mappings).\n- `offset` -- Offset in the file (must be page-aligned).\n\n**File-backed mapping**: Maps a file into memory. Reading/writing the mapped region reads/writes the file directly. The kernel handles page faults and disk I/O transparently. Much faster than `read()`/`write()` for random access patterns.\n\n**Anonymous mapping** (`MAP_ANONYMOUS`): Creates a zero-filled region not backed by any file. Used by `malloc()` for large allocations (glibc uses mmap for allocations >= 128KB by default).\n\n**MAP_SHARED vs MAP_PRIVATE**:\n- `MAP_SHARED`: Changes are visible to all processes mapping the same file. `msync()` flushes changes to disk.\n- `MAP_PRIVATE`: Copy-on-write. Writes create private copies of pages. Changes are NOT written back to the file.\n\nAlways call `munmap()` to release the mapping.",
+          "pseudo_code": "File-backed mmap:\n1. fd = open(file, O_RDWR)\n2. ptr = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0)\n3. Access ptr[i] as if it were an array\n4. msync(ptr, size, MS_SYNC) to flush to disk\n5. munmap(ptr, size)\n6. close(fd)\n\nAnonymous mmap:\n1. ptr = mmap(NULL, size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)\n2. Use ptr as heap memory\n3. munmap(ptr, size)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <fcntl.h>\n#include <unistd.h>\n#include <sys/mman.h>\n#include <sys/stat.h>\n\nvoid file_backed_mmap(void) {\n    int fd = open(\"testfile.txt\", O_RDWR | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return; }\n\n    /* Extend file to desired size */\n    const size_t size = 4096;\n    ftruncate(fd, size);\n\n    /* Map the file into memory */\n    char *map = mmap(NULL, size, PROT_READ | PROT_WRITE,\n                     MAP_SHARED, fd, 0);\n    if (map == MAP_FAILED) { perror(\"mmap\"); close(fd); return; }\n\n    /* Write through the mapping */\n    strcpy(map, \"Hello via mmap!\");\n    printf(\"Read from mapping: %s\\n\", map);\n\n    /* Flush to disk */\n    msync(map, size, MS_SYNC);\n\n    munmap(map, size);\n    close(fd);\n}\n\nvoid anonymous_mmap(void) {\n    /* Allocate 1MB of zeroed memory (no file backing) */\n    size_t size = 1024 * 1024;\n    int *arr = mmap(NULL, size, PROT_READ | PROT_WRITE,\n                    MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);\n    if (arr == MAP_FAILED) { perror(\"mmap\"); return; }\n\n    /* Use like malloc'd memory */\n    arr[0] = 42;\n    printf(\"Anonymous mmap: arr[0] = %d\\n\", arr[0]);\n\n    munmap(arr, size);\n}\n\nint main(void) {\n    file_backed_mmap();\n    anonymous_mmap();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "mmap maps files into memory or creates anonymous (heap-like) regions",
+            "MAP_SHARED: changes visible to others and written to file; MAP_PRIVATE: copy-on-write",
+            "Anonymous mappings (MAP_ANONYMOUS) are used by malloc for large allocations",
+            "mmap is faster than read/write for random-access file I/O",
+            "Always munmap to release; msync to flush shared mappings to disk"
+          ],
+          "gotchas": [
+            "mmap returns MAP_FAILED (not NULL) on error -- check against MAP_FAILED, not NULL",
+            "The file must be large enough for the mapping -- ftruncate() or write() to extend it first",
+            "offset parameter must be page-aligned (multiple of page size)",
+            "Accessing beyond the file size in a shared mapping causes SIGBUS, not SIGSEGV"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`mmap()` maps files into memory or creates anonymous regions. `MAP_SHARED` writes back to the file; `MAP_PRIVATE` uses copy-on-write. Use `munmap()` to release, `msync()` to flush.",
+          "pseudo_code": "",
+          "actual_code": "/* File-backed mmap */\nchar *p = mmap(NULL, 4096, PROT_READ|PROT_WRITE,\n               MAP_SHARED, fd, 0);\nstrcpy(p, \"Hello\");  /* writes to the file */\nmunmap(p, 4096);\n\n/* Anonymous mmap (like malloc) */\nint *arr = mmap(NULL, size, PROT_READ|PROT_WRITE,\n                MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);\nmunmap(arr, size);",
+          "code_language": "c",
+          "key_points": [
+            "MAP_SHARED = visible to others; MAP_PRIVATE = copy-on-write",
+            "Check return against MAP_FAILED, not NULL"
+          ],
+          "gotchas": [
+            "mmap returns MAP_FAILED on error, NOT NULL"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does stack overflow occur and how can it be detected and prevented?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["stack-overflow", "recursion", "ulimit", "guard-page", "stack-size"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Stack overflow** occurs when a program uses more stack space than allocated. The stack has a fixed size (default 8MB on Linux, configurable via `ulimit -s`).\n\n**Common causes**:\n1. **Deep/infinite recursion**: Each call adds a frame to the stack.\n2. **Large local arrays**: `char buf[10*1024*1024];` instantly overflows the stack.\n3. **Excessive function call depth**: Even without recursion, deeply nested calls accumulate.\n\n**What happens**:\n- The stack grows into a **guard page** (an unmapped page below the stack). Accessing it causes a `SIGSEGV` (segmentation fault).\n- On some systems, the kernel may expand the stack dynamically up to the limit. Beyond the limit, SIGSEGV.\n\n**Detection**:\n- **Compiler flags**: `-fstack-protector` / `-fstack-protector-strong` insert canaries that detect buffer overflows on the stack.\n- **Address Sanitizer**: `-fsanitize=address` detects stack buffer overflows.\n- **`getrlimit()`**: Check the current stack size limit programmatically.\n\n**Prevention**:\n- Move large arrays to the heap (`malloc`).\n- Convert recursion to iteration.\n- Increase stack size with `ulimit -s` or `pthread_attr_setstacksize()` for threads.\n- Use tail-call optimization (compiler may optimize tail-recursive functions, but C does not guarantee it).",
+          "pseudo_code": "Causes:\n1. Infinite recursion: func() -> func() -> func() -> ...\n2. Large local array: char buf[8MB]\n3. Deep call chains\n\nPrevention:\n1. Move large data to heap (malloc)\n2. Convert recursion to iteration\n3. Increase stack limit (ulimit -s / pthread_attr_setstacksize)\n4. Use -fstack-protector for overflow detection",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <sys/resource.h>\n#include <pthread.h>\n\n/* Cause 1: Infinite recursion */\nvoid infinite_recursion(int depth) {\n    char buffer[4096]; /* 4KB per frame */\n    buffer[0] = (char)depth;\n    printf(\"Depth: %d, stack addr: %p\\n\", depth, (void *)buffer);\n    infinite_recursion(depth + 1); /* Will crash ~2000 frames deep */\n}\n\n/* Prevention: convert recursion to iteration */\nlong factorial_iterative(int n) {\n    long result = 1;\n    for (int i = 2; i <= n; i++)\n        result *= i;\n    return result;\n}\n\n/* Prevention: move large data to heap */\nvoid safe_large_buffer(void) {\n    /* BAD: char buf[10 * 1024 * 1024]; -- stack overflow! */\n    /* GOOD: */\n    char *buf = malloc(10 * 1024 * 1024);\n    if (buf) {\n        buf[0] = 'A';\n        free(buf);\n    }\n}\n\n/* Check stack size limit */\nvoid check_stack_limit(void) {\n    struct rlimit rl;\n    getrlimit(RLIMIT_STACK, &rl);\n    printf(\"Stack soft limit: %lu KB\\n\", rl.rlim_cur / 1024);\n    printf(\"Stack hard limit: %lu KB\\n\", rl.rlim_max / 1024);\n}\n\n/* Set thread stack size */\nvoid *thread_func(void *arg) {\n    (void)arg;\n    printf(\"Thread running with custom stack\\n\");\n    return NULL;\n}\n\nint main(void) {\n    check_stack_limit();\n    safe_large_buffer();\n\n    /* Create thread with 16MB stack */\n    pthread_t tid;\n    pthread_attr_t attr;\n    pthread_attr_init(&attr);\n    pthread_attr_setstacksize(&attr, 16 * 1024 * 1024);\n    pthread_create(&tid, &attr, thread_func, NULL);\n    pthread_join(tid, NULL);\n    pthread_attr_destroy(&attr);\n\n    /* Uncomment to see stack overflow: */\n    /* infinite_recursion(0); */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Default stack size is typically 8MB on Linux (check with ulimit -s)",
+            "Stack overflow causes SIGSEGV when the stack grows into the guard page",
+            "Common causes: deep recursion, large local arrays, excessive call depth",
+            "Prevention: use heap for large data, convert recursion to iteration",
+            "Use pthread_attr_setstacksize() to control per-thread stack size"
+          ],
+          "gotchas": [
+            "Stack overflow is not always caught cleanly -- the signal handler itself needs stack space (use sigaltstack)",
+            "Compiler tail-call optimization is not guaranteed in C -- do not rely on it",
+            "Thread stacks are typically smaller than the main thread stack (often 1-2MB by default)",
+            "-fstack-protector detects buffer overflows on the stack but not stack exhaustion from deep recursion"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Stack overflow happens when recursion or large local arrays exceed the stack limit (default 8MB). Causes SIGSEGV. Fix: use heap for large data, convert recursion to iteration, increase limit with `ulimit -s`.",
+          "pseudo_code": "",
+          "actual_code": "/* BAD: stack overflow */\nchar buf[10*1024*1024]; /* 10MB on stack -- crash! */\n\n/* GOOD: use heap */\nchar *buf = malloc(10*1024*1024);\n\n/* Check limit */\nstruct rlimit rl;\ngetrlimit(RLIMIT_STACK, &rl);\nprintf(\"Stack limit: %lu KB\\n\", rl.rlim_cur / 1024);",
+          "code_language": "c",
+          "key_points": [
+            "Default stack ~8MB; exceeded by deep recursion or large locals",
+            "Fix: heap allocation or convert recursion to iteration"
+          ],
+          "gotchas": [
+            "Thread stacks are often smaller (1-2MB) than the main thread stack"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the heap work internally (free lists and fragmentation)?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["heap", "malloc", "free-list", "fragmentation", "allocator"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **heap** is managed by the memory allocator (e.g., glibc's `ptmalloc2`, `jemalloc`, `tcmalloc`). The allocator sits between `malloc()`/`free()` calls and the OS.\n\n**Free list**: The allocator maintains lists of free memory blocks. When you call `malloc(size)`, it searches for a free block that fits. When you call `free(ptr)`, the block is added back to a free list.\n\n**Allocation strategies**:\n- **First fit**: Use the first block that is large enough. Fast but can cause fragmentation.\n- **Best fit**: Find the smallest block that fits. Reduces waste but slower.\n- **Segregated free lists** (glibc): Separate lists for different size classes (16, 32, 64, ... bytes). Fast because small allocations go to a specific bin.\n\n**Fragmentation**:\n- **External fragmentation**: Free memory is split into small, non-contiguous blocks. Total free memory is enough, but no single block is large enough for the request.\n- **Internal fragmentation**: Allocated block is larger than requested (due to alignment/rounding). The extra space is wasted.\n\n**glibc ptmalloc2**:\n- Small allocations (< 128KB): Uses `sbrk()` to extend the heap. Managed in bins.\n- Large allocations (>= 128KB): Uses `mmap()` directly. Freed with `munmap()`.\n- Thread-local arenas: Reduce lock contention in multi-threaded programs.\n\n**Coalescing**: When a block is freed, the allocator merges it with adjacent free blocks to reduce fragmentation.",
+          "pseudo_code": "malloc(size):\n1. Round size up to alignment boundary\n2. Search appropriate free list for a fitting block\n3. If found: split block if much larger, return pointer\n4. If not found: request more memory from OS (sbrk/mmap)\n5. Return pointer to usable memory (after metadata header)\n\nfree(ptr):\n1. Read metadata header before ptr to find block size\n2. Mark block as free\n3. Coalesce with adjacent free blocks\n4. Add to appropriate free list\n5. If large mmap'd block: munmap it back to OS",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Demonstrate fragmentation */\nint main(void) {\n    /* Allocate many small blocks */\n    const int N = 1000;\n    char *ptrs[1000];\n\n    for (int i = 0; i < N; i++) {\n        ptrs[i] = malloc(100); /* 100 bytes each */\n    }\n    printf(\"Allocated %d blocks of 100 bytes\\n\", N);\n\n    /* Free every other block -- creates external fragmentation */\n    for (int i = 0; i < N; i += 2) {\n        free(ptrs[i]);\n        ptrs[i] = NULL;\n    }\n    printf(\"Freed every other block (external fragmentation)\\n\");\n\n    /* Now try to allocate a large block */\n    /* This may fail or require new memory from OS even though\n       500 * 100 = 50KB is free in scattered chunks */\n    char *big = malloc(50000);\n    if (big) {\n        printf(\"Large allocation succeeded at %p\\n\", (void *)big);\n        free(big);\n    }\n\n    /* Internal fragmentation: malloc(1) actually allocates\n       at least 16-32 bytes due to alignment + metadata */\n    char *tiny = malloc(1);\n    printf(\"Asked for 1 byte, got block at %p\\n\", (void *)tiny);\n    /* Real usable size is often 16+ bytes */\n\n    /* Clean up */\n    free(tiny);\n    for (int i = 1; i < N; i += 2) {\n        free(ptrs[i]);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Allocator uses free lists organized by size (bins/buckets)",
+            "External fragmentation: free memory is scattered in small chunks",
+            "Internal fragmentation: allocated block is larger than requested (alignment overhead)",
+            "glibc uses sbrk for small allocs, mmap for large (>= 128KB)",
+            "Coalescing merges adjacent free blocks to reduce fragmentation"
+          ],
+          "gotchas": [
+            "free() does not always return memory to the OS -- it goes to the free list for reuse by future mallocs",
+            "malloc(1) typically allocates 16-32 bytes due to alignment and metadata overhead",
+            "Memory fragmentation can cause out-of-memory even when total free memory is sufficient",
+            "malloc metadata is stored just before the returned pointer -- buffer overflows corrupt it, causing crashes in free()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The heap allocator maintains free lists of blocks by size. `malloc()` finds a fitting block; `free()` returns it. External fragmentation = scattered free blocks. Internal = wasted padding. glibc uses sbrk for small, mmap for large allocations.",
+          "pseudo_code": "",
+          "actual_code": "/* External fragmentation demo */\nchar *a = malloc(100);\nchar *b = malloc(100);\nchar *c = malloc(100);\nfree(a);  /* free block between b and c */\nfree(c);  /* two free blocks, not contiguous */\n/* malloc(200) might fail even though 200 bytes are free */\nfree(b);  /* now all 3 coalesce into one free block */",
+          "code_language": "c",
+          "key_points": [
+            "Free lists organized by size; coalescing merges adjacent free blocks",
+            "free() returns to free list, not always to OS"
+          ],
+          "gotchas": [
+            "Buffer overflows corrupt malloc metadata, causing crashes in free()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Valgrind (memcheck) for memory leak detection?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["valgrind", "memcheck", "leak-detection", "debugging", "uninitialized"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Valgrind** is a dynamic analysis tool. Its **Memcheck** tool (the default) detects:\n- Memory leaks (allocated but never freed)\n- Use of uninitialized values\n- Reading/writing freed memory (use-after-free)\n- Reading/writing beyond allocated blocks (buffer overflow)\n- Double free\n- Mismatched alloc/free (malloc with delete, new with free)\n\n**Usage**: Compile with `-g` (debug symbols) and `-O0` (no optimization). Run:\n```\nvalgrind --leak-check=full --show-reachable=yes --track-origins=yes ./program\n```\n\n**Key flags**:\n- `--leak-check=full` -- Show details of each leak.\n- `--show-reachable=yes` -- Show memory still reachable at exit.\n- `--track-origins=yes` -- Show where uninitialized values originated.\n- `--log-file=valgrind.log` -- Write output to a file.\n\n**Leak categories**:\n- **Definitely lost**: No pointer to the block exists. Real leak.\n- **Indirectly lost**: Reachable only through a definitely-lost block.\n- **Possibly lost**: A pointer to the interior of the block exists (may be intentional).\n- **Still reachable**: Pointer exists at program exit (not a leak in most cases, just not freed before exit).\n\n**Performance**: Valgrind runs the program in a virtual CPU. Expect 10-50x slowdown. Not suitable for production.",
+          "pseudo_code": "1. Compile: gcc -g -O0 -o prog prog.c\n2. Run: valgrind --leak-check=full ./prog\n3. Read report:\n   - \"Invalid read/write\" = buffer overflow or use-after-free\n   - \"Conditional jump depends on uninitialised value\" = uninitialized read\n   - \"X bytes in Y blocks are definitely lost\" = memory leak\n4. Fix the code and re-run until clean",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nvoid memory_leak(void) {\n    /* Leak: allocated but never freed */\n    int *p = malloc(40);\n    p[0] = 42;\n    /* Missing: free(p); */\n}\n\nvoid use_after_free(void) {\n    int *p = malloc(sizeof(int));\n    *p = 10;\n    free(p);\n    /* BUG: using freed memory */\n    /* printf(\"%d\\n\", *p); */  /* Valgrind: Invalid read */\n}\n\nvoid buffer_overflow(void) {\n    int *arr = malloc(5 * sizeof(int));\n    /* BUG: writing past the end */\n    /* arr[5] = 99; */  /* Valgrind: Invalid write of size 4 */\n    free(arr);\n}\n\nvoid uninitialized_read(void) {\n    int x;\n    /* BUG: using uninitialized variable */\n    /* if (x > 0) printf(\"positive\\n\"); */\n    /* Valgrind: Conditional jump depends on uninitialised value */\n    x = 0; /* proper initialization */\n    if (x > 0) printf(\"positive\\n\");\n}\n\nint main(void) {\n    memory_leak();\n    use_after_free();\n    buffer_overflow();\n    uninitialized_read();\n    return 0;\n}\n\n/* Compile and run:\n   gcc -g -O0 -o membugs membugs.c\n   valgrind --leak-check=full --track-origins=yes ./membugs\n\n   Expected output:\n   ==PID== 40 bytes in 1 blocks are definitely lost\n   ==PID==    at malloc (in libcXXX.so)\n   ==PID==    by memory_leak (membugs.c:6)\n   ==PID==    by main (membugs.c:33)\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Valgrind Memcheck detects leaks, use-after-free, buffer overflows, uninitialized reads",
+            "Compile with -g -O0 for best results (debug symbols, no optimization)",
+            "--leak-check=full shows detailed leak information with source locations",
+            "Leak categories: definitely lost (real leak) vs still reachable (often benign)",
+            "Expect 10-50x slowdown -- not for production use"
+          ],
+          "gotchas": [
+            "Valgrind cannot detect stack buffer overflows -- use Address Sanitizer for those",
+            "Optimized code (-O2) may eliminate variables, making Valgrind reports confusing -- always use -O0",
+            "Valgrind does not work on macOS ARM (Apple Silicon) -- use Address Sanitizer instead",
+            "'Still reachable' is usually not a real leak -- it means memory was not freed before exit but was still accessible"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compile with `-g -O0`, run `valgrind --leak-check=full ./prog`. Detects leaks, use-after-free, buffer overflows, uninitialized reads. 10-50x slowdown.",
+          "pseudo_code": "",
+          "actual_code": "/* Compile: gcc -g -O0 -o prog prog.c */\n/* Run: valgrind --leak-check=full --track-origins=yes ./prog */\n\n/* Common bugs Valgrind finds: */\nint *p = malloc(40);\n/* leak: no free(p) */\n\nfree(p);\n/* *p = 1;  -- use-after-free: Invalid write */\n\nint *a = malloc(5 * sizeof(int));\n/* a[5] = 1; -- buffer overflow: Invalid write */\nfree(a);",
+          "code_language": "c",
+          "key_points": [
+            "valgrind --leak-check=full detects leaks, use-after-free, overflows",
+            "Compile with -g -O0 for readable reports"
+          ],
+          "gotchas": [
+            "Valgrind does not detect stack overflows -- use ASan for those"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the essential GDB commands for debugging C programs?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["gdb", "debugging", "breakpoint", "backtrace", "watchpoint"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**GDB** (GNU Debugger) is the standard debugger for C programs. Compile with `-g` for debug symbols.\n\n**Starting GDB**:\n```\ngcc -g -O0 -o prog prog.c\ngdb ./prog\ngdb --args ./prog arg1 arg2\n```\n\n**Essential commands**:\n\n| Command | Short | Purpose |\n|---------|-------|---------|\n| `run` | `r` | Start/restart the program |\n| `break main` | `b main` | Set breakpoint at function |\n| `break file.c:42` | `b file.c:42` | Breakpoint at line 42 |\n| `next` | `n` | Step over (execute line, don't enter functions) |\n| `step` | `s` | Step into (enter called functions) |\n| `continue` | `c` | Resume execution until next breakpoint |\n| `print x` | `p x` | Print value of variable x |\n| `print *ptr` | `p *ptr` | Dereference and print |\n| `print arr[0]@10` | | Print 10 elements of array |\n| `backtrace` | `bt` | Show call stack (stack trace) |\n| `frame 2` | `f 2` | Switch to stack frame #2 |\n| `watch x` | | Break when variable x changes (hardware watchpoint) |\n| `info locals` | | Show all local variables |\n| `info breakpoints` | `info b` | List all breakpoints |\n| `delete 1` | `d 1` | Delete breakpoint #1 |\n| `quit` | `q` | Exit GDB |\n\n**Debugging crashes**: When a program crashes with SIGSEGV:\n1. Run in GDB: `gdb ./prog` then `run`.\n2. At crash: `bt` shows the exact call stack.\n3. `frame N` and `print var` to inspect variables.\n4. `list` shows source code around the current line.",
+          "pseudo_code": "1. Compile: gcc -g -O0 -o prog prog.c\n2. gdb ./prog\n3. (gdb) break main       -> set breakpoint\n4. (gdb) run              -> start program\n5. (gdb) next / step      -> step through code\n6. (gdb) print variable   -> inspect values\n7. (gdb) backtrace        -> see call stack on crash\n8. (gdb) continue         -> resume to next breakpoint\n9. (gdb) quit             -> exit",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint divide(int a, int b) {\n    /* Bug: no check for b == 0 */\n    return a / b;\n}\n\nvoid process(int *data, int n) {\n    for (int i = 0; i <= n; i++) { /* Bug: off by one (i <= n) */\n        data[i] = i * 10;\n    }\n}\n\nint main(void) {\n    int result = divide(10, 2);\n    printf(\"10 / 2 = %d\\n\", result);\n\n    int *arr = malloc(5 * sizeof(int));\n    if (!arr) return 1;\n    process(arr, 5); /* Bug: writes arr[5] -- out of bounds */\n    printf(\"arr[0] = %d\\n\", arr[0]);\n    free(arr);\n\n    /* Crash: NULL dereference */\n    /* int *p = NULL; */\n    /* *p = 42; */\n\n    return 0;\n}\n\n/* GDB session example:\n   $ gcc -g -O0 -o debug_me debug_me.c\n   $ gdb ./debug_me\n   (gdb) break main\n   (gdb) run\n   (gdb) next           # step over lines\n   (gdb) print result   # inspect variable\n   (gdb) break divide\n   (gdb) continue       # run to divide()\n   (gdb) print a        # 10\n   (gdb) print b        # 2\n   (gdb) backtrace      # show call stack\n   (gdb) watch result   # break when result changes\n   (gdb) info locals    # all local vars in current frame\n   (gdb) quit\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Compile with -g -O0 for debug symbols and no optimization",
+            "break, run, next, step, continue, print, backtrace are the core commands",
+            "backtrace (bt) shows the full call stack -- essential for crash debugging",
+            "watch sets a hardware watchpoint that breaks when a variable changes",
+            "info locals shows all local variables in the current stack frame"
+          ],
+          "gotchas": [
+            "Optimized code (-O2) may reorder or eliminate variables, making GDB output confusing -- always use -O0 for debugging",
+            "GDB cannot debug stripped binaries (no debug symbols) -- always compile with -g",
+            "Breakpoints on inlined functions may not work as expected with optimization",
+            "On macOS, use lldb instead of gdb (gdb requires code signing on modern macOS)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compile with `-g -O0`. Core GDB commands: `break` (set breakpoint), `run`, `next`/`step` (step over/into), `print` (inspect), `backtrace` (call stack), `continue`, `quit`.",
+          "pseudo_code": "",
+          "actual_code": "/* Compile: gcc -g -O0 -o prog prog.c */\n/* gdb ./prog */\n/* (gdb) break main */\n/* (gdb) run */\n/* (gdb) next          -- step over */\n/* (gdb) step          -- step into */\n/* (gdb) print var     -- inspect */\n/* (gdb) backtrace     -- call stack */\n/* (gdb) continue      -- resume */\n/* (gdb) quit */",
+          "code_language": "c",
+          "key_points": [
+            "break, run, next, step, print, backtrace, continue, quit",
+            "Always compile with -g -O0"
+          ],
+          "gotchas": [
+            "Use lldb instead of gdb on macOS"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Address Sanitizer (ASan) work and what does it detect?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["asan", "address-sanitizer", "fsanitize", "buffer-overflow", "use-after-free"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Address Sanitizer (ASan)** is a compile-time instrumentation tool that detects memory errors at runtime. It is built into GCC and Clang.\n\n**Usage**: `gcc -fsanitize=address -g -O1 -o prog prog.c`\n\n**What ASan detects**:\n1. **Heap buffer overflow** -- Read/write past malloc'd region.\n2. **Stack buffer overflow** -- Read/write past local arrays.\n3. **Global buffer overflow** -- Read/write past global arrays.\n4. **Use-after-free** -- Accessing memory after `free()`.\n5. **Use-after-return** -- Accessing a local variable after the function returns (with `-fsanitize-address-use-after-return=always`).\n6. **Double free** -- Calling `free()` twice on the same pointer.\n7. **Memory leaks** -- With `-fsanitize=address,leak` or `ASAN_OPTIONS=detect_leaks=1`.\n\n**How it works**:\n- ASan inserts **redzones** (poisoned memory) around every stack, heap, and global object.\n- It maintains a **shadow memory** that tracks which bytes are valid/poisoned.\n- Every memory access is instrumented to check the shadow memory first.\n- If an access hits a redzone, ASan reports the error with a stack trace.\n\n**Performance**: ~2x slowdown, ~2-3x memory overhead. Much faster than Valgrind.\n\n**Advantages over Valgrind**:\n- Detects stack and global overflows (Valgrind cannot).\n- Much faster (2x vs 10-50x).\n- Works on macOS ARM (Apple Silicon).",
+          "pseudo_code": "Compilation:\n1. gcc -fsanitize=address -g -o prog prog.c\n\nASan instrumentation (conceptual):\n  For every memory access *addr:\n  1. Check shadow_mem[addr] -- is it poisoned?\n  2. If poisoned: print error + stack trace + abort\n  3. If clean: allow the access\n\nRedzone layout for malloc(10):\n  [redzone][10 usable bytes][redzone]\n  Writing to redzone triggers ASan error",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Bug 1: Heap buffer overflow */\nvoid heap_overflow(void) {\n    int *arr = malloc(5 * sizeof(int));\n    arr[5] = 42; /* ASan: heap-buffer-overflow */\n    free(arr);\n}\n\n/* Bug 2: Stack buffer overflow */\nvoid stack_overflow(void) {\n    int buf[5];\n    buf[5] = 42; /* ASan: stack-buffer-overflow */\n}\n\n/* Bug 3: Use-after-free */\nvoid use_after_free(void) {\n    int *p = malloc(sizeof(int));\n    *p = 10;\n    free(p);\n    printf(\"%d\\n\", *p); /* ASan: heap-use-after-free */\n}\n\n/* Bug 4: Double free */\nvoid double_free(void) {\n    int *p = malloc(sizeof(int));\n    free(p);\n    free(p); /* ASan: double-free */\n}\n\nint main(void) {\n    /* Uncomment one at a time to see ASan output */\n    /* heap_overflow(); */\n    /* stack_overflow(); */\n    /* use_after_free(); */\n    /* double_free(); */\n    printf(\"No bugs triggered\\n\");\n    return 0;\n}\n\n/* Compile and run:\n   gcc -fsanitize=address -g -O1 -o asan_demo asan_demo.c\n   ./asan_demo\n\n   ASan output example:\n   ==PID==ERROR: AddressSanitizer: heap-buffer-overflow\n   WRITE of size 4 at 0x....\n   #0 heap_overflow asan_demo.c:6\n   #1 main asan_demo.c:26\n*/",
+          "code_language": "c",
+          "key_points": [
+            "Compile with -fsanitize=address -g to enable ASan",
+            "Detects heap/stack/global overflows, use-after-free, double-free",
+            "Uses shadow memory and redzones to catch invalid accesses",
+            "~2x slowdown (much faster than Valgrind's 10-50x)",
+            "Works on macOS ARM where Valgrind does not"
+          ],
+          "gotchas": [
+            "ASan cannot be used simultaneously with Valgrind -- choose one",
+            "ASan increases memory usage by 2-3x due to shadow memory and redzones",
+            "-O1 or higher is recommended with ASan -- -O0 may produce false positives or miss some bugs",
+            "ASan does not detect uninitialized reads -- use -fsanitize=memory (MSan) for that, but MSan only works on Linux"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Compile with `-fsanitize=address -g`. Detects heap/stack/global overflows, use-after-free, double-free. ~2x slowdown. Faster and more capable than Valgrind for many bug types.",
+          "pseudo_code": "",
+          "actual_code": "/* gcc -fsanitize=address -g -O1 -o prog prog.c */\n\nint *p = malloc(5 * sizeof(int));\np[5] = 42;  /* ASan: heap-buffer-overflow */\nfree(p);\n*p = 10;    /* ASan: heap-use-after-free */\nfree(p);    /* ASan: double-free */",
+          "code_language": "c",
+          "key_points": [
+            "-fsanitize=address detects overflows, use-after-free, double-free",
+            "~2x slowdown, catches stack overflows (Valgrind cannot)"
+          ],
+          "gotchas": [
+            "ASan does not detect uninitialized reads -- use MSan for that"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are memory barriers and why are they needed (compiler vs hardware ordering)?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["memory-barrier", "fence", "compiler-barrier", "hardware-ordering", "volatile"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Memory barriers** (fences) prevent the reordering of memory operations. Reordering happens at two levels:\n\n**1. Compiler reordering**: The compiler rearranges instructions for optimization. It can move loads and stores as long as the single-threaded result is unchanged. But in multi-threaded code, this can break assumptions about memory visibility.\n\n**Compiler barrier**: `asm volatile(\"\" ::: \"memory\")` (GCC/Clang). Tells the compiler not to reorder memory operations across this point. Does NOT affect the CPU.\n\n**2. Hardware reordering**: Modern CPUs reorder instructions out-of-order for performance. On weakly-ordered architectures (ARM, POWER), a store by CPU 0 may not be visible to CPU 1 immediately, or loads/stores may appear in different order.\n\n**Hardware memory barriers**:\n- `__sync_synchronize()` -- Full hardware barrier (GCC built-in).\n- `atomic_thread_fence(memory_order_seq_cst)` -- C11 full barrier.\n- `atomic_thread_fence(memory_order_acquire)` -- Acquire barrier (loads after this see prior stores from other threads).\n- `atomic_thread_fence(memory_order_release)` -- Release barrier (stores before this are visible to other threads that acquire).\n\n**x86 is strongly ordered**: Stores are not reordered with other stores, and loads are not reordered with other loads. But StoreLoad reordering IS possible (a load can be reordered before an earlier store to a different address). `mfence` prevents this.\n\n**ARM/POWER are weakly ordered**: All types of reordering are possible. Barriers are essential.\n\n**`volatile` is NOT a memory barrier**: It prevents the compiler from caching a variable in a register, but does NOT prevent reordering of surrounding accesses.",
+          "pseudo_code": "Problem (without barrier):\n  Thread 1:            Thread 2:\n  data = 42;           while (!ready);  /* spin */\n  ready = 1;           use(data);       /* may see data=0! */\n\nCompiler/CPU may reorder: ready=1 before data=42\n\nFix with barrier:\n  Thread 1:            Thread 2:\n  data = 42;           while (!ready);  /* spin */\n  BARRIER;             BARRIER;\n  ready = 1;           use(data);       /* now safe */",
+          "actual_code": "#include <stdio.h>\n#include <stdatomic.h>\n#include <pthread.h>\n\n/* Shared state */\nint data = 0;\natomic_int ready = 0;\n\nvoid *producer(void *arg) {\n    (void)arg;\n    data = 42;\n    /* Release fence: ensures data=42 is visible before ready=1 */\n    atomic_thread_fence(memory_order_release);\n    atomic_store_explicit(&ready, 1, memory_order_relaxed);\n    return NULL;\n}\n\nvoid *consumer(void *arg) {\n    (void)arg;\n    while (atomic_load_explicit(&ready, memory_order_relaxed) == 0)\n        ; /* spin */\n    /* Acquire fence: ensures we see all stores before the release */\n    atomic_thread_fence(memory_order_acquire);\n    printf(\"data = %d\\n\", data); /* Guaranteed to print 42 */\n    return NULL;\n}\n\nint main(void) {\n    pthread_t t1, t2;\n    pthread_create(&t1, NULL, producer, NULL);\n    pthread_create(&t2, NULL, consumer, NULL);\n    pthread_join(t1, NULL);\n    pthread_join(t2, NULL);\n    return 0;\n}\n\n/* Compiler barrier only (GCC/Clang): */\n/* asm volatile(\"\" ::: \"memory\"); */\n\n/* Full hardware barrier (GCC built-in): */\n/* __sync_synchronize(); */\n\n/* C11 atomics are preferred for portable code */",
+          "code_language": "c",
+          "key_points": [
+            "Compiler barriers prevent compiler reordering; hardware barriers prevent CPU reordering",
+            "C11 atomic_thread_fence provides portable memory barriers",
+            "Acquire fence: loads after it see stores before the matching release fence",
+            "Release fence: stores before it are visible to threads that do an acquire",
+            "x86 is strongly ordered (only StoreLoad reordering); ARM/POWER are weakly ordered"
+          ],
+          "gotchas": [
+            "volatile does NOT provide memory barrier semantics -- it only prevents register caching",
+            "On x86, most barriers are implicit (strong ordering) but StoreLoad reordering can still bite you",
+            "Missing barriers cause bugs that appear only under heavy load or on specific CPUs -- extremely hard to debug",
+            "Prefer C11 atomics (stdatomic.h) over raw barriers -- they combine the variable access with the correct barrier"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Memory barriers prevent reordering of memory ops by the compiler (compiler barrier) or CPU (hardware barrier). Use C11 `atomic_thread_fence()` or `__sync_synchronize()`. `volatile` is NOT a memory barrier.",
+          "pseudo_code": "",
+          "actual_code": "/* Compiler barrier (GCC/Clang) */\nasm volatile(\"\" ::: \"memory\");\n\n/* Full hardware barrier */\n__sync_synchronize();\n\n/* C11 portable barriers */\n#include <stdatomic.h>\natomic_thread_fence(memory_order_release); /* before store */\natomic_thread_fence(memory_order_acquire); /* after load */",
+          "code_language": "c",
+          "key_points": [
+            "Compiler barrier: asm volatile(\"\" ::: \"memory\")",
+            "C11 atomic fences are the portable solution"
+          ],
+          "gotchas": [
+            "volatile is NOT a memory barrier"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is cache-friendly programming and locality of reference in C?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["cache", "locality", "cache-line", "performance", "optimization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Modern CPUs have multi-level caches (L1: ~32KB, L2: ~256KB, L3: ~8MB). A cache miss (accessing data not in cache) costs 100+ cycles versus ~4 cycles for a cache hit. Writing **cache-friendly** code means organizing memory access patterns to maximize cache hits.\n\n**Locality of reference**:\n- **Temporal locality**: If you access address X, you are likely to access X again soon. Keep working sets small.\n- **Spatial locality**: If you access X, you are likely to access X+1, X+2 soon. Access memory sequentially.\n\n**Cache line**: The unit of data transferred between cache and memory. Typically 64 bytes on x86. Accessing one byte loads the entire 64-byte cache line.\n\n**Key principles**:\n1. **Access arrays sequentially** (row-major order in C). A 2D array `arr[i][j]` should be traversed with the inner loop over `j` (consecutive memory).\n2. **Use small, compact data structures**. Avoid unnecessary padding. Use arrays of structs (AoS) vs structs of arrays (SoA) depending on access pattern.\n3. **Avoid pointer chasing**. Linked lists have poor locality (nodes scattered in heap). Prefer arrays.\n4. **Keep hot data together**. Frequently accessed fields should be in the same struct (same cache line).\n5. **Avoid false sharing**: Two threads writing to different variables on the same cache line cause cache-line bouncing. Align per-thread data to cache line boundaries.",
+          "pseudo_code": "Bad (column-major traversal of row-major array):\n  for j in 0..cols:     /* stride = row_size (cache misses) */\n    for i in 0..rows:\n      access arr[i][j]\n\nGood (row-major traversal):\n  for i in 0..rows:     /* stride = 1 (sequential, cache-friendly) */\n    for j in 0..cols:\n      access arr[i][j]",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <time.h>\n\n#define N 2048\nstatic int matrix[N][N];\n\n/* BAD: Column-major traversal (cache-unfriendly) */\nlong sum_column_major(void) {\n    long sum = 0;\n    for (int j = 0; j < N; j++)       /* outer loop over columns */\n        for (int i = 0; i < N; i++)   /* inner loop over rows */\n            sum += matrix[i][j];      /* stride = N * sizeof(int) */\n    return sum;\n}\n\n/* GOOD: Row-major traversal (cache-friendly) */\nlong sum_row_major(void) {\n    long sum = 0;\n    for (int i = 0; i < N; i++)       /* outer loop over rows */\n        for (int j = 0; j < N; j++)   /* inner loop over columns */\n            sum += matrix[i][j];      /* stride = sizeof(int) */\n    return sum;\n}\n\n/* Struct of Arrays (SoA) -- good when accessing one field at a time */\nstruct particles_soa {\n    float x[1000];\n    float y[1000];\n    float z[1000];\n    float mass[1000];\n};\n\n/* Array of Structs (AoS) -- good when accessing all fields of one item */\nstruct particle_aos {\n    float x, y, z, mass;\n};\nstruct particle_aos particles[1000];\n\nint main(void) {\n    /* Initialize */\n    for (int i = 0; i < N; i++)\n        for (int j = 0; j < N; j++)\n            matrix[i][j] = 1;\n\n    clock_t start, end;\n\n    start = clock();\n    long s1 = sum_row_major();\n    end = clock();\n    printf(\"Row-major:    %ld (%.3f ms)\\n\", s1,\n           1000.0 * (end - start) / CLOCKS_PER_SEC);\n\n    start = clock();\n    long s2 = sum_column_major();\n    end = clock();\n    printf(\"Column-major: %ld (%.3f ms)\\n\", s2,\n           1000.0 * (end - start) / CLOCKS_PER_SEC);\n    /* Row-major is typically 3-10x faster for large N */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Cache line is 64 bytes -- accessing one byte loads 64 bytes",
+            "Row-major (sequential) traversal is cache-friendly; column-major causes cache misses",
+            "Spatial locality: access contiguous memory; temporal locality: reuse data soon",
+            "Arrays are cache-friendly; linked lists are not (pointer chasing)",
+            "False sharing: threads writing to same cache line causes performance degradation"
+          ],
+          "gotchas": [
+            "Column-major traversal of a large 2D array can be 3-10x slower than row-major",
+            "Linked lists have terrible cache performance for traversal -- prefer arrays when possible",
+            "False sharing between threads is invisible in code but devastating for performance -- pad per-thread data to 64 bytes",
+            "Struct field ordering matters: putting hot fields first keeps them in the same cache line"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Access memory sequentially (row-major for 2D arrays). Cache line = 64 bytes. Spatial locality (sequential access) and temporal locality (reuse data) maximize cache hits. Avoid pointer chasing (linked lists).",
+          "pseudo_code": "",
+          "actual_code": "/* GOOD: row-major (cache-friendly) */\nfor (int i = 0; i < N; i++)\n    for (int j = 0; j < N; j++)\n        sum += arr[i][j]; /* sequential memory access */\n\n/* BAD: column-major (cache-unfriendly) */\nfor (int j = 0; j < N; j++)\n    for (int i = 0; i < N; i++)\n        sum += arr[i][j]; /* large stride, cache misses */",
+          "code_language": "c",
+          "key_points": [
+            "Sequential access = cache-friendly; large strides = cache misses",
+            "Cache line is 64 bytes; arrays beat linked lists for locality"
+          ],
+          "gotchas": [
+            "Column-major traversal can be 3-10x slower for large arrays"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do brk() and sbrk() work and how does malloc use them?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["brk", "sbrk", "program-break", "malloc", "heap"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`brk()` and `sbrk()` are the low-level system calls that adjust the **program break** -- the end of the data segment (top of the heap).\n\n**`int brk(void *addr)`**: Sets the program break to `addr`. Returns 0 on success, -1 on error.\n\n**`void *sbrk(intptr_t increment)`**: Increases the program break by `increment` bytes. Returns the *previous* program break (the start of the new memory). `sbrk(0)` returns the current break without changing it.\n\n**How malloc uses them**:\n- For **small allocations** (< MMAP_THRESHOLD, typically 128KB), glibc's malloc calls `sbrk()` to extend the heap. The allocator carves blocks from this region.\n- For **large allocations** (>= 128KB), malloc uses `mmap()` instead. This avoids fragmenting the heap and allows the memory to be returned to the OS immediately via `munmap()`.\n- `free()` for sbrk-allocated memory adds the block to a free list. The memory is NOT returned to the OS unless the freed block is at the very top of the heap (then `brk()` can lower the break).\n\n**Why not call sbrk() directly?**\nYou must not mix `sbrk()` with `malloc()` -- they both manage the same heap region. Calling `sbrk()` directly while using `malloc()` corrupts the allocator's internal state.\n\n**Modern note**: On modern systems, `brk`/`sbrk` are considered obsolete. The kernel and allocators increasingly rely on `mmap()` for all allocations.",
+          "pseudo_code": "sbrk(0)         -> returns current program break\nsbrk(4096)      -> extends heap by 4096 bytes, returns old break\nbrk(old + 8192) -> sets break to specific address\n\nmalloc(size):\n  if size < 128KB:\n    use sbrk to extend heap, carve block from it\n  else:\n    use mmap for a private anonymous mapping\n\nfree(ptr):\n  if sbrk-allocated: add to free list (stays in process)\n  if mmap-allocated: munmap (returns to OS immediately)",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n#include <stdint.h>\n\nint main(void) {\n    /* Get current program break */\n    void *initial_brk = sbrk(0);\n    printf(\"Initial program break: %p\\n\", initial_brk);\n\n    /* Extend heap by 4096 bytes */\n    void *old_brk = sbrk(4096);\n    if (old_brk == (void *)-1) {\n        perror(\"sbrk\");\n        return 1;\n    }\n    printf(\"Old break: %p\\n\", old_brk);\n    printf(\"New break: %p\\n\", sbrk(0));\n    printf(\"Difference: %td bytes\\n\",\n           (char *)sbrk(0) - (char *)old_brk);\n\n    /* Use the allocated memory */\n    int *arr = (int *)old_brk;\n    for (int i = 0; i < 100; i++) {\n        arr[i] = i * i;\n    }\n    printf(\"arr[10] = %d\\n\", arr[10]); /* 100 */\n\n    /* Shrink heap back (return memory) */\n    brk(initial_brk);\n    printf(\"Break restored to: %p\\n\", sbrk(0));\n\n    /* WARNING: Do NOT mix sbrk() with malloc()! */\n    /* malloc uses sbrk internally -- direct sbrk calls\n       corrupt malloc's data structures */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sbrk(n) extends heap by n bytes, returns pointer to new region",
+            "brk(addr) sets the program break to a specific address",
+            "malloc uses sbrk for small allocs (< 128KB), mmap for large ones",
+            "free() of sbrk memory goes to free list, not back to OS (usually)",
+            "sbrk(0) returns current break without changing it"
+          ],
+          "gotchas": [
+            "NEVER mix direct sbrk() calls with malloc() -- it corrupts the allocator's internal state",
+            "sbrk returns (void *)-1 on failure, not NULL -- check correctly",
+            "brk/sbrk are considered obsolete -- mmap is preferred for new allocator designs",
+            "free() rarely returns sbrk memory to the OS -- only if the freed block is at the top of the heap"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sbrk(n)` extends the heap by n bytes, returning the old break. `brk(addr)` sets the break directly. malloc uses sbrk for small allocs, mmap for large ones. Never mix sbrk with malloc.",
+          "pseudo_code": "",
+          "actual_code": "void *cur = sbrk(0);       /* current program break */\nvoid *new = sbrk(4096);    /* extend heap by 4096 bytes */\nint *arr = (int *)new;     /* use the memory */\narr[0] = 42;\nbrk(cur);                  /* shrink back (return memory) */",
+          "code_language": "c",
+          "key_points": [
+            "sbrk extends heap; brk sets it to an absolute address",
+            "malloc uses sbrk for small allocs, mmap for large ones"
+          ],
+          "gotchas": [
+            "Never call sbrk directly if you also use malloc -- it corrupts internal state"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common memory corruption patterns in C (buffer overflow, use-after-free, double-free)?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["memory-corruption", "buffer-overflow", "use-after-free", "double-free", "security"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Memory corruption bugs are the most dangerous class of C bugs. They cause crashes, data corruption, and security vulnerabilities.\n\n**1. Buffer overflow (heap/stack)**:\nWriting past the end of an allocated buffer. On the stack, this can overwrite the return address (enabling code execution attacks). On the heap, it corrupts allocator metadata or adjacent objects.\n\n**2. Use-after-free (UAF)**:\nAccessing memory after `free()`. The memory may have been reallocated to another object, so reading returns garbage and writing corrupts unrelated data. This is a major source of exploitable security bugs.\n\n**3. Double free**:\nCalling `free()` twice on the same pointer. Corrupts the allocator's free list. Can lead to the allocator returning the same memory for two different `malloc()` calls, causing one object to alias another.\n\n**4. Uninitialized memory read**:\nReading a variable before assigning it. The value is whatever was in that memory location before -- garbage. Can leak sensitive data (information disclosure).\n\n**5. Null pointer dereference**:\nDereferencing a NULL pointer causes SIGSEGV. Always check malloc's return value.\n\n**6. Type confusion / incorrect cast**:\nCasting a pointer to the wrong type and accessing it. Violates strict aliasing and causes undefined behavior.\n\n**Prevention**:\n- Use ASan (`-fsanitize=address`) during development.\n- Run Valgrind in CI.\n- Set freed pointers to NULL (`free(p); p = NULL;`).\n- Use safe string functions (`snprintf` instead of `sprintf`, `strncpy` or `strlcpy` instead of `strcpy`).\n- Enable `-Wall -Wextra -Werror`.",
+          "pseudo_code": "Pattern 1 - Buffer overflow:\n  char buf[10]; strcpy(buf, \"this string is way too long\");\n\nPattern 2 - Use-after-free:\n  free(p); ... *p = 42;  /* p is dangling */\n\nPattern 3 - Double free:\n  free(p); ... free(p);  /* corrupts allocator */\n\nPattern 4 - Uninitialized read:\n  int x; if (x > 0) ...  /* x is garbage */\n\nPrevention:\n  - ASan (-fsanitize=address)\n  - Set freed pointers to NULL\n  - Bounds checking\n  - -Wall -Wextra -Werror",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* 1. Buffer overflow */\nvoid buffer_overflow_demo(void) {\n    char buf[10];\n    /* BUG: \"Hello World!\" is 12 chars + null = 13 > 10 */\n    /* strcpy(buf, \"Hello World!\"); */\n    /* SAFE: use snprintf */\n    snprintf(buf, sizeof(buf), \"Hello World!\");\n    printf(\"%s\\n\", buf); /* \"Hello Wor\" (truncated safely) */\n}\n\n/* 2. Use-after-free */\nvoid use_after_free_demo(void) {\n    int *p = malloc(sizeof(int));\n    *p = 42;\n    free(p);\n    /* BUG: p is dangling -- memory may be reused */\n    /* printf(\"%d\\n\", *p); */\n    /* FIX: set to NULL after free */\n    p = NULL;\n    /* Now *p would crash immediately (easier to debug) */\n}\n\n/* 3. Double free */\nvoid double_free_demo(void) {\n    int *p = malloc(sizeof(int));\n    free(p);\n    /* BUG: free(p); -- corrupts allocator */\n    /* FIX: set to NULL after free */\n    p = NULL;\n    free(p); /* free(NULL) is safe -- no-op */\n}\n\n/* 4. Safe free macro */\n#define SAFE_FREE(ptr) do { free(ptr); (ptr) = NULL; } while(0)\n\n/* 5. Bounds-checked access */\nint safe_array_get(const int *arr, int size, int index) {\n    if (index < 0 || index >= size) {\n        fprintf(stderr, \"Index %d out of bounds [0, %d)\\n\", index, size);\n        return -1;\n    }\n    return arr[index];\n}\n\nint main(void) {\n    buffer_overflow_demo();\n    use_after_free_demo();\n    double_free_demo();\n\n    int arr[] = {10, 20, 30};\n    printf(\"arr[1] = %d\\n\", safe_array_get(arr, 3, 1));\n    safe_array_get(arr, 3, 5); /* prints error, returns -1 */\n\n    /* Using SAFE_FREE */\n    int *data = malloc(100);\n    SAFE_FREE(data); /* frees and sets to NULL */\n    SAFE_FREE(data); /* safe: free(NULL) is a no-op */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Buffer overflow: writing past array bounds -- use snprintf, strncpy, bounds checks",
+            "Use-after-free: accessing freed memory -- set pointers to NULL after free",
+            "Double free: calling free twice -- set pointer to NULL (free(NULL) is safe)",
+            "Use ASan and Valgrind to detect these bugs during development",
+            "Enable -Wall -Wextra -Werror to catch issues at compile time"
+          ],
+          "gotchas": [
+            "Use-after-free bugs may 'work' for a long time because the freed memory is not immediately reused -- they are time bombs",
+            "Buffer overflows on the stack can overwrite the return address, enabling arbitrary code execution (the basis of most exploits)",
+            "Double free corrupts the allocator's free list and can lead to arbitrary write primitives (security-critical)",
+            "strncpy does not null-terminate if the source is longer than n -- always add buf[n-1] = '\\0' explicitly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Main corruption patterns: buffer overflow (write past bounds), use-after-free (access freed memory), double free (free twice). Fix: bounds-check, NULL after free, use ASan/Valgrind, `-Wall -Wextra`.",
+          "pseudo_code": "",
+          "actual_code": "/* Safe free macro */\n#define SAFE_FREE(p) do { free(p); (p) = NULL; } while(0)\n\nchar buf[10];\nsnprintf(buf, sizeof(buf), \"%s\", long_str); /* safe, truncates */\n\nint *p = malloc(100);\nSAFE_FREE(p);   /* frees and NULLs */\nSAFE_FREE(p);   /* safe: free(NULL) is no-op */",
+          "code_language": "c",
+          "key_points": [
+            "NULL pointer after free prevents use-after-free and double-free",
+            "snprintf is the safe alternative to sprintf/strcpy"
+          ],
+          "gotchas": [
+            "Use-after-free may appear to work for a long time before suddenly crashing"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,638 @@
+{
+  "concept_slug": "unix-file-io",
+  "questions": [
+    {
+      "title": "How does the open() system call work, and what are the commonly used flags?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["open", "system-call", "file-descriptors", "flags"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`open()` is the fundamental UNIX system call for accessing files. It returns a file descriptor (a small non-negative integer) that serves as an index into the process's file descriptor table.\n\n**Prototype:**\n```c\n#include <fcntl.h>\nint open(const char *pathname, int flags);\nint open(const char *pathname, int flags, mode_t mode);\n```\n\n**Access mode flags (exactly one required):**\n- `O_RDONLY` -- open for reading only\n- `O_WRONLY` -- open for writing only\n- `O_RDWR` -- open for reading and writing\n\n**Common modifier flags (OR-ed with access mode):**\n- `O_CREAT` -- create file if it does not exist (requires `mode` argument)\n- `O_TRUNC` -- truncate to zero length if file exists\n- `O_APPEND` -- append on each write (atomic seek-to-end + write)\n- `O_EXCL` -- with `O_CREAT`, fail if file exists (atomic create-or-fail)\n- `O_NONBLOCK` -- non-blocking mode for FIFOs and devices\n- `O_CLOEXEC` -- close fd on exec (avoids fd leak to child processes)\n- `O_SYNC` -- synchronous writes (data + metadata flushed to disk)\n\nThe kernel always assigns the **lowest available** file descriptor number. The `mode` argument (e.g., `0644`) is masked by the process's `umask` when creating files.",
+          "pseudo_code": "1. Call open(pathname, flags, mode)\n2. Kernel checks permissions against effective UID/GID\n3. Kernel allocates an entry in the open file table\n4. Kernel adds an entry in the process fd table pointing to the open file entry\n5. Returns lowest available fd number, or -1 on error (sets errno)\n6. Common pattern: fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644)",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <errno.h>\n#include <string.h>\n\nint main(void) {\n    /* Open for reading only */\n    int fd1 = open(\"/etc/passwd\", O_RDONLY);\n    if (fd1 == -1) {\n        perror(\"open /etc/passwd\");\n        return 1;\n    }\n    printf(\"fd1 = %d\\n\", fd1);  /* likely 3 */\n\n    /* Create or truncate a file for writing */\n    int fd2 = open(\"output.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd2 == -1) {\n        perror(\"open output.txt\");\n        close(fd1);\n        return 1;\n    }\n    printf(\"fd2 = %d\\n\", fd2);  /* likely 4 */\n\n    /* Atomic create -- fail if file already exists */\n    int fd3 = open(\"lockfile\", O_WRONLY | O_CREAT | O_EXCL, 0600);\n    if (fd3 == -1) {\n        if (errno == EEXIST)\n            fprintf(stderr, \"lockfile already exists\\n\");\n        else\n            perror(\"open lockfile\");\n    } else {\n        printf(\"fd3 = %d\\n\", fd3);\n        close(fd3);\n    }\n\n    close(fd1);\n    close(fd2);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "open() returns the lowest available file descriptor number",
+            "Exactly one of O_RDONLY, O_WRONLY, or O_RDWR must be specified",
+            "O_CREAT requires a third mode argument; actual permissions = mode & ~umask",
+            "O_CREAT | O_EXCL is atomic: create-or-fail with no race condition",
+            "O_APPEND guarantees atomic seek-to-end + write (even across processes)",
+            "Always check the return value; -1 means error and errno is set"
+          ],
+          "gotchas": [
+            "Forgetting the mode argument with O_CREAT causes undefined permissions (garbage from the stack)",
+            "O_RDONLY is typically 0, so you cannot test for it with bitwise AND",
+            "O_TRUNC on a file opened O_RDONLY is undefined behavior on some systems",
+            "O_CLOEXEC should be used by default to prevent fd leaks across exec()",
+            "On Linux, open() can fail with EMFILE (per-process limit) or ENFILE (system-wide limit)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`open()` opens a file and returns a file descriptor (small int). Use flags like `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREAT`, `O_TRUNC`, `O_APPEND`, `O_EXCL`. Always check return value for -1.",
+          "pseudo_code": "",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n\nint main(void) {\n    int fd = open(\"file.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n    write(fd, \"hello\\n\", 6);\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Returns lowest available fd or -1 on error",
+            "O_CREAT needs a mode argument"
+          ],
+          "gotchas": [
+            "Omitting mode with O_CREAT gives garbage permissions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are file descriptors 0, 1, and 2, and how does the fd lifecycle work with close()?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["file-descriptors", "stdin", "stdout", "stderr", "close"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every UNIX process starts with three open file descriptors by convention:\n\n| FD | Symbolic Constant | stdio Stream | Purpose |\n|----|-------------------|--------------|----------|\n| 0  | `STDIN_FILENO`    | `stdin`      | Standard input |\n| 1  | `STDOUT_FILENO`   | `stdout`     | Standard output |\n| 2  | `STDERR_FILENO`   | `stderr`     | Standard error |\n\nThese constants are defined in `<unistd.h>`. The shell sets these up before the program runs; they typically point to the terminal device.\n\n**fd lifecycle:**\n1. `open()` / `creat()` / `socket()` / `pipe()` -- allocates a new fd (lowest available)\n2. Use fd with `read()`, `write()`, `lseek()`, `fcntl()`, etc.\n3. `close(fd)` -- releases the fd, decrements the reference count in the open file table entry. When the reference count reaches 0, the kernel releases the open file table entry.\n\n**Important:** `close()` returns 0 on success, -1 on error. On NFS, a delayed write error can be reported on `close()`, so you should check its return value for critical files.",
+          "pseudo_code": "1. Process starts with fd 0 (stdin), 1 (stdout), 2 (stderr) open\n2. open() assigns the lowest available fd number\n3. Use fd with read/write/lseek/fcntl\n4. close(fd) releases the descriptor\n5. If fd was last reference to open file entry, kernel frees that entry\n6. Closing an already-closed fd is an error (EBADF)",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n\nint main(void) {\n    /* Standard file descriptors */\n    printf(\"STDIN_FILENO  = %d\\n\", STDIN_FILENO);   /* 0 */\n    printf(\"STDOUT_FILENO = %d\\n\", STDOUT_FILENO);  /* 1 */\n    printf(\"STDERR_FILENO = %d\\n\", STDERR_FILENO);  /* 2 */\n\n    /* Close stdin, then open a file -- it gets fd 0 */\n    close(STDIN_FILENO);\n    int fd = open(\"/dev/null\", O_RDONLY);\n    printf(\"After closing stdin, new fd = %d\\n\", fd);  /* 0 */\n\n    /* Always check close() return on critical files */\n    int wfd = open(\"important.dat\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (wfd == -1) { perror(\"open\"); return 1; }\n    write(wfd, \"data\\n\", 5);\n    if (close(wfd) == -1) {\n        perror(\"close\");  /* NFS can report write errors here */\n        return 1;\n    }\n\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fd 0 = stdin, fd 1 = stdout, fd 2 = stderr by POSIX convention",
+            "Use STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO from <unistd.h>",
+            "open() always assigns the lowest available fd number",
+            "close() decrements the open file table reference count",
+            "A process has a per-process limit on open fds (RLIMIT_NOFILE)"
+          ],
+          "gotchas": [
+            "Closing fd 0 then opening a file gives it fd 0 -- can cause subtle bugs if code assumes fd 0 is a terminal",
+            "Double-close of an fd is an error (EBADF) and can close a different file if the fd was reused",
+            "On NFS, close() can return an error for a failed deferred write -- always check return value",
+            "Forgetting to close fds leads to fd exhaustion (EMFILE error)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "fd 0 = stdin, 1 = stdout, 2 = stderr. `open()` returns the lowest unused fd. `close()` releases the fd. Always check `close()` return value for important files.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    /* fd 0, 1, 2 are stdin, stdout, stderr */\n    close(STDIN_FILENO);  /* free fd 0 */\n    int fd = open(\"/dev/null\", O_RDONLY);  /* gets fd 0 */\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Standard fds: 0=stdin, 1=stdout, 2=stderr",
+            "open() assigns lowest available fd"
+          ],
+          "gotchas": [
+            "Double-close is a bug -- EBADF and possible race with fd reuse"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do read() and write() handle partial I/O, and why must you use loops?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["read", "write", "partial-io", "system-call"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`read()` and `write()` are not guaranteed to transfer the full requested number of bytes in a single call. They return the number of bytes actually transferred, which can be less than requested.\n\n**Reasons for short reads:**\n- Reading from a pipe/FIFO/socket when fewer bytes are available\n- Reading from a terminal (typically returns one line)\n- Interrupted by a signal (returns bytes transferred so far, or -1 with `EINTR`)\n- Reading near end-of-file\n- Kernel buffer limits\n\n**Reasons for short writes:**\n- Disk full condition\n- Writing to a pipe/socket with limited buffer space\n- Signal interruption\n- Non-blocking I/O on a fd that cannot accept all bytes\n\n**Return values:**\n- `read()`: number of bytes read (0 = EOF), or -1 on error\n- `write()`: number of bytes written, or -1 on error\n\nYou must always loop until all bytes are transferred or an error/EOF occurs. This is so common that many projects define `readn()` and `writen()` helper functions (as shown in APUE by Stevens).",
+          "pseudo_code": "1. Call read(fd, buf, nbytes)\n2. If return == 0, EOF reached\n3. If return == -1 and errno == EINTR, retry\n4. If return == -1 (other error), handle error\n5. If return < nbytes, advance buffer pointer, reduce count, loop\n6. Same logic for write() but 0 return is unusual (not EOF)",
+          "actual_code": "#include <unistd.h>\n#include <errno.h>\n#include <stddef.h>\n\n/* Read exactly n bytes (APUE-style readn) */\nssize_t readn(int fd, void *buf, size_t n) {\n    size_t nleft = n;\n    ssize_t nread;\n    char *ptr = (char *)buf;\n\n    while (nleft > 0) {\n        nread = read(fd, ptr, nleft);\n        if (nread == -1) {\n            if (errno == EINTR)\n                continue;   /* interrupted, retry */\n            return -1;      /* real error */\n        }\n        if (nread == 0)\n            break;          /* EOF */\n        nleft -= (size_t)nread;\n        ptr += nread;\n    }\n    return (ssize_t)(n - nleft);\n}\n\n/* Write exactly n bytes (APUE-style writen) */\nssize_t writen(int fd, const void *buf, size_t n) {\n    size_t nleft = n;\n    ssize_t nwritten;\n    const char *ptr = (const char *)buf;\n\n    while (nleft > 0) {\n        nwritten = write(fd, ptr, nleft);\n        if (nwritten == -1) {\n            if (errno == EINTR)\n                continue;\n            return -1;\n        }\n        nleft -= (size_t)nwritten;\n        ptr += nwritten;\n    }\n    return (ssize_t)n;\n}",
+          "code_language": "c",
+          "key_points": [
+            "read() and write() can return fewer bytes than requested (partial I/O)",
+            "read() returns 0 for EOF, -1 for error",
+            "EINTR means interrupted by signal -- usually retry",
+            "Always loop to handle partial I/O on pipes, sockets, and terminals",
+            "readn()/writen() helper functions are the standard APUE pattern"
+          ],
+          "gotchas": [
+            "Assuming read() fills the entire buffer is the most common UNIX programming bug",
+            "write() returning 0 is technically possible but unusual; do not treat it as EOF",
+            "On signals: if SA_RESTART is set, the kernel auto-restarts; otherwise you get EINTR",
+            "Reading from /dev/urandom can also short-read under extreme load"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`read()`/`write()` can transfer fewer bytes than requested. Always loop. `read()` returns 0 for EOF, -1 for error. Handle `EINTR` (signal interruption) by retrying.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <errno.h>\n\nssize_t readn(int fd, void *buf, size_t n) {\n    size_t left = n;\n    char *p = (char *)buf;\n    while (left > 0) {\n        ssize_t nr = read(fd, p, left);\n        if (nr == -1) { if (errno == EINTR) continue; return -1; }\n        if (nr == 0) break;\n        left -= nr; p += nr;\n    }\n    return (ssize_t)(n - left);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never assume read/write transfers all bytes",
+            "Loop until done, EOF, or error"
+          ],
+          "gotchas": [
+            "Short reads are normal on pipes, sockets, and terminals"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dup() and dup2() work for file descriptor duplication?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["dup", "dup2", "file-descriptors", "redirection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`dup()` and `dup2()` create a copy of a file descriptor. Both the old and new fd share the same open file table entry (same file offset, status flags, etc.).\n\n**Prototypes:**\n```c\n#include <unistd.h>\nint dup(int oldfd);           /* returns lowest available fd */\nint dup2(int oldfd, int newfd); /* makes newfd a copy of oldfd */\n```\n\n**dup()** returns the lowest available fd that is a copy of `oldfd`.\n\n**dup2()** atomically closes `newfd` (if open) and makes it a copy of `oldfd`. If `oldfd == newfd`, it returns `newfd` without closing it.\n\nThe classic use case is **I/O redirection** -- redirecting stdout to a file:\n1. Open the file\n2. `dup2(fd, STDOUT_FILENO)` -- now fd 1 points to the file\n3. Close the original fd\n4. Any `printf()` or `write(1, ...)` goes to the file\n\n**dup2 vs close+dup:** `dup2()` is atomic. If you do `close(newfd); dup(oldfd);` there is a race window where a signal handler could open a file and grab the fd number you wanted.",
+          "pseudo_code": "1. dup(oldfd): kernel finds lowest free fd, copies oldfd's pointer to it\n2. dup2(oldfd, newfd): if newfd is open, close it; copy oldfd to newfd slot\n3. Both old and new fd share the same open file table entry\n4. They share file offset and status flags\n5. They have independent FD_CLOEXEC flags",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n\nint main(void) {\n    /* Redirect stdout to a file */\n    int fd = open(\"output.log\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n\n    /* Save original stdout */\n    int saved_stdout = dup(STDOUT_FILENO);\n    if (saved_stdout == -1) { perror(\"dup\"); return 1; }\n\n    /* Redirect: fd 1 now points to output.log */\n    if (dup2(fd, STDOUT_FILENO) == -1) { perror(\"dup2\"); return 1; }\n    close(fd);  /* no longer need the original fd */\n\n    printf(\"This goes to output.log\\n\");  /* writes to file */\n\n    /* Restore stdout */\n    dup2(saved_stdout, STDOUT_FILENO);\n    close(saved_stdout);\n\n    printf(\"This goes to terminal\\n\");  /* back to terminal */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "dup() returns lowest available fd; dup2() targets a specific fd",
+            "Both old and new fd share the same open file table entry (offset, flags)",
+            "dup2() is atomic: close + copy in one step, no race condition",
+            "Classic use: I/O redirection (dup2(fd, STDOUT_FILENO))",
+            "FD_CLOEXEC flag is NOT inherited by the duplicate"
+          ],
+          "gotchas": [
+            "dup2 does NOT set FD_CLOEXEC on the new fd -- use dup3() with O_CLOEXEC on Linux",
+            "If oldfd is invalid, dup2 returns -1 and does NOT close newfd",
+            "dup2(fd, fd) is a no-op that returns fd (does not close it)",
+            "After dup2, both fds share the same offset -- writing via one advances the other"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`dup(fd)` copies fd to lowest available number. `dup2(old, new)` atomically closes `new` and copies `old` to it. Both share the same file offset and flags.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    int fd = open(\"out.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    dup2(fd, STDOUT_FILENO);  /* stdout -> out.txt */\n    close(fd);\n    write(STDOUT_FILENO, \"redirected\\n\", 11);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "dup2() is atomic close+copy",
+            "Old and new fd share file offset"
+          ],
+          "gotchas": [
+            "dup2 does not set FD_CLOEXEC on the new descriptor"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does fcntl() do, and what are its most important operations?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["fcntl", "file-descriptors", "locking", "flags"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`fcntl()` (file control) is a multipurpose system call for manipulating file descriptor properties.\n\n**Prototype:**\n```c\n#include <fcntl.h>\nint fcntl(int fd, int cmd, ... /* arg */);\n```\n\n**Key operations:**\n\n1. **F_DUPFD** -- duplicate fd (like dup but with a minimum fd number)\n2. **F_GETFD / F_SETFD** -- get/set fd flags (currently only `FD_CLOEXEC`)\n3. **F_GETFL / F_SETFL** -- get/set file status flags (O_APPEND, O_NONBLOCK, O_SYNC, etc.)\n4. **F_GETLK / F_SETLK / F_SETLKW** -- advisory record locking\n5. **F_GETOWN / F_SETOWN** -- get/set process ID for SIGIO/SIGURG signals\n\n**Important distinction:**\n- **fd flags** (F_GETFD/F_SETFD) are per-fd (not shared across dup'd fds)\n- **file status flags** (F_GETFL/F_SETFL) are per-open-file-entry (shared across dup'd fds)\n\nThe most common use of `fcntl()` is setting `O_NONBLOCK` on an existing fd, since you cannot always control the flags at `open()` time (e.g., for pipe fds or inherited fds).",
+          "pseudo_code": "1. Get current flags: flags = fcntl(fd, F_GETFL)\n2. Modify flags: flags |= O_NONBLOCK  (or flags &= ~O_NONBLOCK)\n3. Set new flags: fcntl(fd, F_SETFL, flags)\n4. For FD_CLOEXEC: fcntl(fd, F_SETFD, FD_CLOEXEC)\n5. For locking: fill struct flock, call fcntl(fd, F_SETLK, &lock)",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n\n/* Set a file descriptor to non-blocking mode */\nint set_nonblocking(int fd) {\n    int flags = fcntl(fd, F_GETFL);\n    if (flags == -1) { perror(\"fcntl F_GETFL\"); return -1; }\n    flags |= O_NONBLOCK;\n    if (fcntl(fd, F_SETFL, flags) == -1) { perror(\"fcntl F_SETFL\"); return -1; }\n    return 0;\n}\n\n/* Set close-on-exec flag */\nint set_cloexec(int fd) {\n    int flags = fcntl(fd, F_GETFD);\n    if (flags == -1) { perror(\"fcntl F_GETFD\"); return -1; }\n    flags |= FD_CLOEXEC;\n    if (fcntl(fd, F_SETFD, flags) == -1) { perror(\"fcntl F_SETFD\"); return -1; }\n    return 0;\n}\n\nint main(void) {\n    int fd = open(\"test.txt\", O_RDWR | O_CREAT, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n\n    /* Print current file status flags */\n    int flags = fcntl(fd, F_GETFL);\n    printf(\"Access mode: \");\n    switch (flags & O_ACCMODE) {\n        case O_RDONLY: printf(\"O_RDONLY\\n\"); break;\n        case O_WRONLY: printf(\"O_WRONLY\\n\"); break;\n        case O_RDWR:   printf(\"O_RDWR\\n\");   break;\n    }\n\n    set_nonblocking(fd);\n    set_cloexec(fd);\n\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fcntl() is a multipurpose fd control system call",
+            "F_GETFL/F_SETFL operate on file status flags (shared via dup)",
+            "F_GETFD/F_SETFD operate on fd flags (per-descriptor, not shared)",
+            "Most common use: setting O_NONBLOCK on an existing fd",
+            "Access mode (O_RDONLY etc.) cannot be changed via F_SETFL"
+          ],
+          "gotchas": [
+            "You must read-modify-write flags (GET, OR/AND, SET) -- never just SET without GET first",
+            "F_GETFL returns -1 on error, but -1 is also a valid (unlikely) flag combination -- always check errno",
+            "O_ACCMODE mask is needed to extract the access mode from F_GETFL result",
+            "F_SETFL cannot change the access mode (O_RDONLY/O_WRONLY/O_RDWR)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fcntl()` manipulates fd properties: duplicate fds, get/set fd flags (`FD_CLOEXEC`), get/set file status flags (`O_NONBLOCK`, `O_APPEND`), and advisory locking.",
+          "pseudo_code": "",
+          "actual_code": "#include <fcntl.h>\n\nint set_nonblocking(int fd) {\n    int flags = fcntl(fd, F_GETFL);\n    if (flags == -1) return -1;\n    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always read-modify-write: GET, modify, SET",
+            "fd flags are per-descriptor; file status flags are per-open-file"
+          ],
+          "gotchas": [
+            "Never SET flags without GET first -- you will clobber existing flags"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does lseek() work, and what are file holes?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["lseek", "file-offset", "file-holes", "sparse-files"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`lseek()` repositions the file offset of an open file descriptor.\n\n**Prototype:**\n```c\n#include <unistd.h>\noff_t lseek(int fd, off_t offset, int whence);\n```\n\n**whence values:**\n- `SEEK_SET` -- offset from beginning of file\n- `SEEK_CUR` -- offset from current position\n- `SEEK_END` -- offset from end of file\n\n**File holes (sparse files):**\nIf you seek past the end of a file and write, the gap is called a \"hole.\" The filesystem does not allocate disk blocks for holes -- they read as zero bytes. This creates a **sparse file** where the logical size is larger than the physical disk usage.\n\nExample: A file with 1 byte at offset 0 and 1 byte at offset 1GB uses only 2 blocks on disk, not 1GB of space.\n\n`lseek()` returns the new offset on success, or `(off_t)-1` on error. You can use `lseek(fd, 0, SEEK_CUR)` to get the current offset without moving it.",
+          "pseudo_code": "1. lseek(fd, 0, SEEK_SET) -- go to beginning\n2. lseek(fd, 0, SEEK_END) -- go to end (returns file size)\n3. lseek(fd, 0, SEEK_CUR) -- get current offset\n4. lseek(fd, 1000000, SEEK_SET); write(fd, \"x\", 1) -- creates a hole\n5. Holes read as '\\0' but use no disk blocks",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <sys/stat.h>\n\nint main(void) {\n    int fd = open(\"sparse.dat\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n\n    /* Write at beginning */\n    write(fd, \"A\", 1);\n\n    /* Seek far ahead -- creates a hole */\n    off_t pos = lseek(fd, 1000000, SEEK_SET);\n    printf(\"Seeked to offset: %lld\\n\", (long long)pos);\n\n    /* Write at the new position */\n    write(fd, \"B\", 1);\n\n    close(fd);\n\n    /* Check file size vs disk usage */\n    struct stat st;\n    stat(\"sparse.dat\", &st);\n    printf(\"Logical size:  %lld bytes\\n\", (long long)st.st_size);    /* 1000001 */\n    printf(\"Disk blocks:   %lld (512-byte blocks)\\n\", (long long)st.st_blocks);\n    /* st_blocks will be much less than 1000001/512 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "lseek() repositions the file offset; returns new offset or -1",
+            "SEEK_SET = absolute, SEEK_CUR = relative, SEEK_END = from end",
+            "Seeking past EOF and writing creates a hole (sparse file)",
+            "Holes read as zero bytes but consume no disk blocks",
+            "lseek(fd, 0, SEEK_CUR) returns current offset without moving"
+          ],
+          "gotchas": [
+            "lseek() does not work on pipes, FIFOs, or sockets (returns ESPIPE)",
+            "Comparing lseek return with -1 requires casting to off_t since some offsets could be negative-looking on 32-bit",
+            "Copying a sparse file with cp or cat fills in the holes (use cp --sparse=always)",
+            "off_t may be 32-bit by default; compile with -D_FILE_OFFSET_BITS=64 for large file support"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`lseek(fd, offset, whence)` sets the file offset. `SEEK_SET`/`SEEK_CUR`/`SEEK_END`. Seeking past EOF and writing creates a sparse file with holes that read as zeros but use no disk space.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    int fd = open(\"sparse.dat\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    write(fd, \"A\", 1);\n    lseek(fd, 1000000, SEEK_SET);  /* hole */\n    write(fd, \"B\", 1);\n    close(fd);  /* file is ~1MB logically, tiny on disk */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Holes read as zero, use no disk blocks",
+            "Does not work on pipes or sockets"
+          ],
+          "gotchas": [
+            "off_t is 32-bit by default on some systems -- use _FILE_OFFSET_BITS=64"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the three-level file descriptor architecture (fd table, open file table, v-node table)?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["fd-table", "open-file-table", "v-node", "kernel-internals"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UNIX uses a three-level data structure to manage open files:\n\n**1. Per-process file descriptor table (fd table):**\n- One per process, indexed by fd number (0, 1, 2, ...)\n- Each entry contains: fd flags (just `FD_CLOEXEC`) and a pointer to an open file table entry\n\n**2. System-wide open file table (file table):**\n- One for the entire kernel\n- Each entry contains: file status flags (`O_APPEND`, `O_NONBLOCK`, etc.), current file offset, reference count, pointer to v-node entry\n- Created by each `open()` call (even for the same file)\n\n**3. V-node table (or inode table):**\n- One per open file (unique per file, not per open)\n- Contains: file type, pointers to filesystem-specific functions (read/write ops), inode information (size, permissions, timestamps, disk block locations)\n\n**Key implications:**\n- `dup()`/`dup2()` create a new fd table entry pointing to the **same** open file table entry (shared offset)\n- Two separate `open()` calls on the same file create **different** open file table entries (independent offsets)\n- `fork()` duplicates the fd table -- child inherits pointers to the **same** open file table entries (shared offsets between parent and child)\n- `O_APPEND` works because the kernel sets offset to file size atomically in the open file table entry on each write",
+          "pseudo_code": "Level 1: Per-process FD table\n  fd 0 -> [FD_CLOEXEC=0, ptr -> OFT entry A]\n  fd 1 -> [FD_CLOEXEC=0, ptr -> OFT entry B]\n  fd 3 -> [FD_CLOEXEC=1, ptr -> OFT entry A]  (via dup)\n\nLevel 2: System-wide Open File Table\n  Entry A -> [flags=O_RDWR, offset=100, refcount=2, ptr -> vnode X]\n  Entry B -> [flags=O_WRONLY|O_APPEND, offset=500, refcount=1, ptr -> vnode X]\n\nLevel 3: V-node (inode) table\n  Vnode X -> [type=REG, size=1024, inode=12345, blocks=[...]]",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n\nint main(void) {\n    /* Two open() calls on the same file: independent offsets */\n    int fd1 = open(\"data.txt\", O_RDWR | O_CREAT | O_TRUNC, 0644);\n    int fd2 = open(\"data.txt\", O_RDWR);\n    /* fd1 and fd2 have DIFFERENT open file table entries */\n    /* They have independent offsets */\n\n    write(fd1, \"AAAA\", 4);  /* fd1 offset = 4 */\n    write(fd2, \"BB\", 2);    /* fd2 offset = 2 (overwrites first 2 bytes) */\n    /* File contents: \"BBAA\" */\n\n    /* dup creates shared offset */\n    int fd3 = dup(fd1);\n    /* fd3 shares open file table entry with fd1 */\n    off_t off1 = lseek(fd1, 0, SEEK_CUR);  /* offset = 4 */\n    off_t off3 = lseek(fd3, 0, SEEK_CUR);  /* offset = 4 (same!) */\n    printf(\"fd1 offset=%lld, fd3 offset=%lld\\n\",\n           (long long)off1, (long long)off3);\n\n    write(fd1, \"CC\", 2);  /* offset advances to 6 for BOTH fd1 and fd3 */\n    off3 = lseek(fd3, 0, SEEK_CUR);\n    printf(\"After write via fd1, fd3 offset=%lld\\n\", (long long)off3);  /* 6 */\n\n    close(fd1);\n    close(fd2);\n    close(fd3);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Three levels: per-process fd table, system open file table, v-node table",
+            "dup/fork share the open file table entry (shared offset and flags)",
+            "Separate open() calls create separate open file table entries (independent offsets)",
+            "FD_CLOEXEC is per-fd; file status flags and offset are per-open-file-entry",
+            "fork() causes parent and child to share offsets (both point to same open file entry)"
+          ],
+          "gotchas": [
+            "After fork(), parent and child share offsets -- writing in one moves the offset for the other",
+            "Two processes opening the same file independently have separate offsets and can overwrite each other",
+            "Closing a dup'd fd does not affect the other fd or the offset, but decrements the refcount",
+            "The v-node is shared even across independent opens -- that is how the kernel knows it is the same file"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Three levels: (1) per-process fd table (fd flags + pointer), (2) system-wide open file table (offset, status flags, refcount), (3) v-node/inode table (file metadata). `dup()`/`fork()` share level 2; separate `open()` calls create new level 2 entries.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n\nint main(void) {\n    int fd1 = open(\"f.txt\", O_RDWR | O_CREAT, 0644);\n    int fd2 = dup(fd1);  /* shares offset with fd1 */\n    int fd3 = open(\"f.txt\", O_RDWR);  /* independent offset */\n    write(fd1, \"AB\", 2);\n    printf(\"fd2 offset=%lld\\n\", (long long)lseek(fd2, 0, SEEK_CUR)); /* 2 */\n    printf(\"fd3 offset=%lld\\n\", (long long)lseek(fd3, 0, SEEK_CUR)); /* 0 */\n    close(fd1); close(fd2); close(fd3);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "dup() shares offset; separate open() does not",
+            "fork() inherits shared open file table entries"
+          ],
+          "gotchas": [
+            "After fork, parent and child share file offsets -- coordinate writes carefully"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do atomic operations with O_APPEND and O_CREAT|O_EXCL prevent race conditions?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["atomic", "O_APPEND", "O_EXCL", "race-condition"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UNIX provides two important atomic file operations to avoid race conditions:\n\n**O_APPEND -- Atomic append:**\nWhen a file is opened with `O_APPEND`, every `write()` atomically seeks to the end of the file and writes. This is done as a single kernel operation, so multiple processes appending to the same file (e.g., a log file) will not overwrite each other's data.\n\nWithout `O_APPEND`, the sequence `lseek(fd, 0, SEEK_END); write(fd, data, len);` is NOT atomic -- another process could write between the seek and write, causing data loss.\n\n**O_CREAT | O_EXCL -- Atomic create-or-fail:**\nWhen both flags are specified, `open()` will fail with `EEXIST` if the file already exists. The check-and-create is atomic. This is the correct way to implement lock files.\n\nWithout `O_EXCL`, checking `stat()` then `open()` has a TOCTOU (time-of-check-to-time-of-use) race: another process could create the file between the check and the open.\n\n**Note:** `O_CREAT | O_EXCL` does NOT follow symbolic links. If the path is a symlink, it fails with `EEXIST` regardless. This is a security feature to prevent symlink attacks.",
+          "pseudo_code": "RACE (broken):\n  Process A: lseek(fd, 0, SEEK_END)  -> offset 1000\n  Process B: lseek(fd, 0, SEEK_END)  -> offset 1000\n  Process A: write(fd, dataA, 100)   -> writes at 1000\n  Process B: write(fd, dataB, 50)    -> writes at 1000 (OVERWRITES A!)\n\nATOMIC (correct with O_APPEND):\n  Process A: write(fd, dataA, 100)   -> kernel atomically seeks to end, writes at 1000\n  Process B: write(fd, dataB, 50)    -> kernel atomically seeks to end, writes at 1100",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <errno.h>\n#include <string.h>\n\n/* Safe concurrent log writing */\nvoid append_log(const char *msg) {\n    int fd = open(\"app.log\", O_WRONLY | O_APPEND | O_CREAT, 0644);\n    if (fd == -1) { perror(\"open log\"); return; }\n    /* write() is atomic to EOF thanks to O_APPEND */\n    write(fd, msg, strlen(msg));\n    close(fd);\n}\n\n/* Safe lock file creation */\nint acquire_lock(const char *lockpath) {\n    int fd = open(lockpath, O_WRONLY | O_CREAT | O_EXCL, 0600);\n    if (fd == -1) {\n        if (errno == EEXIST) {\n            fprintf(stderr, \"Lock already held\\n\");\n            return -1;\n        }\n        perror(\"open lockfile\");\n        return -1;\n    }\n    /* Write PID to lock file for debugging */\n    char buf[32];\n    int len = snprintf(buf, sizeof(buf), \"%d\\n\", getpid());\n    write(fd, buf, (size_t)len);\n    close(fd);\n    return 0;\n}\n\nvoid release_lock(const char *lockpath) {\n    unlink(lockpath);\n}\n\nint main(void) {\n    append_log(\"Server started\\n\");\n\n    if (acquire_lock(\"/tmp/myapp.lock\") == 0) {\n        printf(\"Lock acquired\\n\");\n        /* do work ... */\n        release_lock(\"/tmp/myapp.lock\");\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O_APPEND makes write() atomic: seek-to-end + write in one kernel operation",
+            "O_CREAT | O_EXCL is atomic create-or-fail -- no TOCTOU race",
+            "O_EXCL does not follow symlinks (security feature)",
+            "Multiple processes can safely append to the same log file with O_APPEND",
+            "Lock files should use O_CREAT | O_EXCL, not stat() + open()"
+          ],
+          "gotchas": [
+            "O_APPEND guarantees atomicity of the seek+write but NOT of multiple writes appearing contiguous",
+            "NFS does not properly support O_APPEND atomicity -- use fcntl locking on NFS",
+            "O_EXCL lock files are not cleaned up on crash -- need a stale lock detection strategy",
+            "POSIX guarantees O_APPEND atomic writes only up to PIPE_BUF bytes for pipes; for regular files it is always atomic"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`O_APPEND` makes each `write()` atomically seek to EOF then write (safe for concurrent log appending). `O_CREAT | O_EXCL` atomically creates a file or fails if it exists (safe lock file pattern).",
+          "pseudo_code": "",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n#include <errno.h>\n\n/* Atomic append */\nint fd = open(\"log\", O_WRONLY | O_APPEND | O_CREAT, 0644);\nwrite(fd, \"line\\n\", 5);  /* always at EOF */\nclose(fd);\n\n/* Atomic lock file */\nint lk = open(\"/tmp/app.lock\", O_WRONLY | O_CREAT | O_EXCL, 0600);\nif (lk == -1 && errno == EEXIST) { /* already locked */ }",
+          "code_language": "c",
+          "key_points": [
+            "O_APPEND: atomic seek-to-end + write",
+            "O_CREAT|O_EXCL: atomic create-or-fail"
+          ],
+          "gotchas": [
+            "NFS does not support O_APPEND atomicity properly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does O_NONBLOCK affect I/O operations?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["O_NONBLOCK", "non-blocking", "EAGAIN", "EWOULDBLOCK"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `O_NONBLOCK` flag changes the behavior of I/O operations so they never block the calling process.\n\n**Without O_NONBLOCK (default blocking behavior):**\n- `read()` on a pipe with no data blocks until data arrives or all writers close\n- `write()` on a full pipe blocks until space is available\n- `open()` on a FIFO blocks until the other end opens\n- `accept()` on a socket blocks until a connection arrives\n\n**With O_NONBLOCK:**\n- `read()` with no data returns -1 with `errno = EAGAIN` (or `EWOULDBLOCK`)\n- `write()` with no buffer space returns -1 with `errno = EAGAIN`\n- `open()` on a read-only FIFO returns immediately\n- `accept()` with no pending connections returns -1 with `EAGAIN`\n\nNon-blocking I/O is essential for event-driven programming (used with `select()`, `poll()`, or `epoll()`) where a single thread handles multiple I/O sources.\n\nYou can set `O_NONBLOCK` at `open()` time or later with `fcntl(fd, F_SETFL, flags | O_NONBLOCK)`.",
+          "pseudo_code": "1. Set O_NONBLOCK via open() or fcntl()\n2. Attempt read/write\n3. If returns -1 and errno == EAGAIN:\n   a. No data available (read) or buffer full (write)\n   b. Register fd with poll/epoll and wait\n   c. Retry when poll says fd is ready\n4. If returns > 0: partial or complete I/O succeeded\n5. If read returns 0: EOF (peer closed)",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <errno.h>\n\nint main(void) {\n    int pipefd[2];\n    if (pipe(pipefd) == -1) { perror(\"pipe\"); return 1; }\n\n    /* Set read end to non-blocking */\n    int flags = fcntl(pipefd[0], F_GETFL);\n    fcntl(pipefd[0], F_SETFL, flags | O_NONBLOCK);\n\n    /* Try to read from empty pipe -- would block normally */\n    char buf[128];\n    ssize_t n = read(pipefd[0], buf, sizeof(buf));\n    if (n == -1) {\n        if (errno == EAGAIN || errno == EWOULDBLOCK)\n            printf(\"No data available (non-blocking)\\n\");\n        else\n            perror(\"read\");\n    }\n\n    /* Write some data, then read succeeds */\n    write(pipefd[1], \"hello\", 5);\n    n = read(pipefd[0], buf, sizeof(buf));\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Read: %s\\n\", buf);  /* \"hello\" */\n    }\n\n    close(pipefd[0]);\n    close(pipefd[1]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "O_NONBLOCK prevents read/write/open/accept from blocking",
+            "Returns -1 with EAGAIN/EWOULDBLOCK when operation would block",
+            "Essential for event-driven I/O with select/poll/epoll",
+            "Can be set at open() or later with fcntl(F_SETFL)",
+            "Non-blocking open() on a FIFO returns immediately for O_RDONLY"
+          ],
+          "gotchas": [
+            "EAGAIN and EWOULDBLOCK may be the same value on Linux but are different constants on some systems",
+            "O_NONBLOCK on regular files has no effect -- regular file reads never block (they wait for disk I/O)",
+            "Non-blocking write can return a short write (less than requested) -- must handle partial writes",
+            "Opening a FIFO with O_WRONLY | O_NONBLOCK fails with ENXIO if no reader"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`O_NONBLOCK` makes I/O operations return immediately instead of blocking. If the operation would block, it returns -1 with `errno = EAGAIN`. Used with `select()`/`poll()`/`epoll()` for event-driven I/O.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <errno.h>\n#include <stdio.h>\n\nint main(void) {\n    int pfd[2];\n    pipe(pfd);\n    fcntl(pfd[0], F_SETFL, fcntl(pfd[0], F_GETFL) | O_NONBLOCK);\n    char buf[64];\n    if (read(pfd[0], buf, 64) == -1 && errno == EAGAIN)\n        printf(\"Would block -- no data\\n\");\n    close(pfd[0]); close(pfd[1]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Returns EAGAIN instead of blocking",
+            "Used with event loops (select/poll/epoll)"
+          ],
+          "gotchas": [
+            "O_NONBLOCK has no effect on regular file I/O"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are pread() and pwrite(), and why are they useful for multithreaded programs?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["pread", "pwrite", "thread-safe", "atomic"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`pread()` and `pwrite()` perform I/O at a specified offset without changing the file's current offset. This makes them atomic with respect to the file position.\n\n**Prototypes:**\n```c\n#include <unistd.h>\nssize_t pread(int fd, void *buf, size_t count, off_t offset);\nssize_t pwrite(int fd, const void *buf, size_t count, off_t offset);\n```\n\n**Why they matter for threads:**\nAll threads in a process share the same file descriptors (and therefore the same file offsets in the open file table). If two threads do `lseek()` + `read()` on the same fd, they race on the shared offset:\n\n- Thread A: `lseek(fd, 100, SEEK_SET)`\n- Thread B: `lseek(fd, 200, SEEK_SET)` -- overwrites A's seek\n- Thread A: `read(fd, buf, 50)` -- reads from 200, not 100!\n\nWith `pread(fd, buf, 50, 100)`, the offset is specified in the call and the file's current offset is untouched. No locking needed.\n\n**Other uses:**\n- Database systems that read/write at specific page offsets\n- Any scenario where multiple I/O streams target different parts of the same file",
+          "pseudo_code": "Without pread (racy):\n  Thread A: lseek(fd, offsetA, SEEK_SET)\n  Thread B: lseek(fd, offsetB, SEEK_SET)  <-- overwrites A's position\n  Thread A: read(fd, bufA, n)  <-- reads from offsetB!\n\nWith pread (safe):\n  Thread A: pread(fd, bufA, n, offsetA)  <-- atomic, does not change fd offset\n  Thread B: pread(fd, bufB, n, offsetB)  <-- atomic, does not change fd offset",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <pthread.h>\n#include <string.h>\n\n#define PAGE_SIZE 4096\n\nstatic int shared_fd;\n\nvoid *reader_thread(void *arg) {\n    int page_num = *(int *)arg;\n    char buf[PAGE_SIZE];\n    /* pread: read at offset without affecting shared file offset */\n    ssize_t n = pread(shared_fd, buf, PAGE_SIZE,\n                      (off_t)page_num * PAGE_SIZE);\n    if (n > 0) {\n        printf(\"Thread read page %d: first byte = 0x%02x\\n\",\n               page_num, (unsigned char)buf[0]);\n    }\n    return NULL;\n}\n\nint main(void) {\n    shared_fd = open(\"database.dat\", O_RDWR | O_CREAT, 0644);\n    if (shared_fd == -1) { perror(\"open\"); return 1; }\n\n    /* Write some pages using pwrite */\n    char page0[PAGE_SIZE], page1[PAGE_SIZE];\n    memset(page0, 0xAA, PAGE_SIZE);\n    memset(page1, 0xBB, PAGE_SIZE);\n    pwrite(shared_fd, page0, PAGE_SIZE, 0);\n    pwrite(shared_fd, page1, PAGE_SIZE, PAGE_SIZE);\n\n    /* Read different pages concurrently -- no locking needed */\n    pthread_t t1, t2;\n    int p0 = 0, p1 = 1;\n    pthread_create(&t1, NULL, reader_thread, &p0);\n    pthread_create(&t2, NULL, reader_thread, &p1);\n    pthread_join(t1, NULL);\n    pthread_join(t2, NULL);\n\n    close(shared_fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "pread/pwrite perform I/O at a specified offset without changing the file offset",
+            "They are atomic with respect to the file position (no lseek + read/write race)",
+            "Essential for multithreaded programs sharing a file descriptor",
+            "Used heavily in database engines for page-level I/O",
+            "Equivalent to lseek + read/write but without the race condition"
+          ],
+          "gotchas": [
+            "pread/pwrite can still return short reads/writes -- you must loop",
+            "pwrite with O_APPEND ignores the offset argument (always appends)",
+            "They share the same file lock state as read/write",
+            "Not available on very old UNIX systems (but POSIX since SUSv2)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`pread(fd, buf, n, offset)` and `pwrite(fd, buf, n, offset)` do I/O at a specific offset without changing the fd's current position. Thread-safe alternative to `lseek()` + `read()`/`write()`.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    int fd = open(\"data.bin\", O_RDWR | O_CREAT, 0644);\n    char buf[] = \"page0\";\n    pwrite(fd, buf, 5, 0);       /* write at offset 0 */\n    pwrite(fd, \"page1\", 5, 4096); /* write at offset 4096 */\n    char out[5];\n    pread(fd, out, 5, 0);        /* read from offset 0 */\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Atomic seek+read/write in one call",
+            "Does not modify the file's current offset"
+          ],
+          "gotchas": [
+            "pwrite with O_APPEND ignores the offset"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is scatter-gather I/O with readv() and writev()?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["readv", "writev", "scatter-gather", "iovec"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Scatter-gather I/O (`readv()`/`writev()`) allows reading into or writing from multiple non-contiguous buffers in a single system call.\n\n**Prototypes:**\n```c\n#include <sys/uio.h>\nssize_t readv(int fd, const struct iovec *iov, int iovcnt);\nssize_t writev(int fd, const struct iovec *iov, int iovcnt);\n```\n\n**struct iovec:**\n```c\nstruct iovec {\n    void  *iov_base;  /* starting address of buffer */\n    size_t iov_len;   /* number of bytes */\n};\n```\n\n**Advantages:**\n1. **Atomicity** -- writev writes all buffers in one kernel operation (important for protocols with headers + data)\n2. **Performance** -- one syscall instead of multiple read/write calls (fewer context switches)\n3. **Convenience** -- no need to concatenate buffers before writing\n\n**Use cases:**\n- Writing an HTTP response: header + body in one writev()\n- Reading structured data into separate fields\n- Network protocols with fixed headers and variable payloads",
+          "pseudo_code": "1. Define array of struct iovec, each with base pointer and length\n2. Call writev(fd, iov, count) to write all buffers atomically\n3. Call readv(fd, iov, count) to scatter input into multiple buffers\n4. Returns total bytes transferred or -1 on error\n5. May return short count (partial I/O) -- handle like read/write",
+          "actual_code": "#include <sys/uio.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    int fd = open(\"output.dat\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n\n    /* Write header + body in one atomic operation */\n    char header[] = \"HTTP/1.1 200 OK\\r\\nContent-Length: 13\\r\\n\\r\\n\";\n    char body[] = \"Hello, World!\";\n\n    struct iovec iov[2];\n    iov[0].iov_base = header;\n    iov[0].iov_len  = strlen(header);\n    iov[1].iov_base = body;\n    iov[1].iov_len  = strlen(body);\n\n    ssize_t nwritten = writev(fd, iov, 2);\n    printf(\"writev wrote %zd bytes\\n\", nwritten);\n    close(fd);\n\n    /* Read back into separate buffers */\n    fd = open(\"output.dat\", O_RDONLY);\n    char hdr_buf[64];\n    char body_buf[32];\n    struct iovec riov[2];\n    riov[0].iov_base = hdr_buf;\n    riov[0].iov_len  = strlen(header);  /* read exactly header size */\n    riov[1].iov_base = body_buf;\n    riov[1].iov_len  = strlen(body);\n\n    ssize_t nread = readv(fd, riov, 2);\n    body_buf[strlen(body)] = '\\0';\n    printf(\"readv read %zd bytes, body: %s\\n\", nread, body_buf);\n\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "readv/writev transfer data to/from multiple buffers in one syscall",
+            "writev is atomic for regular files (no interleaving from other writes)",
+            "Reduces number of system calls compared to multiple write() calls",
+            "struct iovec has iov_base (pointer) and iov_len (size)",
+            "IOV_MAX defines the maximum number of iovec entries (at least 16, often 1024)"
+          ],
+          "gotchas": [
+            "writev can still do a short write -- you must handle partial I/O",
+            "The iovec array is read by the kernel, not modified -- readv fills the buffers",
+            "Exceeding IOV_MAX entries causes EINVAL",
+            "writev atomicity is not guaranteed for sockets -- data may be interleaved with other writes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`readv()`/`writev()` do scatter-gather I/O: read into or write from multiple buffers in one syscall. Uses `struct iovec` array. One syscall = fewer context switches + atomic writes.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/uio.h>\n#include <unistd.h>\n#include <string.h>\n\nint main(void) {\n    char hdr[] = \"HDR:\";\n    char data[] = \"payload\";\n    struct iovec iov[2] = {\n        { .iov_base = hdr,  .iov_len = strlen(hdr) },\n        { .iov_base = data, .iov_len = strlen(data) }\n    };\n    writev(STDOUT_FILENO, iov, 2);  /* prints: HDR:payload */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "One syscall for multiple buffers",
+            "Atomic for regular files"
+          ],
+          "gotchas": [
+            "IOV_MAX limits the number of iovec entries"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are /dev/null and /dev/zero, and how are they used in systems programming?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["dev-null", "dev-zero", "special-files", "device-files"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UNIX provides special device files that are useful for I/O operations:\n\n**/dev/null (the bit bucket):**\n- Reading from `/dev/null` returns EOF immediately (0 bytes)\n- Writing to `/dev/null` always succeeds and discards all data\n- Used to discard unwanted output: `./program > /dev/null 2>&1`\n- In C, redirect stderr: `dup2(open(\"/dev/null\", O_WRONLY), STDERR_FILENO)`\n- Daemons redirect all three standard fds to `/dev/null`\n\n**/dev/zero:**\n- Reading from `/dev/zero` returns an infinite stream of zero bytes (`\\0`)\n- Used to create zero-filled buffers or files\n- Used with `mmap()` for anonymous memory mapping on some systems\n- `dd if=/dev/zero of=file bs=1M count=100` creates a 100MB zero-filled file\n\n**/dev/random and /dev/urandom:**\n- Provide random bytes from the kernel's entropy pool\n- `/dev/random` may block if entropy is low; `/dev/urandom` never blocks\n- Used for cryptographic key generation and secure randomness",
+          "pseudo_code": "1. /dev/null: open, dup2 to fd 1 or 2 to silence output\n2. /dev/zero: read from it to get zero-filled buffers\n3. Common daemon pattern:\n   open /dev/null\n   dup2(devnull_fd, STDIN_FILENO)\n   dup2(devnull_fd, STDOUT_FILENO)\n   dup2(devnull_fd, STDERR_FILENO)\n   close(devnull_fd)",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Redirect stderr to /dev/null (silence errors) */\n    int devnull = open(\"/dev/null\", O_RDWR);\n    if (devnull == -1) { perror(\"open /dev/null\"); return 1; }\n    dup2(devnull, STDERR_FILENO);\n    fprintf(stderr, \"This is silenced\\n\");  /* goes nowhere */\n\n    /* Read zero bytes from /dev/zero */\n    int devzero = open(\"/dev/zero\", O_RDONLY);\n    if (devzero == -1) { perror(\"open /dev/zero\"); return 1; }\n    char buf[1024];\n    ssize_t n = read(devzero, buf, sizeof(buf));\n    printf(\"Read %zd bytes from /dev/zero\\n\", n);  /* 1024 */\n\n    /* Verify all bytes are zero */\n    int all_zero = 1;\n    for (int i = 0; i < (int)n; i++) {\n        if (buf[i] != 0) { all_zero = 0; break; }\n    }\n    printf(\"All zeros: %s\\n\", all_zero ? \"yes\" : \"no\");  /* yes */\n\n    close(devzero);\n    close(devnull);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "/dev/null discards all writes, returns EOF on read",
+            "/dev/zero returns infinite zero bytes on read",
+            "Daemons redirect stdin/stdout/stderr to /dev/null",
+            "/dev/urandom provides non-blocking random bytes",
+            "These are character device files, not regular files"
+          ],
+          "gotchas": [
+            "/dev/null opened O_RDONLY cannot be used for dup2 to stdout -- use O_RDWR",
+            "/dev/random may block on Linux if entropy pool is empty -- prefer /dev/urandom for most uses",
+            "Reading from /dev/zero in a loop without a limit will consume CPU forever",
+            "On some embedded systems, these device files may not exist"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`/dev/null` discards all writes and gives EOF on read. `/dev/zero` provides infinite zero bytes. Daemons redirect stdin/stdout/stderr to `/dev/null`.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    /* Silence stdout */\n    int fd = open(\"/dev/null\", O_WRONLY);\n    dup2(fd, STDOUT_FILENO);\n    close(fd);\n    write(STDOUT_FILENO, \"gone\\n\", 5);  /* discarded */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "/dev/null = bit bucket; /dev/zero = zero source",
+            "Used in daemon initialization"
+          ],
+          "gotchas": [
+            "Open /dev/null with O_RDWR if you dup2 to both stdin and stdout"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do file descriptor limits work, and how can you check or change them?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["ulimit", "RLIMIT_NOFILE", "getrlimit", "setrlimit"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every process has limits on the number of file descriptors it can have open simultaneously.\n\n**Two types of limits:**\n\n1. **Soft limit (RLIMIT_NOFILE cur):** The actual enforced limit. A process can raise this up to the hard limit.\n2. **Hard limit (RLIMIT_NOFILE max):** The ceiling. Only root (or `CAP_SYS_RESOURCE`) can raise this. A process can irreversibly lower it.\n\n**System-wide limit:**\n- `/proc/sys/fs/file-max` on Linux -- total open files across all processes\n- `ENFILE` error when this is exceeded\n\n**Per-process limit:**\n- `EMFILE` error when a process exceeds its per-process limit\n- Default is typically 1024 (soft) on many Linux distributions\n\n**APIs:**\n- `getrlimit(RLIMIT_NOFILE, &rlim)` -- query limits\n- `setrlimit(RLIMIT_NOFILE, &rlim)` -- set limits\n- `sysconf(_SC_OPEN_MAX)` -- portable way to get maximum\n- Shell: `ulimit -n` (soft), `ulimit -Hn` (hard)\n\nServers (nginx, Apache, database systems) often need to raise the soft limit to handle many concurrent connections.",
+          "pseudo_code": "1. getrlimit(RLIMIT_NOFILE, &rlim) to read current limits\n2. rlim.rlim_cur = desired_soft_limit (must be <= rlim.rlim_max)\n3. setrlimit(RLIMIT_NOFILE, &rlim) to apply\n4. For hard limit increase: need root/CAP_SYS_RESOURCE\n5. sysconf(_SC_OPEN_MAX) returns current soft limit",
+          "actual_code": "#include <sys/resource.h>\n#include <unistd.h>\n#include <stdio.h>\n\nint main(void) {\n    struct rlimit rl;\n\n    /* Get current limits */\n    if (getrlimit(RLIMIT_NOFILE, &rl) == -1) {\n        perror(\"getrlimit\");\n        return 1;\n    }\n    printf(\"Soft limit: %llu\\n\", (unsigned long long)rl.rlim_cur);\n    printf(\"Hard limit: %llu\\n\", (unsigned long long)rl.rlim_max);\n\n    /* Raise soft limit to hard limit */\n    rl.rlim_cur = rl.rlim_max;\n    if (setrlimit(RLIMIT_NOFILE, &rl) == -1) {\n        perror(\"setrlimit\");\n        return 1;\n    }\n    printf(\"New soft limit: %llu\\n\", (unsigned long long)rl.rlim_cur);\n\n    /* Portable way to get max open files */\n    long max_fd = sysconf(_SC_OPEN_MAX);\n    printf(\"sysconf _SC_OPEN_MAX: %ld\\n\", max_fd);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Soft limit is enforced; hard limit is the ceiling",
+            "EMFILE = per-process limit hit; ENFILE = system-wide limit hit",
+            "getrlimit/setrlimit to query/modify per-process limits",
+            "Only root can raise the hard limit",
+            "sysconf(_SC_OPEN_MAX) is the portable query"
+          ],
+          "gotchas": [
+            "The default soft limit of 1024 is too low for high-performance servers",
+            "Lowering the hard limit is irreversible for the process",
+            "select() has FD_SETSIZE (often 1024) which limits usable fds -- use poll/epoll instead",
+            "Close-on-exec (FD_CLOEXEC) helps prevent fd leaks in long-running servers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Each process has soft and hard limits on open fds (`RLIMIT_NOFILE`). Use `getrlimit()`/`setrlimit()` to query/change. Soft can be raised to hard; only root raises hard. Default is often 1024.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/resource.h>\n#include <stdio.h>\n\nint main(void) {\n    struct rlimit rl;\n    getrlimit(RLIMIT_NOFILE, &rl);\n    printf(\"soft=%llu hard=%llu\\n\",\n           (unsigned long long)rl.rlim_cur,\n           (unsigned long long)rl.rlim_max);\n    rl.rlim_cur = rl.rlim_max;  /* raise soft to hard */\n    setrlimit(RLIMIT_NOFILE, &rl);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Soft limit enforced; hard limit is ceiling",
+            "EMFILE = per-process, ENFILE = system-wide"
+          ],
+          "gotchas": [
+            "Default 1024 is too low for servers handling many connections"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between ANSI C FILE* streams and UNIX file descriptors?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["FILE", "file-descriptor", "stdio", "buffering"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**UNIX file descriptors (fd):**\n- Low-level, kernel-space abstraction\n- Small integer (0, 1, 2, ...)\n- System calls: `open()`, `read()`, `write()`, `close()`, `lseek()`\n- No buffering (each call is a system call)\n- POSIX-specific, not part of ANSI C\n\n**ANSI C FILE* streams:**\n- High-level, user-space abstraction (defined in `<stdio.h>`)\n- `FILE *` pointer to an opaque struct\n- Functions: `fopen()`, `fread()`, `fwrite()`, `fclose()`, `fseek()`\n- **Buffered I/O** -- reduces system calls by batching reads/writes\n- Portable across all C implementations\n\n**Buffering modes:**\n- **Fully buffered** (`_IOFBF`): flushes when buffer is full (default for regular files)\n- **Line buffered** (`_IOLBF`): flushes on newline (default for terminals)\n- **Unbuffered** (`_IONBF`): no buffering (stderr default)\n\n**Interconversion:**\n- `fileno(FILE *)` -- get the fd underlying a FILE stream\n- `fdopen(fd, mode)` -- wrap an fd in a FILE stream\n\n**When to use which:**\n- Use FILE* for text processing, formatted I/O, portability\n- Use fd for system programming: pipes, sockets, non-blocking I/O, dup2, fcntl",
+          "pseudo_code": "FILE* (buffered):\n  fopen -> fread/fwrite/fprintf -> fclose\n  Buffer: [........] -- flushed when full, on newline, or on fclose\n\nfd (unbuffered):\n  open -> read/write -> close\n  Each call = one system call\n\nConversion:\n  int fd = fileno(fp);    /* FILE* -> fd */\n  FILE *fp = fdopen(fd, \"r\");  /* fd -> FILE* */",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    /* FILE* is buffered -- fewer syscalls */\n    FILE *fp = fopen(\"test.txt\", \"w\");\n    if (!fp) { perror(\"fopen\"); return 1; }\n    fprintf(fp, \"Line %d\\n\", 1);   /* stays in buffer */\n    fprintf(fp, \"Line %d\\n\", 2);   /* stays in buffer */\n    fflush(fp);                     /* NOW written to disk */\n\n    /* Get underlying fd from FILE* */\n    int fd = fileno(fp);\n    printf(\"Underlying fd = %d\\n\", fd);\n\n    /* Can mix, but dangerous without fflush first */\n    fflush(fp);\n    write(fd, \"raw write\\n\", 10);  /* bypasses buffer */\n\n    fclose(fp);  /* flushes buffer and closes fd */\n\n    /* Wrap an fd in a FILE* */\n    int pipefd[2];\n    pipe(pipefd);\n    FILE *pipe_fp = fdopen(pipefd[0], \"r\");\n    if (pipe_fp) {\n        /* Can now use fgets, fscanf, etc. on the pipe */\n        fclose(pipe_fp);  /* also closes pipefd[0] */\n    }\n    close(pipefd[1]);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "FILE* is buffered (user-space); fd is unbuffered (kernel calls)",
+            "FILE* is portable ANSI C; fd is POSIX-specific",
+            "fileno() gets fd from FILE*; fdopen() wraps fd in FILE*",
+            "Three buffering modes: fully buffered, line buffered, unbuffered",
+            "Use fd for system programming (pipes, sockets, dup2, fcntl)"
+          ],
+          "gotchas": [
+            "Mixing FILE* and fd operations on the same stream without fflush causes data corruption/reordering",
+            "fclose() closes the underlying fd -- do not close it separately",
+            "After fork(), both parent and child have the same FILE* buffers -- fflush before fork to avoid duplicate output",
+            "setvbuf() must be called before any I/O on the stream"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`FILE*` is buffered, portable ANSI C (`fopen/fread/fwrite`). File descriptors are unbuffered, POSIX-specific (`open/read/write`). Convert with `fileno()` and `fdopen()`. Use fd for system programming, `FILE*` for text/formatted I/O.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n\nint main(void) {\n    FILE *fp = fopen(\"f.txt\", \"w\");\n    int fd = fileno(fp);          /* FILE* -> fd */\n    fprintf(fp, \"buffered\\n\");    /* in buffer */\n    fflush(fp);                   /* now on disk */\n    write(fd, \"direct\\n\", 7);    /* bypasses buffer */\n    fclose(fp);                   /* flushes + closes fd */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "FILE* = buffered + portable; fd = unbuffered + POSIX",
+            "fileno() and fdopen() for conversion"
+          ],
+          "gotchas": [
+            "Mixing FILE* and fd I/O without fflush causes data corruption"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does record locking work with fcntl(), and what is the difference between advisory and mandatory locking?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["fcntl", "record-locking", "advisory-locking", "flock"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "POSIX record locking (via `fcntl()`) allows processes to lock byte ranges of a file to coordinate concurrent access.\n\n**struct flock:**\n```c\nstruct flock {\n    short l_type;    /* F_RDLCK, F_WRLCK, F_UNLCK */\n    short l_whence;  /* SEEK_SET, SEEK_CUR, SEEK_END */\n    off_t l_start;   /* starting offset */\n    off_t l_len;     /* 0 = lock to EOF */\n    pid_t l_pid;     /* PID of lock owner (F_GETLK only) */\n};\n```\n\n**Lock types:**\n- `F_RDLCK` -- shared (read) lock: multiple readers allowed\n- `F_WRLCK` -- exclusive (write) lock: single writer, no readers\n- `F_UNLCK` -- unlock a region\n\n**fcntl commands:**\n- `F_SETLK` -- set lock (non-blocking, returns EAGAIN if cannot)\n- `F_SETLKW` -- set lock (blocking, waits until lock is available)\n- `F_GETLK` -- test if a lock would be blocked (does NOT set the lock)\n\n**Advisory vs Mandatory locking:**\n- **Advisory:** The default. Locks are only respected by processes that cooperate by also calling `fcntl()`. A process can ignore locks and read/write freely.\n- **Mandatory:** Enforced by the kernel on every `read()`/`write()`. Requires `set-group-ID` bit on and group-execute off (`chmod g+s,g-x file`). Unreliable and deprecated on Linux.\n\n**Locks are associated with (process, inode) pairs, not file descriptors.** Closing ANY fd that refers to the file releases ALL locks held by that process on that file.",
+          "pseudo_code": "1. Fill struct flock: l_type, l_whence, l_start, l_len\n2. F_GETLK: test if lock is available (fills l_pid if blocked)\n3. F_SETLK: try to set lock, return immediately (EAGAIN if blocked)\n4. F_SETLKW: try to set lock, block until available\n5. To unlock: set l_type = F_UNLCK, call F_SETLK\n6. Locks released on close of ANY fd to the file (or process exit)",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <errno.h>\n\nint lock_region(int fd, int type, off_t start, off_t len) {\n    struct flock fl;\n    fl.l_type   = (short)type;\n    fl.l_whence = SEEK_SET;\n    fl.l_start  = start;\n    fl.l_len    = len;     /* 0 = lock to EOF */\n\n    if (fcntl(fd, F_SETLK, &fl) == -1) {\n        if (errno == EAGAIN || errno == EACCES) {\n            fprintf(stderr, \"Region locked by another process\\n\");\n            return -1;\n        }\n        perror(\"fcntl F_SETLK\");\n        return -1;\n    }\n    return 0;\n}\n\nint lock_region_wait(int fd, int type, off_t start, off_t len) {\n    struct flock fl;\n    fl.l_type   = (short)type;\n    fl.l_whence = SEEK_SET;\n    fl.l_start  = start;\n    fl.l_len    = len;\n    return fcntl(fd, F_SETLKW, &fl);  /* blocks until lock acquired */\n}\n\nint unlock_region(int fd, off_t start, off_t len) {\n    struct flock fl;\n    fl.l_type   = F_UNLCK;\n    fl.l_whence = SEEK_SET;\n    fl.l_start  = start;\n    fl.l_len    = len;\n    return fcntl(fd, F_SETLK, &fl);\n}\n\nint main(void) {\n    int fd = open(\"shared.dat\", O_RDWR | O_CREAT, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n\n    /* Lock first 100 bytes exclusively */\n    if (lock_region(fd, F_WRLCK, 0, 100) == 0) {\n        printf(\"Locked bytes 0-99 for writing\\n\");\n        write(fd, \"exclusive data\", 14);\n        unlock_region(fd, 0, 100);\n    }\n\n    /* Lock entire file (l_len=0 means to EOF) */\n    if (lock_region(fd, F_RDLCK, 0, 0) == 0) {\n        printf(\"Read-locked entire file\\n\");\n        unlock_region(fd, 0, 0);\n    }\n\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fcntl() provides byte-range (record) locking with F_SETLK/F_SETLKW/F_GETLK",
+            "F_RDLCK = shared, F_WRLCK = exclusive, F_UNLCK = release",
+            "l_len = 0 means lock from l_start to EOF (grows with file)",
+            "Advisory locks are the default; mandatory locks are deprecated on Linux",
+            "Locks are per (process, inode), not per file descriptor"
+          ],
+          "gotchas": [
+            "Closing ANY fd that refers to the same file releases ALL of that process's locks on it",
+            "F_GETLK only tests if a lock WOULD be blocked; it does NOT acquire the lock",
+            "Deadlock detection: kernel returns EDEADLK for F_SETLKW if deadlock would occur",
+            "flock() (BSD) and fcntl() (POSIX) locks are independent and do not interact",
+            "Locks are not inherited across fork() but are preserved across exec()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`fcntl()` with `F_SETLK`/`F_SETLKW` provides byte-range locking. `F_RDLCK` = shared, `F_WRLCK` = exclusive. Advisory by default (cooperative). Locks are per (process, inode) -- closing any fd releases all locks on that file.",
+          "pseudo_code": "",
+          "actual_code": "#include <fcntl.h>\n#include <unistd.h>\n\nint main(void) {\n    int fd = open(\"data.dat\", O_RDWR | O_CREAT, 0644);\n    struct flock fl = { .l_type = F_WRLCK, .l_whence = SEEK_SET,\n                        .l_start = 0, .l_len = 0 };\n    if (fcntl(fd, F_SETLK, &fl) == -1) {\n        /* locked by another process */\n    }\n    /* ... do work ... */\n    fl.l_type = F_UNLCK;\n    fcntl(fd, F_SETLK, &fl);\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "F_SETLK = non-blocking; F_SETLKW = blocking",
+            "Locks tied to (process, inode) not fd"
+          ],
+          "gotchas": [
+            "Closing any fd to the file releases ALL your locks on it"
+          ]
+        }
+      ]
+    }
+  ]
+}

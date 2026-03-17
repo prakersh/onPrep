@@ -1,0 +1,635 @@
+{
+  "concept_slug": "pointers-fundamentals",
+  "questions": [
+    {
+      "title": "What is a pointer and how do you declare and initialize one?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["pointer", "declaration", "initialization", "address"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **pointer** is a variable that stores the memory address of another variable.\n\n**Declaration:** `type *ptr;` declares a pointer to a value of `type`.\n\n**Initialization:** Use the address-of operator `&` to get the address of a variable: `int *p = &x;`.\n\n**Key concepts:**\n- `*ptr` (dereference): access the value at the address stored in ptr.\n- `&var` (address-of): get the address of a variable.\n- An uninitialized pointer contains a garbage address -- using it is UB.\n- Always initialize pointers: to a valid address or to NULL.",
+          "pseudo_code": "int x = 42;\nint *p = &x;     // p stores the address of x\n*p = 100;        // changes x to 100 (dereference + assign)\nprintf(\"%d\", x); // prints 100\n\n&x -> address of x\n*p -> value at address stored in p\np  -> the address itself",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int x = 42;\n    int *p = &x;  /* p points to x */\n\n    printf(\"x     = %d\\n\", x);      /* 42 */\n    printf(\"&x    = %p\\n\", (void *)&x);  /* address of x */\n    printf(\"p     = %p\\n\", (void *)p);   /* same address */\n    printf(\"*p    = %d\\n\", *p);     /* 42 (value at p) */\n\n    /* Modify x through pointer */\n    *p = 100;\n    printf(\"x after *p=100: %d\\n\", x); /* 100 */\n\n    /* Pointer to different types */\n    double d = 3.14;\n    double *dp = &d;\n    printf(\"*dp = %f\\n\", *dp); /* 3.14 */\n\n    /* Initialize to NULL if no target yet */\n    int *safe = NULL;\n    if (safe != NULL) {\n        printf(\"%d\\n\", *safe);\n    } else {\n        printf(\"safe is NULL\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "A pointer stores an address; * dereferences it to access the value",
+            "& gets the address of a variable",
+            "Always initialize pointers to a valid address or NULL",
+            "The type of the pointer determines how *p interprets the memory",
+            "Pointer to int can only safely point to int (strict aliasing rule)"
+          ],
+          "gotchas": [
+            "int *p, q; declares p as pointer and q as int, NOT two pointers",
+            "Dereferencing an uninitialized or NULL pointer is undefined behavior",
+            "Pointer type must match the pointed-to type (int* for int, double* for double)",
+            "* in declaration means 'pointer to'; * in expression means 'dereference'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A pointer stores a memory address. `int *p = &x` makes p point to x. `*p` dereferences (accesses the value). `&x` gets the address. Always initialize pointers to a valid address or NULL.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 42;\n    int *p = &x;\n    printf(\"*p = %d\\n\", *p); /* 42 */\n    *p = 100;\n    printf(\"x  = %d\\n\", x);  /* 100 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "* = dereference; & = address-of",
+            "Always initialize pointers"
+          ],
+          "gotchas": [
+            "int *p, q; -- only p is a pointer, q is int"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the NULL pointer and how should you use it?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["NULL", "null-pointer", "safety"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**NULL** is a macro that represents a null pointer constant -- a pointer that points to no valid memory. It is defined in `<stddef.h>`, `<stdlib.h>`, `<stdio.h>`, and other headers.\n\n**Key facts:**\n- `NULL` is typically defined as `((void *)0)` or just `0`.\n- Dereferencing NULL is **undefined behavior** (usually causes a segfault).\n- NULL is used to indicate \"no valid object\" (e.g., malloc failure, end of linked list).\n- C11 introduced `nullptr` macro (not keyword) in some headers, but `NULL` is standard.\n\n**Best practices:**\n- Always check for NULL before dereferencing: `if (p != NULL) { *p = 10; }`\n- Set freed pointers to NULL: `free(p); p = NULL;`\n- Functions that return pointers use NULL to indicate failure (e.g., malloc, fopen).",
+          "pseudo_code": "NULL = pointer to nothing (address 0)\n\n1. Check before dereference: if (p != NULL) *p = val;\n2. After free: p = NULL;\n3. Function failure: return NULL;\n4. Dereferencing NULL = undefined behavior (crash)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void) {\n    /* Initialize to NULL */\n    int *p = NULL;\n\n    /* Check before use */\n    if (p == NULL) {\n        printf(\"p is NULL\\n\");\n    }\n\n    /* malloc returns NULL on failure */\n    p = malloc(sizeof(int));\n    if (p == NULL) {\n        fprintf(stderr, \"malloc failed\\n\");\n        return 1;\n    }\n    *p = 42;\n    printf(\"*p = %d\\n\", *p);\n\n    /* Set to NULL after free */\n    free(p);\n    p = NULL;\n\n    /* Double free is safe if pointer is NULL */\n    free(p); /* free(NULL) is a no-op */\n\n    /* fopen returns NULL on failure */\n    FILE *fp = fopen(\"nonexistent.txt\", \"r\");\n    if (fp == NULL) {\n        printf(\"File not found\\n\");\n    }\n\n    /* Idiomatic NULL check */\n    int *q = NULL;\n    if (!q) { /* same as q == NULL */\n        printf(\"q is NULL\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "NULL means the pointer points to no valid object",
+            "Always check for NULL before dereferencing",
+            "malloc/fopen/etc. return NULL on failure",
+            "Set freed pointers to NULL to prevent dangling pointer bugs",
+            "free(NULL) is safe (a no-op)"
+          ],
+          "gotchas": [
+            "Dereferencing NULL is undefined behavior, not a guaranteed crash",
+            "NULL is not guaranteed to be all-zero bits on all platforms (but almost always is)",
+            "In variadic functions, pass (void *)NULL, not just NULL, for portability",
+            "if (p) and if (p != NULL) are equivalent; both are idiomatic"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "NULL = pointer to nothing. Dereference = UB. Check before use: `if (p != NULL)`. Set to NULL after free. `free(NULL)` is safe. malloc/fopen return NULL on failure.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint main(void) {\n    int *p = malloc(sizeof(int));\n    if (!p) { return 1; } /* NULL check */\n    *p = 42;\n    printf(\"%d\\n\", *p);\n    free(p);\n    p = NULL; /* prevent dangling pointer */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Always check for NULL before dereferencing",
+            "Set freed pointers to NULL"
+          ],
+          "gotchas": [
+            "Dereferencing NULL is UB, not a guaranteed crash"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does pointer arithmetic work?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["pointer-arithmetic", "increment", "decrement", "difference"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pointer arithmetic operates in units of the pointed-to type's size, not bytes.\n\n**Operations:**\n- `p + n` advances p by `n * sizeof(*p)` bytes.\n- `p - n` moves p back by `n * sizeof(*p)` bytes.\n- `p++` / `p--` move to the next/previous element.\n- `p2 - p1` gives the number of ELEMENTS between two pointers (not bytes).\n\n**Rules:**\n- You can only do arithmetic with pointers to elements of the same array (or one past the end).\n- Pointer arithmetic on void* is NOT allowed in standard C.\n- Subtraction only works between pointers to the same array.\n- The result of pointer subtraction has type `ptrdiff_t` (from `<stddef.h>`).",
+          "pseudo_code": "int arr[5] = {10, 20, 30, 40, 50};\nint *p = arr;  // p points to arr[0]\n\np + 1  -> points to arr[1] (advanced by sizeof(int) bytes)\np + 3  -> points to arr[3]\np++    -> p now points to arr[1]\np2 - p1 -> number of elements between them\n\nAll arithmetic is in units of sizeof(*p), not bytes",
+          "actual_code": "#include <stdio.h>\n#include <stddef.h>\n\nint main(void) {\n    int arr[] = {10, 20, 30, 40, 50};\n    int *p = arr;  /* p points to arr[0] */\n\n    /* p + n advances by n elements */\n    printf(\"*(p+0) = %d\\n\", *(p + 0)); /* 10 */\n    printf(\"*(p+2) = %d\\n\", *(p + 2)); /* 30 */\n    printf(\"*(p+4) = %d\\n\", *(p + 4)); /* 50 */\n\n    /* Increment */\n    p++;  /* now points to arr[1] */\n    printf(\"After p++: *p = %d\\n\", *p); /* 20 */\n\n    /* Pointer difference = element count */\n    int *start = &arr[0];\n    int *end = &arr[4];\n    ptrdiff_t diff = end - start;\n    printf(\"Elements between: %td\\n\", diff); /* 4 */\n\n    /* Byte difference */\n    printf(\"Byte difference: %td\\n\",\n           (char *)end - (char *)start); /* 16 (4 * sizeof(int)) */\n\n    /* Traversing array with pointer */\n    printf(\"Array: \");\n    for (int *q = arr; q < arr + 5; q++) {\n        printf(\"%d \", *q);\n    }\n    printf(\"\\n\"); /* 10 20 30 40 50 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "p + n moves by n * sizeof(*p) bytes, not n bytes",
+            "p++ moves to the next element (not the next byte)",
+            "p2 - p1 gives element count, not byte count",
+            "Only valid within the same array (or one past the end)",
+            "Result of pointer subtraction is ptrdiff_t"
+          ],
+          "gotchas": [
+            "p + 1 on an int* advances by 4 bytes (sizeof(int)), not 1 byte",
+            "Pointer arithmetic past one-past-the-end or before the array is UB",
+            "Subtracting pointers to different arrays is undefined behavior",
+            "Pointer arithmetic on void* is a GCC extension, not standard C"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pointer arithmetic works in units of the element size. `p+1` advances by `sizeof(*p)` bytes. `p2-p1` gives element count. Only valid within the same array.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int arr[] = {10, 20, 30, 40};\n    int *p = arr;\n    printf(\"%d %d %d\\n\", *p, *(p+1), *(p+3)); /* 10 20 40 */\n    printf(\"diff = %td\\n\", &arr[3] - &arr[0]); /* 3 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Arithmetic in units of element size",
+            "Subtraction gives element count, not bytes"
+          ],
+          "gotchas": [
+            "p+1 on int* advances by sizeof(int) bytes, not 1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the relationship between arrays and pointers?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["array-pointer", "decay", "equivalence"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Arrays and pointers are closely related but NOT the same thing.\n\n**Array-pointer equivalence in expressions:**\n- `arr[i]` is defined as `*(arr + i)` by the C standard.\n- This means `arr[i]` and `i[arr]` are equivalent (both are `*(arr + i)`).\n- An array name decays to a pointer to its first element in most contexts.\n\n**Key differences:**\n- An array is a **block of memory**. A pointer is a **variable that holds an address**.\n- `sizeof(arr)` gives the total array size; `sizeof(ptr)` gives the pointer size.\n- `&arr` gives a pointer to the whole array; `&ptr` gives the address of the pointer variable.\n- An array name cannot be reassigned; a pointer can.",
+          "pseudo_code": "arr[i] == *(arr + i) == *(i + arr) == i[arr]  (all equivalent)\n\nArray vs Pointer:\n  array: fixed memory block, sizeof = total bytes, not assignable\n  pointer: variable holding address, sizeof = 4/8, assignable\n\nArray decays to pointer in most contexts except sizeof, &, and string init",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[5] = {10, 20, 30, 40, 50};\n    int *ptr = arr;  /* arr decays to &arr[0] */\n\n    /* All equivalent ways to access element at index 2 */\n    printf(\"arr[2]     = %d\\n\", arr[2]);       /* 30 */\n    printf(\"*(arr+2)   = %d\\n\", *(arr + 2));   /* 30 */\n    printf(\"ptr[2]     = %d\\n\", ptr[2]);       /* 30 */\n    printf(\"*(ptr+2)   = %d\\n\", *(ptr + 2));   /* 30 */\n    printf(\"2[arr]     = %d\\n\", 2[arr]);       /* 30 (legal!) */\n\n    /* Key differences */\n    printf(\"sizeof(arr) = %zu\\n\", sizeof(arr)); /* 20 (5*4) */\n    printf(\"sizeof(ptr) = %zu\\n\", sizeof(ptr)); /* 8 (pointer) */\n\n    /* ptr can be reassigned; arr cannot */\n    int other[] = {100, 200};\n    ptr = other;  /* OK */\n    /* arr = other;  // ERROR: array not assignable */\n\n    /* ptr++ is valid; arr++ is not */\n    ptr++;\n    printf(\"*ptr = %d\\n\", *ptr); /* 200 */\n    /* arr++;  // ERROR */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "arr[i] is defined as *(arr + i) -- subscript is syntactic sugar",
+            "Array name decays to pointer in most contexts",
+            "sizeof(arr) != sizeof(ptr) -- they are different things",
+            "Arrays cannot be reassigned or incremented; pointers can",
+            "i[arr] is legal and equivalent to arr[i] (curiosity)"
+          ],
+          "gotchas": [
+            "Arrays and pointers are NOT the same: arrays are memory blocks, pointers are address variables",
+            "arr++ is illegal because arr is not a modifiable lvalue",
+            "2[arr] works because arr[2] = *(arr+2) = *(2+arr) = 2[arr]",
+            "After decay, the array loses size information -- always pass size separately"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`arr[i]` is `*(arr + i)`. Array names decay to pointers but are NOT pointers. `sizeof(arr)` gives total array size; `sizeof(ptr)` gives pointer size. Arrays cannot be reassigned.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int arr[3] = {10, 20, 30};\n    int *p = arr;\n    printf(\"%d %d\\n\", arr[1], *(p+1)); /* 20 20 */\n    printf(\"%zu vs %zu\\n\", sizeof(arr), sizeof(p)); /* 12 vs 8 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "arr[i] == *(arr + i)",
+            "sizeof differs for arrays vs pointers"
+          ],
+          "gotchas": [
+            "Arrays decay to pointers, but they are fundamentally different"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is a pointer to pointer (double pointer)?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["pointer-to-pointer", "double-pointer", "indirection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **pointer to pointer** (double pointer) stores the address of another pointer. Declared as `int **pp`.\n\n**Why use it:**\n1. **Modify a pointer in a function:** Since C is pass-by-value, to change what a pointer points to, pass a pointer to that pointer.\n2. **Dynamic 2D arrays:** Array of pointers to dynamically allocated rows.\n3. **argv:** `char **argv` in main() is a pointer to an array of char pointers.\n\n**Dereferencing:**\n- `*pp` gives the inner pointer (the address it stores).\n- `**pp` gives the final value (dereference twice).",
+          "pseudo_code": "int x = 42;\nint *p = &x;     // pointer to int\nint **pp = &p;   // pointer to pointer to int\n\n**pp == *p == x == 42  (all the same value)\n*pp == p == &x         (all the same address)\npp == &p               (address of the pointer p)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Modify a pointer through double pointer */\nvoid allocate(int **pp) {\n    *pp = malloc(sizeof(int));\n    if (*pp) **pp = 99;\n}\n\nint main(void) {\n    int x = 42;\n    int *p = &x;\n    int **pp = &p;\n\n    printf(\"x    = %d\\n\", x);     /* 42 */\n    printf(\"*p   = %d\\n\", *p);    /* 42 */\n    printf(\"**pp = %d\\n\", **pp);  /* 42 */\n\n    /* Modify x through double pointer */\n    **pp = 100;\n    printf(\"x after **pp=100: %d\\n\", x); /* 100 */\n\n    /* Modify pointer through function */\n    int *dynamic = NULL;\n    allocate(&dynamic);  /* pass address of pointer */\n    if (dynamic) {\n        printf(\"*dynamic = %d\\n\", *dynamic); /* 99 */\n        free(dynamic);\n    }\n\n    /* char** for array of strings */\n    const char *words[] = {\"hello\", \"world\"};\n    const char **wp = words;\n    printf(\"%s %s\\n\", wp[0], wp[1]); /* hello world */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int **pp is a pointer to a pointer to int",
+            "**pp dereferences twice to get the final value",
+            "Used to modify a pointer via function call (pass &ptr)",
+            "argv in main is char** (pointer to array of char pointers)",
+            "Dynamic 2D arrays use arrays of pointers (int **matrix)"
+          ],
+          "gotchas": [
+            "int **pp is NOT the same as a 2D array (int arr[3][4])",
+            "Forgetting the & when passing to a function that expects int** is a type error",
+            "Triple pointers (int ***) are almost always a sign of bad design",
+            "Each level of indirection adds complexity -- keep it to 2 levels max"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`int **pp` = pointer to pointer. `**pp` = final value. Used to modify pointers in functions and for dynamic 2D arrays. `argv` is `char **`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nvoid alloc(int **pp) { *pp = malloc(sizeof(int)); **pp = 42; }\nint main(void) {\n    int *p = NULL;\n    alloc(&p);\n    printf(\"%d\\n\", *p); /* 42 */\n    free(p);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pass &ptr to modify a pointer in a function",
+            "**pp dereferences twice"
+          ],
+          "gotchas": [
+            "int ** is NOT the same as a 2D array"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are void pointers and how are they used for generic programming?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["void-pointer", "generic", "type-erasure"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`void *` is C's mechanism for type-generic code. It can point to any data type.\n\n**Key rules:**\n1. Any data pointer can be implicitly converted to `void *` and back (in C, no cast needed).\n2. Cannot dereference `void *` directly -- must cast to a typed pointer first.\n3. Cannot do pointer arithmetic on `void *` (standard C).\n4. `sizeof(void)` is undefined (GCC defines it as 1 as an extension).\n\n**Standard library uses:**\n- `malloc` returns `void *`.\n- `qsort` and `bsearch` accept `void *` for type-generic sorting/searching.\n- `memcpy`, `memset` accept `void *` for raw memory operations.",
+          "pseudo_code": "void *ptr;          // can point to any type\nptr = &int_var;     // implicit conversion to void*\nint *ip = ptr;      // implicit conversion from void* (C only)\n*(int *)ptr = 42;   // must cast to dereference\n\nCannot: *ptr, ptr+1 (no type info)\nCan: assign to/from any pointer type",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* Generic swap function */\nvoid generic_swap(void *a, void *b, size_t size) {\n    void *temp = malloc(size);\n    if (!temp) return;\n    memcpy(temp, a, size);\n    memcpy(a, b, size);\n    memcpy(b, temp, size);\n    free(temp);\n}\n\n/* Generic print function */\nvoid print_value(const void *data, char type) {\n    switch (type) {\n        case 'i': printf(\"%d\", *(const int *)data); break;\n        case 'd': printf(\"%f\", *(const double *)data); break;\n        case 's': printf(\"%s\", (const char *)data); break;\n    }\n    printf(\"\\n\");\n}\n\nint main(void) {\n    /* Generic swap works with any type */\n    int a = 10, b = 20;\n    generic_swap(&a, &b, sizeof(int));\n    printf(\"a=%d b=%d\\n\", a, b); /* a=20 b=10 */\n\n    double x = 1.5, y = 2.5;\n    generic_swap(&x, &y, sizeof(double));\n    printf(\"x=%f y=%f\\n\", x, y); /* x=2.5 y=1.5 */\n\n    /* Generic print */\n    int n = 42;\n    double pi = 3.14;\n    print_value(&n, 'i');    /* 42 */\n    print_value(&pi, 'd');   /* 3.140000 */\n    print_value(\"hello\", 's'); /* hello */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void * can point to any type -- C's way of doing generics",
+            "Must cast to a typed pointer before dereferencing",
+            "malloc returns void * -- no cast needed in C",
+            "memcpy/qsort use void * for type-generic operations",
+            "The programmer is responsible for type correctness"
+          ],
+          "gotchas": [
+            "Casting void * to the wrong type and dereferencing is UB",
+            "Do not cast malloc's return in C -- it can hide missing <stdlib.h>",
+            "Standard C does not allow arithmetic on void * -- use char * for byte offsets",
+            "void * cannot point to functions (function pointers are separate)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`void *` can point to any type. Must cast to dereference. No pointer arithmetic in standard C. Used by malloc, qsort, memcpy. No cast needed for void * conversions in C.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nvoid swap(void *a, void *b, size_t sz) {\n    char tmp[64];\n    memcpy(tmp, a, sz);\n    memcpy(a, b, sz);\n    memcpy(b, tmp, sz);\n}\nint main(void) {\n    int a = 1, b = 2;\n    swap(&a, &b, sizeof(int));\n    printf(\"%d %d\\n\", a, b); /* 2 1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void * = generic pointer; cast to dereference",
+            "No cast needed for void * in C"
+          ],
+          "gotchas": [
+            "Wrong cast type = undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do pointer comparisons work?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["pointer-comparison", "equality", "relational"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Equality comparison** (`==`, `!=`): Can compare any two pointers of compatible type, or any pointer with NULL.\n\n**Relational comparison** (`<`, `>`, `<=`, `>=`): Only well-defined between pointers to elements of the same array (or one past the end). Comparing pointers to unrelated objects is undefined behavior.\n\n**Why relational comparison is restricted:** Pointers may come from different memory segments (stack, heap, static), and the relative ordering between segments is meaningless.\n\n**Common uses:**\n- `p == NULL` -- null check.\n- `p < end` -- loop through array with pointers.\n- `p1 == p2` -- check if two pointers point to the same object.",
+          "pseudo_code": "Allowed:\n  p == NULL, p != NULL         (any pointer vs null)\n  p1 == p2, p1 != p2          (compatible pointer types)\n  p1 < p2, p1 > p2            (ONLY within same array)\n\nUndefined:\n  p1 < p2 when pointing to different objects/arrays",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int arr[5] = {10, 20, 30, 40, 50};\n    int *start = &arr[0];\n    int *end = &arr[5]; /* one past the end -- valid for comparison */\n    int *mid = &arr[2];\n\n    /* Equality */\n    printf(\"start == arr? %d\\n\", start == arr); /* 1 */\n\n    /* Relational: within same array */\n    printf(\"start < end? %d\\n\", start < end); /* 1 */\n    printf(\"mid < end?   %d\\n\", mid < end);   /* 1 */\n\n    /* Pointer traversal with comparison */\n    for (int *p = start; p < end; p++) {\n        printf(\"%d \", *p);\n    }\n    printf(\"\\n\"); /* 10 20 30 40 50 */\n\n    /* NULL comparison */\n    int *null_ptr = NULL;\n    if (null_ptr == NULL) {\n        printf(\"Pointer is NULL\\n\");\n    }\n\n    /* Comparing pointers to same object */\n    int x = 42;\n    int *p1 = &x;\n    int *p2 = &x;\n    printf(\"p1 == p2? %d\\n\", p1 == p2); /* 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "== and != work for any compatible pointer types",
+            "< > <= >= only defined within the same array",
+            "One-past-the-end pointer is valid for comparison but not dereference",
+            "Comparing pointers to unrelated objects is UB",
+            "NULL comparison is always valid"
+          ],
+          "gotchas": [
+            "Comparing pointers from different malloc calls with < is UB (even if it seems to work)",
+            "Comparing a function pointer and a data pointer is undefined",
+            "One-past-the-end: &arr[N] is valid for comparison but dereferencing it is UB",
+            "Pointer equality does not imply the values are equal (strict aliasing)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`==`/`!=` work for any compatible pointers and NULL. `<`/`>` only within the same array. Comparing pointers to unrelated objects is UB. One-past-the-end is valid for comparison.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int arr[3] = {1, 2, 3};\n    int *end = arr + 3; /* one past the end */\n    for (int *p = arr; p < end; p++) printf(\"%d \", *p);\n    printf(\"\\n\"); /* 1 2 3 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Relational comparison only within same array",
+            "One-past-end valid for comparison, not dereference"
+          ],
+          "gotchas": [
+            "< between unrelated pointers is UB"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are wild pointers and dangling pointers?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["wild-pointer", "dangling-pointer", "bugs", "safety"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Wild pointer:** An uninitialized pointer that contains a random (garbage) address. Using it is UB.\n\n**Dangling pointer:** A pointer that used to point to valid memory, but that memory has been freed or the variable has gone out of scope. Using it is UB.\n\n**Common causes of dangling pointers:**\n1. Using a pointer after `free()`.\n2. Returning a pointer to a local variable.\n3. Using a pointer to a block-scope variable after the block ends.\n4. Using a pointer after `realloc()` moves the memory.\n\n**Prevention:**\n- Initialize all pointers (to a valid address or NULL).\n- Set pointers to NULL after free.\n- Never return pointers to local variables.\n- Be careful with realloc -- it can invalidate old pointers.",
+          "pseudo_code": "Wild pointer:\n  int *p;          // uninitialized -- points to random address\n  *p = 42;         // UB!\n\nDangling pointer:\n  int *p = malloc(sizeof(int));\n  free(p);         // p now dangles\n  *p = 42;         // UB!\n\n  int *f() {\n    int local = 42;\n    return &local;  // dangling -- local dies when f returns\n  }",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* BAD: returns pointer to local variable */\n/* int *bad_function(void) {\n    int local = 42;\n    return &local;  // DANGLING: local destroyed on return\n} */\n\n/* GOOD: return heap-allocated memory */\nint *good_function(void) {\n    int *p = malloc(sizeof(int));\n    if (p) *p = 42;\n    return p;  /* caller must free */\n}\n\nint main(void) {\n    /* Wild pointer: uninitialized */\n    /* int *wild;\n       *wild = 10;  // UB! wild points to garbage address */\n\n    /* Dangling pointer: use after free */\n    int *p = malloc(sizeof(int));\n    *p = 42;\n    free(p);\n    /* *p = 100;  // UB! p is dangling */\n    p = NULL;  /* GOOD: prevent accidental use */\n\n    /* Safe function */\n    int *safe = good_function();\n    if (safe) {\n        printf(\"%d\\n\", *safe); /* 42 */\n        free(safe);\n        safe = NULL;\n    }\n\n    /* Dangling from scope */\n    int *scope_ptr;\n    {\n        int local = 99;\n        scope_ptr = &local;\n    }\n    /* scope_ptr is now dangling -- local is out of scope */\n    /* printf(\"%d\", *scope_ptr);  // UB! */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Wild pointer: uninitialized, points to random address",
+            "Dangling pointer: points to freed or out-of-scope memory",
+            "Both cause undefined behavior when dereferenced",
+            "Set pointers to NULL after free to prevent dangling use",
+            "Never return a pointer to a local variable"
+          ],
+          "gotchas": [
+            "Use-after-free bugs may work intermittently and only crash in production",
+            "realloc can move memory, making old pointers dangling",
+            "A dangling pointer still has the old address value -- comparisons may seem valid but are UB",
+            "Static analysis tools (clang-tidy, cppcheck) can detect many dangling pointer bugs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Wild** = uninitialized (garbage address). **Dangling** = points to freed/out-of-scope memory. Both cause UB. Fix: initialize all pointers, set to NULL after free, never return address of local.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint main(void) {\n    int *p = malloc(sizeof(int));\n    if (p) { *p = 42; printf(\"%d\\n\", *p); }\n    free(p);\n    p = NULL; /* prevent dangling use */\n    /* *p would segfault now (NULL deref) instead of silent corruption */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Wild = uninitialized; dangling = freed/out-of-scope",
+            "Set to NULL after free"
+          ],
+          "gotchas": [
+            "Dangling pointer bugs may work by accident, then crash in production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the size of a pointer and does it depend on the platform?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["pointer-size", "platform", "32-bit", "64-bit"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The size of a pointer depends on the platform's **address bus width**, not on the type it points to.\n\n**Common sizes:**\n- 32-bit systems: all pointers are 4 bytes.\n- 64-bit systems: all pointers are 8 bytes.\n\n**All data pointers have the same size** on a given platform: `sizeof(int *)` == `sizeof(char *)` == `sizeof(double *)` == `sizeof(void *)`.\n\n**Exception:** Function pointers may have a different size than data pointers on some architectures (e.g., Harvard architecture embedded systems).\n\n**Why it matters:**\n- Do not assume pointer size. Use `sizeof(ptr)` or `sizeof(void *)` to check.\n- Use `%p` (with cast to `void *`) to print pointers.\n- Use `uintptr_t` from `<stdint.h>` to store a pointer as an integer.\n- Never cast a pointer to `int` on 64-bit systems (data loss).",
+          "pseudo_code": "32-bit system: sizeof(int*) = sizeof(char*) = sizeof(void*) = 4\n64-bit system: sizeof(int*) = sizeof(char*) = sizeof(void*) = 8\n\nAll data pointers same size on a given platform\nFunction pointers may differ (rare)\nUse uintptr_t to store pointer as integer",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\nint dummy_func(void) { return 0; }\n\nint main(void) {\n    printf(\"sizeof(char *)    = %zu\\n\", sizeof(char *));\n    printf(\"sizeof(int *)     = %zu\\n\", sizeof(int *));\n    printf(\"sizeof(double *)  = %zu\\n\", sizeof(double *));\n    printf(\"sizeof(void *)    = %zu\\n\", sizeof(void *));\n    printf(\"sizeof(int (*)(void)) = %zu\\n\", sizeof(int (*)(void)));\n\n    /* On 64-bit: all print 8 */\n    /* On 32-bit: all print 4 */\n\n    /* Pointer to integer conversion */\n    int x = 42;\n    uintptr_t addr = (uintptr_t)&x;\n    printf(\"address as integer: 0x%lx\\n\", (unsigned long)addr);\n\n    /* Recover pointer from integer */\n    int *p = (int *)addr;\n    printf(\"*p = %d\\n\", *p); /* 42 */\n\n    /* Print pointer */\n    printf(\"&x = %p\\n\", (void *)&x);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pointer size depends on platform: 4 bytes (32-bit) or 8 bytes (64-bit)",
+            "All data pointers are the same size on a given platform",
+            "sizeof(int *) == sizeof(void *) == sizeof(char *)",
+            "Use uintptr_t for pointer-to-integer conversion",
+            "Never cast pointer to int on 64-bit (truncation)"
+          ],
+          "gotchas": [
+            "Casting pointer to int on 64-bit truncates the address (data loss!)",
+            "Use uintptr_t (from <stdint.h>) for safe pointer-to-integer round-trips",
+            "Function pointers can be different size than data pointers on some architectures",
+            "Windows 64-bit (LLP64): long is 4 bytes but pointers are 8 bytes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pointer size depends on platform: 4 bytes (32-bit) or 8 bytes (64-bit). All data pointers are the same size. Use `uintptr_t` for pointer-to-integer conversion. Never cast to `int` on 64-bit.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\nint main(void) {\n    printf(\"ptr size = %zu bytes\\n\", sizeof(void *)); /* 4 or 8 */\n    int x = 42;\n    uintptr_t addr = (uintptr_t)&x;\n    printf(\"0x%lx\\n\", (unsigned long)addr);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "4 bytes on 32-bit; 8 bytes on 64-bit",
+            "Use uintptr_t for pointer-to-integer"
+          ],
+          "gotchas": [
+            "Casting pointer to int on 64-bit truncates the address"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does const work with pointers (const int* vs int* const)?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["const", "pointers", "read-only"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are three ways to use `const` with pointers:\n\n**1. Pointer to const data:** `const int *p` (or `int const *p`)\n- Cannot modify the data through `p`: `*p = 10;` is an error.\n- CAN change what `p` points to: `p = &y;` is OK.\n- \"I promise not to modify the data through this pointer.\"\n\n**2. Const pointer:** `int *const p`\n- CAN modify the data through `p`: `*p = 10;` is OK.\n- Cannot change what `p` points to: `p = &y;` is an error.\n- \"This pointer always points to the same location.\"\n\n**3. Const pointer to const data:** `const int *const p`\n- Cannot modify the data: `*p = 10;` is an error.\n- Cannot change the pointer: `p = &y;` is an error.\n- \"Read-only pointer to read-only data.\"\n\n**Reading rule:** Read the declaration from right to left. `const int *p` = \"p is a pointer to int that is const\" = pointer to const int.",
+          "pseudo_code": "const int *p;        // pointer to const int (data is read-only)\nint *const p;        // const pointer to int (pointer is fixed)\nconst int *const p;  // const pointer to const int (both fixed)\n\nRead right to left:\n  const int *p  -> p is a (*) to int that is const\n  int *const p  -> p is a const (*) to int",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    int x = 10, y = 20;\n\n    /* 1. Pointer to const data */\n    const int *pc = &x;\n    /* *pc = 99;  // ERROR: cannot modify through pc */\n    pc = &y;     /* OK: can change what pc points to */\n    printf(\"*pc = %d\\n\", *pc); /* 20 */\n\n    /* 2. Const pointer */\n    int *const cp = &x;\n    *cp = 99;    /* OK: can modify the data */\n    /* cp = &y;  // ERROR: cannot change the pointer */\n    printf(\"*cp = %d\\n\", *cp); /* 99 */\n\n    /* 3. Const pointer to const data */\n    const int *const cpc = &x;\n    /* *cpc = 50;  // ERROR: cannot modify data */\n    /* cpc = &y;   // ERROR: cannot change pointer */\n    printf(\"*cpc = %d\\n\", *cpc); /* 99 */\n\n    /* Practical: function parameter promises read-only */\n    /* void print(const int *arr, int n) -- will not modify arr */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const int *p: data is read-only (pointer can be changed)",
+            "int *const p: pointer is fixed (data can be modified)",
+            "const int *const p: both are read-only",
+            "Read right to left to understand const placement",
+            "Use const int * in function params to promise read-only access"
+          ],
+          "gotchas": [
+            "const int *p and int const *p are identical (both = pointer to const int)",
+            "Casting away const and modifying is undefined behavior",
+            "int *p = (int *)const_ptr; -- compiles but modification through p is UB",
+            "Arrays passed as const int *arr prevent modification inside the function"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`const int *p` = data read-only, pointer changeable. `int *const p` = pointer fixed, data modifiable. `const int *const p` = both read-only. Read right to left.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(void) {\n    int x = 10, y = 20;\n    const int *pc = &x;  /* data read-only */\n    pc = &y;             /* OK */\n    /* *pc = 5;           ERROR */\n    int *const cp = &x;  /* pointer fixed */\n    *cp = 5;             /* OK */\n    /* cp = &y;           ERROR */\n    printf(\"%d %d\\n\", *pc, *cp); /* 20 5 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "const before * = data read-only",
+            "const after * = pointer fixed"
+          ],
+          "gotchas": [
+            "const int *p and int const *p are the same"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you pass arrays to functions using pointers?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["arrays", "functions", "pointer-parameter"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you pass an array to a function, it **decays to a pointer** to its first element. The function receives just the address -- it does NOT know the array size.\n\n**Consequence:** You must always pass the size as a separate parameter.\n\n**These are all equivalent:**\n```c\nvoid f(int arr[]);\nvoid f(int arr[100]);  // 100 is ignored\nvoid f(int *arr);\n```\n\nAll three are just `void f(int *arr)`. The compiler treats array parameters as pointers.\n\n**For 2D arrays:** The column dimension must be specified:\n```c\nvoid f(int arr[][COLS], int rows);  // COLS must be known at compile time\n```",
+          "pseudo_code": "void f(int arr[], int n);    // arr is just int*\nvoid f(int *arr, int n);     // same thing\nvoid f(int arr[100], int n); // 100 is ignored, still just int*\n\n2D: void f(int arr[][COLS], int rows); // COLS required\n\nAlways pass size as separate parameter",
+          "actual_code": "#include <stdio.h>\n\n/* All three are identical: arr is int* */\nvoid print_array(const int *arr, int n) {\n    for (int i = 0; i < n; i++) {\n        printf(\"%d \", arr[i]);\n    }\n    printf(\"\\n\");\n}\n\n/* Modifying array through pointer */\nvoid double_elements(int *arr, int n) {\n    for (int i = 0; i < n; i++) {\n        arr[i] *= 2;\n    }\n}\n\n/* 2D array: column dimension must be specified */\nvoid print_matrix(int rows, int cols, int m[rows][cols]) {\n    for (int i = 0; i < rows; i++) {\n        for (int j = 0; j < cols; j++) {\n            printf(\"%3d\", m[i][j]);\n        }\n        printf(\"\\n\");\n    }\n}\n\nint main(void) {\n    int arr[] = {1, 2, 3, 4, 5};\n    int n = sizeof(arr) / sizeof(arr[0]);\n\n    print_array(arr, n); /* 1 2 3 4 5 */\n\n    double_elements(arr, n);\n    print_array(arr, n); /* 2 4 6 8 10 */\n\n    int mat[2][3] = {{1,2,3},{4,5,6}};\n    print_matrix(2, 3, mat);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Arrays decay to pointers when passed to functions",
+            "Always pass the size as a separate parameter",
+            "int arr[], int arr[100], and int *arr are all the same in parameters",
+            "Function can modify the original array through the pointer",
+            "For 2D arrays, the column count must be specified"
+          ],
+          "gotchas": [
+            "sizeof(arr) inside the function gives pointer size, not array size",
+            "void f(int arr[100]) does NOT enforce that the array has 100 elements",
+            "Forgetting to pass the size is a common source of buffer overflows",
+            "2D arrays and pointer-to-pointer require different function signatures"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Arrays decay to pointers in function parameters. `int arr[]`, `int arr[100]`, and `int *arr` are all the same. Always pass size separately. sizeof gives pointer size inside the function.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nvoid sum(const int *arr, int n) {\n    int total = 0;\n    for (int i = 0; i < n; i++) total += arr[i];\n    printf(\"%d\\n\", total);\n}\nint main(void) {\n    int a[] = {1, 2, 3, 4, 5};\n    sum(a, 5); /* 15 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Array decays to pointer in function parameter",
+            "Always pass size separately"
+          ],
+          "gotchas": [
+            "sizeof(arr) in function = pointer size"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the dangers of returning pointers from functions?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["return-pointer", "dangling", "stack-vs-heap"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Returning a pointer from a function is common but has pitfalls:\n\n**SAFE to return:**\n1. Pointer to heap memory (malloc'd) -- caller must free.\n2. Pointer to static/global variables -- they persist.\n3. Pointer to string literals -- they persist for the program lifetime.\n4. Pointer passed in as a parameter (it was valid before the call).\n\n**DANGEROUS (UB):**\n1. Pointer to a local variable -- the variable is destroyed when the function returns, creating a **dangling pointer**.\n2. Pointer to a local array -- same problem.\n\n**The key rule:** Never return the address of a local (automatic) variable.",
+          "pseudo_code": "SAFE:\n  return malloc(n);         // heap memory persists\n  return &static_var;       // static persists\n  return \"literal\";         // string literal persists\n  return input_ptr;         // was valid before call\n\nDANGEROUS:\n  int local = 42;\n  return &local;            // DANGLING! local destroyed on return",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\n/* GOOD: return heap-allocated memory */\nint *create_array(int n) {\n    int *arr = malloc(n * sizeof(int));\n    if (arr) {\n        for (int i = 0; i < n; i++) arr[i] = i * 10;\n    }\n    return arr;  /* caller must free */\n}\n\n/* GOOD: return pointer to static */\nconst char *get_greeting(void) {\n    static char buf[50] = \"Hello, World!\";\n    return buf;  /* buf persists */\n}\n\n/* GOOD: return string literal */\nconst char *get_name(void) {\n    return \"Alice\";  /* string literal persists */\n}\n\n/* BAD: return pointer to local */\n/* int *bad_function(void) {\n    int local = 42;\n    return &local;  // DANGLING: local destroyed here\n} */\n\nint main(void) {\n    int *arr = create_array(5);\n    if (arr) {\n        for (int i = 0; i < 5; i++) printf(\"%d \", arr[i]);\n        printf(\"\\n\"); /* 0 10 20 30 40 */\n        free(arr);\n    }\n\n    printf(\"%s\\n\", get_greeting()); /* Hello, World! */\n    printf(\"%s\\n\", get_name());     /* Alice */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never return a pointer to a local variable",
+            "Safe: return heap (malloc), static, literal, or input pointer",
+            "Heap-allocated returns: caller is responsible for free()",
+            "Static returns: be aware they share the same buffer across calls",
+            "Use const for returned string literals"
+          ],
+          "gotchas": [
+            "Returning &local creates a dangling pointer -- may work by accident, fail in release builds",
+            "Static buffers returned from functions are shared: multiple calls overwrite the same buffer",
+            "Forgetting to free returned heap memory causes leaks",
+            "The compiler may warn about returning address of local (-Wreturn-local-addr)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Never return a pointer to a local variable (dangling). Safe: heap (malloc), static, literal, or input pointers. Caller must free heap allocations. Static returns share one buffer across calls.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint *make_int(int val) {\n    int *p = malloc(sizeof(int)); /* heap: safe */\n    if (p) *p = val;\n    return p;\n}\nint main(void) {\n    int *p = make_int(42);\n    if (p) { printf(\"%d\\n\", *p); free(p); }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Never return address of local variable",
+            "Heap allocations persist; caller must free"
+          ],
+          "gotchas": [
+            "Returning &local may appear to work but is UB"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does pointer casting work and when is it safe?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["pointer-casting", "type-punning", "strict-aliasing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pointer casting converts a pointer from one type to another. Some casts are safe; others invoke undefined behavior.\n\n**Safe casts:**\n1. Any pointer to/from `void *` -- always valid in C.\n2. Any pointer to/from `char *` / `unsigned char *` -- examining raw bytes is always allowed.\n3. Pointer to struct to pointer to its first member (if properly aligned).\n\n**Unsafe casts (strict aliasing violations):**\n- Casting `int *` to `float *` and dereferencing violates the **strict aliasing rule**.\n- The compiler assumes pointers of different types do not alias the same memory.\n- Violation is undefined behavior -- the optimizer can produce wrong code.\n\n**The strict aliasing rule (C99 6.5/7):** An object shall have its stored value accessed only through an lvalue of a compatible type, a char type, or a qualified version. Everything else is UB.",
+          "pseudo_code": "Safe:\n  void *v = &x; int *p = v;           // void* conversion\n  char *bytes = (char *)&x;           // examining raw bytes\n  struct S *sp = ...; int *ip = (int *)sp;  // first member\n\nUnsafe (strict aliasing violation):\n  int x = 42;\n  float *fp = (float *)&x;\n  float f = *fp;   // UB! int aliased as float",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* SAFE: void* conversion */\n    int x = 42;\n    void *vp = &x;\n    int *ip = vp;  /* implicit in C */\n    printf(\"%d\\n\", *ip); /* 42 */\n\n    /* SAFE: examining bytes through char* */\n    unsigned char *bytes = (unsigned char *)&x;\n    printf(\"bytes of %d: \", x);\n    for (size_t i = 0; i < sizeof(int); i++) {\n        printf(\"%02X \", bytes[i]);\n    }\n    printf(\"\\n\");\n\n    /* SAFE: type punning through memcpy (not pointer cast) */\n    float f;\n    unsigned int bits = 0x42280000; /* IEEE 754 for 42.0 */\n    memcpy(&f, &bits, sizeof(f));\n    printf(\"f = %f\\n\", f); /* 42.000000 */\n\n    /* UNSAFE: direct pointer cast (strict aliasing violation) */\n    /* float *fp = (float *)&x;\n       float bad = *fp;  // UB! */\n\n    /* SAFE alternative: use a union (C99 allows it) */\n    union {\n        int i;\n        float f;\n    } pun;\n    pun.i = 0x42280000;\n    printf(\"pun.f = %f\\n\", pun.f); /* 42.000000 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void * and char * casts are always safe",
+            "Strict aliasing: accessing memory through incompatible pointer types is UB",
+            "Use memcpy for type punning, not pointer casts",
+            "Union-based type punning is allowed in C99",
+            "Compiler uses strict aliasing for optimization (assumes no aliasing)"
+          ],
+          "gotchas": [
+            "int x; float f = *(float *)&x; is UB (strict aliasing violation)",
+            "-fno-strict-aliasing disables the optimization (GCC/Clang) but is not portable",
+            "memcpy is the only fully portable way to do type punning",
+            "Violating strict aliasing can cause the optimizer to produce incorrect code"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "void* and char* casts are always safe. Casting between unrelated pointer types (int* to float*) and dereferencing violates strict aliasing (UB). Use `memcpy` for type punning.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\nint main(void) {\n    int x = 42;\n    unsigned char *b = (unsigned char *)&x; /* safe: char* */\n    printf(\"%02X\\n\", b[0]);\n    /* float *f = (float *)&x; *f; -- UB! strict aliasing */\n    float f;\n    memcpy(&f, &x, sizeof(f)); /* safe type punning */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "void* and char* casts are safe",
+            "Use memcpy for type punning"
+          ],
+          "gotchas": [
+            "Casting int* to float* and dereferencing is UB"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most common pointer mistakes in C?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["pointer-bugs", "common-mistakes", "debugging"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Top pointer mistakes:**\n\n1. **Dereferencing NULL:** Forgetting to check malloc return or function return values.\n2. **Use after free:** Using a pointer after calling free() on it.\n3. **Memory leaks:** Forgetting to free() allocated memory.\n4. **Dangling pointer:** Returning address of a local variable.\n5. **Buffer overflow:** Writing past the end of an allocated buffer.\n6. **Uninitialized pointer:** Using a pointer without initializing it.\n7. **Wrong type cast:** Casting to the wrong pointer type.\n8. **Off-by-one:** Allocating n bytes but needing n+1 (e.g., forgetting null terminator).\n9. **Double free:** Calling free() twice on the same pointer.\n10. **Sizeof pointer vs sizeof data:** `malloc(sizeof(ptr))` instead of `malloc(sizeof(*ptr))`.",
+          "pseudo_code": "1. NULL deref: if (!ptr) { handle error; }\n2. Use after free: free(p); p = NULL;\n3. Memory leak: always free what you malloc\n4. Dangling: never return &local\n5. Buffer overflow: check bounds\n6. Uninitialized: always init to NULL or valid address\n7. Wrong cast: match pointer types\n8. Off-by-one: malloc(strlen(s) + 1) for strings\n9. Double free: set to NULL after free\n10. sizeof: malloc(sizeof(*ptr)) not sizeof(ptr)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nint main(void) {\n    /* BUG 1: sizeof pointer vs sizeof data */\n    int *bad = malloc(sizeof(bad));   /* WRONG: 8 bytes (pointer) */\n    int *good = malloc(sizeof(*good)); /* RIGHT: 4 bytes (int) */\n\n    /* BUG 2: Off-by-one for strings */\n    const char *src = \"hello\";\n    /* char *s = malloc(strlen(src));  // WRONG: missing +1 for null */\n    char *s = malloc(strlen(src) + 1);  /* RIGHT */\n    if (s) {\n        strcpy(s, src);\n        printf(\"%s\\n\", s);\n        free(s);\n    }\n\n    /* BUG 3: Forgetting NULL check */\n    int *p = malloc(1000000000 * sizeof(int));\n    if (p == NULL) {\n        fprintf(stderr, \"malloc failed!\\n\");\n        /* Don't use p! */\n    } else {\n        p[0] = 42;\n        free(p);\n    }\n\n    /* GOOD pattern: malloc with sizeof(*ptr) */\n    int *arr = malloc(10 * sizeof(*arr)); /* works even if type changes */\n    if (arr) {\n        for (int i = 0; i < 10; i++) arr[i] = i;\n        free(arr);\n        arr = NULL; /* prevent double free */\n    }\n\n    free(good);\n    free(bad);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use sizeof(*ptr) not sizeof(ptr) in malloc",
+            "malloc(strlen(s) + 1) for string copies (include null terminator)",
+            "Always check malloc return for NULL",
+            "Set pointer to NULL after free to prevent double-free and use-after-free",
+            "Use valgrind and Address Sanitizer to find memory bugs"
+          ],
+          "gotchas": [
+            "malloc(sizeof(ptr)) allocates pointer size (8), not the data size",
+            "strlen(s) does not include the null terminator -- always +1",
+            "Double free causes undefined behavior -- can corrupt the heap",
+            "Use-after-free bugs may appear to work and only crash under load"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Top mistakes: NULL deref, use-after-free, leaks, dangling pointers, buffer overflow, sizeof(ptr) vs sizeof(*ptr), missing +1 for null terminator. Use valgrind and -fsanitize=address.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdlib.h>\n#include <string.h>\n#include <stdio.h>\nint main(void) {\n    /* GOOD patterns */\n    int *p = malloc(10 * sizeof(*p)); /* sizeof(*p), not sizeof(p) */\n    char *s = malloc(strlen(\"hello\") + 1); /* +1 for null */\n    if (p && s) {\n        strcpy(s, \"hello\");\n        printf(\"%s\\n\", s);\n    }\n    free(p); p = NULL;\n    free(s); s = NULL;\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sizeof(*ptr) in malloc, not sizeof(ptr)",
+            "strlen + 1 for string allocation"
+          ],
+          "gotchas": [
+            "malloc(sizeof(ptr)) allocates 8 bytes, not the data size"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use pointers to traverse and manipulate strings?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["string-pointer", "traversal", "pointer-idioms"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Strings in C are just char arrays, and pointers are the natural way to traverse them. Many idiomatic C patterns use pointer arithmetic for string manipulation.\n\n**Common pointer patterns:**\n1. **Traversal:** `while (*p) { ... p++; }` -- iterate until null terminator.\n2. **Copy:** `while (*dst++ = *src++);` -- copy including null terminator.\n3. **Length:** increment pointer until null, subtract start address.\n4. **Search:** advance pointer until match or null.\n\nThese patterns are more idiomatic and often faster than index-based loops.",
+          "pseudo_code": "Traversal: while (*p) { process(*p); p++; }\nCopy:      while (*dst++ = *src++) ; // compact idiom\nLength:    char *s = str; while (*s) s++; return s - str;\nSearch:    while (*p && *p != ch) p++;",
+          "actual_code": "#include <stdio.h>\n\n/* Pointer-based strlen */\nsize_t my_strlen(const char *s) {\n    const char *start = s;\n    while (*s) s++;\n    return (size_t)(s - start);\n}\n\n/* Pointer-based strcpy */\nchar *my_strcpy(char *dst, const char *src) {\n    char *orig = dst;\n    while ((*dst++ = *src++)) ; /* copies including null */\n    return orig;\n}\n\n/* Count occurrences using pointer */\nint count_char(const char *s, char c) {\n    int count = 0;\n    while (*s) {\n        if (*s == c) count++;\n        s++;\n    }\n    return count;\n}\n\n/* Find character using pointer */\nconst char *my_strchr(const char *s, char c) {\n    while (*s) {\n        if (*s == c) return s;\n        s++;\n    }\n    return (c == '\\0') ? s : NULL;\n}\n\nint main(void) {\n    const char *msg = \"hello world\";\n\n    printf(\"length: %zu\\n\", my_strlen(msg)); /* 11 */\n\n    char buf[20];\n    my_strcpy(buf, msg);\n    printf(\"copy: %s\\n\", buf); /* hello world */\n\n    printf(\"'l' count: %d\\n\", count_char(msg, 'l')); /* 3 */\n\n    const char *found = my_strchr(msg, 'w');\n    if (found) {\n        printf(\"found at offset %td: %s\\n\",\n               found - msg, found); /* 6: world */\n    }\n\n    /* Idiomatic pointer traversal */\n    printf(\"chars: \");\n    for (const char *p = msg; *p; p++) {\n        printf(\"%c \", *p);\n    }\n    printf(\"\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "while (*p) is the idiomatic way to traverse a string",
+            "while (*dst++ = *src++) is the classic copy idiom",
+            "Pointer subtraction gives string length or offset",
+            "Pointer-based string functions are idiomatic C",
+            "Always check for null terminator to avoid reading past the string"
+          ],
+          "gotchas": [
+            "while (*dst++ = *src++) has the = inside the condition (assignment, not comparison)",
+            "Forgetting to handle the null terminator in custom string functions causes UB",
+            "Pointer-based string functions assume valid null-terminated input",
+            "Post-increment in *p++ dereferences first, then increments the pointer"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`while (*p)` traverses a string until null. `while (*dst++ = *src++)` copies including null. Pointer subtraction gives length. These are idiomatic C string patterns.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nsize_t my_strlen(const char *s) {\n    const char *p = s;\n    while (*p) p++;\n    return (size_t)(p - s);\n}\nint main(void) {\n    printf(\"%zu\\n\", my_strlen(\"hello\")); /* 5 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "while (*p) is the standard traversal idiom",
+            "*p++ dereferences then increments"
+          ],
+          "gotchas": [
+            "while (*d++ = *s++) assigns AND checks in one expression"
+          ]
+        }
+      ]
+    }
+  ]
+}

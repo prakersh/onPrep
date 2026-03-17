@@ -1,0 +1,745 @@
+{
+  "concept_slug": "bitwise-operations",
+  "questions": [
+    {
+      "title": "What are the bitwise AND, OR, XOR, NOT, and shift operators in C?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "operators", "AND", "OR", "XOR", "NOT", "shift"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C provides six bitwise operators that work on individual bits of integer values:\n\n| Operator | Symbol | Description |\n|----------|--------|-------------|\n| AND | `&` | 1 only if both bits are 1 |\n| OR | `\\|` | 1 if either bit is 1 |\n| XOR | `^` | 1 if bits are different |\n| NOT | `~` | Flips all bits (one's complement) |\n| Left shift | `<<` | Shifts bits left, fills with 0 |\n| Right shift | `>>` | Shifts bits right (arithmetic or logical) |\n\n**Key properties:**\n- AND: masking (extract bits), clearing bits\n- OR: setting bits\n- XOR: toggling bits, finding differences, self-inverse (a ^ a = 0)\n- NOT: one's complement, ~x = -(x+1) for signed integers\n- Left shift by n: multiplies by 2^n\n- Right shift by n: divides by 2^n (for unsigned; implementation-defined for signed)",
+          "pseudo_code": "AND:  1010 & 1100 = 1000  (bits set in BOTH)\nOR:   1010 | 1100 = 1110  (bits set in EITHER)\nXOR:  1010 ^ 1100 = 0110  (bits that DIFFER)\nNOT:  ~1010 = 0101         (flip all bits)\n<<:   0011 << 2 = 1100     (multiply by 4)\n>>:   1100 >> 2 = 0011     (divide by 4)",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    unsigned int a = 0b1010;  /* 10 in decimal */\n    unsigned int b = 0b1100;  /* 12 in decimal */\n\n    printf(\"a & b  = %u\\n\", a & b);   /* 8  (1000) */\n    printf(\"a | b  = %u\\n\", a | b);   /* 14 (1110) */\n    printf(\"a ^ b  = %u\\n\", a ^ b);   /* 6  (0110) */\n    printf(\"~a     = %u\\n\", ~a);      /* 4294967285 (all bits flipped) */\n    printf(\"a << 2 = %u\\n\", a << 2);  /* 40 (101000) -- multiply by 4 */\n    printf(\"b >> 2 = %u\\n\", b >> 2);  /* 3  (0011)   -- divide by 4 */\n\n    /* XOR properties */\n    printf(\"\\nXOR properties:\\n\");\n    printf(\"a ^ 0 = %u\\n\", a ^ 0);    /* a (identity) */\n    printf(\"a ^ a = %u\\n\", a ^ a);    /* 0 (self-inverse) */\n    printf(\"a ^ b ^ b = %u\\n\", a ^ b ^ b);  /* a (cancellation) */\n\n    /* NOT on signed integer */\n    int x = 5;\n    printf(\"\\n~5 = %d\\n\", ~x);  /* -6 (two's complement: ~x = -(x+1)) */\n\n    /* Left shift = multiply by power of 2 */\n    printf(\"3 << 4 = %d\\n\", 3 << 4);  /* 48 = 3 * 16 */\n\n    /* Right shift = divide by power of 2 */\n    printf(\"48 >> 3 = %d\\n\", 48 >> 3);  /* 6 = 48 / 8 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "& (AND): both bits 1 -> 1. Used for masking and clearing bits",
+            "| (OR): either bit 1 -> 1. Used for setting bits",
+            "^ (XOR): different bits -> 1. Self-inverse: a ^ a = 0",
+            "<< n: multiply by 2^n. >> n: divide by 2^n (unsigned)",
+            "~ (NOT): flips all bits. ~x = -(x+1) for signed (two's complement)"
+          ],
+          "gotchas": [
+            "Do not confuse & (bitwise AND) with && (logical AND)",
+            "Do not confuse | (bitwise OR) with || (logical OR)",
+            "Right shift of signed negative integers is implementation-defined (arithmetic vs logical)",
+            "Shifting by a negative amount or by >= bit width is undefined behavior",
+            "Operator precedence: bitwise operators bind weaker than comparison -- use parentheses: (a & b) == 0, not a & b == 0"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`&` AND, `|` OR, `^` XOR, `~` NOT, `<<` left shift, `>>` right shift. AND masks, OR sets, XOR toggles. Left shift = multiply by 2^n.",
+          "pseudo_code": "",
+          "actual_code": "unsigned a = 10, b = 12;\nprintf(\"%u %u %u %u %u %u\\n\",\n    a & b,   /* 8: AND */\n    a | b,   /* 14: OR */\n    a ^ b,   /* 6: XOR */\n    ~a,      /* NOT */\n    a << 2,  /* 40: left shift */\n    b >> 2); /* 3: right shift */",
+          "code_language": "c",
+          "key_points": [
+            "& AND, | OR, ^ XOR, ~ NOT, << left shift, >> right shift"
+          ],
+          "gotchas": [
+            "Don't confuse & with && or | with ||"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set a specific bit in an integer?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "set-bit", "OR"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Setting a bit** means making a specific bit position 1, regardless of its current value.\n\n**Formula:** `num |= (1 << pos)`\n\n**How it works:**\n1. `(1 << pos)` creates a mask with only the target bit set\n2. `|=` (OR) sets that bit to 1 without affecting other bits\n\nOR truth table: `0 | 1 = 1`, `1 | 1 = 1` -- the target bit becomes 1 regardless.\nAll other bits: `x | 0 = x` -- unchanged.\n\n**Bit positions** are typically 0-indexed from the right (least significant bit = position 0).",
+          "pseudo_code": "SetBit(num, pos):\n  mask = 1 << pos      // e.g., pos=3: 00001000\n  num = num | mask     // sets bit at pos to 1\n  return num\n\nExample: num = 5 (0101), pos = 1\n  mask = 0010\n  0101 | 0010 = 0111 = 7",
+          "actual_code": "#include <stdio.h>\n\n/* Set bit at position pos (0-indexed from right) */\nint setBit(int num, int pos) {\n    return num | (1 << pos);\n}\n\n/* Set multiple bits using a mask */\nint setBits(int num, int mask) {\n    return num | mask;\n}\n\nvoid printBinary(unsigned int n, int bits) {\n    for (int i = bits - 1; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int num = 5;  /* 0101 */\n    printf(\"Before: \"); printBinary(num, 8);  /* 00000101 */\n\n    num = setBit(num, 1);\n    printf(\"Set bit 1: \"); printBinary(num, 8);  /* 00000111 = 7 */\n\n    num = setBit(num, 3);\n    printf(\"Set bit 3: \"); printBinary(num, 8);  /* 00001111 = 15 */\n\n    /* Set bit that is already 1 -- no change */\n    num = setBit(num, 0);\n    printf(\"Set bit 0: \"); printBinary(num, 8);  /* 00001111 = 15 */\n\n    /* Set bits 4 and 6 at once */\n    int mask = (1 << 4) | (1 << 6);  /* 01010000 */\n    num = setBits(num, mask);\n    printf(\"Set 4,6:   \"); printBinary(num, 8);  /* 01011111 = 95 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Set bit: num |= (1 << pos)",
+            "OR with a mask sets target bits to 1 without changing others",
+            "Setting an already-set bit is a no-op (idempotent)",
+            "Bit positions are 0-indexed from the LSB (rightmost)",
+            "Can set multiple bits at once with a combined mask"
+          ],
+          "gotchas": [
+            "1 << pos on signed int can cause undefined behavior when pos >= 31 on 32-bit systems",
+            "Use 1U << pos (unsigned) to avoid sign issues with high bit positions",
+            "Shifting 1 by 32 or more is undefined behavior on 32-bit int",
+            "Forgetting that bit positions start at 0, not 1"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`num |= (1 << pos)` -- OR with a mask that has only the target bit set. Idempotent (setting an already-set bit does nothing).",
+          "pseudo_code": "",
+          "actual_code": "int setBit(int num, int pos) {\n    return num | (1 << pos);\n}\n/* Example: setBit(5, 1) -> 7 (0101 | 0010 = 0111) */",
+          "code_language": "c",
+          "key_points": [
+            "OR with (1 << pos) sets that bit to 1"
+          ],
+          "gotchas": [
+            "Use 1U << pos for positions >= 31 to avoid signed overflow"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you clear a specific bit in an integer?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "clear-bit", "AND", "NOT"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Clearing a bit** means setting a specific bit position to 0.\n\n**Formula:** `num &= ~(1 << pos)`\n\n**How it works:**\n1. `(1 << pos)` creates a mask with only the target bit set\n2. `~` inverts it: all bits are 1 except the target (which is 0)\n3. `&=` (AND) clears the target bit while preserving all others\n\nAND truth table: `x & 1 = x` (preserved), `x & 0 = 0` (cleared).\n\nThe inverted mask has 0 only at the target position, so AND clears only that bit.",
+          "pseudo_code": "ClearBit(num, pos):\n  mask = ~(1 << pos)   // e.g., pos=2: 11111011\n  num = num & mask     // clears bit at pos\n  return num\n\nExample: num = 7 (0111), pos = 1\n  1 << 1 = 0010\n  ~0010  = 1101\n  0111 & 1101 = 0101 = 5",
+          "actual_code": "#include <stdio.h>\n\n/* Clear bit at position pos */\nint clearBit(int num, int pos) {\n    return num & ~(1 << pos);\n}\n\n/* Clear all bits from MSB through pos (inclusive) */\nint clearBitsFromMSB(int num, int pos) {\n    int mask = (1 << pos) - 1;\n    return num & mask;\n}\n\n/* Clear all bits from pos through 0 (inclusive) */\nint clearBitsFromLSB(int num, int pos) {\n    int mask = ~((1 << (pos + 1)) - 1);\n    return num & mask;\n}\n\nvoid printBinary(unsigned int n, int bits) {\n    for (int i = bits - 1; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int num = 15;  /* 1111 */\n    printf(\"Before: \"); printBinary(num, 8);  /* 00001111 */\n\n    printf(\"Clear bit 2: \"); printBinary(clearBit(num, 2), 8);  /* 00001011 = 11 */\n    printf(\"Clear bit 0: \"); printBinary(clearBit(num, 0), 8);  /* 00001110 = 14 */\n\n    /* Clear bits from MSB through bit 2 */\n    int val = 0xFF;  /* 11111111 */\n    printf(\"Clear MSB..2: \"); printBinary(clearBitsFromMSB(val, 2), 8);  /* 00000011 */\n\n    /* Clear bits from bit 2 through LSB */\n    printf(\"Clear 2..LSB: \"); printBinary(clearBitsFromLSB(val, 2), 8);  /* 11111000 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Clear bit: num &= ~(1 << pos)",
+            "AND with inverted mask zeros only the target bit",
+            "Clearing an already-clear bit is a no-op",
+            "Can clear ranges of bits with computed masks",
+            "(1 << pos) - 1 gives a mask of pos ones from the right"
+          ],
+          "gotchas": [
+            "Forgetting the ~ (NOT) clears everything EXCEPT the target bit (opposite of intended)",
+            "~(1 << pos) on signed int: works in two's complement but be explicit with unsigned",
+            "Shifting undefined behavior applies here too: 1 << 32 is UB on 32-bit int",
+            "Clearing bit 0 of an odd number makes it even"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`num &= ~(1 << pos)` -- AND with an inverted mask that has 0 only at the target position. Clears that bit to 0.",
+          "pseudo_code": "",
+          "actual_code": "int clearBit(int num, int pos) {\n    return num & ~(1 << pos);\n}\n/* clearBit(7, 1) -> 5 (0111 & 1101 = 0101) */",
+          "code_language": "c",
+          "key_points": [
+            "AND with ~(1 << pos) to clear one bit"
+          ],
+          "gotchas": [
+            "Forgetting ~ inverts the operation (clears all OTHER bits)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you toggle a specific bit in an integer?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "toggle-bit", "XOR"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Toggling a bit** means flipping it: 0 becomes 1 and 1 becomes 0.\n\n**Formula:** `num ^= (1 << pos)`\n\n**How it works:**\nXOR truth table: `0 ^ 1 = 1`, `1 ^ 1 = 0`. The target bit is flipped.\nAll other bits: `x ^ 0 = x` -- unchanged.\n\n**Key property of XOR:** It is its own inverse. Toggling twice restores the original value: `(num ^ mask) ^ mask = num`.",
+          "pseudo_code": "ToggleBit(num, pos):\n  mask = 1 << pos\n  num = num ^ mask   // flips bit at pos\n  return num\n\nExample: num = 5 (0101), pos = 2\n  mask = 0100\n  0101 ^ 0100 = 0001 = 1\n\nToggle again:\n  0001 ^ 0100 = 0101 = 5 (back to original)",
+          "actual_code": "#include <stdio.h>\n\nint toggleBit(int num, int pos) {\n    return num ^ (1 << pos);\n}\n\nvoid printBinary(unsigned int n, int bits) {\n    for (int i = bits - 1; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int num = 5;  /* 0101 */\n    printf(\"Original: \"); printBinary(num, 8);  /* 00000101 */\n\n    int toggled = toggleBit(num, 2);\n    printf(\"Toggle 2: \"); printBinary(toggled, 8);  /* 00000001 = 1 */\n\n    int back = toggleBit(toggled, 2);\n    printf(\"Toggle 2: \"); printBinary(back, 8);  /* 00000101 = 5 (restored) */\n\n    /* Toggle multiple bits at once */\n    int val = 0xAA;  /* 10101010 */\n    int mask = 0xFF;  /* 11111111 */\n    printf(\"\\n0xAA ^ 0xFF = \"); printBinary(val ^ mask, 8);  /* 01010101 = 0x55 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Toggle bit: num ^= (1 << pos)",
+            "XOR flips the target bit, leaves others unchanged",
+            "XOR is self-inverse: toggle twice restores original",
+            "Can toggle multiple bits with a multi-bit mask",
+            "XOR with all 1s (~0 or 0xFF...) flips all bits (same as NOT)"
+          ],
+          "gotchas": [
+            "Do not confuse toggle (XOR) with set (OR) or clear (AND NOT)",
+            "XOR is NOT the same as NOT: XOR flips selected bits, NOT flips all bits",
+            "Same shift/UB gotchas apply: 1 << 32 is undefined for 32-bit int",
+            "Toggle is not idempotent -- applying it twice restores the original"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`num ^= (1 << pos)` -- XOR flips the bit at position pos. Toggle twice restores the original (XOR is self-inverse).",
+          "pseudo_code": "",
+          "actual_code": "int toggleBit(int num, int pos) {\n    return num ^ (1 << pos);\n}\n/* toggleBit(5, 2) -> 1 (0101 ^ 0100 = 0001) */",
+          "code_language": "c",
+          "key_points": [
+            "XOR with (1 << pos) flips that bit"
+          ],
+          "gotchas": [
+            "Toggle is not idempotent: applying twice gives back the original"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a specific bit is set in an integer?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "check-bit", "AND", "test"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Checking a bit** means testing whether a specific bit position is 1 or 0.\n\n**Formula:** `(num >> pos) & 1` or `num & (1 << pos)`\n\n**Method 1:** Shift the number right by pos, then AND with 1. The result is 0 or 1.\n\n**Method 2:** AND with a mask that has only the target bit set. Non-zero means the bit is set.\n\n**Method 1 is preferred** in interviews because it always returns exactly 0 or 1 (not just truthy/falsy).",
+          "pseudo_code": "Method 1: (num >> pos) & 1\n  Shift bit to position 0, mask with 1\n  Returns exactly 0 or 1\n\nMethod 2: num & (1 << pos)\n  Returns 0 or (1 << pos)\n  Non-zero = bit is set\n\nExample: num = 5 (0101), check bit 2\n  Method 1: (5 >> 2) & 1 = 1 & 1 = 1\n  Method 2: 5 & (1 << 2) = 0101 & 0100 = 0100 = 4 (non-zero = set)",
+          "actual_code": "#include <stdio.h>\n\n/* Returns 0 or 1 */\nint getBit(int num, int pos) {\n    return (num >> pos) & 1;\n}\n\n/* Returns 0 or non-zero (the bit's value in place) */\nint isBitSet(int num, int pos) {\n    return num & (1 << pos);\n}\n\nvoid printBinary(unsigned int n, int bits) {\n    for (int i = bits - 1; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    int num = 42;  /* 00101010 */\n    printf(\"num = \"); printBinary(num, 8);\n\n    for (int i = 7; i >= 0; i--)\n        printf(\"Bit %d: %d\\n\", i, getBit(num, i));\n    /* Bit 7: 0, Bit 6: 0, Bit 5: 1, Bit 4: 0,\n       Bit 3: 1, Bit 2: 0, Bit 1: 1, Bit 0: 0 */\n\n    /* Using isBitSet (returns non-zero, not necessarily 1) */\n    printf(\"\\nisBitSet(42, 5) = %d\\n\", isBitSet(42, 5));  /* 32 (non-zero = true) */\n    printf(\"isBitSet(42, 4) = %d\\n\", isBitSet(42, 4));    /* 0 (false) */\n\n    /* Practical: check if number is odd (bit 0) */\n    printf(\"42 is %s\\n\", getBit(42, 0) ? \"odd\" : \"even\");  /* even */\n    printf(\"43 is %s\\n\", getBit(43, 0) ? \"odd\" : \"even\");  /* odd */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "(num >> pos) & 1 returns exactly 0 or 1",
+            "num & (1 << pos) returns 0 or the bit value in place",
+            "Checking bit 0 tells you if a number is odd or even",
+            "Method 1 is preferred when you need a boolean (0/1) result",
+            "Useful for decoding flags, permissions, and bit fields"
+          ],
+          "gotchas": [
+            "num & (1 << pos) returns 0 or 2^pos, not 0 or 1 -- do not use == 1 to check",
+            "Right-shifting negative signed integers is implementation-defined",
+            "Shifting by >= bit width is undefined behavior",
+            "Do not confuse & (bitwise AND) with && (logical AND)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`(num >> pos) & 1` returns 0 or 1. Alternative: `num & (1 << pos)` returns 0 or non-zero.",
+          "pseudo_code": "",
+          "actual_code": "int getBit(int num, int pos) {\n    return (num >> pos) & 1;\n}\n/* getBit(42, 5) -> 1, getBit(42, 4) -> 0 */",
+          "code_language": "c",
+          "key_points": [
+            "(num >> pos) & 1 gives exactly 0 or 1"
+          ],
+          "gotchas": [
+            "num & (1 << pos) returns 2^pos, not 1 -- don't compare with == 1"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you count the number of set bits using Brian Kernighan's algorithm?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "popcount", "kernighan", "hamming-weight"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Counting set bits** (popcount / Hamming weight) is one of the most asked bit manipulation questions.\n\n**Brian Kernighan's algorithm:**\n`n = n & (n - 1)` clears the lowest set bit. Repeat until n is 0. The number of iterations equals the number of set bits.\n\n**Why it works:** `n - 1` flips the lowest set bit and all bits below it. AND with the original clears just the lowest set bit.\n\n**Example:** n = 12 (1100)\n- 1100 & 1011 = 1000 (count=1)\n- 1000 & 0111 = 0000 (count=2)\n\n**Time:** O(k) where k = number of set bits (not O(32) like naive approach).\n\n**Alternative:** Lookup table, or compiler built-in `__builtin_popcount(n)`.",
+          "pseudo_code": "CountSetBits(n):\n  count = 0\n  while n != 0:\n    n = n & (n - 1)  // clear lowest set bit\n    count++\n  return count\n\nNaive approach:\n  count = 0\n  while n != 0:\n    count += n & 1  // check last bit\n    n >>= 1\n  return count",
+          "actual_code": "#include <stdio.h>\n\n/* Brian Kernighan's algorithm: O(number of set bits) */\nint countSetBits(unsigned int n) {\n    int count = 0;\n    while (n) {\n        n = n & (n - 1);  /* clear lowest set bit */\n        count++;\n    }\n    return count;\n}\n\n/* Naive approach: O(number of total bits) */\nint countSetBitsNaive(unsigned int n) {\n    int count = 0;\n    while (n) {\n        count += n & 1;\n        n >>= 1;\n    }\n    return count;\n}\n\n/* Lookup table approach: O(1) with precomputation */\nint table[256];  /* for 8-bit chunks */\n\nvoid buildTable(void) {\n    table[0] = 0;\n    for (int i = 1; i < 256; i++)\n        table[i] = (i & 1) + table[i >> 1];\n}\n\nint countSetBitsTable(unsigned int n) {\n    return table[n & 0xFF] + table[(n >> 8) & 0xFF] +\n           table[(n >> 16) & 0xFF] + table[(n >> 24) & 0xFF];\n}\n\nint main(void) {\n    buildTable();\n\n    unsigned int values[] = {0, 1, 7, 15, 255, 1023, 0xFFFFFFFF};\n    int n = sizeof(values) / sizeof(values[0]);\n\n    for (int i = 0; i < n; i++) {\n        printf(\"%10u: Kernighan=%d, Naive=%d, Table=%d\\n\",\n               values[i],\n               countSetBits(values[i]),\n               countSetBitsNaive(values[i]),\n               countSetBitsTable(values[i]));\n    }\n    /* 0: 0, 1: 1, 7: 3, 15: 4, 255: 8, 1023: 10, 4294967295: 32 */\n\n    /* GCC/Clang built-in */\n    printf(\"\\n__builtin_popcount(255) = %d\\n\", __builtin_popcount(255));  /* 8 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "n & (n-1) clears the lowest set bit -- key insight of Kernighan's algorithm",
+            "O(k) iterations where k = number of set bits (faster than O(32) naive)",
+            "Lookup table gives O(1) per 8-bit chunk with precomputation",
+            "__builtin_popcount() is the fastest on GCC/Clang (uses hardware instruction)",
+            "Also known as Hamming weight or population count"
+          ],
+          "gotchas": [
+            "Use unsigned int to avoid issues with right-shifting negative numbers",
+            "n & (n-1) on 0 would be -1 & 0 -- the while(n) check prevents this",
+            "__builtin_popcount is not portable (GCC/Clang only, not MSVC)",
+            "For 64-bit, use __builtin_popcountll or loop over all 64 bits"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`n & (n-1)` clears the lowest set bit. Loop until n=0 and count iterations. O(k) where k = number of set bits.",
+          "pseudo_code": "",
+          "actual_code": "int countSetBits(unsigned int n) {\n    int count = 0;\n    while (n) {\n        n &= (n - 1);  /* clear lowest set bit */\n        count++;\n    }\n    return count;\n}\n/* countSetBits(15) -> 4, countSetBits(255) -> 8 */",
+          "code_language": "c",
+          "key_points": [
+            "n & (n-1) clears lowest set bit, O(k) iterations"
+          ],
+          "gotchas": [
+            "Use unsigned to avoid signed right-shift issues"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you check if a number is a power of 2 using bitwise operations?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "power-of-two", "trick"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A power of 2 has exactly **one bit set** in its binary representation: 1, 2, 4, 8, 16 = 0001, 0010, 0100, 1000, 10000.\n\n**Formula:** `n > 0 && (n & (n - 1)) == 0`\n\n**Why it works:**\n- `n & (n - 1)` clears the lowest set bit\n- If n has exactly one bit set (power of 2), clearing it gives 0\n- If n has more than one bit set, clearing the lowest leaves a non-zero result\n\n**Must also check n > 0** because 0 satisfies `(0 & -1) == 0` but is not a power of 2.\n\n**Alternative:** `n > 0 && (n & (-n)) == n` -- `-n` isolates the lowest set bit.",
+          "pseudo_code": "IsPowerOf2(n):\n  return n > 0 AND (n & (n-1)) == 0\n\nExamples:\n  8 (1000): 1000 & 0111 = 0000 -> power of 2\n  6 (0110): 0110 & 0101 = 0100 -> NOT power of 2\n  0: n > 0 fails -> NOT power of 2\n  1 (0001): 0001 & 0000 = 0000 -> power of 2 (2^0 = 1)",
+          "actual_code": "#include <stdio.h>\n\nint isPowerOf2(int n) {\n    return n > 0 && (n & (n - 1)) == 0;\n}\n\n/* Alternative using -n to isolate lowest set bit */\nint isPowerOf2_v2(int n) {\n    return n > 0 && (n & (-n)) == n;\n}\n\nint main(void) {\n    int tests[] = {0, 1, 2, 3, 4, 5, 8, 16, 15, 32, 64, 100, 128, 256};\n    int n = sizeof(tests) / sizeof(tests[0]);\n\n    for (int i = 0; i < n; i++) {\n        printf(\"%3d: %s\\n\", tests[i],\n               isPowerOf2(tests[i]) ? \"power of 2\" : \"not power of 2\");\n    }\n    /* 0: not, 1: yes (2^0), 2: yes, 3: not, 4: yes, 5: not,\n       8: yes, 16: yes, 15: not, 32: yes, 64: yes, 100: not,\n       128: yes, 256: yes */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "n & (n-1) == 0 means exactly one bit is set",
+            "Must check n > 0 (zero is not a power of 2)",
+            "1 is a power of 2 (2^0 = 1)",
+            "O(1) time and space",
+            "Commonly used in memory alignment checks"
+          ],
+          "gotchas": [
+            "Forgetting n > 0 check: 0 & (0-1) = 0 & 0xFFFFFFFF = 0, which passes the test",
+            "Negative powers of 2 (-8, -16) should return false -- the n > 0 check handles this",
+            "Do not confuse with (n & n-1): operator precedence means this is n & (n - 1), not (n & n) - 1, but adding parentheses is clearer",
+            "This only works for integers, not floating-point"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`n > 0 && (n & (n-1)) == 0`. Power of 2 has exactly one set bit. `n & (n-1)` clears it. If result is 0, it was the only bit.",
+          "pseudo_code": "",
+          "actual_code": "int isPowerOf2(int n) {\n    return n > 0 && (n & (n - 1)) == 0;\n}\n/* isPowerOf2(16) -> 1, isPowerOf2(15) -> 0 */",
+          "code_language": "c",
+          "key_points": [
+            "n & (n-1) clears lowest set bit; if result is 0, only one bit was set"
+          ],
+          "gotchas": [
+            "Must check n > 0: zero is not a power of 2"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you swap two numbers without using a temporary variable?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "XOR", "swap", "trick"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "XOR swap uses the self-inverse property of XOR:\n\n```\na ^= b;  // a = a ^ b\nb ^= a;  // b = b ^ (a ^ b) = a\na ^= b;  // a = (a ^ b) ^ a = b\n```\n\n**Why it works:**\n- After step 1: `a` holds `a ^ b`\n- After step 2: `b = (a ^ b) ^ b = a` (XOR is associative and self-inverse)\n- After step 3: `a = (a ^ b) ^ a = b`\n\n**Arithmetic swap** (also without temp):\n```\na = a + b;\nb = a - b;  // (a+b) - b = a\na = a - b;  // (a+b) - a = b\n```\n\n**In practice:** Just use a temporary variable. XOR swap is a trick that demonstrates XOR properties but has no practical advantage and several disadvantages.",
+          "pseudo_code": "XOR swap:\n  a = a ^ b\n  b = a ^ b  // now b = original a\n  a = a ^ b  // now a = original b\n\nArithmetic swap:\n  a = a + b\n  b = a - b\n  a = a - b",
+          "actual_code": "#include <stdio.h>\n\n/* XOR swap */\nvoid xorSwap(int *a, int *b) {\n    if (a == b) return;  /* CRITICAL: avoid self-swap */\n    *a ^= *b;\n    *b ^= *a;\n    *a ^= *b;\n}\n\n/* Arithmetic swap */\nvoid arithmeticSwap(int *a, int *b) {\n    *a = *a + *b;\n    *b = *a - *b;\n    *a = *a - *b;\n}\n\n/* Standard swap (use this in practice) */\nvoid standardSwap(int *a, int *b) {\n    int temp = *a;\n    *a = *b;\n    *b = temp;\n}\n\nint main(void) {\n    int x = 5, y = 10;\n    printf(\"Before: x=%d, y=%d\\n\", x, y);\n\n    xorSwap(&x, &y);\n    printf(\"After XOR swap: x=%d, y=%d\\n\", x, y);  /* x=10, y=5 */\n\n    arithmeticSwap(&x, &y);\n    printf(\"After arith swap: x=%d, y=%d\\n\", x, y);  /* x=5, y=10 */\n\n    /* Demonstrate the self-swap bug */\n    int z = 42;\n    /* xorSwap(&z, &z); would give z=0 without the guard */\n    xorSwap(&z, &z);  /* safe: guard returns early */\n    printf(\"Self-swap guarded: z=%d\\n\", z);  /* 42 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "XOR swap: a^=b; b^=a; a^=b; -- uses XOR self-inverse property",
+            "MUST guard against self-swap (a == b gives 0)",
+            "Arithmetic swap risks integer overflow",
+            "In practice, always use a temp variable -- it is clearer and often faster",
+            "XOR swap demonstrates understanding of bit operations in interviews"
+          ],
+          "gotchas": [
+            "XOR swapping a variable with itself (same address) zeroes it: a^=a gives 0",
+            "Arithmetic swap overflows for large integers (undefined behavior for signed)",
+            "XOR swap is NOT faster than temp swap -- modern compilers optimize temp swap into register operations",
+            "XOR swap does not work with floating-point directly (must use integer representation)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "XOR swap: `a^=b; b^=a; a^=b;`. Uses XOR self-inverse property. Must guard against self-swap (same address zeroes the value). In practice, just use a temp variable.",
+          "pseudo_code": "",
+          "actual_code": "void xorSwap(int *a, int *b) {\n    if (a == b) return;  /* guard! */\n    *a ^= *b;\n    *b ^= *a;\n    *a ^= *b;\n}",
+          "code_language": "c",
+          "key_points": [
+            "a^=b; b^=a; a^=b; swaps without temp"
+          ],
+          "gotchas": [
+            "Self-swap (a == b) zeroes the value -- always guard against it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the only non-repeating element in an array where every other element appears twice?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "XOR", "single-number", "interview"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Problem:** Given an array where every element appears exactly twice except one, find the unique element.\n\n**Solution:** XOR all elements together. Since `a ^ a = 0` and `a ^ 0 = a`, all pairs cancel out, leaving only the unique element.\n\n**Why it works:**\n- XOR is commutative and associative: order does not matter\n- `a ^ a = 0`: every pair cancels\n- `0 ^ unique = unique`: the lone element remains\n\n**Time:** O(n), **Space:** O(1). No sorting, no hash table needed.\n\n**Variant:** Two non-repeating elements -- XOR all to get `a ^ b`, then split into two groups based on any set bit of `a ^ b` (it distinguishes a from b), XOR each group separately.",
+          "pseudo_code": "FindUnique(arr, n):\n  result = 0\n  for each element in arr:\n    result = result ^ element\n  return result\n\nExample: [2, 3, 5, 3, 2]\n  0 ^ 2 = 2\n  2 ^ 3 = 1\n  1 ^ 5 = 4\n  4 ^ 3 = 7\n  7 ^ 2 = 5   (the unique element)",
+          "actual_code": "#include <stdio.h>\n\n/* Find the single non-repeating element: O(n) time, O(1) space */\nint findUnique(int arr[], int n) {\n    int result = 0;\n    for (int i = 0; i < n; i++)\n        result ^= arr[i];\n    return result;\n}\n\n/* Variant: find TWO non-repeating elements */\nvoid findTwoUnique(int arr[], int n, int *x, int *y) {\n    int xorAll = 0;\n    for (int i = 0; i < n; i++)\n        xorAll ^= arr[i];\n    /* xorAll = a ^ b. Find any set bit to split into groups. */\n\n    int diffBit = xorAll & (-xorAll);  /* isolate lowest set bit */\n\n    *x = 0;\n    *y = 0;\n    for (int i = 0; i < n; i++) {\n        if (arr[i] & diffBit)\n            *x ^= arr[i];\n        else\n            *y ^= arr[i];\n    }\n}\n\nint main(void) {\n    /* Single unique element */\n    int arr1[] = {2, 3, 5, 4, 5, 3, 4};\n    printf(\"Unique: %d\\n\", findUnique(arr1, 7));  /* 2 */\n\n    int arr2[] = {7, 3, 5, 3, 5};\n    printf(\"Unique: %d\\n\", findUnique(arr2, 5));  /* 7 */\n\n    /* Two unique elements */\n    int arr3[] = {1, 2, 3, 2, 1, 4};\n    int a, b;\n    findTwoUnique(arr3, 6, &a, &b);\n    printf(\"Two unique: %d and %d\\n\", a, b);  /* 3 and 4 (or 4 and 3) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "XOR all elements: pairs cancel (a^a=0), unique remains",
+            "O(n) time, O(1) space -- no hash table needed",
+            "XOR is commutative and associative -- order does not matter",
+            "For two unique elements: use differing bit to split into two groups",
+            "This is LeetCode #136 (Single Number) -- extremely common interview question"
+          ],
+          "gotchas": [
+            "Only works when all OTHER elements appear EXACTLY twice (not 3 times, etc.)",
+            "For elements appearing 3 times, need a different approach (bit counting mod 3)",
+            "The two-unique variant requires exactly two unique elements",
+            "Does not work if no unique element exists (result is 0, same as a valid answer of 0)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "XOR all elements: pairs cancel (`a^a=0`), leaving the unique one. O(n) time, O(1) space. Works because XOR is commutative, associative, and self-inverse.",
+          "pseudo_code": "",
+          "actual_code": "int findUnique(int arr[], int n) {\n    int result = 0;\n    for (int i = 0; i < n; i++)\n        result ^= arr[i];\n    return result;\n}\n/* findUnique({2,3,5,3,2}, 5) -> 5 */",
+          "code_language": "c",
+          "key_points": [
+            "XOR all: a^a=0, 0^unique=unique"
+          ],
+          "gotchas": [
+            "Only works when other elements appear exactly twice"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are bit masking techniques and how are they used?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "masking", "extract", "flags"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Bit masking** uses bitwise operations with a mask to select, modify, or extract specific bits from a value.\n\n**Common mask operations:**\n\n1. **Extract bits:** `(value >> shift) & mask` -- shift desired bits to position 0, then AND with mask\n2. **Set bits:** `value | mask` -- set specific bits to 1\n3. **Clear bits:** `value & ~mask` -- clear specific bits to 0\n4. **Check bits:** `value & mask` -- non-zero if any masked bits are set\n5. **Replace bits:** `(value & ~mask) | (new_bits & mask)` -- clear then set\n\n**Mask generation:**\n- Single bit: `1 << n`\n- N lowest bits: `(1 << n) - 1`\n- Bit range [hi:lo]: `((1 << (hi-lo+1)) - 1) << lo`",
+          "pseudo_code": "Common masks:\n  Single bit at pos n:     (1 << n)\n  Lowest n bits:           (1 << n) - 1\n  Bits [hi:lo] inclusive:  ((1 << (hi-lo+1)) - 1) << lo\n\nOperations:\n  Extract: (value >> lo) & ((1 << width) - 1)\n  Set:     value | mask\n  Clear:   value & ~mask\n  Replace: (value & ~mask) | (new << lo)",
+          "actual_code": "#include <stdio.h>\n\n/* Extract bits [hi:lo] from value */\nunsigned int extractBits(unsigned int value, int hi, int lo) {\n    int width = hi - lo + 1;\n    unsigned int mask = (1U << width) - 1;\n    return (value >> lo) & mask;\n}\n\n/* Replace bits [hi:lo] in value with new_val */\nunsigned int replaceBits(unsigned int value, int hi, int lo,\n                         unsigned int new_val) {\n    int width = hi - lo + 1;\n    unsigned int mask = ((1U << width) - 1) << lo;\n    value &= ~mask;           /* clear target bits */\n    value |= (new_val << lo) & mask;  /* set new bits */\n    return value;\n}\n\nvoid printBinary(unsigned int n, int bits) {\n    for (int i = bits - 1; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\n/* Practical example: RGB color manipulation */\ntypedef unsigned int Color;\n\nColor makeRGB(unsigned char r, unsigned char g, unsigned char b) {\n    return ((Color)r << 16) | ((Color)g << 8) | (Color)b;\n}\n\nunsigned char getRed(Color c)   { return (c >> 16) & 0xFF; }\nunsigned char getGreen(Color c) { return (c >> 8) & 0xFF; }\nunsigned char getBlue(Color c)  { return c & 0xFF; }\n\nint main(void) {\n    unsigned int val = 0b11010110;  /* 214 */\n    printf(\"Value: \"); printBinary(val, 8);  /* 11010110 */\n\n    /* Extract bits [5:3] */\n    printf(\"Bits [5:3]: %u\\n\", extractBits(val, 5, 3));  /* 010 = 2 */\n\n    /* Replace bits [5:3] with 7 (111) */\n    unsigned int replaced = replaceBits(val, 5, 3, 7);\n    printf(\"Replace: \"); printBinary(replaced, 8);  /* 11111110 */\n\n    /* RGB example */\n    Color coral = makeRGB(255, 127, 80);\n    printf(\"\\nCoral: R=%u G=%u B=%u\\n\",\n           getRed(coral), getGreen(coral), getBlue(coral));  /* 255 127 80 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Masking = using AND/OR/NOT with bit patterns to manipulate specific bits",
+            "(1U << n) - 1 creates a mask of n lowest bits",
+            "Extract: shift right, then AND with mask",
+            "Replace: clear with AND ~mask, then set with OR",
+            "RGB color packing is a classic real-world masking application"
+          ],
+          "gotchas": [
+            "Use 1U (unsigned) to avoid undefined behavior when shifting to the sign bit",
+            "(1 << 32) - 1 is undefined; for all-ones mask use ~0U",
+            "Ensure new_val does not exceed the bit width when replacing",
+            "Mask width off-by-one: bits [5:3] has width 3, not 2"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Masking: AND to extract/clear, OR to set, AND-NOT-OR to replace. Mask of n bits: `(1U << n) - 1`. Common in RGB, flags, registers.",
+          "pseudo_code": "",
+          "actual_code": "/* Extract bits [hi:lo] */\nunsigned extractBits(unsigned val, int hi, int lo) {\n    return (val >> lo) & ((1U << (hi - lo + 1)) - 1);\n}\n/* RGB: pack and unpack */\nunsigned makeRGB(unsigned char r, unsigned char g, unsigned char b) {\n    return (r << 16) | (g << 8) | b;\n}\nunsigned char getRed(unsigned c) { return (c >> 16) & 0xFF; }",
+          "code_language": "c",
+          "key_points": [
+            "AND to extract, OR to set, AND-NOT-OR to replace"
+          ],
+          "gotchas": [
+            "Use 1U for unsigned shifts to avoid sign-bit UB"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you extract and insert bit fields in C?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "bit-fields", "extract", "insert", "struct"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Bit fields** in C struct definitions allow you to specify the exact number of bits for each member. The compiler handles packing and extraction.\n\n**Manual extraction:** Use shift and mask: `(value >> offset) & ((1 << width) - 1)`\n\n**Manual insertion:** Clear target bits and OR in new value: `(value & ~mask) | ((new_val << offset) & mask)`\n\n**Struct bit fields:** `unsigned int field : width;` -- the compiler generates the shift/mask code.\n\n**When to use struct bit fields:**\n- Hardware register access (embedded)\n- Network protocol headers\n- File format parsing\n- Saving memory for flags",
+          "pseudo_code": "Struct bit field syntax:\n  struct Flags {\n    unsigned int read  : 1;  // 1 bit\n    unsigned int write : 1;  // 1 bit\n    unsigned int exec  : 1;  // 1 bit\n  };\n\nManual extraction:\n  field = (value >> offset) & ((1 << width) - 1)\n\nManual insertion:\n  mask = ((1 << width) - 1) << offset\n  value = (value & ~mask) | ((new_val << offset) & mask)",
+          "actual_code": "#include <stdio.h>\n\n/* Struct bit fields */\ntypedef struct {\n    unsigned int read  : 1;\n    unsigned int write : 1;\n    unsigned int exec  : 1;\n    unsigned int user  : 1;\n    unsigned int group : 1;\n} Permissions;\n\n/* Manual bit field extraction/insertion */\nunsigned int extractField(unsigned int value, int offset, int width) {\n    return (value >> offset) & ((1U << width) - 1);\n}\n\nunsigned int insertField(unsigned int value, int offset, int width,\n                         unsigned int field_val) {\n    unsigned int mask = ((1U << width) - 1) << offset;\n    value &= ~mask;                      /* clear field */\n    value |= (field_val << offset) & mask;  /* insert new value */\n    return value;\n}\n\nint main(void) {\n    /* Struct bit fields */\n    Permissions p = {0};\n    p.read = 1;\n    p.write = 1;\n    p.exec = 0;\n    p.user = 1;\n\n    printf(\"Permissions: r=%u w=%u x=%u u=%u g=%u\\n\",\n           p.read, p.write, p.exec, p.user, p.group);\n    /* r=1 w=1 x=0 u=1 g=0 */\n\n    printf(\"Size of Permissions: %zu bytes\\n\", sizeof(Permissions));\n    /* Typically 4 bytes (packed into one unsigned int) */\n\n    /* Manual bit field manipulation */\n    /* Pack: [age:7][height:8][weight:8] into 23 bits */\n    unsigned int packed = 0;\n    packed = insertField(packed, 0, 8, 150);   /* weight at bits [7:0] */\n    packed = insertField(packed, 8, 8, 175);   /* height at bits [15:8] */\n    packed = insertField(packed, 16, 7, 25);   /* age at bits [22:16] */\n\n    printf(\"\\nPacked: 0x%X\\n\", packed);\n    printf(\"Weight: %u\\n\", extractField(packed, 0, 8));   /* 150 */\n    printf(\"Height: %u\\n\", extractField(packed, 8, 8));   /* 175 */\n    printf(\"Age:    %u\\n\", extractField(packed, 16, 7));  /* 25 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Struct bit fields: unsigned int field : width; for compiler-managed packing",
+            "Manual extract: (value >> offset) & ((1 << width) - 1)",
+            "Manual insert: clear with AND ~mask, set with OR",
+            "Bit fields save memory but have platform-dependent layout",
+            "Used in hardware registers, network protocols, file formats"
+          ],
+          "gotchas": [
+            "Struct bit field layout (endianness, padding) is implementation-defined",
+            "Cannot take the address of a bit field member (no &p.read)",
+            "Bit fields wider than the base type are undefined behavior",
+            "Mixing signed and unsigned bit fields can cause unexpected sign extension"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Struct bit fields: `unsigned int field : width;`. Manual: extract with shift+mask, insert with clear+OR. Layout is implementation-defined.",
+          "pseudo_code": "",
+          "actual_code": "typedef struct {\n    unsigned int r : 1;\n    unsigned int w : 1;\n    unsigned int x : 1;\n} Perms;\n\nunsigned extractField(unsigned val, int off, int width) {\n    return (val >> off) & ((1U << width) - 1);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Struct bit fields for compiler-managed packing"
+          ],
+          "gotchas": [
+            "Bit field layout is implementation-defined across platforms"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you reverse the bits of an integer?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "reverse-bits", "bit-manipulation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Reversing bits means swapping bit 0 with bit 31, bit 1 with bit 30, and so on (for 32-bit integers).\n\n**Approach 1 -- Simple loop:** Extract each bit from the right, build result from the left.\n\n**Approach 2 -- Divide and conquer:** Swap adjacent bits, then adjacent 2-bit groups, then 4-bit, 8-bit, 16-bit groups. O(log n) operations.\n\n**Approach 3 -- Lookup table:** Precompute reversed bytes, look up 8 bits at a time.\n\nThe simple loop is easiest to understand and most commonly expected in interviews.",
+          "pseudo_code": "Simple loop:\n  result = 0\n  for i = 0 to 31:\n    result <<= 1            // make room\n    result |= (n & 1)       // copy LSB of n to LSB of result\n    n >>= 1                 // move to next bit\n  return result\n\nDivide and conquer (32-bit):\n  n = ((n & 0x55555555) << 1) | ((n >> 1) & 0x55555555)  // swap adjacent bits\n  n = ((n & 0x33333333) << 2) | ((n >> 2) & 0x33333333)  // swap 2-bit groups\n  n = ((n & 0x0F0F0F0F) << 4) | ((n >> 4) & 0x0F0F0F0F)  // swap nibbles\n  n = ((n & 0x00FF00FF) << 8) | ((n >> 8) & 0x00FF00FF)  // swap bytes\n  n = (n << 16) | (n >> 16)                                // swap halves",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n\n/* Simple loop: O(32) */\nuint32_t reverseBits(uint32_t n) {\n    uint32_t result = 0;\n    for (int i = 0; i < 32; i++) {\n        result <<= 1;\n        result |= (n & 1);\n        n >>= 1;\n    }\n    return result;\n}\n\n/* Divide and conquer: O(log 32) = O(5) steps */\nuint32_t reverseBitsFast(uint32_t n) {\n    n = ((n & 0x55555555) << 1)  | ((n >> 1)  & 0x55555555);\n    n = ((n & 0x33333333) << 2)  | ((n >> 2)  & 0x33333333);\n    n = ((n & 0x0F0F0F0F) << 4)  | ((n >> 4)  & 0x0F0F0F0F);\n    n = ((n & 0x00FF00FF) << 8)  | ((n >> 8)  & 0x00FF00FF);\n    n = (n << 16) | (n >> 16);\n    return n;\n}\n\nvoid printBinary32(uint32_t n) {\n    for (int i = 31; i >= 0; i--)\n        printf(\"%d\", (n >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    uint32_t num = 43261596;  /* 00000010100101000001111010011100 */\n    printf(\"Original: \"); printBinary32(num);\n\n    uint32_t rev = reverseBits(num);\n    printf(\"Reversed: \"); printBinary32(rev);\n    /* 00111001011110000010100101000000 = 964176192 */\n    printf(\"Result: %u\\n\", rev);  /* 964176192 */\n\n    uint32_t rev2 = reverseBitsFast(num);\n    printf(\"Fast:   %u\\n\", rev2);  /* 964176192 (same) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Simple loop: extract LSB, append to result, shift both",
+            "Divide and conquer: swap at increasing group sizes (1, 2, 4, 8, 16 bits)",
+            "Use uint32_t for guaranteed 32-bit width",
+            "Reversing bits is different from reversing bytes (endian swap)",
+            "This is LeetCode #190 -- common interview question"
+          ],
+          "gotchas": [
+            "Must iterate exactly 32 times (or 64 for 64-bit) -- stopping early gives wrong result",
+            "Use unsigned types to avoid issues with right-shifting signed integers",
+            "Bit reversal != byte reversal (endian swap)",
+            "The divide-and-conquer constants (0x55555555 etc.) must match the bit width"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Loop 32 times: extract LSB of n, append to result's LSB, shift both. Or use divide-and-conquer swaps at group sizes 1, 2, 4, 8, 16.",
+          "pseudo_code": "",
+          "actual_code": "uint32_t reverseBits(uint32_t n) {\n    uint32_t result = 0;\n    for (int i = 0; i < 32; i++) {\n        result <<= 1;\n        result |= (n & 1);\n        n >>= 1;\n    }\n    return result;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Extract LSB, shift result left, OR in, shift n right"
+          ],
+          "gotchas": [
+            "Must loop exactly 32 times for 32-bit -- stopping early is wrong"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you find the position of the rightmost set bit?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "rightmost-set-bit", "position"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Isolating the rightmost set bit:** `n & (-n)` gives a value with only the rightmost set bit.\n\n**Why:** In two's complement, `-n = ~n + 1`. This flips all bits and adds 1, which means all bits below the rightmost set bit flip back, and the rightmost set bit itself stays.\n\n**Finding the position (0-indexed):** Count trailing zeros. Use `__builtin_ctz(n)` (GCC/Clang) or a loop.\n\n**Example:** n = 12 (1100)\n- `-n` = `~1100 + 1` = `0011 + 1` = `0100`\n- `n & (-n)` = `1100 & 0100` = `0100` (rightmost set bit at position 2)",
+          "pseudo_code": "Isolate rightmost set bit:\n  rsb = n & (-n)\n\nPosition of rightmost set bit (0-indexed):\n  pos = 0\n  mask = n & (-n)\n  while mask > 1:\n    mask >>= 1\n    pos++\n  return pos\n\nOr: pos = log2(n & (-n))",
+          "actual_code": "#include <stdio.h>\n\n/* Isolate rightmost set bit */\nint rightmostSetBit(int n) {\n    return n & (-n);\n}\n\n/* Find position (0-indexed) of rightmost set bit */\nint rightmostSetBitPos(int n) {\n    if (n == 0) return -1;  /* no set bits */\n\n    int pos = 0;\n    int rsb = n & (-n);  /* isolate RSB */\n    while (rsb > 1) {\n        rsb >>= 1;\n        pos++;\n    }\n    return pos;\n}\n\n/* Using GCC built-in */\nint rightmostSetBitPosBuiltin(int n) {\n    if (n == 0) return -1;\n    return __builtin_ctz(n);  /* count trailing zeros */\n}\n\nint main(void) {\n    int tests[] = {1, 2, 3, 4, 12, 18, 40, 0};\n    int n = sizeof(tests) / sizeof(tests[0]);\n\n    for (int i = 0; i < n; i++) {\n        int val = tests[i];\n        int rsb = rightmostSetBit(val);\n        int pos = rightmostSetBitPos(val);\n        printf(\"%3d: rightmost set bit value = %d, position = %d\\n\",\n               val, rsb, pos);\n    }\n    /*  1: value=1, pos=0\n        2: value=2, pos=1\n        3: value=1, pos=0\n        4: value=4, pos=2\n       12: value=4, pos=2\n       18: value=2, pos=1\n       40: value=8, pos=3\n        0: value=0, pos=-1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "n & (-n) isolates the rightmost (lowest) set bit",
+            "Position = number of trailing zeros",
+            "__builtin_ctz() counts trailing zeros (GCC/Clang)",
+            "Result of n & (-n) is always a power of 2",
+            "Returns 0 when n is 0 (no set bits)"
+          ],
+          "gotchas": [
+            "__builtin_ctz(0) is undefined behavior -- always check for n == 0",
+            "n & (-n) on unsigned: -n uses two's complement which wraps around (works correctly)",
+            "Position is 0-indexed: rightmost bit of 1 is at position 0",
+            "Do not confuse with leftmost set bit (MSB) which requires log2 or CLZ"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`n & (-n)` isolates the rightmost set bit. Position = count trailing zeros. Use `__builtin_ctz(n)` on GCC/Clang.",
+          "pseudo_code": "",
+          "actual_code": "int rightmostSetBit(int n) {\n    return n & (-n);  /* isolate lowest set bit */\n}\nint rightmostSetBitPos(int n) {\n    if (n == 0) return -1;\n    return __builtin_ctz(n);  /* GCC: count trailing zeros */\n}",
+          "code_language": "c",
+          "key_points": [
+            "n & (-n) isolates rightmost set bit"
+          ],
+          "gotchas": [
+            "__builtin_ctz(0) is undefined -- always check n != 0"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does two's complement representation work and why does it matter?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "twos-complement", "signed", "representation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Two's complement** is the standard way computers represent signed integers.\n\n**How to get the negative:**\n1. Invert all bits (one's complement): `~n`\n2. Add 1: `~n + 1`\n\nSo `-n = ~n + 1` (equivalently, `-n = ~(n - 1)`).\n\n**Properties:**\n- MSB (most significant bit) is the sign bit: 0 = positive, 1 = negative\n- Range for n bits: -2^(n-1) to 2^(n-1) - 1\n- For 32-bit int: -2,147,483,648 to 2,147,483,647\n- Zero has a single representation (unlike one's complement)\n- Arithmetic (add/subtract) works the same for signed and unsigned\n\n**Why it matters for bitwise ops:**\n- `~x = -(x + 1)` (NOT equals negative minus one)\n- `-n = ~n + 1` (negation via bit flip)\n- Right-shift of negative numbers is implementation-defined",
+          "pseudo_code": "Two's complement of n:\n  -n = ~n + 1\n\nRange for k-bit signed int:\n  -(2^(k-1)) to (2^(k-1) - 1)\n\n8-bit examples:\n   5 = 00000101\n  -5 = ~00000101 + 1 = 11111010 + 1 = 11111011\n\nKey identity: ~x = -(x + 1)\n  ~0 = -1 (all ones)\n  ~5 = -6",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\n\nvoid printBinary32(int n) {\n    unsigned int u = (unsigned int)n;\n    for (int i = 31; i >= 0; i--)\n        printf(\"%d\", (u >> i) & 1);\n    printf(\"\\n\");\n}\n\nint main(void) {\n    /* Two's complement representation */\n    printf(\"  5: \"); printBinary32(5);\n    printf(\" -5: \"); printBinary32(-5);\n    printf(\" ~5: \"); printBinary32(~5);\n    printf(\"~5 = %d\\n\", ~5);     /* -6 (-(5+1)) */\n\n    /* Verify: -n = ~n + 1 */\n    int n = 42;\n    printf(\"\\n-42 == ~42 + 1: %d\\n\", -n == (~n + 1));  /* 1 (true) */\n\n    /* Range of int */\n    printf(\"\\nINT_MIN:  %d\\n\", INT_MIN);   /* -2147483648 */\n    printf(\"INT_MAX:  %d\\n\", INT_MAX);     /* 2147483647 */\n    printf(\"-INT_MIN: \"); printBinary32(INT_MIN);\n    /* 10000000000000000000000000000000 */\n\n    /* Special case: INT_MIN has no positive counterpart */\n    printf(\"\\nabs(INT_MIN) overflow: %d\\n\", -INT_MIN);  /* UB: typically INT_MIN */\n\n    /* Two's complement addition */\n    printf(\"\\n5 + (-3) in binary:\\n\");\n    printf(\"  5: \"); printBinary32(5);\n    printf(\" -3: \"); printBinary32(-3);\n    printf(\"sum: \"); printBinary32(5 + (-3));\n    printf(\"= %d\\n\", 5 + (-3));  /* 2 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two's complement: -n = ~n + 1",
+            "MSB is sign bit: 0 = positive, 1 = negative",
+            "Range: -2^(n-1) to 2^(n-1) - 1 for n-bit signed int",
+            "~x = -(x + 1): NOT equals negative minus one",
+            "Addition/subtraction hardware works identically for signed and unsigned"
+          ],
+          "gotchas": [
+            "INT_MIN has no positive counterpart: -INT_MIN overflows (undefined behavior)",
+            "abs(INT_MIN) is undefined behavior in C",
+            "Right-shifting negative integers is implementation-defined (arithmetic vs logical)",
+            "Before C23, signed integer overflow was undefined behavior (now two's complement is mandated)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Two's complement: `-n = ~n + 1`. MSB is sign bit. Range: -2^(n-1) to 2^(n-1)-1. `~x = -(x+1)`. Hardware add/sub works the same for signed and unsigned.",
+          "pseudo_code": "",
+          "actual_code": "int n = 42;\nprintf(\"-42 = ~42 + 1: %d\\n\", (~n + 1) == -n);  /* 1 (true) */\nprintf(\"~5 = %d\\n\", ~5);  /* -6 */\nprintf(\"INT_MIN = %d, INT_MAX = %d\\n\", INT_MIN, INT_MAX);",
+          "code_language": "c",
+          "key_points": [
+            "-n = ~n + 1, ~x = -(x+1)"
+          ],
+          "gotchas": [
+            "-INT_MIN is undefined behavior (overflow)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is endianness and how does byte order affect bitwise operations?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "endianness", "byte-order", "network"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Endianness** describes the byte order in which multi-byte values are stored in memory.\n\n**Little-endian:** Least significant byte first (x86, ARM default). `0x12345678` stored as `78 56 34 12`.\n\n**Big-endian:** Most significant byte first (network order, SPARC, some ARM). `0x12345678` stored as `12 34 56 78`.\n\n**When does it matter?**\n- Network protocols (always big-endian / \"network byte order\")\n- Reading binary files from different architectures\n- Accessing memory through different-sized pointers (type punning)\n- Serialization/deserialization\n\n**Bitwise operators** work on values (not memory layout), so endianness does NOT affect `&`, `|`, `^`, `~`, `<<`, `>>` on variables. It ONLY matters when you look at raw memory bytes.",
+          "pseudo_code": "Little-endian: LSB at lowest address\n  0x12345678 in memory: [78] [56] [34] [12]\n                        addr  +1   +2   +3\n\nBig-endian: MSB at lowest address\n  0x12345678 in memory: [12] [34] [56] [78]\n                        addr  +1   +2   +3\n\nConversion functions:\n  htonl(): host to network (big-endian) long\n  ntohl(): network to host long\n  htons()/ntohs(): for short (16-bit)",
+          "actual_code": "#include <stdio.h>\n#include <stdint.h>\n#include <arpa/inet.h>  /* htonl, ntohl */\n\n/* Detect endianness at runtime */\nint isLittleEndian(void) {\n    unsigned int x = 1;\n    return *((unsigned char *)&x) == 1;\n}\n\n/* Manual byte swap (endian conversion) for 32-bit */\nuint32_t swapEndian32(uint32_t n) {\n    return ((n >> 24) & 0x000000FF) |\n           ((n >> 8)  & 0x0000FF00) |\n           ((n << 8)  & 0x00FF0000) |\n           ((n << 24) & 0xFF000000);\n}\n\n/* Manual byte swap for 16-bit */\nuint16_t swapEndian16(uint16_t n) {\n    return (n >> 8) | (n << 8);\n}\n\nint main(void) {\n    printf(\"This system is %s-endian\\n\",\n           isLittleEndian() ? \"little\" : \"big\");\n\n    uint32_t val = 0x12345678;\n\n    /* Show bytes in memory order */\n    unsigned char *bytes = (unsigned char *)&val;\n    printf(\"\\n0x%X in memory: \", val);\n    for (int i = 0; i < 4; i++)\n        printf(\"%02X \", bytes[i]);\n    printf(\"\\n\");  /* Little-endian: 78 56 34 12 */\n\n    /* Byte swap */\n    uint32_t swapped = swapEndian32(val);\n    printf(\"Swapped: 0x%X\\n\", swapped);  /* 0x78563412 */\n\n    /* Network byte order conversion */\n    uint32_t net = htonl(val);  /* host to network */\n    printf(\"htonl(0x12345678) = 0x%X\\n\", net);\n    /* On little-endian: 0x78563412; on big-endian: 0x12345678 */\n\n    uint32_t host = ntohl(net);  /* network to host */\n    printf(\"ntohl back: 0x%X\\n\", host);  /* 0x12345678 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Little-endian: LSB at lowest address (x86, most ARM)",
+            "Big-endian: MSB at lowest address (network byte order)",
+            "Bitwise operators work on values, not memory layout -- endianness is transparent",
+            "Use htonl/ntohl for network byte order conversion",
+            "Endianness matters for binary file I/O and network protocols"
+          ],
+          "gotchas": [
+            "Bitwise ops on variables are endian-agnostic; endianness only matters for raw memory access",
+            "Type punning (casting int* to char*) exposes endianness",
+            "Forgetting htonl/ntohl in network code causes data corruption between different-endian systems",
+            "ARM can run in either endian mode (bi-endian) -- do not assume"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Little-endian: LSB first in memory (x86). Big-endian: MSB first (network order). Bitwise ops on variables are endian-transparent. Use htonl/ntohl for network conversions.",
+          "pseudo_code": "",
+          "actual_code": "/* Detect endianness */\nint isLittleEndian(void) {\n    unsigned int x = 1;\n    return *((unsigned char *)&x) == 1;\n}\n/* Byte swap */\nuint32_t swapEndian32(uint32_t n) {\n    return ((n>>24)&0xFF) | ((n>>8)&0xFF00) |\n           ((n<<8)&0xFF0000) | ((n<<24)&0xFF000000);\n}",
+          "code_language": "c",
+          "key_points": [
+            "Endianness = byte order in memory, transparent to bitwise ops on variables"
+          ],
+          "gotchas": [
+            "Only matters for raw memory access, serialization, and network I/O"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use bit manipulation for flags and permissions?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "flags", "permissions", "enum"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Bit flags** use individual bits to represent boolean options, packing multiple flags into a single integer. This is extremely common in C APIs (file permissions, window styles, socket options, etc.).\n\n**Pattern:** Define each flag as a power of 2. Combine flags with OR, check with AND, remove with AND-NOT.\n\n**Advantages:**\n- Memory efficient: 32 flags in 4 bytes\n- Fast: single instruction for set/check/clear\n- Combinable: multiple flags in one parameter\n\n**Real-world examples:**\n- Unix file permissions: `rwxrwxrwx` = 9 bits\n- `open()` flags: `O_RDONLY | O_CREAT | O_TRUNC`\n- `fcntl()` flags, `select()` flags, etc.",
+          "pseudo_code": "Define flags as powers of 2:\n  FLAG_A = 1 << 0  = 0x01\n  FLAG_B = 1 << 1  = 0x02\n  FLAG_C = 1 << 2  = 0x04\n\nSet flag:    flags |= FLAG_A\nClear flag:  flags &= ~FLAG_A\nToggle flag: flags ^= FLAG_A\nCheck flag:  if (flags & FLAG_A)\nCombine:     flags = FLAG_A | FLAG_C",
+          "actual_code": "#include <stdio.h>\n\n/* Define flags as powers of 2 */\n#define PERM_READ    (1 << 0)  /* 0x01 = 001 */\n#define PERM_WRITE   (1 << 1)  /* 0x02 = 010 */\n#define PERM_EXEC    (1 << 2)  /* 0x04 = 100 */\n#define PERM_ALL     (PERM_READ | PERM_WRITE | PERM_EXEC)  /* 0x07 */\n\n/* Using enum for type safety */\ntypedef enum {\n    OPT_VERBOSE  = 1 << 0,\n    OPT_DEBUG    = 1 << 1,\n    OPT_COLOR    = 1 << 2,\n    OPT_LOGFILE  = 1 << 3,\n    OPT_DAEMON   = 1 << 4,\n} Options;\n\nvoid printPerms(int perms) {\n    printf(\"%c%c%c\",\n           (perms & PERM_READ)  ? 'r' : '-',\n           (perms & PERM_WRITE) ? 'w' : '-',\n           (perms & PERM_EXEC)  ? 'x' : '-');\n}\n\nvoid processOptions(unsigned int opts) {\n    if (opts & OPT_VERBOSE) printf(\"Verbose mode\\n\");\n    if (opts & OPT_DEBUG)   printf(\"Debug mode\\n\");\n    if (opts & OPT_COLOR)   printf(\"Color enabled\\n\");\n    if (opts & OPT_LOGFILE) printf(\"Logging to file\\n\");\n    if (opts & OPT_DAEMON)  printf(\"Running as daemon\\n\");\n}\n\nint main(void) {\n    /* Permission flags */\n    int perms = PERM_READ | PERM_WRITE;  /* rw- */\n    printf(\"Permissions: \"); printPerms(perms); printf(\"\\n\");  /* rw- */\n\n    /* Add execute permission */\n    perms |= PERM_EXEC;\n    printf(\"After +exec: \"); printPerms(perms); printf(\"\\n\");  /* rwx */\n\n    /* Remove write permission */\n    perms &= ~PERM_WRITE;\n    printf(\"After -write: \"); printPerms(perms); printf(\"\\n\");  /* r-x */\n\n    /* Toggle execute */\n    perms ^= PERM_EXEC;\n    printf(\"Toggle exec: \"); printPerms(perms); printf(\"\\n\");  /* r-- */\n\n    /* Check specific permission */\n    if (perms & PERM_READ)\n        printf(\"Has read permission\\n\");\n\n    /* Option flags */\n    printf(\"\\n\");\n    unsigned int opts = OPT_VERBOSE | OPT_COLOR | OPT_DAEMON;\n    processOptions(opts);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Each flag is a power of 2 (only one bit set)",
+            "Set: flags |= FLAG, Clear: flags &= ~FLAG, Check: flags & FLAG",
+            "Combine multiple flags with OR: flags = FLAG_A | FLAG_B",
+            "Use #define or enum for named flags",
+            "Ubiquitous in C: Unix permissions, open() flags, socket options"
+          ],
+          "gotchas": [
+            "Flags must be powers of 2 -- using sequential values (1, 2, 3) causes overlapping bits",
+            "if (flags & FLAG) is truthy check -- it returns the flag value, not 1",
+            "Forgetting ~ when clearing: flags &= FLAG sets all bits EXCEPT FLAG (opposite!)",
+            "Max 32 flags in an unsigned int (64 with unsigned long long)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define flags as powers of 2 (`1 << n`). Set: `|= FLAG`. Clear: `&= ~FLAG`. Check: `& FLAG`. Combine: `FLAG_A | FLAG_B`. Ubiquitous in C APIs.",
+          "pseudo_code": "",
+          "actual_code": "#define F_READ  (1 << 0)\n#define F_WRITE (1 << 1)\n#define F_EXEC  (1 << 2)\n\nint flags = F_READ | F_WRITE;  /* set read+write */\nflags |= F_EXEC;               /* add exec */\nflags &= ~F_WRITE;             /* remove write */\nif (flags & F_READ) { /* has read */ }",
+          "code_language": "c",
+          "key_points": [
+            "Flags = powers of 2. Set |=, Clear &= ~, Check &"
+          ],
+          "gotchas": [
+            "Flags must be powers of 2 or bits overlap"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you compute the absolute value of an integer without branching?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "absolute-value", "branchless"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Computing absolute value without branching (no `if` statement) uses the properties of arithmetic right shift and XOR.\n\n**Formula (32-bit int):**\n```\nmask = n >> 31;         // 0 if positive, -1 (all ones) if negative\nabs = (n ^ mask) - mask; // or equivalently: (n + mask) ^ mask\n```\n\n**How it works:**\n- If n >= 0: `mask = 0`, so `(n ^ 0) - 0 = n`\n- If n < 0: `mask = -1` (all 1s), so `(n ^ -1) - (-1) = ~n + 1 = -n`\n\n`n ^ -1` is the same as `~n` (one's complement), and subtracting -1 is adding 1, giving two's complement negation.\n\n**Why branchless?** Avoids branch misprediction penalty on modern CPUs. Useful in performance-critical inner loops.\n\n**Note:** `abs(INT_MIN)` overflows (INT_MIN has no positive counterpart).",
+          "pseudo_code": "BranchlessAbs(n):\n  mask = n >> 31        // arithmetic right shift: 0 or -1\n  return (n ^ mask) - mask\n\nAlternative:\n  mask = n >> 31\n  return (n + mask) ^ mask",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\n\n/* Branchless absolute value */\nint branchlessAbs(int n) {\n    int mask = n >> 31;  /* 0 if positive, -1 if negative */\n    return (n ^ mask) - mask;\n}\n\n/* Alternative formulation */\nint branchlessAbs2(int n) {\n    int mask = n >> 31;\n    return (n + mask) ^ mask;\n}\n\n/* Traditional with branch */\nint traditionalAbs(int n) {\n    return (n < 0) ? -n : n;\n}\n\nint main(void) {\n    int tests[] = {0, 5, -5, 42, -42, 100, -100, INT_MAX};\n    int n = sizeof(tests) / sizeof(tests[0]);\n\n    for (int i = 0; i < n; i++) {\n        printf(\"abs(%d) = %d (branchless), %d (v2)\\n\",\n               tests[i],\n               branchlessAbs(tests[i]),\n               branchlessAbs2(tests[i]));\n    }\n\n    /* WARNING: INT_MIN overflow */\n    printf(\"\\nabs(INT_MIN) = %d (OVERFLOW!)\\n\", branchlessAbs(INT_MIN));\n    /* Result is still INT_MIN (undefined behavior technically) */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "mask = n >> 31 gives 0 (positive) or -1 (negative) via arithmetic shift",
+            "(n ^ mask) - mask: XOR with -1 is NOT, minus -1 is +1, giving two's complement negation",
+            "Avoids branch misprediction -- useful in tight loops",
+            "Equivalent to: (n + mask) ^ mask",
+            "Standard abs() or ternary operator is clearer for non-performance-critical code"
+          ],
+          "gotchas": [
+            "abs(INT_MIN) overflows -- there is no positive counterpart of INT_MIN in two's complement",
+            "n >> 31 must be arithmetic right shift (fills with sign bit) -- C guarantees this for signed ints on most implementations but it is implementation-defined before C23",
+            "This trick assumes 32-bit int; for 64-bit, use >> 63",
+            "Branchless code is harder to read -- comment it clearly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`mask = n >> 31` gives 0 or -1. `(n ^ mask) - mask` gives absolute value. No branch, no `if`. Avoids branch misprediction.",
+          "pseudo_code": "",
+          "actual_code": "int branchlessAbs(int n) {\n    int mask = n >> 31;\n    return (n ^ mask) - mask;\n}",
+          "code_language": "c",
+          "key_points": [
+            "mask = n >> 31 (0 or -1), abs = (n ^ mask) - mask"
+          ],
+          "gotchas": [
+            "abs(INT_MIN) overflows -- no positive counterpart"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common interview trick questions involving bitwise operators?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": ["bitwise", "interview", "tricks", "gotchas"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Interviewers love bitwise trick questions because they test deep understanding. Here are the most common ones:\n\n**1. Check if a number is even or odd:** `n & 1` -- returns 0 (even) or 1 (odd). Faster than `n % 2`.\n\n**2. Multiply/divide by powers of 2:** `n << k` = n * 2^k, `n >> k` = n / 2^k.\n\n**3. Swap two numbers:** XOR swap (covered separately).\n\n**4. Turn off the rightmost set bit:** `n & (n - 1)`.\n\n**5. Isolate the rightmost set bit:** `n & (-n)`.\n\n**6. Check if power of 2:** `n > 0 && (n & (n-1)) == 0`.\n\n**7. Compute minimum/maximum without branching:**\n- `min(a,b) = b ^ ((a ^ b) & -(a < b))`\n- `max(a,b) = a ^ ((a ^ b) & -(a < b))`\n\n**8. Check if two integers have opposite signs:** `(a ^ b) < 0` (XOR of opposite signs has sign bit set).\n\n**9. Add 1 to an integer:** `~(~n + 1) + 1` or `-~n` (using two's complement).\n\n**10. Convert uppercase to lowercase:** `ch | 0x20` (sets bit 5). Lowercase to uppercase: `ch & ~0x20` (clears bit 5).",
+          "pseudo_code": "Common bitwise tricks:\n  Even/odd:       n & 1\n  Multiply by 2k: n << k\n  Divide by 2k:   n >> k\n  Clear lowest set bit: n & (n-1)\n  Isolate lowest set bit: n & (-n)\n  Power of 2:     n > 0 && (n & (n-1)) == 0\n  Opposite signs: (a ^ b) < 0\n  To lowercase:   ch | 0x20\n  To uppercase:   ch & ~0x20\n  Toggle case:    ch ^ 0x20",
+          "actual_code": "#include <stdio.h>\n\nint main(void) {\n    /* 1. Even/Odd check */\n    printf(\"7 is %s\\n\", (7 & 1) ? \"odd\" : \"even\");  /* odd */\n    printf(\"8 is %s\\n\", (8 & 1) ? \"odd\" : \"even\");  /* even */\n\n    /* 2. Multiply and divide by powers of 2 */\n    printf(\"5 * 8 = %d\\n\", 5 << 3);    /* 40 */\n    printf(\"40 / 4 = %d\\n\", 40 >> 2);  /* 10 */\n\n    /* 3. Turn off rightmost set bit */\n    printf(\"12 & 11 = %d\\n\", 12 & 11);  /* 8: 1100 & 1011 = 1000 */\n\n    /* 4. Check opposite signs */\n    int a = -5, b = 10;\n    printf(\"%d and %d opposite signs: %s\\n\", a, b,\n           ((a ^ b) < 0) ? \"yes\" : \"no\");  /* yes */\n\n    /* 5. Case conversion (ASCII) */\n    char upper = 'A';\n    char lower = upper | 0x20;   /* 'a' */\n    char back  = lower & ~0x20;  /* 'A' */\n    char toggled = upper ^ 0x20; /* 'a' */\n    printf(\"'%c' -> '%c' -> '%c', toggle: '%c'\\n\",\n           upper, lower, back, toggled);\n\n    /* 6. Branchless min/max */\n    int x = 7, y = 3;\n    int min_val = y ^ ((x ^ y) & -(x < y));\n    int max_val = x ^ ((x ^ y) & -(x < y));\n    printf(\"min(%d,%d) = %d, max = %d\\n\", x, y, min_val, max_val);\n    /* min=3, max=7 */\n\n    /* 7. Count leading zeros to find log2 */\n    unsigned int v = 16;\n    int log2 = 31 - __builtin_clz(v);\n    printf(\"log2(%u) = %d\\n\", v, log2);  /* 4 */\n\n    /* 8. Round up to next power of 2 */\n    unsigned int num = 13;\n    num--;\n    num |= num >> 1;\n    num |= num >> 2;\n    num |= num >> 4;\n    num |= num >> 8;\n    num |= num >> 16;\n    num++;\n    printf(\"Next power of 2 after 13: %u\\n\", num);  /* 16 */\n\n    /* 9. Average without overflow */\n    int p = 100, q = 200;\n    int avg = (p & q) + ((p ^ q) >> 1);\n    printf(\"avg(%d, %d) = %d\\n\", p, q, avg);  /* 150 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "n & 1: even/odd check (faster than n % 2)",
+            "<< k: multiply by 2^k, >> k: divide by 2^k",
+            "ch | 0x20: uppercase to lowercase (ASCII), ch & ~0x20: reverse",
+            "(a ^ b) < 0: check if a and b have opposite signs",
+            "n & (n-1): clear lowest set bit (used in popcount and power-of-2 check)"
+          ],
+          "gotchas": [
+            "Bit shift multiplication/division only works for powers of 2, not arbitrary numbers",
+            "Case conversion trick only works for ASCII letters (A-Z, a-z), not unicode",
+            "Branchless min/max can still cause issues on some architectures due to -(a < b) evaluation",
+            "Overflow-safe average: (a & b) + ((a ^ b) >> 1) only works for non-negative integers as written",
+            "Many of these tricks sacrifice readability -- use them only when performance matters or in interviews"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key tricks: `n & 1` (even/odd), `<< k` (multiply by 2^k), `n & (n-1)` (clear lowest bit), `(a ^ b) < 0` (opposite signs), `ch | 0x20` (lowercase), `n & (-n)` (isolate lowest bit).",
+          "pseudo_code": "",
+          "actual_code": "/* Even/odd */  int isOdd = n & 1;\n/* Multiply */  int x8 = n << 3;\n/* Clear LSB */ int cleared = n & (n - 1);\n/* Opposite signs */ int opp = (a ^ b) < 0;\n/* Lowercase */ char lo = ch | 0x20;\n/* Uppercase */ char up = ch & ~0x20;\n/* Next pow2 */ v--; v|=v>>1; v|=v>>2; v|=v>>4; v|=v>>8; v|=v>>16; v++;",
+          "code_language": "c",
+          "key_points": [
+            "Most-asked tricks in interviews -- memorize the patterns"
+          ],
+          "gotchas": [
+            "These tricks sacrifice readability -- explain them clearly in interviews"
+          ]
+        }
+      ]
+    }
+  ]
+}

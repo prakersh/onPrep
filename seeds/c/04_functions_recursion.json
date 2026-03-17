@@ -1,0 +1,635 @@
+{
+  "concept_slug": "functions-recursion",
+  "questions": [
+    {
+      "title": "What is the difference between function declaration and definition in C?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": ["function-declaration", "function-definition", "prototype"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Function declaration (prototype):** Tells the compiler the function's name, return type, and parameter types. Does NOT include the body. Ends with a semicolon.\n\n**Function definition:** Provides the actual body (implementation) of the function.\n\n**Why declarations matter:**\n- In C, you must declare a function before calling it (or define it before the call).\n- Declarations are typically placed in header files (.h) so multiple source files can use the function.\n- Without a declaration, C89 assumes the function returns `int` and accepts any arguments (implicit declaration). C99+ makes implicit declarations an error.\n\n**Declaration syntax:** `return_type function_name(param_types);`\n- Parameter names are optional in declarations: `int add(int, int);` is valid.\n- But parameter names in declarations improve readability: `int add(int a, int b);`.",
+          "pseudo_code": "Declaration (prototype):\n  int add(int a, int b);   // tells compiler about function\n\nDefinition:\n  int add(int a, int b) {  // provides the implementation\n      return a + b;\n  }\n\n1. Declaration before first use (or definition before use)\n2. Declarations go in header files (.h)\n3. Definitions go in source files (.c)\n4. One definition allowed (ODR), multiple declarations OK",
+          "actual_code": "#include <stdio.h>\n\n/* Declaration (prototype) -- no body, ends with ; */\nint add(int a, int b);\nint multiply(int, int);  /* parameter names optional */\n\nint main(void) {\n    /* Can call add() and multiply() because they are declared above */\n    printf(\"add(3, 4) = %d\\n\", add(3, 4));           /* 7 */\n    printf(\"mul(3, 4) = %d\\n\", multiply(3, 4));       /* 12 */\n    return 0;\n}\n\n/* Definition -- provides the body */\nint add(int a, int b) {\n    return a + b;\n}\n\nint multiply(int a, int b) {\n    return a * b;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Declaration = signature only (no body, ends with ;)",
+            "Definition = signature + body (the implementation)",
+            "Declare before use; define once in a .c file",
+            "Declarations go in .h files; definitions in .c files",
+            "C99+ requires explicit declaration before calling a function"
+          ],
+          "gotchas": [
+            "C89 allows implicit declarations (assumes int return) -- C99+ makes this an error",
+            "Declaring int f() means f takes UNSPECIFIED parameters, not zero; use int f(void) for zero",
+            "Multiple declarations are fine; multiple definitions cause a linker error",
+            "Forgetting to include the header with the prototype can cause implicit declaration warnings"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Declaration** = name + return type + param types (no body, ends with `;`). **Definition** = declaration + body. Declare before use. Put declarations in `.h` files, definitions in `.c` files. Use `f(void)` for no parameters.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint add(int a, int b); /* declaration */\nint main(void) {\n    printf(\"%d\\n\", add(3, 4)); /* 7 */\n    return 0;\n}\nint add(int a, int b) { return a + b; } /* definition */",
+          "code_language": "c",
+          "key_points": [
+            "Declaration = no body; definition = with body",
+            "Use f(void) for zero parameters"
+          ],
+          "gotchas": [
+            "f() means unspecified params, not zero params -- use f(void)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does pass by value work in C? Does C have pass by reference?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": ["pass-by-value", "pass-by-reference", "function-arguments"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**C is strictly pass by value.** When you call a function, the argument values are COPIED into the function's parameters. Modifying a parameter inside the function does NOT affect the original variable.\n\n**C does NOT have pass by reference** (unlike C++ with `&`). However, you can SIMULATE pass by reference by passing a pointer to the variable. The pointer itself is passed by value, but through it you can modify the original data.\n\n**Why this matters:**\n- `void swap(int a, int b)` cannot swap the caller's variables.\n- `void swap(int *a, int *b)` can, because it receives pointers to the originals.\n- Arrays appear to be passed by reference, but they actually decay to pointers (still pass by value -- the pointer is copied).",
+          "pseudo_code": "1. C is ALWAYS pass by value\n2. Parameters are copies of the arguments\n3. Modifying a parameter does NOT change the original\n4. To modify the original: pass a pointer\n5. void swap(int *a, int *b) -- pointer passed by value\n6. Arrays decay to pointers when passed to functions",
+          "actual_code": "#include <stdio.h>\n\n/* This does NOT work: a and b are copies */\nvoid bad_swap(int a, int b) {\n    int temp = a;\n    a = b;\n    b = temp;\n    /* only local copies are swapped */\n}\n\n/* This works: pointers to originals */\nvoid good_swap(int *a, int *b) {\n    int temp = *a;\n    *a = *b;\n    *b = temp;\n}\n\n/* Demonstrating that the pointer itself is a copy */\nvoid try_change_ptr(int *p) {\n    int local = 99;\n    p = &local;  /* only changes the local copy of the pointer */\n}\n\nint main(void) {\n    int x = 10, y = 20;\n\n    bad_swap(x, y);\n    printf(\"After bad_swap:  x=%d y=%d\\n\", x, y);  /* x=10 y=20 */\n\n    good_swap(&x, &y);\n    printf(\"After good_swap: x=%d y=%d\\n\", x, y);  /* x=20 y=10 */\n\n    /* Pointer itself is passed by value */\n    int val = 42;\n    int *ptr = &val;\n    try_change_ptr(ptr);\n    printf(\"ptr still points to: %d\\n\", *ptr); /* 42, not 99 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C is always pass by value -- arguments are copied",
+            "To modify the caller's variable, pass a pointer to it",
+            "The pointer itself is still passed by value",
+            "Arrays decay to pointers, giving the illusion of pass by reference",
+            "To change what a pointer points to, pass a pointer to the pointer"
+          ],
+          "gotchas": [
+            "void f(int a) cannot modify the caller's a -- it is a copy",
+            "Even pointers are passed by value: changing the pointer itself inside f does not affect the caller",
+            "To change a pointer in the caller, pass int **p (pointer to pointer)",
+            "Arrays look like pass by reference but are actually pointer decay + pass by value"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C is always pass by value. Parameters are copies. To modify the caller's variable, pass a pointer (`&x`). The pointer itself is also a copy; to change a pointer, pass a pointer-to-pointer.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nvoid swap(int *a, int *b) {\n    int tmp = *a; *a = *b; *b = tmp;\n}\nint main(void) {\n    int x = 1, y = 2;\n    swap(&x, &y);\n    printf(\"x=%d y=%d\\n\", x, y); /* x=2 y=1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C is always pass by value",
+            "Use pointers to simulate pass by reference"
+          ],
+          "gotchas": [
+            "Even pointers are passed by value -- changing the pointer itself does not affect the caller"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you simulate pass by reference using pointers?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": ["pass-by-reference", "pointers", "function-arguments"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Since C only supports pass by value, you simulate pass by reference by passing the **address** of a variable (a pointer to it). Inside the function, you dereference the pointer to read or modify the original variable.\n\n**Pattern:**\n1. Caller: pass `&variable` (address of variable).\n2. Function: accept `type *param` (pointer parameter).\n3. Inside function: use `*param` to access/modify the original.\n\n**Common uses:**\n- Swap functions.\n- Functions that need to return multiple values.\n- Functions that modify data structures.\n- Output parameters (a function that fills in a struct or array).\n\n**For pointers:** If you want to change what a pointer points to, pass a pointer to the pointer (`int **pp`).",
+          "pseudo_code": "1. void modify(int *p) { *p = 42; }  // modify through pointer\n2. Caller: int x; modify(&x);         // pass address\n3. For pointer modification: void f(int **pp) { *pp = new_addr; }\n4. Caller: int *p; f(&p);             // pass address of pointer\n5. Output parameters: int parse(const char *s, int *result);",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Modify a single value */\nvoid set_to_zero(int *p) {\n    *p = 0;\n}\n\n/* Return multiple values via output parameters */\nvoid divide(int dividend, int divisor, int *quotient, int *remainder) {\n    *quotient = dividend / divisor;\n    *remainder = dividend % divisor;\n}\n\n/* Modify a pointer itself (pointer to pointer) */\nvoid allocate(int **pp, int value) {\n    *pp = malloc(sizeof(int));\n    if (*pp) {\n        **pp = value;\n    }\n}\n\nint main(void) {\n    /* Modify value */\n    int x = 42;\n    set_to_zero(&x);\n    printf(\"x = %d\\n\", x); /* 0 */\n\n    /* Multiple return values */\n    int q, r;\n    divide(17, 5, &q, &r);\n    printf(\"17 / 5 = %d remainder %d\\n\", q, r); /* 3 remainder 2 */\n\n    /* Modify a pointer */\n    int *ptr = NULL;\n    allocate(&ptr, 99);\n    if (ptr) {\n        printf(\"*ptr = %d\\n\", *ptr); /* 99 */\n        free(ptr);\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pass &variable to give the function access to the original",
+            "Dereference with *param to read/modify the original value",
+            "Use pointer-to-pointer to modify what a pointer points to",
+            "Output parameters allow returning multiple values from a function",
+            "This is the standard C idiom for simulating pass by reference"
+          ],
+          "gotchas": [
+            "Passing NULL as the address causes undefined behavior when dereferenced",
+            "Always check for NULL before dereferencing output parameters",
+            "The original pointer is not modified if you only pass the pointer (not &pointer)",
+            "Returning a pointer to a local variable is a bug (local dies when function returns)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pass `&variable` to the function. Accept `type *param`. Use `*param` to modify the original. For pointer modification, use `type **pp` and pass `&pointer`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nvoid divide(int a, int b, int *q, int *r) {\n    *q = a / b;\n    *r = a % b;\n}\nint main(void) {\n    int q, r;\n    divide(17, 5, &q, &r);\n    printf(\"%d rem %d\\n\", q, r); /* 3 rem 2 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Pass address, dereference to modify original",
+            "Common for multiple return values"
+          ],
+          "gotchas": [
+            "Always check for NULL before dereferencing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are function prototypes and why are they important?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": ["prototype", "declaration", "header-file"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **function prototype** is a declaration that specifies the function's return type and parameter types, allowing the compiler to check calls before seeing the definition.\n\n**Why prototypes matter:**\n1. **Type checking:** The compiler verifies arguments match parameters.\n2. **Implicit conversion:** The compiler generates correct type conversions.\n3. **Error detection:** Catches wrong number of arguments or wrong types at compile time.\n4. **Required in C99+:** Calling an undeclared function is an error (was just a warning in C89).\n\n**Without a prototype (C89):**\n- The compiler assumes the function returns `int`.\n- Arguments are passed with default promotions (float -> double, short -> int).\n- Wrong argument types produce undefined behavior silently.\n\n**Important distinction:** `int f()` means unspecified parameters (NOT zero). `int f(void)` means zero parameters. Always use `(void)` for no parameters.",
+          "pseudo_code": "1. int add(int, int);      // prototype in header or before use\n2. int add(int a, int b);  // names optional but good for docs\n3. int f(void);            // takes NO parameters\n4. int f();                // takes UNSPECIFIED parameters (dangerous!)\n5. Put prototypes in .h files for multi-file projects",
+          "actual_code": "#include <stdio.h>\n\n/* Prototypes -- allow calling before definition */\nint add(int a, int b);\nvoid greet(const char *name);\nint no_args(void);  /* void means ZERO parameters */\n\nint main(void) {\n    printf(\"%d\\n\", add(3, 4));  /* 7 -- compiler checks types */\n    greet(\"World\");\n    printf(\"%d\\n\", no_args());\n\n    /* Without prototype, these errors would be silent: */\n    /* add(3.5, \"hello\"); -- compiler catches type mismatch */\n    /* add(1, 2, 3);      -- compiler catches wrong arg count */\n\n    return 0;\n}\n\nint add(int a, int b) {\n    return a + b;\n}\n\nvoid greet(const char *name) {\n    printf(\"Hello, %s!\\n\", name);\n}\n\nint no_args(void) {\n    return 42;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Prototypes enable compile-time type checking of function calls",
+            "Required in C99+ (implicit declarations are errors)",
+            "Use (void) for zero parameters, not empty ()",
+            "Place prototypes in header files for multi-file projects",
+            "Parameter names in prototypes are optional but improve documentation"
+          ],
+          "gotchas": [
+            "int f() does NOT mean zero parameters in C -- it means unspecified (any number accepted)",
+            "Always write int f(void) when the function takes no parameters",
+            "Without prototypes, float args are promoted to double, causing ABI bugs",
+            "C89 implicit int rule: undeclared functions assumed to return int, hiding type mismatches"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A prototype declares return type and parameter types before the function is used. Enables type checking. Required in C99+. Use `f(void)` for no parameters, not `f()` which means unspecified.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint add(int a, int b);  /* prototype */\nint main(void) {\n    printf(\"%d\\n\", add(3, 4)); /* compiler checks types */\n    return 0;\n}\nint add(int a, int b) { return a + b; }",
+          "code_language": "c",
+          "key_points": [
+            "Prototypes enable type checking",
+            "f(void) means zero params; f() means unspecified"
+          ],
+          "gotchas": [
+            "int f() accepts any number of arguments in C, not zero"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do variadic functions work in C (stdarg.h)?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": ["variadic", "stdarg", "va_list", "va_start", "va_arg", "va_end"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Variadic functions** accept a variable number of arguments. They are declared with `...` (ellipsis) after at least one fixed parameter.\n\n**The `<stdarg.h>` macros:**\n- `va_list` -- type for the argument list.\n- `va_start(ap, last_fixed)` -- initialize `ap` after the last fixed parameter.\n- `va_arg(ap, type)` -- retrieve the next argument as `type`.\n- `va_end(ap)` -- clean up.\n- `va_copy(dest, src)` (C99) -- copy a `va_list`.\n\n**Key rules:**\n- Must have at least one fixed parameter (to anchor `va_start`).\n- The caller must indicate how many variable arguments there are (via a count, format string, or sentinel value like NULL).\n- Type safety is the programmer's responsibility -- there is no compiler checking for variadic arguments.\n- Default promotions apply: `float` -> `double`, `char`/`short` -> `int`.",
+          "pseudo_code": "1. int f(int count, ...) { }     // ... = variable args\n2. va_list ap;                    // declare argument pointer\n3. va_start(ap, count);           // init after last fixed param\n4. val = va_arg(ap, int);         // get next arg as int\n5. va_end(ap);                    // clean up\n6. Caller must tell function how many args (count or sentinel)",
+          "actual_code": "#include <stdio.h>\n#include <stdarg.h>\n\n/* Sum of n integers */\nint sum(int count, ...) {\n    va_list ap;\n    va_start(ap, count);\n\n    int total = 0;\n    for (int i = 0; i < count; i++) {\n        total += va_arg(ap, int);\n    }\n\n    va_end(ap);\n    return total;\n}\n\n/* Simple printf-like function */\nvoid my_printf(const char *fmt, ...) {\n    va_list ap;\n    va_start(ap, fmt);\n\n    for (const char *p = fmt; *p; p++) {\n        if (*p == '%' && *(p + 1)) {\n            p++;\n            switch (*p) {\n                case 'd': printf(\"%d\", va_arg(ap, int)); break;\n                case 's': printf(\"%s\", va_arg(ap, char *)); break;\n                case 'f': printf(\"%f\", va_arg(ap, double)); break;\n                default: putchar(*p); break;\n            }\n        } else {\n            putchar(*p);\n        }\n    }\n\n    va_end(ap);\n}\n\nint main(void) {\n    printf(\"sum = %d\\n\", sum(4, 10, 20, 30, 40)); /* 100 */\n\n    my_printf(\"Name: %s, Age: %d, GPA: %f\\n\",\n              \"Alice\", 22, 3.8);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use ... in function declaration for variable arguments",
+            "va_start initializes; va_arg retrieves; va_end cleans up",
+            "Must have at least one fixed parameter before ...",
+            "Caller must communicate the number/types of arguments",
+            "No type safety: wrong va_arg type is undefined behavior"
+          ],
+          "gotchas": [
+            "va_arg with wrong type is undefined behavior (no compiler checking)",
+            "Forgetting va_end can cause memory leaks or stack corruption on some platforms",
+            "float is promoted to double in variadic calls: use va_arg(ap, double) not float",
+            "NULL as a variadic argument may not be a null pointer on all platforms: use (void *)NULL"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Declare with `...` after fixed params. Use `va_start`/`va_arg`/`va_end` from `<stdarg.h>`. No type safety on variadic arguments. `float` is promoted to `double`. Always call `va_end`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdarg.h>\nint sum(int n, ...) {\n    va_list ap;\n    va_start(ap, n);\n    int total = 0;\n    for (int i = 0; i < n; i++) total += va_arg(ap, int);\n    va_end(ap);\n    return total;\n}\nint main(void) {\n    printf(\"%d\\n\", sum(3, 10, 20, 30)); /* 60 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "va_start / va_arg / va_end for variable arguments",
+            "No type safety on variadic args"
+          ],
+          "gotchas": [
+            "Use va_arg(ap, double) not float (promotion rule)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does recursion work in C?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": ["recursion", "base-case", "stack-frame"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Recursion** is when a function calls itself. Every recursive function needs:\n1. **Base case:** A condition that stops the recursion.\n2. **Recursive case:** The function calls itself with a \"smaller\" problem.\n3. **Progress:** Each call must move toward the base case.\n\n**How it works internally:**\n- Each call creates a new **stack frame** with its own local variables.\n- When the base case is reached, the calls start returning (unwinding the stack).\n- The return values propagate back up through the chain of calls.\n\n**Stack usage:** Each recursive call uses stack memory. Very deep recursion can cause **stack overflow** (typically the stack is 1-8 MB).",
+          "pseudo_code": "1. Define base case (stopping condition)\n2. Define recursive case (calls self with smaller input)\n3. Each call creates a new stack frame\n4. Stack unwinds as calls return\n5. Must make progress toward base case to avoid infinite recursion",
+          "actual_code": "#include <stdio.h>\n\n/* Factorial: n! = n * (n-1)! with 0! = 1 */\nint factorial(int n) {\n    if (n <= 1) return 1;       /* base case */\n    return n * factorial(n - 1); /* recursive case */\n}\n\n/* Fibonacci: fib(n) = fib(n-1) + fib(n-2) */\nint fibonacci(int n) {\n    if (n <= 0) return 0;       /* base case */\n    if (n == 1) return 1;       /* base case */\n    return fibonacci(n - 1) + fibonacci(n - 2); /* recursive */\n}\n\n/* Tracing recursion */\nvoid countdown(int n) {\n    if (n < 0) return;          /* base case */\n    printf(\"%d \", n);\n    countdown(n - 1);           /* recursive call */\n}\n\nint main(void) {\n    printf(\"5! = %d\\n\", factorial(5));  /* 120 */\n    printf(\"fib(7) = %d\\n\", fibonacci(7)); /* 13 */\n\n    printf(\"Countdown: \");\n    countdown(5); /* 5 4 3 2 1 0 */\n    printf(\"\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Every recursion needs a base case and a recursive case",
+            "Each call creates a new stack frame with its own variables",
+            "The stack unwinds as recursive calls return",
+            "Recursion is often simpler than iteration for tree/graph problems",
+            "Must progress toward the base case to terminate"
+          ],
+          "gotchas": [
+            "Missing base case causes infinite recursion and stack overflow",
+            "Naive Fibonacci is O(2^n) -- exponentially slow; use memoization or iteration",
+            "Each recursive call uses stack space -- deep recursion can crash",
+            "Recursion can be slower than iteration due to function call overhead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A function calls itself. Needs: base case (stops recursion), recursive case (smaller problem), progress toward base case. Each call uses a stack frame. Missing base case = stack overflow.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint factorial(int n) {\n    if (n <= 1) return 1;          /* base case */\n    return n * factorial(n - 1);   /* recursive case */\n}\nint main(void) {\n    printf(\"%d\\n\", factorial(5)); /* 120 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Base case + recursive case + progress",
+            "Each call uses a stack frame"
+          ],
+          "gotchas": [
+            "Missing base case = infinite recursion = stack overflow"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is tail recursion and can C compilers optimize it?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": ["tail-recursion", "optimization", "TCO"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Tail recursion** is when the recursive call is the LAST operation in the function -- there is no work left to do after the recursive call returns.\n\n**Why it matters:** A tail-recursive function can theoretically reuse the same stack frame for each call, converting the recursion into a loop. This is called **tail call optimization (TCO)**.\n\n**C and TCO:**\n- The C standard does NOT require TCO.\n- GCC and Clang perform TCO with optimization enabled (`-O2` or higher).\n- Without optimization, even tail-recursive functions will use stack frames normally.\n- You cannot rely on TCO in portable C code.\n\n**Converting to tail recursion:**\n- Use an accumulator parameter to carry the result.\n- `factorial(n)` becomes `factorial_tail(n, 1)` where the second argument accumulates the product.",
+          "pseudo_code": "Non-tail recursive:\n  int fact(n) { return n * fact(n-1); }  // multiplication AFTER call\n\nTail recursive:\n  int fact_tail(n, acc) {\n    if (n <= 1) return acc;\n    return fact_tail(n-1, n*acc);  // call is the LAST thing\n  }\n\nTCO: compiler can rewrite as a loop\nNot guaranteed by C standard; works with -O2 in GCC/Clang",
+          "actual_code": "#include <stdio.h>\n\n/* Non-tail recursive: multiplication after recursive call */\nint factorial(int n) {\n    if (n <= 1) return 1;\n    return n * factorial(n - 1);  /* n * ... is done AFTER call returns */\n}\n\n/* Tail recursive: call is the last operation */\nint factorial_tail(int n, int acc) {\n    if (n <= 1) return acc;\n    return factorial_tail(n - 1, n * acc); /* nothing after this call */\n}\n\n/* Wrapper for clean API */\nint factorial_optimized(int n) {\n    return factorial_tail(n, 1);\n}\n\n/* Tail recursive GCD (naturally tail recursive) */\nint gcd(int a, int b) {\n    if (b == 0) return a;\n    return gcd(b, a % b);  /* last operation is the call */\n}\n\nint main(void) {\n    printf(\"5! = %d\\n\", factorial(5));           /* 120 */\n    printf(\"5! = %d\\n\", factorial_optimized(5));  /* 120 */\n    printf(\"gcd(48,18) = %d\\n\", gcd(48, 18));    /* 6 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Tail recursion: the recursive call is the very last operation",
+            "Use an accumulator to convert regular recursion to tail recursion",
+            "GCC/Clang optimize tail calls with -O2 or higher",
+            "C standard does not mandate TCO -- it is compiler-dependent",
+            "GCD (Euclidean algorithm) is naturally tail recursive"
+          ],
+          "gotchas": [
+            "n * factorial(n-1) is NOT tail recursive -- multiplication happens after the call",
+            "TCO is not guaranteed -- do not rely on it for correctness in C",
+            "Debug builds (-O0) will NOT apply TCO, so you may still get stack overflow",
+            "Some compilers may optimize non-tail calls into loops too (aggressive optimization)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Tail recursion means the recursive call is the last operation. Compilers can optimize it into a loop (TCO). Use an accumulator parameter. GCC/Clang do TCO with `-O2`. Not guaranteed by the C standard.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint fact_tail(int n, int acc) {\n    if (n <= 1) return acc;\n    return fact_tail(n - 1, n * acc); /* tail call */\n}\nint main(void) {\n    printf(\"%d\\n\", fact_tail(5, 1)); /* 120 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Recursive call must be the last operation",
+            "TCO requires -O2 in GCC/Clang; not guaranteed by standard"
+          ],
+          "gotchas": [
+            "n * f(n-1) is NOT tail recursive"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you choose recursion over iteration?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": ["recursion-vs-iteration", "trade-offs", "design"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Choose recursion when:**\n1. The problem is naturally recursive (trees, graphs, divide-and-conquer).\n2. Code clarity is more important than performance.\n3. The recursion depth is bounded and small.\n4. The data structure is recursive (linked lists, trees).\n\n**Choose iteration when:**\n1. Performance is critical (no function call overhead).\n2. The recursion depth could be large (risk of stack overflow).\n3. The problem maps naturally to a loop (linear scan, counting).\n4. Tail recursion cannot be guaranteed by the compiler.\n\n**Any recursion can be converted to iteration** using an explicit stack (which is essentially what the call stack does). This trades code clarity for stack safety.\n\n**Performance comparison:**\n- Iteration: no function call overhead, no stack frame allocation.\n- Recursion: cleaner code for recursive problems, but slower and stack-limited.",
+          "pseudo_code": "Use recursion:\n  - Tree traversal (inorder, preorder, postorder)\n  - Merge sort, quicksort\n  - Directory traversal\n  - Parsing nested expressions\n\nUse iteration:\n  - Simple counting, summing\n  - Linear search\n  - Large/unknown depth problems\n  - Performance-critical code",
+          "actual_code": "#include <stdio.h>\n\n/* Recursive: natural for the problem */\nint sum_recursive(int n) {\n    if (n <= 0) return 0;\n    return n + sum_recursive(n - 1);\n}\n\n/* Iterative: more efficient for this simple case */\nint sum_iterative(int n) {\n    int total = 0;\n    for (int i = 1; i <= n; i++) {\n        total += i;\n    }\n    return total;\n}\n\n/* Recursive: natural for binary search */\nint bsearch_recursive(int arr[], int lo, int hi, int target) {\n    if (lo > hi) return -1;\n    int mid = lo + (hi - lo) / 2;\n    if (arr[mid] == target) return mid;\n    if (arr[mid] < target) return bsearch_recursive(arr, mid + 1, hi, target);\n    return bsearch_recursive(arr, lo, mid - 1, target);\n}\n\n/* Iterative: safer for large arrays */\nint bsearch_iterative(int arr[], int n, int target) {\n    int lo = 0, hi = n - 1;\n    while (lo <= hi) {\n        int mid = lo + (hi - lo) / 2;\n        if (arr[mid] == target) return mid;\n        if (arr[mid] < target) lo = mid + 1;\n        else hi = mid - 1;\n    }\n    return -1;\n}\n\nint main(void) {\n    printf(\"sum(100) recursive: %d\\n\", sum_recursive(100));  /* 5050 */\n    printf(\"sum(100) iterative: %d\\n\", sum_iterative(100));  /* 5050 */\n\n    int arr[] = {1, 3, 5, 7, 9, 11, 13};\n    printf(\"find 7: idx %d\\n\", bsearch_recursive(arr, 0, 6, 7));  /* 3 */\n    printf(\"find 7: idx %d\\n\", bsearch_iterative(arr, 7, 7));     /* 3 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Recursion is natural for trees, graphs, and divide-and-conquer",
+            "Iteration is faster and uses less memory",
+            "Any recursion can be converted to iteration with an explicit stack",
+            "Use recursion for clarity; iteration for performance",
+            "Binary search works well both ways; tree traversal is cleaner recursive"
+          ],
+          "gotchas": [
+            "sum_recursive(1000000) will stack overflow; sum_iterative will not",
+            "Naive recursive Fibonacci is O(2^n); iterative is O(n)",
+            "Converting recursion to iteration can make code much harder to read",
+            "Depth-first search on a large graph should use an explicit stack to avoid overflow"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use recursion for naturally recursive problems (trees, divide-and-conquer). Use iteration for simple loops, large depths, and performance-critical code. Any recursion can be converted to iteration with an explicit stack.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n/* Recursion: natural for recursive problems */\nint power(int base, int exp) {\n    if (exp == 0) return 1;\n    return base * power(base, exp - 1);\n}\n/* Iteration: better for performance */\nint power_iter(int base, int exp) {\n    int result = 1;\n    for (int i = 0; i < exp; i++) result *= base;\n    return result;\n}\nint main(void) {\n    printf(\"%d %d\\n\", power(2, 10), power_iter(2, 10)); /* 1024 1024 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Recursion = clarity; iteration = performance",
+            "Any recursion can become iteration with explicit stack"
+          ],
+          "gotchas": [
+            "Deep recursion = stack overflow risk"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How can deep recursion cause stack overflow?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": ["stack-overflow", "recursion", "stack-size"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Each function call pushes a **stack frame** onto the call stack, containing local variables, parameters, return address, and saved registers. The stack has a fixed size (typically 1-8 MB, depending on OS).\n\n**Stack overflow** occurs when the stack grows beyond its limit, typically from:\n1. Deep recursion (e.g., processing a million elements recursively).\n2. Large local arrays in recursive functions.\n3. Infinite recursion (missing base case).\n\n**Detection:**\n- Segfault (SIGSEGV) is the typical crash signal.\n- Stack overflow is NOT an exception in C -- there is no try/catch.\n- Address Sanitizer (`-fsanitize=address`) can detect stack issues.\n\n**Solutions:**\n1. Convert to iteration with an explicit stack (heap-allocated).\n2. Increase stack size (OS-dependent: `ulimit -s` on Linux).\n3. Use tail recursion and hope the compiler optimizes it.\n4. Reduce stack frame size (minimize local variables).",
+          "pseudo_code": "Problem: each call uses ~16-64+ bytes of stack\n  1000 calls = 16-64 KB\n  100000 calls = 1.6-6.4 MB -> stack overflow!\n\nSolutions:\n1. Convert to iteration with heap-allocated stack\n2. ulimit -s unlimited (Linux)\n3. Tail recursion with -O2 (compiler-dependent)\n4. Minimize local variables in recursive functions",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* This WILL stack overflow for large n */\nint sum_recursive(int n) {\n    if (n <= 0) return 0;\n    return n + sum_recursive(n - 1);\n}\n\n/* Safe iterative version */\nlong sum_iterative(int n) {\n    long total = 0;\n    for (int i = 1; i <= n; i++) {\n        total += i;\n    }\n    return total;\n}\n\n/* Simulating recursion with explicit stack */\nlong sum_with_stack(int n) {\n    int *stack = malloc(n * sizeof(int));\n    if (!stack) return -1;\n\n    int top = 0;\n    for (int i = n; i > 0; i--) {\n        stack[top++] = i;\n    }\n\n    long total = 0;\n    while (top > 0) {\n        total += stack[--top];\n    }\n\n    free(stack);\n    return total;\n}\n\nint main(void) {\n    /* Safe for small n */\n    printf(\"sum(100) = %d\\n\", sum_recursive(100)); /* 5050 */\n\n    /* Iterative works for any n */\n    printf(\"sum(1000000) = %ld\\n\", sum_iterative(1000000));\n\n    /* Explicit stack also works for any n */\n    printf(\"sum(1000000) = %ld\\n\", sum_with_stack(1000000));\n\n    /* DO NOT: sum_recursive(1000000) -- stack overflow! */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Each recursive call uses stack memory for its frame",
+            "Stack size is limited (typically 1-8 MB)",
+            "Stack overflow causes segfault -- no exception handling in C",
+            "Convert to iteration or use an explicit heap-allocated stack",
+            "Large local arrays in recursive functions worsen the problem"
+          ],
+          "gotchas": [
+            "Stack overflow is not a catchable exception -- it kills the process",
+            "The maximum safe recursion depth depends on stack frame size and OS stack limit",
+            "int arr[10000] inside a recursive function uses 40KB per call",
+            "Tail call optimization is not guaranteed -- do not rely on it for deep recursion"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Each recursive call uses stack space. The stack is limited (1-8 MB). Deep recursion causes segfault. Fix: convert to iteration with heap-allocated stack, or increase stack size (`ulimit -s`).",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n/* BAD: will overflow for large n */\nint sum(int n) {\n    if (n <= 0) return 0;\n    return n + sum(n - 1);\n}\n/* GOOD: iterative version */\nlong safe_sum(int n) {\n    long total = 0;\n    for (int i = 1; i <= n; i++) total += i;\n    return total;\n}\nint main(void) {\n    printf(\"%ld\\n\", safe_sum(1000000));\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Stack is limited; deep recursion overflows it",
+            "Convert to iteration for safety"
+          ],
+          "gotchas": [
+            "Stack overflow causes segfault, not an exception"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are inline functions in C?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": ["inline", "optimization", "function-call-overhead"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `inline` keyword (C99) **suggests** to the compiler that the function body should be inserted at the call site, eliminating function call overhead.\n\n**Key points:**\n- `inline` is a suggestion, not a command -- the compiler may ignore it.\n- Modern compilers inline functions automatically based on their own analysis (-O2/-O3).\n- `inline` is most useful for very small, frequently called functions.\n\n**C inline rules (different from C++):**\n- An `inline` function in C has no external definition by default.\n- You need a separate `extern inline` declaration in exactly one translation unit to provide an external definition.\n- Or use `static inline` (most common), which avoids linkage issues entirely.\n\n**`static inline` is the recommended approach for C:**\n- Define in the header file.\n- Each translation unit gets its own copy.\n- No linkage issues.",
+          "pseudo_code": "1. static inline int max(int a, int b) { return a > b ? a : b; }\n2. inline is a hint -- compiler decides whether to inline\n3. static inline in headers is the safest approach\n4. Modern compilers auto-inline with -O2/-O3\n5. Best for small, frequently called functions",
+          "actual_code": "#include <stdio.h>\n\n/* static inline: recommended approach */\nstatic inline int max(int a, int b) {\n    return (a > b) ? a : b;\n}\n\nstatic inline int min(int a, int b) {\n    return (a < b) ? a : b;\n}\n\nstatic inline int clamp(int val, int lo, int hi) {\n    return min(max(val, lo), hi);\n}\n\nint main(void) {\n    printf(\"max(3, 7) = %d\\n\", max(3, 7));           /* 7 */\n    printf(\"min(3, 7) = %d\\n\", min(3, 7));           /* 3 */\n    printf(\"clamp(15, 0, 10) = %d\\n\", clamp(15, 0, 10)); /* 10 */\n\n    /* The compiler may replace these calls with the actual code:\n     * int result = (3 > 7) ? 3 : 7;  // instead of calling max() */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "inline suggests inlining -- the compiler can ignore it",
+            "Use static inline for header-file definitions (avoids linkage issues)",
+            "Best for small, frequently called functions",
+            "Modern compilers auto-inline with optimization flags",
+            "C inline rules differ from C++ -- prefer static inline in C"
+          ],
+          "gotchas": [
+            "inline in C does not guarantee inlining -- it is just a hint",
+            "Non-static inline in C requires an extern inline definition in exactly one .c file",
+            "Inlining large functions can increase code size (code bloat)",
+            "static inline in a header means each .c file gets its own copy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`inline` suggests the compiler insert the function body at the call site. Use `static inline` in headers for safety. The compiler may ignore inline hints. Best for small, hot functions.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nstatic inline int max(int a, int b) {\n    return (a > b) ? a : b;\n}\nint main(void) {\n    printf(\"%d\\n\", max(3, 7)); /* 7 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "static inline is the safe approach in C",
+            "Compiler may ignore the hint and decide itself"
+          ],
+          "gotchas": [
+            "inline does not guarantee inlining"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are static functions and why are they useful?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": ["static", "internal-linkage", "encapsulation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A `static` function has **internal linkage** -- it is only visible within the translation unit (source file) where it is defined. Other files cannot call it, even with an `extern` declaration.\n\n**Why use static functions:**\n1. **Encapsulation:** Hide implementation details. Only expose the public API.\n2. **Avoid name collisions:** Two files can each have `static void helper()` without conflict.\n3. **Optimization:** The compiler knows all call sites, enabling better inlining and optimization.\n4. **Documentation:** Signals to readers that the function is a private helper.\n\n**This is C's version of \"private\" functions.** Since C has no classes or namespaces, `static` at file scope is the primary encapsulation mechanism.",
+          "pseudo_code": "1. static void helper(void) { ... }  // only visible in this file\n2. void public_api(void) { helper(); }  // calls the static helper\n3. Other files cannot see or call helper()\n4. Two files can have static functions with the same name\n5. static = internal linkage = file-private",
+          "actual_code": "#include <stdio.h>\n\n/* Private helper: only visible in this file */\nstatic int square(int x) {\n    return x * x;\n}\n\nstatic void print_separator(void) {\n    printf(\"---\\n\");\n}\n\n/* Public function: visible to other files */\nvoid compute_and_print(int n) {\n    print_separator();\n    for (int i = 1; i <= n; i++) {\n        printf(\"%d^2 = %d\\n\", i, square(i));\n    }\n    print_separator();\n}\n\nint main(void) {\n    compute_and_print(5);\n    /* Output:\n       ---\n       1^2 = 1\n       2^2 = 4\n       3^2 = 9\n       4^2 = 16\n       5^2 = 25\n       --- */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "static functions are file-private (internal linkage)",
+            "Cannot be called from other files",
+            "Prevents name collisions between translation units",
+            "Enables better compiler optimization (all call sites known)",
+            "C's equivalent of private methods"
+          ],
+          "gotchas": [
+            "static on a function = internal linkage; static on a local variable = persistent lifetime",
+            "If you put a static function in a header, each .c file gets its own copy",
+            "Unused static functions generate compiler warnings (good for cleanup)",
+            "Cannot take the address of a static function and use it across files (well, technically you can pass it as a callback, but that is unusual)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`static` functions are file-private. Other files cannot call them. Use for helper functions, avoiding name collisions, and enabling compiler optimizations. C's equivalent of private methods.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nstatic int square(int x) { return x * x; } /* file-private */\nint main(void) {\n    printf(\"%d\\n\", square(5)); /* 25 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "static function = internal linkage = file-private",
+            "Prevents name collisions across files"
+          ],
+          "gotchas": [
+            "static on function vs static on local variable mean different things"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are function pointers and the callback pattern?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": ["function-pointers", "callback", "higher-order"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **function pointer** stores the address of a function, allowing you to call different functions through the same pointer variable.\n\n**Declaration syntax:** `return_type (*pointer_name)(param_types);`\n\n**The callback pattern:** Pass a function pointer as an argument to another function. The receiving function calls the pointed-to function at the appropriate time. This is how C implements higher-order functions.\n\n**Common uses:**\n1. `qsort()` and `bsearch()` in stdlib.h -- accept comparison function pointers.\n2. Event handlers in GUI frameworks.\n3. Plugin/strategy pattern.\n4. Dispatch tables (arrays of function pointers).",
+          "pseudo_code": "1. int (*fp)(int, int);           // declare function pointer\n2. fp = add;                       // assign function address\n3. int result = fp(3, 4);          // call through pointer\n4. void sort(arr, n, int (*cmp)(const void*, const void*));  // callback\n5. typedef int (*Comparator)(const void*, const void*);  // typedef for clarity",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Functions with matching signatures */\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\nint mul(int a, int b) { return a * b; }\n\n/* Higher-order function using callback */\nint apply(int (*op)(int, int), int a, int b) {\n    return op(a, b);\n}\n\n/* qsort comparison callback */\nint compare_int(const void *a, const void *b) {\n    return (*(const int *)a - *(const int *)b);\n}\n\nint main(void) {\n    /* Basic function pointer */\n    int (*fp)(int, int) = add;\n    printf(\"fp(3, 4) = %d\\n\", fp(3, 4)); /* 7 */\n\n    fp = mul;\n    printf(\"fp(3, 4) = %d\\n\", fp(3, 4)); /* 12 */\n\n    /* Callback pattern */\n    printf(\"add: %d\\n\", apply(add, 10, 3));  /* 13 */\n    printf(\"sub: %d\\n\", apply(sub, 10, 3));  /* 7 */\n    printf(\"mul: %d\\n\", apply(mul, 10, 3));  /* 30 */\n\n    /* Dispatch table */\n    int (*ops[])(int, int) = {add, sub, mul};\n    const char *names[] = {\"+\", \"-\", \"*\"};\n    for (int i = 0; i < 3; i++) {\n        printf(\"5 %s 3 = %d\\n\", names[i], ops[i](5, 3));\n    }\n\n    /* qsort with callback */\n    int arr[] = {5, 2, 8, 1, 9, 3};\n    qsort(arr, 6, sizeof(int), compare_int);\n    for (int i = 0; i < 6; i++) printf(\"%d \", arr[i]);\n    printf(\"\\n\"); /* 1 2 3 5 8 9 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Function pointer: int (*fp)(int, int) declares a pointer to a function",
+            "Callbacks allow passing behavior as an argument",
+            "qsort() is the classic callback example in C",
+            "Dispatch tables (arrays of function pointers) replace switch statements",
+            "Use typedef to make function pointer types readable"
+          ],
+          "gotchas": [
+            "int *fp(int) declares a function returning int*, not a function pointer -- need parens: int (*fp)(int)",
+            "Calling through a NULL function pointer is undefined behavior",
+            "Function pointer types must match exactly -- wrong signature is UB",
+            "Function pointer syntax is confusing -- use typedef for clarity"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Function pointer `int (*fp)(int, int)` stores a function's address. Call with `fp(args)`. Callbacks: pass function pointers as arguments. `qsort()` is the classic C callback example.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\nint apply(int (*op)(int, int), int a, int b) { return op(a, b); }\nint main(void) {\n    printf(\"%d\\n\", apply(add, 5, 3)); /* 8 */\n    printf(\"%d\\n\", apply(sub, 5, 3)); /* 2 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int (*fp)(int, int) is a function pointer",
+            "Callbacks let you pass behavior as an argument"
+          ],
+          "gotchas": [
+            "int *fp(int) != int (*fp)(int) -- parentheses matter"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the valid signatures for main() in C?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": ["main", "entry-point", "return-value"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The C standard defines two valid signatures for `main()`:\n\n**1. `int main(void)`** -- no arguments.\n**2. `int main(int argc, char *argv[])`** -- command-line arguments.\n\n**Return value:**\n- `return 0;` or `return EXIT_SUCCESS;` indicates success.\n- `return EXIT_FAILURE;` or any non-zero value indicates failure.\n- In C99+, reaching the end of main without a return statement implicitly returns 0.\n\n**Important notes:**\n- `void main()` is NOT standard C -- some compilers accept it, but it is non-portable.\n- `main` must return `int`.\n- `argv[argc]` is guaranteed to be NULL.\n- `argv[0]` is typically the program name.\n- The environment may also support a third parameter: `char *envp[]` (common extension, not standard).",
+          "pseudo_code": "1. int main(void) { return 0; }             // no args\n2. int main(int argc, char *argv[]) { ... } // with args\n3. return 0 = success; return non-zero = failure\n4. void main() is NOT standard C\n5. argv[argc] is always NULL\n6. C99+: implicit return 0 at end of main",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\n/* Standard main with command-line arguments */\nint main(int argc, char *argv[]) {\n    printf(\"Program: %s\\n\", argv[0]);\n    printf(\"Argument count: %d\\n\", argc);\n\n    for (int i = 1; i < argc; i++) {\n        printf(\"  argv[%d] = \\\"%s\\\"\\n\", i, argv[i]);\n    }\n\n    /* argv[argc] is guaranteed to be NULL */\n    if (argv[argc] == NULL) {\n        printf(\"argv[%d] is NULL (guaranteed)\\n\", argc);\n    }\n\n    if (argc < 2) {\n        fprintf(stderr, \"Usage: %s <name>\\n\", argv[0]);\n        return EXIT_FAILURE;  /* non-zero = error */\n    }\n\n    printf(\"Hello, %s!\\n\", argv[1]);\n    return EXIT_SUCCESS;  /* 0 = success */\n}",
+          "code_language": "c",
+          "key_points": [
+            "Two standard signatures: int main(void) and int main(int argc, char *argv[])",
+            "main must return int -- void main() is non-standard",
+            "return 0 or EXIT_SUCCESS for success; EXIT_FAILURE for error",
+            "argv[0] is the program name; argv[argc] is NULL",
+            "C99+ implicitly returns 0 if you reach the end of main"
+          ],
+          "gotchas": [
+            "void main() compiles on some compilers but is NOT standard C",
+            "char **argv and char *argv[] are equivalent in function parameters",
+            "argv[0] may be NULL on some systems if the program name is unavailable",
+            "main() calling itself recursively is legal but highly unusual"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Two standard signatures: `int main(void)` and `int main(int argc, char *argv[])`. Returns `int` (0 = success). `void main()` is non-standard. `argv[0]` = program name. `argv[argc]` = NULL.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\nint main(int argc, char *argv[]) {\n    for (int i = 0; i < argc; i++)\n        printf(\"argv[%d] = %s\\n\", i, argv[i]);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "int main(void) or int main(int argc, char *argv[])",
+            "void main() is non-standard"
+          ],
+          "gotchas": [
+            "void main() is not portable -- always use int main()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do command-line arguments work (argc and argv)?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": ["argc", "argv", "command-line", "arguments"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When a C program starts, the OS passes command-line arguments through `main()`:\n\n**`argc` (argument count):** The number of arguments, including the program name. Always >= 1.\n\n**`argv` (argument vector):** An array of C strings (`char *`). `argv[0]` is the program name, `argv[1]` through `argv[argc-1]` are the actual arguments, and `argv[argc]` is NULL.\n\n**Parsing arguments:**\n- All arguments are strings -- you must convert numbers with `atoi()`, `strtol()`, `strtod()`, etc.\n- For complex argument parsing, use `getopt()` (POSIX) or write a custom parser.\n\n**Example run:** `./prog hello 42` gives argc=3, argv={\"./prog\", \"hello\", \"42\", NULL}.",
+          "pseudo_code": "argc = number of arguments (including program name)\nargv[0] = program name\nargv[1] to argv[argc-1] = user arguments\nargv[argc] = NULL\n\nAll arguments are strings: use atoi/strtol to convert to int\nargc is always >= 1",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nint main(int argc, char *argv[]) {\n    /* Basic argument display */\n    printf(\"argc = %d\\n\", argc);\n    for (int i = 0; i < argc; i++) {\n        printf(\"argv[%d] = \\\"%s\\\"\\n\", i, argv[i]);\n    }\n\n    /* Simple argument parsing */\n    if (argc < 3) {\n        fprintf(stderr, \"Usage: %s <name> <age>\\n\", argv[0]);\n        return 1;\n    }\n\n    const char *name = argv[1];\n    int age = atoi(argv[2]);  /* convert string to int */\n\n    printf(\"Hello %s, you are %d years old.\\n\", name, age);\n\n    /* Safer conversion with strtol */\n    char *endptr;\n    long age_safe = strtol(argv[2], &endptr, 10);\n    if (*endptr != '\\0') {\n        fprintf(stderr, \"Invalid number: %s\\n\", argv[2]);\n        return 1;\n    }\n    printf(\"(safe) age = %ld\\n\", age_safe);\n\n    /* Check for flags */\n    for (int i = 1; i < argc; i++) {\n        if (strcmp(argv[i], \"--verbose\") == 0) {\n            printf(\"Verbose mode enabled\\n\");\n        }\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "argc >= 1 always; argv[0] is the program name",
+            "All arguments are C strings -- convert with atoi()/strtol() as needed",
+            "argv[argc] is guaranteed to be NULL",
+            "Use strtol() instead of atoi() for safe integer parsing with error checking",
+            "Use getopt() for complex argument parsing"
+          ],
+          "gotchas": [
+            "atoi() returns 0 on invalid input with no error indication -- use strtol() instead",
+            "argv[0] may include the full path or just the program name (OS-dependent)",
+            "Arguments with spaces must be quoted on the command line: ./prog \"hello world\"",
+            "argc is int, not size_t -- this is one of the few places C uses int for a count"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`argc` = argument count (always >= 1). `argv[0]` = program name. `argv[1]` to `argv[argc-1]` = arguments. All are strings. Use `strtol()` to convert to numbers safely.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char *argv[]) {\n    if (argc != 3) {\n        fprintf(stderr, \"Usage: %s <name> <num>\\n\", argv[0]);\n        return 1;\n    }\n    printf(\"%s: %d\\n\", argv[1], atoi(argv[2]));\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "argv[0] = program name; argv[argc] = NULL",
+            "All arguments are strings; convert numbers manually"
+          ],
+          "gotchas": [
+            "atoi() gives no error on invalid input -- use strtol()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the main() return value affect the program's exit status?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": ["exit-status", "return-value", "main", "exit"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The value returned from `main()` becomes the program's **exit status**, which is reported to the OS and can be checked by the calling process (e.g., a shell script).\n\n**Convention:**\n- `0` (or `EXIT_SUCCESS`): program succeeded.\n- Non-zero (or `EXIT_FAILURE`): program failed.\n- On POSIX, only the lower 8 bits are used (0-255).\n\n**Ways to set exit status:**\n1. `return value;` from main().\n2. `exit(value);` from anywhere in the program.\n3. `_Exit(value);` for immediate termination (no cleanup).\n4. C99+: reaching the end of main() without return is equivalent to `return 0;`.\n\n**Shell access:** In bash, `$?` gives the exit status of the last command.\n\n**`exit()` vs `return` in main():**\n- Both have the same effect in main().\n- `exit()` can be called from any function.\n- `exit()` calls atexit handlers and flushes stdio buffers.",
+          "pseudo_code": "return 0;            // success\nreturn EXIT_SUCCESS;  // same as 0 (from <stdlib.h>)\nreturn EXIT_FAILURE;  // failure (typically 1)\nreturn N;            // POSIX uses only lower 8 bits (0-255)\n\nexit(0);             // from anywhere, calls atexit handlers\n_Exit(1);            // immediate, no cleanup\n\nIn bash: $? gives the exit status",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n\nvoid cleanup(void) {\n    printf(\"Cleanup called\\n\");\n}\n\nint main(int argc, char *argv[]) {\n    /* Register cleanup function */\n    atexit(cleanup);\n\n    if (argc < 2) {\n        fprintf(stderr, \"Error: missing argument\\n\");\n        return EXIT_FAILURE; /* non-zero = error */\n        /* Shell: echo $? prints 1 */\n    }\n\n    printf(\"Processing: %s\\n\", argv[1]);\n\n    /* exit() can be called from anywhere */\n    if (argv[1][0] == 'q') {\n        printf(\"Quitting early\\n\");\n        exit(EXIT_SUCCESS); /* calls atexit handlers */\n    }\n\n    printf(\"Done\\n\");\n    return EXIT_SUCCESS; /* 0 = success */\n    /* Shell: echo $? prints 0 */\n\n    /* Cleanup called in both cases (atexit) */\n}",
+          "code_language": "c",
+          "key_points": [
+            "return 0 from main = success; non-zero = failure",
+            "EXIT_SUCCESS and EXIT_FAILURE are the portable constants",
+            "exit() can be called from any function, not just main",
+            "atexit() handlers are called by exit() and normal return from main()",
+            "POSIX uses only the lower 8 bits of the exit status (0-255)"
+          ],
+          "gotchas": [
+            "_Exit() and abort() skip atexit handlers and do not flush buffers",
+            "On POSIX, exit(256) appears as exit status 0 (only lower 8 bits)",
+            "Calling exit() from a library function can surprise callers -- prefer returning error codes",
+            "In C99+, reaching end of main without return implicitly returns 0; in C89 it is undefined"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`return 0` (or `EXIT_SUCCESS`) = success. Non-zero = failure. `exit()` works from anywhere and calls atexit handlers. POSIX uses only lower 8 bits. Shell checks with `$?`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\nint main(int argc, char *argv[]) {\n    if (argc < 2) {\n        fprintf(stderr, \"Usage: %s <arg>\\n\", argv[0]);\n        return EXIT_FAILURE; /* echo $? -> 1 */\n    }\n    printf(\"OK\\n\");\n    return EXIT_SUCCESS; /* echo $? -> 0 */\n}",
+          "code_language": "c",
+          "key_points": [
+            "0 = success, non-zero = failure",
+            "exit() calls atexit handlers"
+          ],
+          "gotchas": [
+            "exit(256) appears as status 0 on POSIX (lower 8 bits only)"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,341 @@
+{
+  "concept_slug": "c-standards",
+  "questions": [
+    {
+      "title": "What are the key differences between C89/C90, C99, C11, and C17?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["c89", "c99", "c11", "c17", "standards", "history"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The C standard has evolved through several major revisions, each adding important features:\n\n**C89/C90** (ANSI C / ISO C): The original standard.\n- Function prototypes required.\n- Variables must be declared at the start of a block.\n- No `//` single-line comments (only `/* */`).\n- No `inline` keyword.\n- No `_Bool` type.\n- No `long long` type.\n- No variable-length arrays.\n\n**C99** (ISO/IEC 9899:1999): Major modernization.\n- `//` single-line comments.\n- Mixed declarations and code (variables anywhere in a block).\n- `inline` functions.\n- `_Bool` type (and `<stdbool.h>`).\n- `long long int` (at least 64-bit).\n- Variable-Length Arrays (VLAs).\n- Designated initializers: `int a[5] = { [2] = 42 }`.\n- Compound literals: `(struct point){.x = 1, .y = 2}`.\n- `restrict` pointer qualifier.\n- `<stdint.h>` with `uint32_t`, `int8_t`, etc.\n- `<inttypes.h>` with `PRId32`, `SCNu64` format macros.\n- `snprintf()` (safe formatted output).\n\n**C11** (ISO/IEC 9899:2011): Concurrency and safety.\n- `_Generic` (type-generic expressions, basis for `tgmath.h`).\n- `_Static_assert` (compile-time assertions).\n- `_Noreturn` function specifier.\n- `_Alignas` / `_Alignof` (alignment control).\n- Anonymous structs and unions.\n- `<stdatomic.h>` (atomic operations).\n- `<threads.h>` (portable threading).\n- `gets()` removed (security hazard).\n- VLAs made optional (implementations can omit them).\n\n**C17/C18** (ISO/IEC 9899:2018): Bug-fix release.\n- No new features.\n- Clarifications and defect fixes from C11.\n- `__STDC_VERSION__` = `201710L`.\n\n**C23** (ISO/IEC 9899:2024): Latest standard.\n- `typeof` operator.\n- `#embed` directive.\n- Binary literals (`0b1010`).\n- Digit separators (`1'000'000`).\n- `nullptr` constant.\n- `constexpr` objects.",
+          "pseudo_code": "C89: Variables at top of block only. No // comments.\nC99: Mixed declarations, //, VLAs, inline, _Bool, stdint.h, restrict.\nC11: _Generic, _Static_assert, atomics, threads, anonymous structs.\nC17: Bug fixes only. No new features.\nC23: typeof, #embed, binary literals, nullptr.",
+          "actual_code": "#include <stdio.h>\n#include <stdbool.h>   /* C99: _Bool as bool */\n#include <stdint.h>    /* C99: uint32_t, int8_t, etc. */\n\nint main(void) {\n    /* C89: only block-start declarations */\n    /* C99: mixed declarations and code */\n    printf(\"Hello\\n\");\n    int x = 42;  /* C99: declaration after statement */\n\n    /* C99: // single-line comments */\n    // This is a C99 comment\n\n    /* C99: bool type via stdbool.h */\n    bool flag = true;\n\n    /* C99: long long */\n    long long big = 9223372036854775807LL;\n\n    /* C99: fixed-width integers */\n    uint32_t val = 0xDEADBEEF;\n    int8_t byte = -128;\n\n    /* Check standard version */\n    #if __STDC_VERSION__ >= 201710L\n        printf(\"C17 or later\\n\");\n    #elif __STDC_VERSION__ >= 201112L\n        printf(\"C11\\n\");\n    #elif __STDC_VERSION__ >= 199901L\n        printf(\"C99\\n\");\n    #else\n        printf(\"C89/C90\\n\");\n    #endif\n\n    printf(\"x=%d, flag=%d, big=%lld, val=0x%X, byte=%d\\n\",\n           x, flag, big, val, byte);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "C99 added mixed declarations, //, VLAs, inline, _Bool, stdint.h, designated initializers, restrict",
+            "C11 added _Generic, _Static_assert, atomics (stdatomic.h), threads (threads.h), anonymous structs",
+            "C17 is a bug-fix release with no new features",
+            "__STDC_VERSION__ macro identifies the standard version at compile time",
+            "C23 adds typeof, #embed, binary literals, nullptr"
+          ],
+          "gotchas": [
+            "VLAs are mandatory in C99 but optional in C11+ (MSVC never supported them)",
+            "C11 threads.h is optional and rarely implemented -- most code uses pthreads instead",
+            "gets() was removed in C11 -- code using it will not compile under C11+",
+            "Many embedded compilers only support C99 or even C89 -- check your toolchain's conformance"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C89: basic C. C99: `//` comments, mixed declarations, VLAs, `inline`, `stdint.h`, `_Bool`, `restrict`. C11: `_Generic`, `_Static_assert`, atomics, threads. C17: bug fixes only. Check with `__STDC_VERSION__`.",
+          "pseudo_code": "",
+          "actual_code": "#if __STDC_VERSION__ >= 201112L\n  /* C11 features available */\n  _Static_assert(sizeof(int) == 4, \"int must be 4 bytes\");\n#endif\n\n#if __STDC_VERSION__ >= 199901L\n  /* C99 features available */\n  bool flag = true;  /* stdbool.h */\n  uint32_t x = 42;   /* stdint.h */\n#endif",
+          "code_language": "c",
+          "key_points": [
+            "C99: mixed decls, stdint.h, VLAs, restrict, inline",
+            "C11: _Generic, _Static_assert, atomics; C17: bug fixes"
+          ],
+          "gotchas": [
+            "VLAs are optional in C11+ -- do not rely on them for portable code"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the most important C99 features (designated initializers, VLAs, inline, _Bool, mixed declarations)?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["c99", "designated-initializers", "VLA", "inline", "_Bool", "compound-literals"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C99 was the biggest modernization of C. Here are the features most commonly asked about in interviews:\n\n**1. Designated initializers**: Initialize specific elements of arrays or struct members by name.\n```c\nint arr[5] = { [2] = 42, [4] = 99 };  /* arr = {0,0,42,0,99} */\nstruct point p = { .y = 10, .x = 5 };  /* order doesn't matter */\n```\n\n**2. Variable-Length Arrays (VLAs)**: Array size determined at runtime.\n```c\nvoid func(int n) { int arr[n]; }  /* size n known only at runtime */\n```\nVLAs are allocated on the stack. They cannot be `static` or `extern`. Made optional in C11.\n\n**3. `inline` keyword**: Suggests the compiler inline a function (expand it at the call site). The function must be defined in every translation unit that uses it (typically in a header). `static inline` is the common safe pattern.\n\n**4. `_Bool` type**: A true boolean type. `<stdbool.h>` provides `bool`, `true`, `false` macros. Converting any non-zero value to `_Bool` gives 1.\n\n**5. Mixed declarations and code**: Variables can be declared anywhere in a block, not just at the top.\n\n**6. Compound literals**: Create unnamed objects inline.\n```c\nstruct point *p = &(struct point){ .x = 1, .y = 2 };\n```\n\n**7. `restrict` keyword**: Tells the compiler that a pointer is the only way to access the memory it points to, enabling better optimization.\n\n**8. `<stdint.h>`**: Fixed-width integer types: `int8_t`, `uint32_t`, `int64_t`, etc.",
+          "pseudo_code": "Designated initializers:\n  int a[10] = { [0]=1, [5]=50, [9]=90 };  /* rest are 0 */\n  struct rgb c = { .r=255, .g=0, .b=128 };\n\nVLA:\n  void process(int n) { double data[n]; }\n\ninline:\n  static inline int max(int a, int b) { return a > b ? a : b; }\n\n_Bool:\n  _Bool flag = 42;  /* flag == 1 (any non-zero -> 1) */",
+          "actual_code": "#include <stdio.h>\n#include <stdbool.h>\n#include <stdint.h>\n\n/* 1. Designated initializers */\nstruct color { uint8_t r, g, b; };\n\nvoid designated_init_demo(void) {\n    /* Array: initialize specific indices */\n    int lookup[10] = { [0] = -1, [5] = 50, [9] = 100 };\n    /* Unspecified elements are zero */\n    printf(\"lookup[5]=%d, lookup[3]=%d\\n\", lookup[5], lookup[3]); /* 50, 0 */\n\n    /* Struct: initialize by name (order independent) */\n    struct color red = { .r = 255, .g = 0, .b = 0 };\n    struct color blue = { .b = 255 }; /* r and g are 0 */\n    printf(\"red.r=%d, blue.b=%d\\n\", red.r, blue.b);\n}\n\n/* 2. Variable-Length Array */\nvoid vla_demo(int n) {\n    int arr[n]; /* VLA: size determined at runtime */\n    for (int i = 0; i < n; i++)\n        arr[i] = i * i;\n    printf(\"VLA arr[%d-1] = %d\\n\", n, arr[n - 1]);\n}\n\n/* 3. inline function */\nstatic inline int max(int a, int b) {\n    return (a > b) ? a : b;\n}\n\n/* 4. _Bool type */\nvoid bool_demo(void) {\n    _Bool a = 42;   /* _Bool conversion: any non-zero -> 1 */\n    bool  b = true; /* via stdbool.h */\n    printf(\"_Bool of 42 = %d\\n\", a); /* 1 */\n    printf(\"bool true = %d\\n\", b);   /* 1 */\n}\n\n/* 5. Compound literal */\nstruct point { int x, y; };\nvoid print_point(const struct point *p) {\n    printf(\"(%d, %d)\\n\", p->x, p->y);\n}\n\n/* 6. restrict keyword */\nvoid add_arrays(int * restrict dst,\n                const int * restrict a,\n                const int * restrict b,\n                int n) {\n    /* restrict: compiler assumes dst, a, b don't alias */\n    for (int i = 0; i < n; i++)\n        dst[i] = a[i] + b[i]; /* can be vectorized */\n}\n\nint main(void) {\n    designated_init_demo();\n\n    /* 5. Mixed declarations and code (C99) */\n    printf(\"Before declaration\\n\");\n    int late_var = 100; /* C89 would require this at top */\n    printf(\"late_var = %d\\n\", late_var);\n\n    vla_demo(5);\n    printf(\"max(3,7) = %d\\n\", max(3, 7));\n    bool_demo();\n\n    /* Compound literal: create struct inline */\n    print_point(&(struct point){ .x = 10, .y = 20 });\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Designated initializers: {.field=val} for structs, {[idx]=val} for arrays",
+            "VLAs: runtime-sized stack arrays; optional in C11+",
+            "static inline is the safe portable inline pattern",
+            "_Bool converts any non-zero to 1; stdbool.h provides bool/true/false",
+            "Compound literals create unnamed objects inline: (type){initializer}"
+          ],
+          "gotchas": [
+            "VLAs are on the stack -- a large n causes stack overflow with no way to check for failure",
+            "VLAs are optional in C11+; MSVC does not support them at all",
+            "An inline function without static may cause linker errors (multiple definitions) if defined in a header",
+            "Compound literals have block scope -- a pointer to one becomes dangling after the block ends"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "C99 highlights: designated initializers (`{.x=1}`), VLAs, `static inline`, `_Bool`/`stdbool.h`, mixed declarations, compound literals, `restrict`, `stdint.h`. VLAs are optional in C11+.",
+          "pseudo_code": "",
+          "actual_code": "int a[5] = { [2] = 42 };          /* designated init */\nstruct pt p = { .x = 1, .y = 2 }; /* named members */\nint n = 10; int vla[n];            /* VLA */\nstatic inline int sq(int x) { return x * x; }\nbool flag = true;                  /* stdbool.h */",
+          "code_language": "c",
+          "key_points": [
+            "Designated initializers, VLAs, inline, _Bool, mixed declarations",
+            "VLAs optional in C11+; use static inline for safe inlining"
+          ],
+          "gotchas": [
+            "VLAs on the stack can overflow it -- no way to check for allocation failure"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key C11 features (_Generic, _Static_assert, _Noreturn, anonymous structs, atomics)?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["c11", "_Generic", "_Static_assert", "_Noreturn", "stdatomic", "anonymous-struct"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "C11 added several important features focused on type safety, concurrency, and expressiveness:\n\n**1. `_Generic`**: Type-generic selection. Enables function-like macros that dispatch based on the type of an argument. This is how `<tgmath.h>` works.\n```c\n#define abs(x) _Generic((x), int: abs_int, double: fabs)(x)\n```\n\n**2. `_Static_assert`**: Compile-time assertion. Causes a compilation error if the condition is false. C23 allows omitting the message.\n```c\n_Static_assert(sizeof(int) == 4, \"int must be 4 bytes\");\n```\n\n**3. `_Noreturn`**: Specifies that a function never returns (like `exit()`, `abort()`, infinite loop). Helps the compiler optimize and warn about dead code.\n\n**4. Anonymous structs/unions**: Unnamed struct/union members whose fields are accessed directly.\n```c\nstruct { union { int x; float f; }; int tag; } val;\nval.x = 42; /* access union member directly */\n```\n\n**5. `<stdatomic.h>`**: Atomic types and operations for lock-free concurrency.\n- `atomic_int`, `atomic_flag`\n- `atomic_load()`, `atomic_store()`, `atomic_fetch_add()`\n- Memory ordering: `memory_order_relaxed`, `memory_order_acquire`, `memory_order_release`, `memory_order_seq_cst`\n\n**6. `<threads.h>`**: Portable threading API (`thrd_create`, `mtx_lock`, `cnd_wait`). Optional and rarely implemented.\n\n**7. Alignment**: `_Alignas(N)` forces alignment; `_Alignof(type)` queries alignment.\n\n**8. `gets()` removed**: The unsafe `gets()` function was finally removed from the standard.",
+          "pseudo_code": "_Generic: dispatch on argument type at compile time\n_Static_assert: compile-time check, error if false\n_Noreturn: function never returns (exit, abort, infinite loop)\nAnonymous struct/union: access inner members directly\nstdatomic.h: atomic_int, atomic_load, atomic_store, fences\nthreads.h: thrd_create, mtx_lock (optional, rarely used)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <stdatomic.h>\n#include <assert.h>\n\n/* 1. _Generic: type-generic macro */\n#define type_name(x) _Generic((x), \\\n    int:     \"int\",            \\\n    double:  \"double\",         \\\n    char *:  \"char *\",         \\\n    default: \"unknown\")\n\n#define print_val(x) _Generic((x),       \\\n    int:    printf(\"%d\\n\", (x)),         \\\n    double: printf(\"%f\\n\", (x)),         \\\n    char *: printf(\"%s\\n\", (x)))\n\n/* 2. _Static_assert: compile-time checks */\n_Static_assert(sizeof(int) >= 4, \"int must be at least 4 bytes\");\n_Static_assert(sizeof(void *) == 8 || sizeof(void *) == 4,\n               \"pointer must be 4 or 8 bytes\");\n\n/* 3. _Noreturn */\n_Noreturn void die(const char *msg) {\n    fprintf(stderr, \"FATAL: %s\\n\", msg);\n    exit(EXIT_FAILURE);\n    /* No return statement needed -- compiler knows */\n}\n\n/* 4. Anonymous struct/union */\nstruct variant {\n    int tag;\n    union {        /* anonymous union */\n        int i;\n        double d;\n        char s[16];\n    };             /* no name -- members accessed directly */\n};\n\n/* 5. Atomics */\nvoid atomics_demo(void) {\n    atomic_int counter = 0;\n    atomic_store(&counter, 10);\n    int old = atomic_fetch_add(&counter, 5); /* returns 10, counter=15 */\n    int val = atomic_load(&counter);\n    printf(\"atomic: old=%d, current=%d\\n\", old, val);\n\n    /* atomic_flag: guaranteed lock-free on all platforms */\n    atomic_flag lock = ATOMIC_FLAG_INIT;\n    while (atomic_flag_test_and_set(&lock)) { } /* spin-lock acquire */\n    /* critical section */\n    atomic_flag_clear(&lock); /* release */\n}\n\n/* 6. _Alignas */\n_Alignas(64) int cache_line_aligned_data[16]; /* 64-byte aligned */\n\nint main(void) {\n    /* _Generic */\n    printf(\"42 is: %s\\n\", type_name(42));        /* int */\n    printf(\"3.14 is: %s\\n\", type_name(3.14));    /* double */\n    printf(\"str is: %s\\n\", type_name(\"hello\"));  /* char * */\n\n    print_val(42);     /* calls printf(\"%d\\n\", 42) */\n    print_val(3.14);   /* calls printf(\"%f\\n\", 3.14) */\n\n    /* Anonymous struct/union */\n    struct variant v;\n    v.tag = 0;\n    v.i = 42;  /* access union member directly (no .u.i) */\n    printf(\"variant: tag=%d, i=%d\\n\", v.tag, v.i);\n\n    /* _Alignof */\n    printf(\"Alignment of double: %zu\\n\", _Alignof(double));\n    printf(\"Alignment of cache_line_data: %zu\\n\",\n           _Alignof(cache_line_aligned_data));\n\n    atomics_demo();\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "_Generic enables type-dispatched macros (C's version of function overloading)",
+            "_Static_assert catches errors at compile time -- no runtime cost",
+            "_Noreturn informs the compiler a function never returns (exit, abort)",
+            "Anonymous structs/unions allow direct member access without intermediate names",
+            "stdatomic.h provides atomic types and operations for lock-free concurrency"
+          ],
+          "gotchas": [
+            "_Generic evaluates at compile time based on TYPE, not value -- all branches must compile even if not selected",
+            "threads.h is optional in C11 and most compilers do not implement it -- use pthreads instead",
+            "atomic_int may not be lock-free on all platforms -- only atomic_flag is guaranteed lock-free",
+            "C11 made VLAs optional -- code relying on VLAs is no longer strictly portable"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`_Generic`: type-dispatched macros. `_Static_assert`: compile-time check. `_Noreturn`: for exit/abort. Anonymous structs/unions. `stdatomic.h` for atomic operations. `threads.h` (optional).",
+          "pseudo_code": "",
+          "actual_code": "/* _Generic: type-based dispatch */\n#define print(x) _Generic((x), int: printf(\"%d\",x), double: printf(\"%f\",x))\n\n/* _Static_assert: compile-time check */\n_Static_assert(sizeof(int) == 4, \"int must be 4 bytes\");\n\n/* Atomic counter */\natomic_int count = 0;\natomic_fetch_add(&count, 1); /* thread-safe increment */",
+          "code_language": "c",
+          "key_points": [
+            "_Generic dispatches on type; _Static_assert checks at compile time",
+            "stdatomic.h for thread-safe operations"
+          ],
+          "gotchas": [
+            "threads.h is optional and rarely implemented -- use pthreads"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What does the restrict keyword do and how does it help optimization?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["restrict", "aliasing", "optimization", "c99", "memcpy"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `restrict` qualifier (C99) is a promise from the programmer that a pointer is the **sole means of accessing** the memory it points to during its lifetime. This allows the compiler to generate more efficient code by assuming no aliasing.\n\n**The aliasing problem**: Without `restrict`, the compiler must assume any two pointers might point to overlapping memory. This prevents optimizations like vectorization, reordering stores, or caching values in registers.\n\n**Example**:\n```c\nvoid add(int *a, const int *b, int n) {\n    for (int i = 0; i < n; i++) a[i] += b[i];\n}\n```\nWithout `restrict`, the compiler cannot assume `a` and `b` don't overlap. If `a[0]` and `b[1]` are the same memory location, writing `a[0]` changes `b[1]`. The compiler must re-read `b[i]` from memory after every write.\n\nWith `restrict`, the compiler knows `a` and `b` don't overlap, enabling SIMD vectorization and register optimization.\n\n**Standard library usage**: `memcpy` uses `restrict` (no overlap allowed), while `memmove` does not (handles overlap):\n```c\nvoid *memcpy(void * restrict dst, const void * restrict src, size_t n);\nvoid *memmove(void *dst, const void *src, size_t n);\n```\n\n**Important**: `restrict` is a contract. If you lie (pass overlapping pointers), the behavior is undefined. The compiler trusts you and optimizes accordingly.",
+          "pseudo_code": "Without restrict:\n  compiler must assume *a and *b may alias\n  every write to a[i] may change b[j]\n  cannot vectorize or reorder\n\nWith restrict:\n  compiler knows a and b don't overlap\n  can keep b[i] in registers\n  can vectorize the loop (SIMD)\n  typically 2-4x faster for tight loops",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n#include <time.h>\n\n/* Without restrict: compiler assumes a and b might alias */\nvoid add_no_restrict(int *a, const int *b, int n) {\n    for (int i = 0; i < n; i++)\n        a[i] += b[i]; /* must re-read b[i] after writing a[i] */\n}\n\n/* With restrict: compiler knows a and b don't overlap */\nvoid add_restrict(int * restrict a, const int * restrict b, int n) {\n    for (int i = 0; i < n; i++)\n        a[i] += b[i]; /* can vectorize: SIMD, register caching */\n}\n\n/* memcpy vs memmove */\nvoid copy_examples(void) {\n    char buf[20] = \"Hello, World!\";\n\n    /* memcpy: restrict -- undefined if src and dst overlap */\n    char dst[20];\n    memcpy(dst, buf, 14); /* OK: no overlap */\n    printf(\"memcpy: %s\\n\", dst);\n\n    /* memmove: handles overlapping regions */\n    memmove(buf + 3, buf, 10); /* OK: overlap handled */\n    printf(\"memmove: %s\\n\", buf);\n}\n\n/* Real-world: restrict on function parameters */\nvoid matrix_multiply(float * restrict C,\n                     const float * restrict A,\n                     const float * restrict B,\n                     int n) {\n    for (int i = 0; i < n; i++)\n        for (int j = 0; j < n; j++) {\n            float sum = 0.0f;\n            for (int k = 0; k < n; k++)\n                sum += A[i * n + k] * B[k * n + j];\n            C[i * n + j] = sum;\n        }\n    /* restrict lets compiler vectorize the inner loop */\n}\n\nint main(void) {\n    const int N = 1000000;\n    int *a = malloc(N * sizeof(int));\n    int *b = malloc(N * sizeof(int));\n    for (int i = 0; i < N; i++) { a[i] = i; b[i] = i; }\n\n    clock_t start;\n\n    start = clock();\n    add_no_restrict(a, b, N);\n    printf(\"No restrict: %.3f ms\\n\",\n           1000.0 * (clock() - start) / CLOCKS_PER_SEC);\n\n    start = clock();\n    add_restrict(a, b, N);\n    printf(\"With restrict: %.3f ms\\n\",\n           1000.0 * (clock() - start) / CLOCKS_PER_SEC);\n\n    copy_examples();\n\n    free(a);\n    free(b);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "restrict promises the pointer is the only way to access that memory -- no aliasing",
+            "Enables compiler optimizations: vectorization, register caching, store reordering",
+            "memcpy uses restrict (no overlap); memmove does not (handles overlap)",
+            "Violating the restrict contract causes undefined behavior",
+            "Most effective on tight loops processing arrays -- can give 2-4x speedup"
+          ],
+          "gotchas": [
+            "If you pass overlapping pointers to a restrict function, behavior is UNDEFINED -- the compiler will generate wrong code silently",
+            "restrict is C99 only -- C++ does not have it (though compilers offer __restrict as an extension)",
+            "restrict only applies to pointer parameters -- it has no effect on global variables",
+            "The compiler is not required to optimize based on restrict -- it is a hint, not a guarantee"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`restrict` tells the compiler a pointer does not alias any other pointer, enabling vectorization and register optimization. `memcpy` uses it (no overlap); `memmove` does not. Violating the promise is UB.",
+          "pseudo_code": "",
+          "actual_code": "/* restrict: a and b don't overlap */\nvoid add(int * restrict a, const int * restrict b, int n) {\n    for (int i = 0; i < n; i++)\n        a[i] += b[i]; /* compiler can vectorize */\n}\n\n/* memcpy: restrict (no overlap allowed) */\nmemcpy(dst, src, n);\n/* memmove: no restrict (overlap OK) */\nmemmove(dst, src, n);",
+          "code_language": "c",
+          "key_points": [
+            "restrict = no aliasing promise, enables optimization",
+            "memcpy requires no overlap; memmove handles overlap"
+          ],
+          "gotchas": [
+            "Passing overlapping pointers to restrict parameters is undefined behavior"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is undefined behavior in C and what are the most common examples and consequences?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["undefined-behavior", "UB", "signed-overflow", "null-deref", "uninitialized"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Undefined Behavior (UB)** means the C standard imposes no requirements on what happens. The compiler may do anything: crash, silently produce wrong results, optimize away seemingly necessary code, or even appear to work correctly.\n\n**Why UB exists**: It gives compiler writers freedom to optimize. If signed overflow is UB, the compiler can assume `x + 1 > x` is always true and optimize based on that.\n\n**Most common UB in interviews**:\n\n1. **Signed integer overflow**: `INT_MAX + 1` is UB (unsigned overflow wraps and is well-defined).\n\n2. **Null pointer dereference**: `*NULL` is UB. The compiler may optimize away null checks that follow a dereference.\n\n3. **Uninitialized variable read**: Reading an uninitialized local variable is UB. The value is not merely \"garbage\" -- the compiler may assume it never happens.\n\n4. **Buffer overflow**: Accessing past array bounds.\n\n5. **Use-after-free / double-free**: Accessing freed memory or freeing twice.\n\n6. **Strict aliasing violation**: Accessing an object through a pointer of an incompatible type (except `char *`).\n\n7. **Signed integer shift**: Shifting a negative value left, or shifting by >= bit width.\n\n8. **Division by zero**: `x / 0` is UB for integers.\n\n9. **Modifying a string literal**: `char *s = \"hello\"; s[0] = 'H';` is UB.\n\n10. **Missing return value**: A non-void function that reaches the end without returning.\n\n**Why UB is dangerous**: Modern compilers use UB for aggressive optimization. If UB occurs on one code path, the compiler may eliminate that entire path, including safety checks. This creates security vulnerabilities.",
+          "pseudo_code": "Common UB examples:\n1. INT_MAX + 1          -- signed overflow\n2. *((int *)NULL)       -- null dereference\n3. int x; if (x > 0)   -- uninitialized read\n4. arr[10] (size 5)     -- buffer overflow\n5. free(p); *p          -- use-after-free\n6. *(int *)float_ptr    -- strict aliasing\n7. x << 32 (32-bit int) -- shift by >= width\n8. x / 0               -- division by zero\n\nCompiler may: crash, silently compute wrong result,\noptimize away the check, or appear to work",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\n#include <stdlib.h>\n#include <stdint.h>\n\n/* 1. Signed overflow: UNDEFINED BEHAVIOR */\nvoid signed_overflow_ub(void) {\n    int x = INT_MAX;\n    /* int y = x + 1; */  /* UB! Compiler may assume this never happens */\n    /* Result: compiler can optimize assuming x+1 > x is always true */\n\n    /* SAFE: use unsigned or check before adding */\n    if (x < INT_MAX) {\n        int y = x + 1; /* safe */\n        printf(\"y = %d\\n\", y);\n    }\n\n    /* Unsigned wraps (well-defined) */\n    unsigned int u = UINT_MAX;\n    unsigned int w = u + 1; /* wraps to 0 -- defined behavior */\n    printf(\"UINT_MAX + 1 = %u\\n\", w); /* 0 */\n}\n\n/* 2. Null pointer dereference: UB */\nvoid null_deref_ub(void) {\n    int *p = NULL;\n    /* int x = *p; */  /* UB! */\n    /* The compiler may optimize away subsequent NULL checks:\n       if (p != NULL) { ... }  -- compiler thinks 'p was already\n       dereferenced, so it must not be NULL' */\n}\n\n/* 3. Strict aliasing violation: UB */\nvoid aliasing_ub(void) {\n    float f = 3.14f;\n    /* UB: accessing float memory as int (type punning via cast) */\n    /* int i = *(int *)&f; */\n\n    /* SAFE: use memcpy for type punning */\n    uint32_t bits;\n    __builtin_memcpy(&bits, &f, sizeof(bits));\n    printf(\"Float bits: 0x%08X\\n\", bits);\n}\n\n/* 4. Shift by >= bit width: UB */\nvoid shift_ub(void) {\n    int x = 1;\n    /* int y = x << 32; */  /* UB on 32-bit int! */\n    /* int z = x << -1; */  /* UB: negative shift */\n    /* SAFE: */\n    int shift = 31;\n    if (shift >= 0 && shift < (int)(sizeof(int) * 8)) {\n        int y = x << shift; /* safe */\n        printf(\"1 << %d = %d\\n\", shift, y);\n    }\n}\n\n/* 5. Modifying string literal: UB */\nvoid string_literal_ub(void) {\n    /* char *s = \"hello\"; */\n    /* s[0] = 'H'; */  /* UB: string literals are in read-only memory */\n\n    /* SAFE: use array */\n    char s[] = \"hello\"; /* copies to stack -- modifiable */\n    s[0] = 'H';\n    printf(\"%s\\n\", s); /* Hello */\n}\n\nint main(void) {\n    signed_overflow_ub();\n    null_deref_ub();\n    aliasing_ub();\n    shift_ub();\n    string_literal_ub();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "UB means the standard imposes no requirements -- anything can happen",
+            "Signed overflow, null dereference, uninitialized reads are the most common UB",
+            "Compilers exploit UB for optimization -- they can remove 'dead' code paths that involve UB",
+            "Unsigned arithmetic wraps and is well-defined; signed overflow is UB",
+            "Use memcpy for type punning instead of pointer casts (strict aliasing)"
+          ],
+          "gotchas": [
+            "Code with UB may 'work' for years on one compiler/platform and suddenly break on an upgrade",
+            "The compiler can use UB to eliminate NULL checks: if you dereference p before checking p!=NULL, the check is removed",
+            "-fsanitize=undefined (UBSan) detects many forms of UB at runtime -- use it in testing",
+            "int x = x; is legal C syntax but reading x on the right side is UB (uninitialized)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "UB = standard says anything can happen. Common examples: signed overflow, null deref, uninitialized read, buffer overflow, strict aliasing violation, shift by >= bit width. Compilers exploit UB for optimization. Use `-fsanitize=undefined` to detect.",
+          "pseudo_code": "",
+          "actual_code": "int x = INT_MAX + 1;    /* UB: signed overflow */\n*((int *)NULL);         /* UB: null dereference */\nint y; if (y > 0) {}    /* UB: uninitialized read */\narr[10]; /* sizeof(arr)==5*sizeof(int) */ /* UB: out of bounds */\n1 << 32; /* on 32-bit int */  /* UB: shift >= width */\n\n/* SAFE: unsigned wraps (well-defined) */\nunsigned u = UINT_MAX + 1; /* wraps to 0 -- OK */",
+          "code_language": "c",
+          "key_points": [
+            "Signed overflow, null deref, uninitialized reads are UB",
+            "Unsigned wraps (defined); use -fsanitize=undefined to detect UB"
+          ],
+          "gotchas": [
+            "UB code may appear to work but breaks silently on compiler upgrades or optimization levels"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between undefined, implementation-defined, and unspecified behavior?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["undefined-behavior", "implementation-defined", "unspecified", "portability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The C standard defines three categories of non-portable behavior:\n\n**1. Undefined Behavior (UB)**: No requirements. The program is erroneous. The compiler can do literally anything (crash, wrong results, time travel optimizations).\n- Examples: signed overflow, null dereference, buffer overflow, use-after-free.\n- **Key property**: The compiler can assume UB never happens and optimize accordingly.\n\n**2. Implementation-defined behavior**: The behavior depends on the platform/compiler, but the compiler MUST document its choice. Portable code should not rely on it, but it is safe to use if you know your platform.\n- Examples:\n  - Size of `int` (16, 32, or 64 bits).\n  - Right-shift of negative integers (arithmetic or logical shift).\n  - Signedness of plain `char` (signed or unsigned).\n  - Byte order (endianness).\n  - Behavior of `system()` function.\n\n**3. Unspecified behavior**: The standard gives a set of valid choices, and the compiler can pick any one, but does NOT need to document it or be consistent. The program is still well-formed.\n- Examples:\n  - Order of evaluation of function arguments: `f(a(), b())` -- which is called first?\n  - Order of evaluation of operands: `x = a() + b()` -- which is called first?\n  - Whether identical string literals share storage.\n  - Layout of struct padding (within alignment constraints).\n\n**In practice**: UB must be avoided always. Implementation-defined behavior is acceptable when writing platform-specific code. Unspecified behavior should not be relied upon for correctness.",
+          "pseudo_code": "Undefined: Compiler can do anything. MUST avoid.\n  signed overflow, null deref, double free\n\nImplementation-defined: Compiler chooses and documents.\n  sizeof(int), signedness of char, right-shift of negatives\n\nUnspecified: Compiler chooses, does NOT document.\n  Evaluation order of f(a(), b()), struct padding",
+          "actual_code": "#include <stdio.h>\n#include <limits.h>\n\n/* --- Undefined Behavior (MUST AVOID) --- */\nvoid ub_examples(void) {\n    /* Signed overflow: UB */\n    /* int x = INT_MAX + 1; */\n\n    /* Null dereference: UB */\n    /* int *p = NULL; int y = *p; */\n}\n\n/* --- Implementation-Defined (platform-specific but documented) --- */\nvoid impl_defined_examples(void) {\n    /* Size of int: implementation-defined */\n    printf(\"sizeof(int) = %zu\\n\", sizeof(int)); /* 4 on most modern systems */\n\n    /* Signedness of char: implementation-defined */\n    char c = -1;\n    printf(\"char is %s\\n\",\n           (c < 0) ? \"signed\" : \"unsigned\");\n\n    /* Right shift of negative: implementation-defined */\n    int neg = -8;\n    int shifted = neg >> 1;\n    printf(\"-8 >> 1 = %d\\n\", shifted);\n    /* Most compilers: arithmetic shift -> -4 */\n    /* But COULD be logical shift -> large positive number */\n\n    /* Bit representation of negative numbers */\n    /* (almost always two's complement, but implementation-defined until C23) */\n}\n\n/* --- Unspecified Behavior (valid but unpredictable) --- */\nint counter = 0;\nint increment(void) { return ++counter; }\n\nvoid unspecified_examples(void) {\n    /* Order of argument evaluation: unspecified */\n    counter = 0;\n    printf(\"first=%d, second=%d\\n\", increment(), increment());\n    /* Could print: first=1, second=2 OR first=2, second=1 */\n    /* Both are valid! */\n\n    /* Order of operand evaluation: unspecified */\n    int a = 0;\n    /* int b = a++ + a++; */  /* Actually UB (modifying a twice between\n                                  sequence points), not just unspecified */\n\n    /* String literal sharing: unspecified */\n    const char *s1 = \"hello\";\n    const char *s2 = \"hello\";\n    printf(\"Same string literal address: %s\\n\",\n           (s1 == s2) ? \"yes\" : \"no\");\n    /* Compiler may or may not merge them */\n}\n\nint main(void) {\n    impl_defined_examples();\n    unspecified_examples();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Undefined: no requirements, compiler assumes it never happens",
+            "Implementation-defined: compiler chooses AND documents (sizeof(int), signedness of char)",
+            "Unspecified: compiler chooses but need not document or be consistent (evaluation order)",
+            "UB must be avoided; implementation-defined is OK for platform-specific code",
+            "C23 mandates two's complement, removing some implementation-defined behavior"
+          ],
+          "gotchas": [
+            "i++ + i++ is UNDEFINED, not merely unspecified -- it modifies i twice without a sequence point",
+            "Right-shifting a negative number is implementation-defined, not UB -- but it is non-portable",
+            "Compilers document implementation-defined choices in their manuals (e.g., GCC: gcc.gnu.org/onlinedocs)",
+            "The order of evaluation of function arguments (f(a(), b())) is unspecified -- do not depend on it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Undefined**: anything can happen (signed overflow, null deref) -- must avoid. **Implementation-defined**: compiler documents its choice (sizeof(int), signedness of char). **Unspecified**: compiler picks from valid options, no docs required (evaluation order of function args).",
+          "pseudo_code": "",
+          "actual_code": "/* Undefined: AVOID */\n/* INT_MAX + 1; */\n\n/* Implementation-defined: platform-specific */\nprintf(\"%zu\\n\", sizeof(int));  /* 4 or 2 -- documented */\nint x = -8 >> 1;  /* arithmetic or logical -- documented */\n\n/* Unspecified: valid but unpredictable */\nprintf(\"%d %d\\n\", f(), g()); /* which runs first? unspecified */",
+          "code_language": "c",
+          "key_points": [
+            "UB: no rules. Impl-defined: documented choice. Unspecified: valid but undocumented.",
+            "Avoid UB; know your platform for impl-defined; don't depend on unspecified"
+          ],
+          "gotchas": [
+            "i++ + i++ is undefined behavior, not unspecified -- never do this"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key CERT C secure coding guidelines and common rules?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["CERT-C", "secure-coding", "safety", "guidelines", "best-practices"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**CERT C Secure Coding Standard** is a set of rules and recommendations published by Carnegie Mellon's Software Engineering Institute (SEI). It targets eliminating security vulnerabilities in C code.\n\n**Most important rules (commonly asked in interviews)**:\n\n**INT30-C**: Ensure unsigned integer operations do not wrap.\n**INT32-C**: Ensure signed integer operations do not result in overflow.\n\n**STR31-C**: Guarantee that storage for strings has sufficient space for the data and the null terminator.\n\n**MEM30-C**: Do not access freed memory.\n**MEM35-C**: Allocate sufficient memory for an object.\n**MEM33-C**: Allocate and copy structures containing flexible array members dynamically.\n\n**ARR30-C**: Do not form or use out-of-bounds pointers or array subscripts.\n**ARR38-C**: Guarantee that library functions do not form invalid pointers.\n\n**EXP30-C**: Do not depend on the order of evaluation for side effects.\n**EXP33-C**: Do not read uninitialized memory.\n\n**FIO30-C**: Exclude user input from format strings (prevents format string attacks).\n\n**ERR33-C**: Detect and handle standard library errors (check return values).\n\n**ENV33-C**: Do not call `system()` with user-controlled input.\n\n**MSC30-C**: Do not use the `rand()` function for generating pseudorandom numbers (use OS-provided CSPRNG instead).\n\n**General principles**:\n1. Validate all input.\n2. Check all return values.\n3. Use safe functions (snprintf, not sprintf; fgets, not gets).\n4. Initialize all variables.\n5. Use static analysis tools (Coverity, cppcheck, clang-tidy).",
+          "pseudo_code": "Key rules by category:\n\nIntegers: Check for overflow before arithmetic\nStrings: Always ensure space for null terminator\nMemory: Never use freed memory; always check malloc return\nArrays: Never access out of bounds\nExpressions: Don't rely on evaluation order\nI/O: Never put user input in format strings\nErrors: Always check return values\nRandom: Use OS CSPRNG, not rand()",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <limits.h>\n#include <stdint.h>\n\n/* INT32-C: Prevent signed integer overflow */\nint safe_add(int a, int b) {\n    if ((b > 0 && a > INT_MAX - b) ||\n        (b < 0 && a < INT_MIN - b)) {\n        fprintf(stderr, \"Integer overflow detected!\\n\");\n        return 0; /* or abort */\n    }\n    return a + b;\n}\n\n/* STR31-C: Ensure string buffer has space */\nvoid safe_string_copy(char *dst, size_t dst_size, const char *src) {\n    if (dst_size == 0) return;\n    /* snprintf guarantees null termination and no overflow */\n    snprintf(dst, dst_size, \"%s\", src);\n}\n\n/* MEM30-C: Do not access freed memory */\nvoid safe_memory(void) {\n    int *p = malloc(10 * sizeof(int));\n    if (p == NULL) { /* ERR33-C: check return value */\n        fprintf(stderr, \"malloc failed\\n\");\n        return;\n    }\n    p[0] = 42;\n    free(p);\n    p = NULL; /* prevent use-after-free */\n}\n\n/* FIO30-C: Never use user input as format string */\nvoid safe_print(const char *user_input) {\n    /* BAD: printf(user_input);  -- format string attack! */\n    /* GOOD: */\n    printf(\"%s\", user_input);\n}\n\n/* ARR30-C: Bounds checking */\nint safe_array_access(const int *arr, size_t arr_len, size_t index) {\n    if (index >= arr_len) {\n        fprintf(stderr, \"Array index %zu out of bounds\\n\", index);\n        return -1;\n    }\n    return arr[index];\n}\n\n/* EXP33-C: Initialize all variables */\nvoid safe_init(void) {\n    int x = 0; /* always initialize */\n    int *p = NULL;\n    char buf[256] = {0};\n    (void)x; (void)p; (void)buf;\n}\n\nint main(void) {\n    printf(\"safe_add(INT_MAX, 1): \");\n    safe_add(INT_MAX, 1); /* detects overflow */\n\n    char buf[10];\n    safe_string_copy(buf, sizeof(buf), \"Hello, World!\");\n    printf(\"Truncated: %s\\n\", buf); /* Hello, Wo */\n\n    safe_memory();\n\n    int arr[] = {10, 20, 30};\n    printf(\"arr[1] = %d\\n\", safe_array_access(arr, 3, 1));\n    safe_array_access(arr, 3, 5); /* error message */\n\n    safe_print(\"user input is %s safe\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "INT32-C: Check for signed overflow before performing arithmetic",
+            "STR31-C: Always ensure buffer has space for string + null terminator",
+            "MEM30-C: Never access freed memory; set pointers to NULL after free",
+            "FIO30-C: Never use user input as a printf format string",
+            "ERR33-C: Always check return values from library functions (malloc, fopen, etc.)"
+          ],
+          "gotchas": [
+            "printf(user_input) is a critical vulnerability -- attacker can read/write arbitrary memory with %n",
+            "Checking for overflow AFTER the operation is too late -- signed overflow is UB, the check may be optimized away",
+            "rand() is not cryptographically secure -- use /dev/urandom or getrandom() for security-sensitive random numbers",
+            "Static analysis tools (cppcheck, Coverity, clang-tidy) can automatically check many CERT C rules"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "CERT C rules: check for integer overflow before arithmetic (INT32-C), ensure string buffer space (STR31-C), never access freed memory (MEM30-C), never use user input as format string (FIO30-C), always check return values (ERR33-C).",
+          "pseudo_code": "",
+          "actual_code": "/* INT32-C: check before overflow */\nif (a > INT_MAX - b) { /* overflow! */ }\n\n/* STR31-C: safe copy */\nsnprintf(dst, sizeof(dst), \"%s\", src);\n\n/* FIO30-C: NEVER do printf(user_input) */\nprintf(\"%s\", user_input); /* safe */\n\n/* ERR33-C: check returns */\nint *p = malloc(100);\nif (p == NULL) { /* handle error */ }",
+          "code_language": "c",
+          "key_points": [
+            "Check overflow before arithmetic; use snprintf; check all returns",
+            "Never pass user input as printf format string"
+          ],
+          "gotchas": [
+            "printf(user_input) lets attackers read/write memory via %n format specifier"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write portable C code that avoids platform-specific assumptions?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["portability", "cross-platform", "sizeof", "stdint", "endianness", "alignment"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Writing portable C means your code compiles and runs correctly on different compilers, CPUs, and operating systems. Key areas to address:\n\n**1. Integer sizes**: Never assume `int` is 32 bits. Use `<stdint.h>` types: `int32_t`, `uint16_t`, `size_t`.\n\n**2. Endianness**: Never assume little-endian. Serialize multi-byte values by extracting bytes with shifts, not pointer casts.\n\n**3. Alignment**: Never cast `char *` to `int *` and dereference -- the alignment may be wrong. Use `memcpy` for safe type punning.\n\n**4. Struct padding**: Don't assume struct layout matches wire format. Use packed structs or serialize field-by-field.\n\n**5. Signedness of `char`**: `char` may be signed or unsigned. Use `unsigned char` for byte manipulation.\n\n**6. Pointer size**: Don't assume `sizeof(void *) == sizeof(int)`. Use `uintptr_t` for pointer-to-integer conversions.\n\n**7. Path separators**: `/` vs `\\` on Windows. Use preprocessor checks or libraries.\n\n**8. Standard headers**: Stick to standard C headers (`<stdio.h>`, `<stdlib.h>`, `<string.h>`). Avoid POSIX or platform-specific headers unless behind `#ifdef`.\n\n**9. Format specifiers**: Use `%zu` for `size_t`, `%\" PRId32 \"` for `int32_t` (from `<inttypes.h>`).\n\n**10. Bit fields**: Bit field layout (order, signedness) is implementation-defined. Don't use them in portable code.",
+          "pseudo_code": "Portability checklist:\n1. Use stdint.h types (int32_t, not int)\n2. Serialize with byte shifts, not pointer casts\n3. Use memcpy for type punning, not casts\n4. Use sizeof, not hardcoded sizes\n5. unsigned char for byte data\n6. size_t for sizes and indices\n7. PRId32/PRIu64 for format specifiers\n8. #ifdef for platform-specific code\n9. No bit fields in portable structs\n10. No assumptions about struct padding",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <stdint.h>\n#include <inttypes.h>\n#include <limits.h>\n\n/* Rule 1: Use fixed-width integers */\nvoid portable_integers(void) {\n    int32_t x = 42;       /* exactly 32 bits */\n    uint64_t big = 1ULL << 40;\n    size_t len = 100;     /* correct type for sizes */\n\n    /* Rule 9: Correct format specifiers */\n    printf(\"x = %\" PRId32 \"\\n\", x);\n    printf(\"big = %\" PRIu64 \"\\n\", big);\n    printf(\"len = %zu\\n\", len);\n}\n\n/* Rule 2: Portable serialization (endianness-safe) */\nvoid write_uint32_be(uint8_t *buf, uint32_t val) {\n    buf[0] = (val >> 24) & 0xFF;\n    buf[1] = (val >> 16) & 0xFF;\n    buf[2] = (val >> 8)  & 0xFF;\n    buf[3] = val & 0xFF;\n}\n\nuint32_t read_uint32_be(const uint8_t *buf) {\n    return ((uint32_t)buf[0] << 24) |\n           ((uint32_t)buf[1] << 16) |\n           ((uint32_t)buf[2] << 8)  |\n           (uint32_t)buf[3];\n}\n\n/* Rule 3: Safe type punning with memcpy */\nuint32_t float_to_bits(float f) {\n    uint32_t bits;\n    memcpy(&bits, &f, sizeof(bits)); /* safe, portable */\n    return bits;\n    /* BAD: return *(uint32_t *)&f; -- aliasing violation, alignment */\n}\n\n/* Rule 5: Use unsigned char for bytes */\nvoid process_bytes(const unsigned char *data, size_t len) {\n    for (size_t i = 0; i < len; i++) {\n        /* unsigned char: 0-255, no sign issues */\n        printf(\"%02X \", data[i]);\n    }\n    printf(\"\\n\");\n}\n\n/* Rule 8: Platform-specific code behind #ifdef */\nvoid platform_sleep(unsigned int ms) {\n#ifdef _WIN32\n    /* Sleep(ms); */  /* Windows */\n#elif defined(__unix__) || defined(__APPLE__)\n    /* usleep(ms * 1000); */ /* POSIX */\n#else\n    /* Busy wait or error */\n    (void)ms;\n#endif\n}\n\n/* Rule 4: Don't assume struct layout for serialization */\nstruct message {\n    uint8_t  type;\n    uint32_t length;\n    uint16_t flags;\n};\n\nsize_t serialize_message(uint8_t *buf, const struct message *msg) {\n    size_t offset = 0;\n    buf[offset++] = msg->type;\n    write_uint32_be(buf + offset, msg->length); offset += 4;\n    buf[offset++] = (msg->flags >> 8) & 0xFF;\n    buf[offset++] = msg->flags & 0xFF;\n    return offset; /* total bytes written */\n    /* Do NOT: memcpy(buf, msg, sizeof(*msg)) -- padding/endianness! */\n}\n\nint main(void) {\n    portable_integers();\n\n    /* Endianness-safe serialization */\n    uint8_t buf[4];\n    write_uint32_be(buf, 0x12345678);\n    uint32_t val = read_uint32_be(buf);\n    printf(\"Round-trip: 0x%08\" PRIX32 \"\\n\", val); /* 0x12345678 */\n\n    /* Safe type punning */\n    float f = 3.14f;\n    printf(\"Float bits: 0x%08\" PRIX32 \"\\n\", float_to_bits(f));\n\n    /* Byte processing */\n    unsigned char data[] = {0xDE, 0xAD, 0xBE, 0xEF};\n    process_bytes(data, sizeof(data));\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Use stdint.h (int32_t, uint64_t) instead of int/long for fixed sizes",
+            "Serialize with byte shifts for endianness safety -- never cast pointers",
+            "Use memcpy for type punning -- pointer casts violate strict aliasing",
+            "Use unsigned char for byte data -- plain char signedness is platform-dependent",
+            "Use PRId32/PRIu64 format macros from inttypes.h for portable printf"
+          ],
+          "gotchas": [
+            "sizeof(int) varies: 2 bytes on some embedded, 4 on most 32/64-bit, historically even 8",
+            "memcpy(buf, &struct, sizeof(struct)) is NOT portable for serialization -- padding and endianness differ",
+            "Bit fields have implementation-defined ordering and signedness -- avoid for cross-platform data",
+            "CHAR_BIT is not always 8 -- some DSPs use 16-bit or 32-bit chars (though rare)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `stdint.h` types, serialize with shifts not casts, `memcpy` for type punning, `unsigned char` for bytes, `PRId32`/`PRIu64` for format specifiers, `#ifdef` for platform code. Never assume int size, endianness, or struct layout.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdint.h>\n#include <inttypes.h>\n#include <string.h>\n\nint32_t x = 42;                           /* not int */\nprintf(\"%\" PRId32 \"\\n\", x);               /* portable format */\n\nuint32_t bits;\nmemcpy(&bits, &float_val, sizeof(bits));  /* safe type pun */\n\nuint8_t buf[4];\nbuf[0] = (val >> 24) & 0xFF;              /* portable serialize */",
+          "code_language": "c",
+          "key_points": [
+            "stdint.h for fixed sizes; memcpy for type punning; shifts for serialization",
+            "Never assume sizeof(int), endianness, or struct padding"
+          ],
+          "gotchas": [
+            "sizeof(int) varies by platform -- always use explicit fixed-width types"
+          ]
+        }
+      ]
+    }
+  ]
+}

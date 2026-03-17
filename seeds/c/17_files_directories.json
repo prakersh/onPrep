@@ -1,0 +1,509 @@
+{
+  "concept_slug": "files-directories",
+  "questions": [
+    {
+      "title": "How do stat(), fstat(), and lstat() work, and what information does struct stat contain?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["stat", "fstat", "lstat", "struct-stat", "file-metadata"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `stat()` family of functions retrieves file metadata without opening the file.\n\n**Prototypes:**\n```c\n#include <sys/stat.h>\nint stat(const char *pathname, struct stat *buf);\nint fstat(int fd, struct stat *buf);\nint lstat(const char *pathname, struct stat *buf);\n```\n\n**Differences:**\n- `stat()` follows symbolic links (returns info about the target)\n- `lstat()` does NOT follow symlinks (returns info about the link itself)\n- `fstat()` works on an already-open file descriptor\n\n**struct stat fields:**\n- `st_dev` -- device ID of filesystem\n- `st_ino` -- inode number\n- `st_mode` -- file type and permissions\n- `st_nlink` -- number of hard links\n- `st_uid` / `st_gid` -- owner user/group ID\n- `st_size` -- file size in bytes (for regular files)\n- `st_blksize` -- optimal I/O block size\n- `st_blocks` -- number of 512-byte blocks allocated\n- `st_atime` -- last access time\n- `st_mtime` -- last modification time\n- `st_ctime` -- last status change time (NOT creation time on most UNIX systems)\n\n**File type macros** (applied to `st_mode`):\n- `S_ISREG()` -- regular file\n- `S_ISDIR()` -- directory\n- `S_ISLNK()` -- symbolic link\n- `S_ISCHR()` / `S_ISBLK()` -- character/block device\n- `S_ISFIFO()` -- FIFO/pipe\n- `S_ISSOCK()` -- socket",
+          "pseudo_code": "1. Call stat(path, &sb) or lstat(path, &sb) or fstat(fd, &sb)\n2. Check return value (0 = success, -1 = error)\n3. Use S_ISREG(sb.st_mode), S_ISDIR(sb.st_mode), etc. for file type\n4. Use sb.st_mode & 0777 for permission bits\n5. sb.st_size for file size, sb.st_nlink for hard link count\n6. sb.st_mtime for last modification time",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n#include <time.h>\n#include <unistd.h>\n\nvoid print_file_info(const char *path) {\n    struct stat sb;\n    if (lstat(path, &sb) == -1) {\n        perror(path);\n        return;\n    }\n\n    printf(\"File: %s\\n\", path);\n    printf(\"  Inode: %lu\\n\", (unsigned long)sb.st_ino);\n    printf(\"  Size:  %lld bytes\\n\", (long long)sb.st_size);\n    printf(\"  Links: %lu\\n\", (unsigned long)sb.st_nlink);\n    printf(\"  Mode:  %o\\n\", (unsigned int)(sb.st_mode & 07777));\n\n    /* File type */\n    printf(\"  Type:  \");\n    if (S_ISREG(sb.st_mode))       printf(\"regular file\\n\");\n    else if (S_ISDIR(sb.st_mode))  printf(\"directory\\n\");\n    else if (S_ISLNK(sb.st_mode))  printf(\"symbolic link\\n\");\n    else if (S_ISCHR(sb.st_mode))  printf(\"character device\\n\");\n    else if (S_ISBLK(sb.st_mode))  printf(\"block device\\n\");\n    else if (S_ISFIFO(sb.st_mode)) printf(\"FIFO\\n\");\n    else if (S_ISSOCK(sb.st_mode)) printf(\"socket\\n\");\n\n    /* Timestamps */\n    char timebuf[64];\n    struct tm *tm = localtime(&sb.st_mtime);\n    strftime(timebuf, sizeof(timebuf), \"%Y-%m-%d %H:%M:%S\", tm);\n    printf(\"  Modified: %s\\n\", timebuf);\n}\n\nint main(void) {\n    print_file_info(\"/etc/passwd\");\n    print_file_info(\"/tmp\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "stat() follows symlinks; lstat() does not; fstat() uses an fd",
+            "struct stat contains inode, size, permissions, timestamps, link count",
+            "Use S_ISREG/S_ISDIR/S_ISLNK macros on st_mode for file type",
+            "st_ctime is status change time, NOT creation time",
+            "st_blocks counts 512-byte blocks regardless of filesystem block size"
+          ],
+          "gotchas": [
+            "stat() on a symlink returns info about the target; use lstat() for the link itself",
+            "st_size for symlinks is the length of the target path string, not the target file size",
+            "st_size for directories is filesystem-dependent and does not reflect content count",
+            "st_ctime changes on chmod/chown/link/unlink, not just content changes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`stat()` gets file metadata into `struct stat`. `lstat()` does not follow symlinks. `fstat()` works on an fd. Key fields: `st_mode` (type+perms), `st_size`, `st_ino`, `st_nlink`, `st_mtime`.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n\nint main(void) {\n    struct stat sb;\n    if (stat(\"/etc/passwd\", &sb) == -1) { perror(\"stat\"); return 1; }\n    printf(\"Size: %lld, Links: %lu, Mode: %o\\n\",\n           (long long)sb.st_size, (unsigned long)sb.st_nlink,\n           (unsigned int)(sb.st_mode & 07777));\n    if (S_ISREG(sb.st_mode)) printf(\"Regular file\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "stat follows symlinks; lstat does not",
+            "S_ISREG/S_ISDIR macros for file type"
+          ],
+          "gotchas": [
+            "st_ctime is NOT creation time -- it is last status change time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do file permissions work in UNIX, including setuid, setgid, and the sticky bit?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["permissions", "setuid", "setgid", "sticky-bit", "chmod"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UNIX file permissions are stored in the `st_mode` field as a 12-bit value.\n\n**Standard permission bits (9 bits):**\n```\nOwner: r(0400) w(0200) x(0100)\nGroup: r(0040) w(0020) x(0010)\nOther: r(0004) w(0002) x(0001)\n```\n\n**Special bits (3 bits):**\n- **Set-user-ID (setuid, 04000):** When set on an executable, the process runs with the effective UID of the file owner, not the invoking user. Example: `/usr/bin/passwd` is setuid root.\n- **Set-group-ID (setgid, 02000):** On an executable, runs with the effective GID of the file's group. On a directory, new files inherit the directory's group (not the creator's).\n- **Sticky bit (01000):** On a directory, only the file owner (or root) can delete/rename files within it, even if others have write permission. Example: `/tmp` has the sticky bit.\n\n**Permission checking order:**\n1. If effective UID == 0 (root), all access granted\n2. If effective UID == file owner, use owner bits\n3. If effective GID or supplementary group matches file group, use group bits\n4. Otherwise, use other bits\n\n**APIs:**\n- `chmod(path, mode)` / `fchmod(fd, mode)` -- change permissions\n- `access(path, R_OK|W_OK|X_OK)` -- check real UID access (not effective)",
+          "pseudo_code": "Permission bits layout (octal):\n  04000 = setuid\n  02000 = setgid\n  01000 = sticky\n  00700 = owner rwx\n  00070 = group rwx\n  00007 = other rwx\n\nKernel check: root -> owner -> group -> other\nsetuid: effective UID = file owner UID on exec\nsetgid on dir: new files inherit directory group\nsticky on dir: only owner can delete their files",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n#include <unistd.h>\n\nvoid print_permissions(const char *path) {\n    struct stat sb;\n    if (stat(path, &sb) == -1) { perror(path); return; }\n\n    printf(\"%s: \", path);\n    /* File type */\n    printf(\"%c\", S_ISDIR(sb.st_mode) ? 'd' : '-');\n    /* Owner */\n    printf(\"%c%c%c\",\n        (sb.st_mode & S_IRUSR) ? 'r' : '-',\n        (sb.st_mode & S_IWUSR) ? 'w' : '-',\n        (sb.st_mode & S_ISUID) ? 's' :\n            (sb.st_mode & S_IXUSR) ? 'x' : '-');\n    /* Group */\n    printf(\"%c%c%c\",\n        (sb.st_mode & S_IRGRP) ? 'r' : '-',\n        (sb.st_mode & S_IWGRP) ? 'w' : '-',\n        (sb.st_mode & S_ISGID) ? 's' :\n            (sb.st_mode & S_IXGRP) ? 'x' : '-');\n    /* Other */\n    printf(\"%c%c%c\",\n        (sb.st_mode & S_IROTH) ? 'r' : '-',\n        (sb.st_mode & S_IWOTH) ? 'w' : '-',\n        (sb.st_mode & S_ISVTX) ? 't' :\n            (sb.st_mode & S_IXOTH) ? 'x' : '-');\n    printf(\"\\n\");\n}\n\nint main(void) {\n    print_permissions(\"/etc/passwd\");\n    print_permissions(\"/tmp\");\n\n    /* Change permissions */\n    chmod(\"myfile.txt\", 0755);          /* rwxr-xr-x */\n    chmod(\"script.sh\", 04755);          /* setuid + rwxr-xr-x */\n    chmod(\"shared_dir\", 01777);         /* sticky + rwxrwxrwx */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "12 permission bits: 3 special + 9 rwx (owner/group/other)",
+            "setuid (04000): process runs as file owner",
+            "setgid (02000): on dirs, new files inherit directory group",
+            "sticky bit (01000): on dirs, only file owner can delete",
+            "Kernel checks: root -> owner -> group -> other (stops at first match)"
+          ],
+          "gotchas": [
+            "setuid on shell scripts is ignored on most modern systems (security risk)",
+            "Group permissions are NOT checked if you are the owner -- owner bits take precedence",
+            "access() checks real UID, not effective UID -- do not use for security decisions in setuid programs",
+            "chmod does not follow symlinks on many systems -- use the target directly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "9 rwx bits (owner/group/other) + 3 special bits (setuid/setgid/sticky). setuid makes process run as file owner. Sticky bit on `/tmp` prevents users from deleting others' files. `chmod()` changes permissions.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n\nint main(void) {\n    chmod(\"prog\", 04755);    /* setuid + rwxr-xr-x */\n    chmod(\"/tmp\", 01777);    /* sticky + rwxrwxrwx */\n    /* Check permissions */\n    struct stat sb;\n    stat(\"prog\", &sb);\n    if (sb.st_mode & S_ISUID) { /* setuid is set */ }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "setuid=04000, setgid=02000, sticky=01000",
+            "Owner bits checked before group bits"
+          ],
+          "gotchas": [
+            "setuid scripts ignored on most modern systems"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between hard links and symbolic links?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["hard-link", "symbolic-link", "symlink", "link", "unlink", "inode"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Hard links:**\n- A hard link is a directory entry that points directly to an inode\n- Multiple hard links to the same inode share the same data blocks, size, permissions, and timestamps\n- `st_nlink` in struct stat counts the number of hard links\n- Created with `link(oldpath, newpath)`\n- Removed with `unlink(path)` -- decrements link count; file data is freed when count reaches 0 AND no process has it open\n- **Restrictions:** Cannot cross filesystem boundaries (same device only). Cannot hard-link directories (to prevent cycles in the filesystem tree).\n\n**Symbolic (soft) links:**\n- A symlink is a special file whose content is the pathname of another file\n- Has its own inode with file type `S_IFLNK`\n- Created with `symlink(target, linkpath)`\n- Read target with `readlink(linkpath, buf, bufsize)`\n- Can cross filesystem boundaries\n- Can point to directories\n- Can become \"dangling\" if the target is deleted\n- `stat()` follows symlinks; `lstat()` does not\n\n**Key difference:** A hard link IS the file (another name for the same inode). A symlink is a pointer to a name (indirection).",
+          "pseudo_code": "Hard link:\n  link(\"existing.txt\", \"hardlink.txt\")\n  Both names -> same inode -> same data\n  unlink(\"existing.txt\")  -> hardlink.txt still works (data intact)\n  st_nlink decremented; data freed when nlink==0 and no open fds\n\nSymbolic link:\n  symlink(\"existing.txt\", \"softlink.txt\")\n  softlink.txt -> contains string \"existing.txt\"\n  unlink(\"existing.txt\") -> softlink.txt becomes dangling",
+          "actual_code": "#include <unistd.h>\n#include <sys/stat.h>\n#include <stdio.h>\n#include <fcntl.h>\n#include <string.h>\n\nint main(void) {\n    /* Create a file */\n    int fd = open(\"original.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    write(fd, \"hello\\n\", 6);\n    close(fd);\n\n    /* Create hard link */\n    if (link(\"original.txt\", \"hardlink.txt\") == -1)\n        perror(\"link\");\n\n    /* Create symbolic link */\n    if (symlink(\"original.txt\", \"softlink.txt\") == -1)\n        perror(\"symlink\");\n\n    /* Check link counts */\n    struct stat sb;\n    stat(\"original.txt\", &sb);\n    printf(\"original.txt: nlink=%lu, inode=%lu\\n\",\n           (unsigned long)sb.st_nlink, (unsigned long)sb.st_ino);\n\n    stat(\"hardlink.txt\", &sb);\n    printf(\"hardlink.txt: nlink=%lu, inode=%lu\\n\",\n           (unsigned long)sb.st_nlink, (unsigned long)sb.st_ino);\n    /* Same inode! nlink=2 */\n\n    lstat(\"softlink.txt\", &sb);\n    printf(\"softlink.txt: inode=%lu (different), is_symlink=%d\\n\",\n           (unsigned long)sb.st_ino, S_ISLNK(sb.st_mode));\n\n    /* Read symlink target */\n    char target[256];\n    ssize_t len = readlink(\"softlink.txt\", target, sizeof(target) - 1);\n    if (len != -1) {\n        target[len] = '\\0';\n        printf(\"softlink.txt -> %s\\n\", target);\n    }\n\n    /* Delete original -- hard link survives, symlink dangles */\n    unlink(\"original.txt\");\n    /* hardlink.txt still works (nlink=1) */\n    /* softlink.txt is now dangling */\n\n    unlink(\"hardlink.txt\");\n    unlink(\"softlink.txt\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Hard link: another directory entry for the same inode (same data)",
+            "Symlink: a file containing a path string (indirection)",
+            "Hard links cannot cross filesystems or link to directories",
+            "Symlinks can cross filesystems and point to directories",
+            "unlink() decrements link count; data freed when nlink=0 and no open fds"
+          ],
+          "gotchas": [
+            "Deleting the target of a symlink makes it dangling (broken)",
+            "readlink() does NOT null-terminate the buffer -- you must do it",
+            "Hard-linking directories is forbidden to prevent filesystem graph cycles",
+            "rename() is atomic within a filesystem but not across filesystems"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Hard link = another name for the same inode (same data, cannot cross filesystems). Symlink = a file containing a path (can cross filesystems, can dangle). `link()` creates hard links, `symlink()` creates symlinks, `unlink()` removes either.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <sys/stat.h>\n\nint main(void) {\n    link(\"file.txt\", \"hardlink.txt\");    /* same inode */\n    symlink(\"file.txt\", \"softlink.txt\"); /* path indirection */\n    struct stat sb;\n    stat(\"hardlink.txt\", &sb);  /* nlink=2 */\n    unlink(\"file.txt\");  /* hardlink survives, softlink dangles */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Hard link = same inode; symlink = path string",
+            "unlink decrements nlink; data freed at nlink=0"
+          ],
+          "gotchas": [
+            "readlink() does not null-terminate the returned string"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is an inode, and what information does it store?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["inode", "filesystem", "metadata"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "An **inode** (index node) is the fundamental data structure in UNIX filesystems that stores metadata about a file. Every file and directory has exactly one inode.\n\n**What an inode stores:**\n- File type (regular, directory, symlink, device, pipe, socket)\n- Permissions (rwx bits + setuid/setgid/sticky)\n- Owner UID and GID\n- File size in bytes\n- Number of hard links (nlink)\n- Timestamps: atime (access), mtime (modification), ctime (status change)\n- Pointers to data blocks on disk (direct, single indirect, double indirect, triple indirect)\n- Number of disk blocks allocated\n\n**What an inode does NOT store:**\n- The filename! Names are stored in directory entries.\n- The path -- there is no single canonical path for a file.\n\nA **directory** is a file whose data blocks contain a list of `(name, inode number)` pairs. This is why hard links work: multiple directory entries can point to the same inode number.\n\nThe inode number is unique within a filesystem (device). Two files on different filesystems may have the same inode number. To uniquely identify a file system-wide, you need the `(st_dev, st_ino)` pair.",
+          "pseudo_code": "Inode contains:\n  - File type and permissions (st_mode)\n  - Owner UID, GID\n  - Size, block count\n  - Timestamps (atime, mtime, ctime)\n  - Hard link count (nlink)\n  - Pointers to data blocks\n\nDirectory entry: (name -> inode_number)\n  \"file.txt\" -> inode 12345\n  \"link.txt\" -> inode 12345   (hard link: same inode)\n  \".\"        -> inode 99      (self)\n  \"..\"       -> inode 88      (parent)",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n#include <unistd.h>\n\nint main(void) {\n    struct stat sb;\n\n    if (stat(\"/etc/passwd\", &sb) == -1) {\n        perror(\"stat\");\n        return 1;\n    }\n\n    printf(\"Inode information for /etc/passwd:\\n\");\n    printf(\"  Device:     %lld\\n\", (long long)sb.st_dev);\n    printf(\"  Inode:      %lu\\n\", (unsigned long)sb.st_ino);\n    printf(\"  Mode:       %o\\n\", (unsigned int)sb.st_mode);\n    printf(\"  Hard links: %lu\\n\", (unsigned long)sb.st_nlink);\n    printf(\"  UID:        %u\\n\", sb.st_uid);\n    printf(\"  GID:        %u\\n\", sb.st_gid);\n    printf(\"  Size:       %lld\\n\", (long long)sb.st_size);\n    printf(\"  Blocks:     %lld\\n\", (long long)sb.st_blocks);\n    printf(\"  Block size: %ld\\n\", (long)sb.st_blksize);\n\n    /* Two files are the same if (dev, ino) match */\n    struct stat sb2;\n    if (stat(\"/etc/passwd\", &sb2) == 0) {\n        if (sb.st_dev == sb2.st_dev && sb.st_ino == sb2.st_ino)\n            printf(\"Same file (same device + inode)\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Inode stores all metadata except the filename",
+            "Filenames are stored in directory entries (name -> inode number pairs)",
+            "Unique file identity is (st_dev, st_ino) pair",
+            "Hard links are multiple directory entries pointing to the same inode",
+            "Each filesystem has a fixed pool of inodes (can run out even with free space)"
+          ],
+          "gotchas": [
+            "A filesystem can run out of inodes before running out of disk space (many small files)",
+            "inode numbers are only unique within a filesystem -- not globally",
+            "The filename is NOT in the inode, which is why hard links work",
+            "Deleting a file only removes the directory entry; data survives while nlink > 0 or a process holds it open"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "An inode stores file metadata (type, permissions, size, timestamps, block pointers) but NOT the filename. Filenames are in directory entries mapping names to inode numbers. Unique file identity = `(st_dev, st_ino)`.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n\nint main(void) {\n    struct stat sb;\n    stat(\"/etc/passwd\", &sb);\n    printf(\"inode=%lu, size=%lld, nlinks=%lu\\n\",\n           (unsigned long)sb.st_ino, (long long)sb.st_size,\n           (unsigned long)sb.st_nlink);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Inode = all metadata except filename",
+            "(st_dev, st_ino) uniquely identifies a file"
+          ],
+          "gotchas": [
+            "Filesystem can run out of inodes with free disk space remaining"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you traverse directories using opendir(), readdir(), and closedir()?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["opendir", "readdir", "closedir", "directory-traversal"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "POSIX provides a standard API for reading directory contents:\n\n**Functions:**\n```c\n#include <dirent.h>\nDIR *opendir(const char *name);\nstruct dirent *readdir(DIR *dirp);\nint closedir(DIR *dirp);\n```\n\n**struct dirent fields:**\n- `d_ino` -- inode number\n- `d_name` -- null-terminated filename (no path)\n- `d_type` -- file type (DT_REG, DT_DIR, DT_LNK, etc.) -- not portable, may be DT_UNKNOWN\n\n**Usage pattern:**\n1. `opendir()` returns a `DIR *` handle (like `FILE *` for directories)\n2. `readdir()` returns the next entry, or NULL when done (or on error)\n3. Always skip `.` (current dir) and `..` (parent dir) entries\n4. `closedir()` releases the handle\n\n**Thread safety:** `readdir()` uses a static buffer in the `DIR` structure, so it is not thread-safe across different `DIR *` handles. For thread safety, use `readdir_r()` (deprecated) or protect with a mutex.\n\n**Important:** `readdir()` returns NULL both at end-of-directory and on error. To distinguish, set `errno = 0` before the call and check `errno` after getting NULL.",
+          "pseudo_code": "1. DIR *dp = opendir(path)\n2. while ((entry = readdir(dp)) != NULL)\n3.   skip if entry->d_name is \".\" or \"..\"\n4.   process entry->d_name\n5. closedir(dp)\n6. To distinguish EOF from error: check errno after NULL return",
+          "actual_code": "#include <dirent.h>\n#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n\nint list_directory(const char *path) {\n    DIR *dp = opendir(path);\n    if (dp == NULL) {\n        perror(path);\n        return -1;\n    }\n\n    struct dirent *entry;\n    errno = 0;\n    while ((entry = readdir(dp)) != NULL) {\n        /* Skip . and .. */\n        if (strcmp(entry->d_name, \".\") == 0 ||\n            strcmp(entry->d_name, \"..\") == 0)\n            continue;\n\n        /* Print file type (d_type is Linux-specific) */\n        char type = '?';\n        switch (entry->d_type) {\n            case DT_REG: type = '-'; break;\n            case DT_DIR: type = 'd'; break;\n            case DT_LNK: type = 'l'; break;\n            default:     type = '?'; break;\n        }\n        printf(\"%c %lu %s\\n\", type,\n               (unsigned long)entry->d_ino, entry->d_name);\n    }\n\n    if (errno != 0) {\n        perror(\"readdir\");\n        closedir(dp);\n        return -1;\n    }\n\n    closedir(dp);\n    return 0;\n}\n\nint main(void) {\n    list_directory(\"/tmp\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "opendir/readdir/closedir is the standard directory reading API",
+            "readdir returns NULL at end or on error -- check errno to distinguish",
+            "Always skip \".\" and \"..\" entries",
+            "d_type field is not portable (may be DT_UNKNOWN on some filesystems)",
+            "readdir is not thread-safe across DIR handles without synchronization"
+          ],
+          "gotchas": [
+            "d_type is not available on all filesystems (e.g., XFS before Linux 4.0) -- fall back to stat()",
+            "readdir returns a pointer to a static buffer -- copy d_name if you need to keep it",
+            "Modifying the directory during traversal (creating/deleting files) has undefined behavior",
+            "d_name has a max length of NAME_MAX (typically 255), not PATH_MAX"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`opendir()` opens a directory, `readdir()` iterates entries (`d_name`, `d_ino`), `closedir()` closes it. Skip `.` and `..`. Set `errno = 0` before loop to detect errors vs EOF.",
+          "pseudo_code": "",
+          "actual_code": "#include <dirent.h>\n#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    DIR *dp = opendir(\".\");\n    struct dirent *e;\n    while ((e = readdir(dp)) != NULL) {\n        if (e->d_name[0] == '.') continue;\n        printf(\"%s\\n\", e->d_name);\n    }\n    closedir(dp);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "readdir returns NULL at end or error",
+            "Skip . and .. entries"
+          ],
+          "gotchas": [
+            "d_type may be DT_UNKNOWN on some filesystems -- use stat() instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement recursive directory traversal in C?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["nftw", "recursive-traversal", "directory-walk"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "There are two main approaches to recursive directory traversal:\n\n**1. nftw() -- POSIX standard:**\n```c\n#include <ftw.h>\nint nftw(const char *dirpath, \n         int (*fn)(const char *fpath, const struct stat *sb,\n                   int typeflag, struct FTW *ftwbuf),\n         int nopenfd, int flags);\n```\n\n`nftw()` walks a directory tree and calls your callback for each entry.\n- `nopenfd` limits the number of simultaneously open directories\n- `flags`: `FTW_PHYS` (don't follow symlinks), `FTW_DEPTH` (post-order traversal)\n- `typeflag`: `FTW_F` (file), `FTW_D` (directory), `FTW_DNR` (unreadable dir), etc.\n- Return 0 from callback to continue, non-zero to stop\n\n**2. Manual recursion** with opendir/readdir:\n- Open directory, read entries, recurse into subdirectories\n- Must construct full paths and handle errors\n- More control but more code\n\n`nftw()` is preferred for most uses because it handles fd management, path construction, and cycle detection.",
+          "pseudo_code": "nftw approach:\n1. Define callback function(path, stat, typeflag, ftwbuf)\n2. Call nftw(root_path, callback, max_open_fds, FTW_PHYS)\n3. Callback is called for every file/dir in the tree\n4. Return 0 to continue, non-zero to stop\n\nManual approach:\n1. opendir(path)\n2. For each entry: skip . and ..\n3. Construct full_path = path + \"/\" + d_name\n4. lstat(full_path) to get type\n5. If directory: recurse\n6. If file: process\n7. closedir()",
+          "actual_code": "#include <ftw.h>\n#include <stdio.h>\n#include <string.h>\n#include <sys/stat.h>\n#include <dirent.h>\n#include <limits.h>\n\n/* Approach 1: nftw (preferred) */\nstatic int print_entry(const char *fpath, const struct stat *sb,\n                       int typeflag, struct FTW *ftwbuf) {\n    const char *name = fpath + ftwbuf->base;  /* just the filename */\n    printf(\"%*s%s\", ftwbuf->level * 2, \"\", name);\n    if (typeflag == FTW_D)\n        printf(\"/\");\n    printf(\" (%lld bytes)\\n\", (long long)sb->st_size);\n    return 0;  /* continue traversal */\n}\n\n/* Approach 2: Manual recursion */\nvoid walk_dir(const char *path, int depth) {\n    DIR *dp = opendir(path);\n    if (dp == NULL) { perror(path); return; }\n\n    struct dirent *entry;\n    while ((entry = readdir(dp)) != NULL) {\n        if (strcmp(entry->d_name, \".\") == 0 ||\n            strcmp(entry->d_name, \"..\") == 0)\n            continue;\n\n        char fullpath[PATH_MAX];\n        snprintf(fullpath, sizeof(fullpath), \"%s/%s\", path, entry->d_name);\n\n        struct stat sb;\n        if (lstat(fullpath, &sb) == -1) continue;\n\n        printf(\"%*s%s\\n\", depth * 2, \"\", entry->d_name);\n        if (S_ISDIR(sb.st_mode))\n            walk_dir(fullpath, depth + 1);\n    }\n    closedir(dp);\n}\n\nint main(void) {\n    printf(\"=== nftw traversal ===\\n\");\n    nftw(\".\", print_entry, 20, FTW_PHYS);\n\n    printf(\"\\n=== Manual traversal ===\\n\");\n    walk_dir(\".\", 0);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "nftw() is the POSIX standard for recursive directory walking",
+            "FTW_PHYS prevents following symlinks (avoids infinite loops)",
+            "nftw manages open fd count automatically with nopenfd parameter",
+            "Manual recursion gives more control but requires careful path construction",
+            "Always use lstat() (not stat()) to avoid following symlinks into loops"
+          ],
+          "gotchas": [
+            "Without FTW_PHYS, symlink cycles cause infinite traversal",
+            "Manual recursion can exhaust the stack on deeply nested directories",
+            "PATH_MAX may not be large enough on all systems -- use dynamic allocation for robustness",
+            "nftw is not reentrant and not safe to call from a signal handler"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `nftw()` for POSIX-standard recursive traversal with a callback. Use `FTW_PHYS` to avoid following symlinks. Manual recursion with `opendir`/`readdir` gives more control.",
+          "pseudo_code": "",
+          "actual_code": "#include <ftw.h>\n#include <stdio.h>\n\nstatic int callback(const char *path, const struct stat *sb,\n                    int type, struct FTW *ftw) {\n    printf(\"%s\\n\", path);\n    return 0;\n}\n\nint main(void) {\n    nftw(\".\", callback, 20, FTW_PHYS);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "nftw() handles recursion, fd management, and path construction",
+            "FTW_PHYS avoids symlink loops"
+          ],
+          "gotchas": [
+            "Without FTW_PHYS, symlink cycles cause infinite recursion"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do getcwd() and chdir() work for managing the current working directory?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["getcwd", "chdir", "working-directory"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every process has a current working directory (CWD) that is used as the starting point for resolving relative pathnames.\n\n**getcwd() -- get current working directory:**\n```c\n#include <unistd.h>\nchar *getcwd(char *buf, size_t size);\n```\nReturns `buf` on success, or NULL on error. If `buf` is NULL (GNU extension), getcwd allocates a buffer with `malloc()` that the caller must `free()`.\n\n**chdir() / fchdir() -- change working directory:**\n```c\nint chdir(const char *path);\nint fchdir(int fd);  /* change to directory represented by fd */\n```\n\nThe CWD is a per-process attribute (stored as an inode reference in the kernel). When you `fork()`, the child inherits the parent's CWD. `chdir()` in the child does NOT affect the parent.\n\nThis is why `cd` must be a shell built-in: if it were an external command, it would change the CWD of the child process (the command) but not the shell itself.",
+          "pseudo_code": "1. getcwd(buf, size) -> fills buf with absolute path of CWD\n2. chdir(path) -> changes CWD to path (0 on success, -1 on error)\n3. fchdir(fd) -> changes CWD to directory of open fd\n4. CWD inherited on fork, but changes do not propagate to parent\n5. cd is a shell builtin because it must change the shell's own CWD",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <stdlib.h>\n#include <limits.h>\n\nint main(void) {\n    char cwd[PATH_MAX];\n\n    /* Get current working directory */\n    if (getcwd(cwd, sizeof(cwd)) == NULL) {\n        perror(\"getcwd\");\n        return 1;\n    }\n    printf(\"Current dir: %s\\n\", cwd);\n\n    /* Change to /tmp */\n    if (chdir(\"/tmp\") == -1) {\n        perror(\"chdir\");\n        return 1;\n    }\n\n    if (getcwd(cwd, sizeof(cwd)) != NULL)\n        printf(\"After chdir: %s\\n\", cwd);\n\n    /* Using fchdir to return to original directory */\n    /* (Useful when original path might be deleted) */\n    int orig_fd = open(\".\", O_RDONLY);\n    chdir(\"/var\");\n    /* ... do work in /var ... */\n    fchdir(orig_fd);  /* back to /tmp */\n    close(orig_fd);\n\n    if (getcwd(cwd, sizeof(cwd)) != NULL)\n        printf(\"After fchdir: %s\\n\", cwd);\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "getcwd() returns the absolute path of the current working directory",
+            "chdir() changes the CWD; fchdir() uses an open directory fd",
+            "CWD is per-process; inherited on fork but not shared",
+            "cd must be a shell builtin to affect the shell's CWD",
+            "fchdir() is useful to return to a directory even if its path changes"
+          ],
+          "gotchas": [
+            "getcwd() fails if any component of the path lacks read or execute permission",
+            "PATH_MAX may not be sufficient on all systems; GNU getcwd(NULL, 0) auto-allocates",
+            "chdir() in a child process does not affect the parent",
+            "If CWD is deleted, getcwd() fails but the process can still operate with relative paths"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`getcwd(buf, size)` returns the absolute CWD path. `chdir(path)` changes it. CWD is per-process (inherited on fork, not shared). `cd` is a shell builtin because external commands cannot change the shell's CWD.",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <stdio.h>\n#include <limits.h>\n\nint main(void) {\n    char buf[PATH_MAX];\n    getcwd(buf, sizeof(buf));\n    printf(\"CWD: %s\\n\", buf);\n    chdir(\"/tmp\");\n    getcwd(buf, sizeof(buf));\n    printf(\"Now: %s\\n\", buf);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "CWD is per-process, inherited on fork",
+            "cd is a shell builtin for this reason"
+          ],
+          "gotchas": [
+            "chdir in a child does not affect the parent process"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does rename() work, and what guarantees does it provide for atomicity?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["rename", "atomicity", "filesystem"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`rename()` atomically changes the name of a file or moves it within the same filesystem.\n\n**Prototype:**\n```c\n#include <stdio.h>\nint rename(const char *oldpath, const char *newpath);\n```\n\n**Atomicity guarantee:**\nIf `newpath` already exists, it is atomically replaced. At no point will another process see `newpath` as missing -- it goes directly from old content to new content. This makes `rename()` the standard way to atomically update a file:\n1. Write new content to a temporary file\n2. `rename(tmpfile, target)` -- atomic swap\n\n**Rules:**\n- If `oldpath` is a file and `newpath` is a file: `newpath` is atomically replaced\n- If `oldpath` is a directory and `newpath` is an empty directory: replaced\n- Cannot rename a file to a directory name or vice versa\n- Both paths must be on the **same filesystem** (same mount point)\n- If `oldpath == newpath`, no error (no-op)\n\n**Cross-filesystem rename:**\nIf old and new paths are on different filesystems, `rename()` fails with `EXDEV`. You must manually copy + unlink.",
+          "pseudo_code": "Atomic file update pattern:\n1. Write new data to tmpfile (same filesystem as target)\n2. fsync(tmpfile_fd) to ensure data is on disk\n3. close(tmpfile_fd)\n4. rename(tmpfile, target)  -- atomic replacement\n5. fsync on directory fd to ensure rename is durable\n\nRules:\n- Same filesystem only (EXDEV if cross-device)\n- File -> existing file: old file atomically unlinked\n- Dir -> existing empty dir: old dir atomically replaced\n- File -> existing dir: EISDIR error",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <string.h>\n#include <errno.h>\n\n/* Atomic file update: write-to-temp then rename */\nint atomic_write(const char *path, const char *data, size_t len) {\n    char tmppath[256];\n    snprintf(tmppath, sizeof(tmppath), \"%s.tmp\", path);\n\n    /* Write to temporary file */\n    int fd = open(tmppath, O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open tmp\"); return -1; }\n\n    ssize_t nw = write(fd, data, len);\n    if (nw != (ssize_t)len) { perror(\"write\"); close(fd); return -1; }\n\n    /* Ensure data is on disk before rename */\n    if (fsync(fd) == -1) { perror(\"fsync\"); close(fd); return -1; }\n    close(fd);\n\n    /* Atomic rename */\n    if (rename(tmppath, path) == -1) {\n        perror(\"rename\");\n        unlink(tmppath);\n        return -1;\n    }\n\n    return 0;\n}\n\nint main(void) {\n    const char *data = \"new config data\\n\";\n    if (atomic_write(\"config.txt\", data, strlen(data)) == 0)\n        printf(\"Atomically updated config.txt\\n\");\n    else\n        fprintf(stderr, \"Update failed\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "rename() atomically replaces newpath if it exists",
+            "Standard pattern for atomic file updates: write tmp + rename",
+            "Both paths must be on the same filesystem (EXDEV otherwise)",
+            "fsync before rename ensures data durability on crash",
+            "Cannot rename file to directory or vice versa"
+          ],
+          "gotchas": [
+            "Cross-filesystem rename fails with EXDEV -- must copy + unlink manually",
+            "Without fsync before rename, a crash can leave the new file empty",
+            "rename on a directory requires newpath to be empty if it exists",
+            "rename does not update ctime of the file, but does update ctime of both directories"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`rename(old, new)` atomically moves/renames a file. If `new` exists, it is atomically replaced. Must be on the same filesystem. Standard atomic update: write to tmp, fsync, rename.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdio.h>\n#include <unistd.h>\n#include <fcntl.h>\n\nint main(void) {\n    /* Atomic update: write tmp, rename */\n    int fd = open(\"config.tmp\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    write(fd, \"new data\\n\", 9);\n    fsync(fd);\n    close(fd);\n    rename(\"config.tmp\", \"config.txt\");  /* atomic */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Atomic replacement of existing file",
+            "Must be same filesystem (EXDEV otherwise)"
+          ],
+          "gotchas": [
+            "Without fsync before rename, crash can leave empty file"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do mkstemp() and mkdtemp() create temporary files and directories safely?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["mkstemp", "mkdtemp", "temporary-files", "security"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Creating temporary files securely is critical to avoid race conditions and symlink attacks.\n\n**Unsafe approaches:**\n- `tmpnam()` / `tempnam()`: return a name, but between getting the name and creating the file, another process can create a file (or symlink) with that name. **DEPRECATED.**\n- `mktemp()`: same TOCTOU race. **DEPRECATED.**\n\n**Safe approaches:**\n\n**mkstemp() -- create temp file:**\n```c\n#include <stdlib.h>\nint mkstemp(char *template);  /* template modified in place */\n```\n- Takes a template like `\"/tmp/myapp.XXXXXX\"` (at least 6 X's)\n- Atomically creates and opens the file with mode 0600\n- Replaces the X's with random characters\n- Returns an open file descriptor\n- The caller must `unlink()` the file when done (or keep it)\n\n**mkdtemp() -- create temp directory:**\n```c\nchar *mkdtemp(char *template);\n```\n- Creates a directory with mode 0700\n- Returns the modified template string, or NULL on error\n\nBoth use a unique random suffix and create the file/directory atomically, eliminating the TOCTOU race.",
+          "pseudo_code": "1. Prepare template: char tmpl[] = \"/tmp/myapp.XXXXXX\"\n2. int fd = mkstemp(tmpl)  -- creates file, returns fd\n3. tmpl now contains actual filename (e.g., \"/tmp/myapp.a3bK9f\")\n4. Use fd for read/write\n5. unlink(tmpl) to remove (or keep if needed)\n6. close(fd)\n\nFor directory:\n1. char dtmpl[] = \"/tmp/mydir.XXXXXX\"\n2. mkdtemp(dtmpl)  -- creates directory\n3. Use dtmpl as directory path",
+          "actual_code": "#include <stdlib.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <string.h>\n\nint main(void) {\n    /* Create temporary file */\n    char tmpl[] = \"/tmp/myapp.XXXXXX\";\n    int fd = mkstemp(tmpl);\n    if (fd == -1) {\n        perror(\"mkstemp\");\n        return 1;\n    }\n    printf(\"Temp file: %s (fd=%d)\\n\", tmpl, fd);\n\n    /* Write to it */\n    const char *data = \"temporary data\\n\";\n    write(fd, data, strlen(data));\n\n    /* Unlink immediately -- file stays open until close */\n    unlink(tmpl);\n    printf(\"Unlinked %s (still usable via fd)\\n\", tmpl);\n\n    /* Can still read/write via fd */\n    lseek(fd, 0, SEEK_SET);\n    char buf[64];\n    ssize_t n = read(fd, buf, sizeof(buf) - 1);\n    buf[n] = '\\0';\n    printf(\"Read back: %s\", buf);\n\n    close(fd);  /* file data now freed */\n\n    /* Create temporary directory */\n    char dtmpl[] = \"/tmp/mydir.XXXXXX\";\n    if (mkdtemp(dtmpl) == NULL) {\n        perror(\"mkdtemp\");\n        return 1;\n    }\n    printf(\"Temp dir: %s\\n\", dtmpl);\n    rmdir(dtmpl);  /* clean up */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "mkstemp() atomically creates and opens a temp file (no TOCTOU race)",
+            "Template must have at least 6 trailing X characters",
+            "File is created with mode 0600 (owner read/write only)",
+            "mkdtemp() creates a temp directory with mode 0700",
+            "tmpnam() and mktemp() are deprecated due to race conditions"
+          ],
+          "gotchas": [
+            "Template must be a mutable char array, not a string literal (would segfault)",
+            "mkstemp does NOT unlink the file -- caller must clean up",
+            "The unlink-immediately pattern (unlink then use fd) is great for security but the file has no name",
+            "Template path should be in a directory writable by the process (usually /tmp)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`mkstemp(template)` atomically creates and opens a temp file (mode 0600). `mkdtemp(template)` creates a temp directory (mode 0700). Template needs trailing `XXXXXX`. Never use deprecated `tmpnam()`/`mktemp()`.",
+          "pseudo_code": "",
+          "actual_code": "#include <stdlib.h>\n#include <unistd.h>\n#include <stdio.h>\n\nint main(void) {\n    char tmpl[] = \"/tmp/app.XXXXXX\";\n    int fd = mkstemp(tmpl);  /* atomic create + open */\n    printf(\"%s\\n\", tmpl);    /* e.g., /tmp/app.x7kQ2m */\n    unlink(tmpl);            /* optional: remove name */\n    close(fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "mkstemp is atomic -- no TOCTOU race",
+            "Template must be a mutable array, not a literal"
+          ],
+          "gotchas": [
+            "String literal template causes segfault (char *t = \"...XXXXXX\" is wrong)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does umask work, and how does it affect file creation permissions?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["umask", "permissions", "file-creation"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `umask` is a per-process attribute that specifies which permission bits should be **turned off** when creating new files and directories.\n\n**Formula:**\n```\nactual_permissions = requested_mode & ~umask\n```\n\n**Example:** If umask is 022 and you call `open(\"f\", O_CREAT, 0666)`:\n```\n0666 & ~022 = 0666 & 0755 = 0644 (rw-r--r--)\n```\n\n**Prototype:**\n```c\n#include <sys/stat.h>\nmode_t umask(mode_t mask);  /* returns previous umask */\n```\n\n**Common umask values:**\n- `022` -- default on most systems: owner rwx, group/other rx (no write)\n- `077` -- restrictive: owner rwx, no group/other access\n- `002` -- permissive: owner/group rwx, other rx\n\n**Important:** `umask()` always succeeds (no error return). It returns the **previous** umask value. There is no way to query the umask without setting it (until Linux 4.7's `/proc/self/status`). A common pattern is `old = umask(0); umask(old);` to read the current value.\n\nDaemons typically call `umask(0)` during initialization so that file creation modes are fully controlled by the explicit mode argument.",
+          "pseudo_code": "actual_mode = mode & ~umask\n\nExample:\n  umask = 022 (binary: 000 010 010)\n  open(\"f\", O_CREAT, 0666)  (binary: 110 110 110)\n  ~umask = 755 (binary: 111 101 101)\n  result = 0666 & 0755 = 0644 (rw-r--r--)\n\nTo read current umask:\n  old = umask(0); umask(old);  /* restore immediately */",
+          "actual_code": "#include <sys/stat.h>\n#include <fcntl.h>\n#include <unistd.h>\n#include <stdio.h>\n\nint main(void) {\n    /* Read current umask (no other portable way) */\n    mode_t old_mask = umask(0);\n    umask(old_mask);  /* restore immediately */\n    printf(\"Current umask: %04o\\n\", (unsigned int)old_mask);\n\n    /* Create file with umask 022 */\n    umask(022);\n    int fd1 = open(\"file1.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0666);\n    /* Actual permissions: 0666 & ~022 = 0644 */\n\n    /* Create file with umask 077 */\n    umask(077);\n    int fd2 = open(\"file2.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0666);\n    /* Actual permissions: 0666 & ~077 = 0600 */\n\n    /* Verify */\n    struct stat sb;\n    fstat(fd1, &sb);\n    printf(\"file1.txt mode: %04o\\n\", (unsigned int)(sb.st_mode & 07777));  /* 0644 */\n    fstat(fd2, &sb);\n    printf(\"file2.txt mode: %04o\\n\", (unsigned int)(sb.st_mode & 07777));  /* 0600 */\n\n    /* Daemon pattern: clear umask for full control */\n    umask(0);\n    int fd3 = open(\"file3.txt\", O_WRONLY | O_CREAT | O_TRUNC, 0755);\n    fstat(fd3, &sb);\n    printf(\"file3.txt mode: %04o\\n\", (unsigned int)(sb.st_mode & 07777));  /* 0755 exactly */\n\n    close(fd1); close(fd2); close(fd3);\n    umask(old_mask);  /* restore */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "umask turns OFF permission bits: actual = mode & ~umask",
+            "Common default umask is 022 (removes group/other write)",
+            "umask() always succeeds and returns the previous value",
+            "No portable way to query umask without setting it (read-modify-restore pattern)",
+            "Daemons typically set umask(0) for full control"
+          ],
+          "gotchas": [
+            "umask is inherited by child processes via fork/exec",
+            "umask affects open(), mkdir(), mkfifo() etc. but NOT chmod()",
+            "mkstemp creates files with 0600 regardless of umask on most systems",
+            "There is no atomic way to read the umask in older kernels -- the read-restore pattern is racy in multithreaded programs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "umask specifies bits to turn OFF when creating files: `actual = mode & ~umask`. Default 022 means `0666` becomes `0644`. `umask()` returns previous value. Daemons use `umask(0)` for full control.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n#include <fcntl.h>\n#include <stdio.h>\n\nint main(void) {\n    umask(022);\n    int fd = open(\"f.txt\", O_CREAT | O_WRONLY, 0666);\n    /* actual mode: 0666 & ~022 = 0644 */\n    struct stat sb;\n    fstat(fd, &sb);\n    printf(\"%04o\\n\", (unsigned int)(sb.st_mode & 07777));  /* 0644 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "actual = mode & ~umask",
+            "Default umask 022 removes group/other write"
+          ],
+          "gotchas": [
+            "No atomic way to read umask without setting it in older kernels"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the S_ISREG, S_ISDIR, S_ISLNK and other file type test macros?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["file-type", "S_ISREG", "S_ISDIR", "S_ISLNK", "st_mode"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "POSIX defines macros to test the file type from the `st_mode` field of `struct stat`. The file type is encoded in the upper bits of `st_mode`.\n\n**File type macros (applied to st_mode):**\n\n| Macro | True for | st_mode constant |\n|-------|----------|------------------|\n| `S_ISREG(m)` | Regular file | `S_IFREG` |\n| `S_ISDIR(m)` | Directory | `S_IFDIR` |\n| `S_ISLNK(m)` | Symbolic link | `S_IFLNK` |\n| `S_ISCHR(m)` | Character device | `S_IFCHR` |\n| `S_ISBLK(m)` | Block device | `S_IFBLK` |\n| `S_ISFIFO(m)` | FIFO/named pipe | `S_IFIFO` |\n| `S_ISSOCK(m)` | Socket | `S_IFSOCK` |\n\n**How they work internally:**\nThe macros extract the file type bits using `S_IFMT` mask:\n```c\n#define S_ISREG(m)  (((m) & S_IFMT) == S_IFREG)\n```\n\n**Important:** `S_ISLNK()` only works with `lstat()`. If you use `stat()`, it follows the symlink and returns the type of the target file, so `S_ISLNK()` would never be true.\n\nYou can also extract the file type manually:\n```c\nswitch (st.st_mode & S_IFMT) {\n    case S_IFREG:  /* regular file */  break;\n    case S_IFDIR:  /* directory */     break;\n    ...\n}\n```",
+          "pseudo_code": "1. Call lstat(path, &sb) to get st_mode\n2. Test with macros: S_ISREG(sb.st_mode), S_ISDIR(sb.st_mode), etc.\n3. For symlinks, must use lstat() -- stat() follows the link\n4. Alternative: switch (sb.st_mode & S_IFMT) for all types\n5. Permission bits: sb.st_mode & 0777 (or specific masks like S_IRUSR)",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n#include <unistd.h>\n\nconst char *file_type_str(mode_t mode) {\n    if (S_ISREG(mode))  return \"regular file\";\n    if (S_ISDIR(mode))  return \"directory\";\n    if (S_ISLNK(mode))  return \"symbolic link\";\n    if (S_ISCHR(mode))  return \"character device\";\n    if (S_ISBLK(mode))  return \"block device\";\n    if (S_ISFIFO(mode)) return \"FIFO/pipe\";\n    if (S_ISSOCK(mode)) return \"socket\";\n    return \"unknown\";\n}\n\nint main(void) {\n    const char *paths[] = {\n        \"/etc/passwd\",     /* regular file */\n        \"/tmp\",            /* directory */\n        \"/dev/null\",       /* character device */\n        NULL\n    };\n\n    for (int i = 0; paths[i] != NULL; i++) {\n        struct stat sb;\n        if (lstat(paths[i], &sb) == -1) {\n            perror(paths[i]);\n            continue;\n        }\n        printf(\"%-20s -> %s (mode=%07o)\\n\",\n               paths[i], file_type_str(sb.st_mode),\n               (unsigned int)sb.st_mode);\n    }\n\n    /* Alternative: switch on masked mode */\n    struct stat sb;\n    lstat(\"/dev/null\", &sb);\n    switch (sb.st_mode & S_IFMT) {\n        case S_IFCHR:  printf(\"/dev/null is a char device\\n\"); break;\n        case S_IFREG:  printf(\"/dev/null is a regular file\\n\"); break;\n        default:       printf(\"/dev/null is something else\\n\"); break;\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "S_ISREG, S_ISDIR, S_ISLNK etc. test the file type from st_mode",
+            "They work by masking with S_IFMT: (mode & S_IFMT) == S_IFREG",
+            "S_ISLNK only works with lstat(), not stat()",
+            "Can also use a switch on (st_mode & S_IFMT)",
+            "Seven file types: regular, directory, symlink, char dev, block dev, FIFO, socket"
+          ],
+          "gotchas": [
+            "stat() follows symlinks so S_ISLNK will never be true -- use lstat()",
+            "S_ISSOCK may not be available on very old systems",
+            "dirent d_type is NOT the same encoding as st_mode -- different constants",
+            "Pipes created with pipe() show as S_ISFIFO in fstat()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `S_ISREG(mode)`, `S_ISDIR(mode)`, `S_ISLNK(mode)` etc. on `st_mode` from `stat()`/`lstat()`. For symlinks, must use `lstat()`. Seven UNIX file types: regular, directory, symlink, char/block device, FIFO, socket.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n#include <stdio.h>\n\nint main(void) {\n    struct stat sb;\n    lstat(\"/etc/passwd\", &sb);\n    if (S_ISREG(sb.st_mode))  printf(\"Regular file\\n\");\n    if (S_ISDIR(sb.st_mode))  printf(\"Directory\\n\");\n    if (S_ISLNK(sb.st_mode))  printf(\"Symlink\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Seven file types tested via macros on st_mode",
+            "S_ISLNK requires lstat, not stat"
+          ],
+          "gotchas": [
+            "stat follows symlinks -- S_ISLNK is always false with stat()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do chmod() and fchmod() change file permissions, and what are common permission patterns?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["chmod", "fchmod", "permissions", "access-control"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`chmod()` and `fchmod()` change the permission bits of a file.\n\n**Prototypes:**\n```c\n#include <sys/stat.h>\nint chmod(const char *pathname, mode_t mode);\nint fchmod(int fd, mode_t mode);\n```\n\n**Key differences from open() mode:**\n- `chmod()` sets the EXACT permissions -- umask is NOT applied\n- Only the file owner or root can change permissions\n- `chmod()` follows symlinks; there is no `lchmod()` on most systems\n\n**Common permission patterns:**\n```\n0644 (rw-r--r--)  -- regular files (readable by all, writable by owner)\n0755 (rwxr-xr-x)  -- executables and directories\n0600 (rw-------)   -- private files (credentials, keys)\n0700 (rwx------)   -- private directories\n0666 (rw-rw-rw-)   -- world-writable files (before umask)\n04755 (rwsr-xr-x)  -- setuid executables (like passwd)\n01777 (rwxrwxrwt)  -- sticky directories (like /tmp)\n```\n\n**Symbolic constants:**\n- `S_IRUSR`, `S_IWUSR`, `S_IXUSR` -- owner\n- `S_IRGRP`, `S_IWGRP`, `S_IXGRP` -- group\n- `S_IROTH`, `S_IWOTH`, `S_IXOTH` -- other\n- `S_ISUID`, `S_ISGID`, `S_ISVTX` -- special bits",
+          "pseudo_code": "1. chmod(path, mode) -- sets exact permissions (umask NOT applied)\n2. fchmod(fd, mode) -- same but on open fd\n3. Only owner or root can change permissions\n4. Use symbolic constants for readability:\n   S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH = 0644\n5. Can toggle individual bits:\n   stat(path, &sb)\n   chmod(path, sb.st_mode | S_IXUSR)  -- add owner execute",
+          "actual_code": "#include <sys/stat.h>\n#include <fcntl.h>\n#include <stdio.h>\n#include <unistd.h>\n\nint main(void) {\n    /* Create a file */\n    int fd = open(\"script.sh\", O_WRONLY | O_CREAT | O_TRUNC, 0644);\n    if (fd == -1) { perror(\"open\"); return 1; }\n    write(fd, \"#!/bin/sh\\necho hello\\n\", 21);\n\n    /* Make executable using fchmod */\n    if (fchmod(fd, 0755) == -1) perror(\"fchmod\");\n    close(fd);\n\n    /* Verify */\n    struct stat sb;\n    stat(\"script.sh\", &sb);\n    printf(\"script.sh mode: %04o\\n\", (unsigned int)(sb.st_mode & 07777));\n    /* Output: 0755 */\n\n    /* Using symbolic constants */\n    chmod(\"script.sh\",\n          S_IRUSR | S_IWUSR | S_IXUSR |  /* rwx for owner */\n          S_IRGRP | S_IXGRP |             /* r-x for group */\n          S_IROTH | S_IXOTH);             /* r-x for other */\n    /* Same as 0755 */\n\n    /* Add setuid bit */\n    stat(\"script.sh\", &sb);\n    chmod(\"script.sh\", sb.st_mode | S_ISUID);  /* setuid + existing */\n    stat(\"script.sh\", &sb);\n    printf(\"After setuid: %04o\\n\", (unsigned int)(sb.st_mode & 07777));\n    /* Output: 4755 */\n\n    /* Make private (credentials file) */\n    chmod(\"secret.key\", S_IRUSR | S_IWUSR);  /* 0600 */\n\n    unlink(\"script.sh\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "chmod sets exact permissions (umask NOT applied)",
+            "Only the file owner or root can chmod",
+            "fchmod works on an open fd -- avoids TOCTOU races",
+            "0644 for files, 0755 for executables, 0600 for secrets",
+            "Use symbolic constants (S_IRUSR etc.) for readable code"
+          ],
+          "gotchas": [
+            "chmod on a symlink changes the target, not the link itself",
+            "Setting setuid on a script has no effect on most modern UNIX systems",
+            "The kernel clears setuid/setgid bits when a non-root user writes to a file",
+            "fchmod avoids race conditions but the fd must be open"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`chmod(path, mode)` sets exact permissions (no umask). `fchmod(fd, mode)` does the same on an open fd. Only owner or root can change permissions. Common: 0644 files, 0755 executables, 0600 secrets.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/stat.h>\n\nint main(void) {\n    chmod(\"file.txt\", 0644);      /* rw-r--r-- */\n    chmod(\"script.sh\", 0755);     /* rwxr-xr-x */\n    chmod(\"secret.key\", 0600);    /* rw------- */\n    chmod(\"shared/\", 01777);      /* sticky + rwxrwxrwx */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "chmod sets exact mode; umask not applied",
+            "0644 files, 0755 executables, 0600 secrets"
+          ],
+          "gotchas": [
+            "Kernel clears setuid/setgid bits when non-root writes to the file"
+          ]
+        }
+      ]
+    }
+  ]
+}

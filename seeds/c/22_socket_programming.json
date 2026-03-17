@@ -1,0 +1,633 @@
+{
+  "concept_slug": "socket-programming",
+  "questions": [
+    {
+      "title": "What is the socket() system call and what do AF_INET, SOCK_STREAM, and SOCK_DGRAM mean?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["socket", "AF_INET", "SOCK_STREAM", "SOCK_DGRAM", "system-call"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `socket()` system call creates a communication endpoint and returns a file descriptor. It is the first step in all network programming.\n\n**Signature**: `int socket(int domain, int type, int protocol);`\n\n**Domain (Address Family)**:\n- `AF_INET` -- IPv4 Internet protocols\n- `AF_INET6` -- IPv6 Internet protocols\n- `AF_UNIX` (or `AF_LOCAL`) -- Local communication (same machine)\n\n**Type (Socket Type)**:\n- `SOCK_STREAM` -- Reliable, connection-oriented, byte stream (TCP). Guarantees in-order delivery. You must `connect()` before sending data.\n- `SOCK_DGRAM` -- Connectionless, unreliable datagrams (UDP). Each `sendto()` is independent. No connection setup needed.\n- `SOCK_RAW` -- Raw network access (requires root/CAP_NET_RAW).\n\n**Protocol**: Usually `0` to auto-select the default protocol for the given domain+type pair (TCP for STREAM, UDP for DGRAM).\n\nThe returned file descriptor behaves like any other fd -- you can use `read()`/`write()`, `close()`, `select()`/`poll()` on it. On error, `socket()` returns `-1` and sets `errno`.",
+          "pseudo_code": "1. Call socket(AF_INET, SOCK_STREAM, 0) for TCP\n2. Call socket(AF_INET, SOCK_DGRAM, 0) for UDP\n3. Check return value: >= 0 is valid fd, -1 is error\n4. Use the fd with bind/listen/accept (server) or connect (client)\n5. Close the fd when done with close()",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n\nint main(void) {\n    /* Create a TCP socket */\n    int tcp_fd = socket(AF_INET, SOCK_STREAM, 0);\n    if (tcp_fd == -1) {\n        perror(\"socket (TCP)\");\n        exit(EXIT_FAILURE);\n    }\n    printf(\"TCP socket fd: %d\\n\", tcp_fd);\n\n    /* Create a UDP socket */\n    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);\n    if (udp_fd == -1) {\n        perror(\"socket (UDP)\");\n        close(tcp_fd);\n        exit(EXIT_FAILURE);\n    }\n    printf(\"UDP socket fd: %d\\n\", udp_fd);\n\n    close(tcp_fd);\n    close(udp_fd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "socket() returns a file descriptor or -1 on error",
+            "AF_INET = IPv4, AF_INET6 = IPv6, AF_UNIX = local IPC",
+            "SOCK_STREAM = TCP (reliable, ordered, connection-oriented)",
+            "SOCK_DGRAM = UDP (unreliable, connectionless, message-oriented)",
+            "Protocol 0 auto-selects the default (TCP for STREAM, UDP for DGRAM)"
+          ],
+          "gotchas": [
+            "Always check the return value -- socket() can fail if the system runs out of file descriptors",
+            "Sockets must be closed with close() to avoid fd leaks, just like regular files",
+            "SOCK_STREAM does not preserve message boundaries -- TCP is a byte stream, not a message stream"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`socket(domain, type, protocol)` creates a network endpoint. `AF_INET` = IPv4, `SOCK_STREAM` = TCP, `SOCK_DGRAM` = UDP. Returns an fd or -1 on error.",
+          "pseudo_code": "",
+          "actual_code": "#include <sys/socket.h>\n#include <netinet/in.h>\n\nint tcp_fd = socket(AF_INET, SOCK_STREAM, 0); /* TCP */\nint udp_fd = socket(AF_INET, SOCK_DGRAM, 0);  /* UDP */",
+          "code_language": "c",
+          "key_points": [
+            "SOCK_STREAM = TCP, SOCK_DGRAM = UDP",
+            "Returns fd on success, -1 on error"
+          ],
+          "gotchas": [
+            "SOCK_STREAM is a byte stream -- it does not preserve message boundaries"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write a basic TCP server in C (socket/bind/listen/accept flow)?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["tcp", "server", "bind", "listen", "accept"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A TCP server follows a strict sequence of system calls:\n\n1. **socket()** -- Create a SOCK_STREAM socket.\n2. **bind()** -- Assign a local address and port to the socket using `struct sockaddr_in`.\n3. **listen()** -- Mark the socket as passive (willing to accept connections). The `backlog` parameter limits the queue of pending connections.\n4. **accept()** -- Block until a client connects. Returns a *new* file descriptor for the connected client. The original socket continues listening.\n5. **read()/write()** or **recv()/send()** -- Exchange data with the client on the new fd.\n6. **close()** -- Close the client fd, then eventually the listening fd.\n\n**Key detail**: `accept()` returns a *different* fd from the listening socket. The listening socket is never used directly for data transfer -- it only spawns connected sockets.\n\n**bind() address**: Use `INADDR_ANY` (0.0.0.0) to listen on all interfaces, or a specific IP to bind to one interface.\n\n**listen() backlog**: Typically 5-128. The kernel may silently cap this value. On Linux, `SOMAXCONN` (128 by default) is the upper limit unless changed via sysctl.",
+          "pseudo_code": "1. sockfd = socket(AF_INET, SOCK_STREAM, 0)\n2. Set SO_REUSEADDR on sockfd\n3. Fill sockaddr_in: family=AF_INET, addr=INADDR_ANY, port=htons(PORT)\n4. bind(sockfd, addr, sizeof(addr))\n5. listen(sockfd, BACKLOG)\n6. Loop:\n   a. connfd = accept(sockfd, client_addr, &addrlen)\n   b. read/write on connfd\n   c. close(connfd)\n7. close(sockfd)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\n#define PORT 8080\n#define BACKLOG 5\n#define BUFSIZE 1024\n\nint main(void) {\n    int sockfd, connfd;\n    struct sockaddr_in serv_addr, cli_addr;\n    socklen_t cli_len = sizeof(cli_addr);\n    char buf[BUFSIZE];\n\n    /* 1. Create socket */\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd == -1) { perror(\"socket\"); exit(1); }\n\n    /* 2. Allow address reuse */\n    int opt = 1;\n    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));\n\n    /* 3. Bind to port */\n    memset(&serv_addr, 0, sizeof(serv_addr));\n    serv_addr.sin_family = AF_INET;\n    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    serv_addr.sin_port = htons(PORT);\n\n    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {\n        perror(\"bind\"); close(sockfd); exit(1);\n    }\n\n    /* 4. Listen */\n    if (listen(sockfd, BACKLOG) == -1) {\n        perror(\"listen\"); close(sockfd); exit(1);\n    }\n    printf(\"Server listening on port %d\\n\", PORT);\n\n    /* 5. Accept and handle one client */\n    connfd = accept(sockfd, (struct sockaddr *)&cli_addr, &cli_len);\n    if (connfd == -1) { perror(\"accept\"); close(sockfd); exit(1); }\n\n    ssize_t n = read(connfd, buf, BUFSIZE - 1);\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Received: %s\\n\", buf);\n        write(connfd, \"Hello from server\\n\", 18);\n    }\n\n    close(connfd);\n    close(sockfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "TCP server flow: socket -> bind -> listen -> accept -> read/write -> close",
+            "accept() returns a NEW fd for the connected client; the original fd keeps listening",
+            "INADDR_ANY binds to all available interfaces",
+            "htons() converts port number to network byte order (big-endian)",
+            "listen() backlog limits the pending connection queue"
+          ],
+          "gotchas": [
+            "Forgetting SO_REUSEADDR means you get 'Address already in use' for ~60 seconds after restart (TIME_WAIT)",
+            "accept() blocks by default -- the server is stuck until a client connects",
+            "You must close BOTH the connected fd and the listening fd to avoid fd leaks",
+            "The backlog argument to listen() is a hint -- the kernel may ignore values above SOMAXCONN"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TCP server: `socket()` -> `bind()` -> `listen()` -> `accept()` loop -> `read()`/`write()` -> `close()`. `accept()` returns a new fd for each client.",
+          "pseudo_code": "",
+          "actual_code": "int sockfd = socket(AF_INET, SOCK_STREAM, 0);\nbind(sockfd, (struct sockaddr *)&addr, sizeof(addr));\nlisten(sockfd, 5);\nint connfd = accept(sockfd, NULL, NULL);\nread(connfd, buf, sizeof(buf));\nwrite(connfd, reply, strlen(reply));\nclose(connfd);\nclose(sockfd);",
+          "code_language": "c",
+          "key_points": [
+            "Flow: socket -> bind -> listen -> accept -> I/O -> close",
+            "accept() gives a new fd; original fd continues listening"
+          ],
+          "gotchas": [
+            "Without SO_REUSEADDR, restarting the server gives 'Address already in use' for ~60s"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you write a TCP client in C (socket/connect flow)?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["tcp", "client", "connect", "sockaddr_in"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A TCP client is simpler than a server because it does not need `bind()` or `listen()`. The kernel assigns an ephemeral port automatically.\n\n**Flow**:\n1. **socket()** -- Create a SOCK_STREAM socket.\n2. **Fill `struct sockaddr_in`** -- Set the server's IP and port.\n3. **connect()** -- Initiate the TCP three-way handshake with the server. This blocks until the connection is established or fails.\n4. **send()/recv()** or **write()/read()** -- Exchange data.\n5. **close()** -- Tear down the connection (sends FIN).\n\n**connect() errors**:\n- `ECONNREFUSED` -- No server listening on that port.\n- `ETIMEDOUT` -- Server unreachable (after retransmission timeouts).\n- `ENETUNREACH` -- No route to the network.\n\nThe client does not call `bind()` unless it needs a specific source port (rare). The kernel picks an ephemeral port from the range (typically 32768-60999 on Linux).",
+          "pseudo_code": "1. sockfd = socket(AF_INET, SOCK_STREAM, 0)\n2. Fill sockaddr_in: family=AF_INET, addr=server_ip, port=htons(PORT)\n3. Convert IP string with inet_pton(AF_INET, ip_str, &addr.sin_addr)\n4. connect(sockfd, addr, sizeof(addr))\n5. write(sockfd, request, len)\n6. read(sockfd, buf, bufsize)\n7. close(sockfd)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <arpa/inet.h>\n\n#define SERVER_IP \"127.0.0.1\"\n#define PORT 8080\n#define BUFSIZE 1024\n\nint main(void) {\n    int sockfd;\n    struct sockaddr_in serv_addr;\n    char buf[BUFSIZE];\n\n    /* 1. Create socket */\n    sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd == -1) { perror(\"socket\"); exit(1); }\n\n    /* 2. Set server address */\n    memset(&serv_addr, 0, sizeof(serv_addr));\n    serv_addr.sin_family = AF_INET;\n    serv_addr.sin_port = htons(PORT);\n\n    if (inet_pton(AF_INET, SERVER_IP, &serv_addr.sin_addr) <= 0) {\n        fprintf(stderr, \"Invalid address: %s\\n\", SERVER_IP);\n        close(sockfd); exit(1);\n    }\n\n    /* 3. Connect to server */\n    if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {\n        perror(\"connect\"); close(sockfd); exit(1);\n    }\n    printf(\"Connected to %s:%d\\n\", SERVER_IP, PORT);\n\n    /* 4. Send and receive */\n    const char *msg = \"Hello from client\";\n    write(sockfd, msg, strlen(msg));\n\n    ssize_t n = read(sockfd, buf, BUFSIZE - 1);\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Server replied: %s\\n\", buf);\n    }\n\n    close(sockfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "TCP client flow: socket -> connect -> write/read -> close",
+            "No bind() needed -- the kernel assigns an ephemeral source port",
+            "connect() performs the TCP three-way handshake",
+            "inet_pton() converts IP string to binary network format",
+            "connect() blocks until connection succeeds or fails"
+          ],
+          "gotchas": [
+            "connect() can block for a long time if the server is unreachable (kernel retransmits SYN packets)",
+            "ECONNREFUSED means no process is listening on the target port -- check the server is running",
+            "After connect() fails, the socket is in an undefined state -- you must close it and create a new one"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TCP client: `socket()` -> `connect()` -> `write()`/`read()` -> `close()`. No `bind()` needed. `connect()` performs the three-way handshake.",
+          "pseudo_code": "",
+          "actual_code": "int fd = socket(AF_INET, SOCK_STREAM, 0);\nstruct sockaddr_in addr = {.sin_family=AF_INET, .sin_port=htons(8080)};\ninet_pton(AF_INET, \"127.0.0.1\", &addr.sin_addr);\nconnect(fd, (struct sockaddr *)&addr, sizeof(addr));\nwrite(fd, \"hello\", 5);\nread(fd, buf, sizeof(buf));\nclose(fd);",
+          "code_language": "c",
+          "key_points": [
+            "Client: socket -> connect -> I/O -> close",
+            "Kernel assigns ephemeral source port automatically"
+          ],
+          "gotchas": [
+            "A failed connect() leaves the socket unusable -- close it and create a new one"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between send()/recv() and write()/read() on sockets?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["send", "recv", "read", "write", "MSG_WAITALL", "MSG_PEEK"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both pairs work on socket file descriptors, but `send()`/`recv()` offer an additional `flags` parameter for socket-specific behavior.\n\n**Signatures**:\n```\nssize_t write(int fd, const void *buf, size_t count);\nssize_t read(int fd, void *buf, size_t count);\nssize_t send(int sockfd, const void *buf, size_t len, int flags);\nssize_t recv(int sockfd, void *buf, size_t len, int flags);\n```\n\nWith `flags = 0`, `send()` is equivalent to `write()` and `recv()` is equivalent to `read()`.\n\n**Useful flags**:\n- `MSG_WAITALL` (recv) -- Block until the full `len` bytes are received (instead of returning a partial read).\n- `MSG_PEEK` (recv) -- Read data without removing it from the receive buffer.\n- `MSG_DONTWAIT` (both) -- Non-blocking operation for this single call.\n- `MSG_NOSIGNAL` (send, Linux) -- Suppress SIGPIPE when writing to a closed connection. Without this, writing to a broken pipe kills the process.\n- `MSG_OOB` (both) -- Send/receive out-of-band (urgent) data.\n\n**Key difference**: `write()`/`read()` work on any fd (files, pipes, sockets). `send()`/`recv()` only work on sockets. For portable code that may switch between fd types, use `write()`/`read()`.",
+          "pseudo_code": "1. write(fd, buf, len)  == send(fd, buf, len, 0)\n2. read(fd, buf, len)   == recv(fd, buf, len, 0)\n3. Use MSG_WAITALL to get exactly N bytes\n4. Use MSG_PEEK to inspect without consuming\n5. Use MSG_NOSIGNAL on Linux to avoid SIGPIPE death",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <unistd.h>\n\nvoid demonstrate_send_recv(int sockfd) {\n    const char *msg = \"Hello, network!\";\n\n    /* send with flags=0 is the same as write */\n    send(sockfd, msg, strlen(msg), 0);\n    /* equivalent: write(sockfd, msg, strlen(msg)); */\n\n    char buf[1024];\n\n    /* recv with MSG_WAITALL: block until we get exactly 15 bytes */\n    ssize_t n = recv(sockfd, buf, 15, MSG_WAITALL);\n\n    /* recv with MSG_PEEK: look at data without consuming it */\n    n = recv(sockfd, buf, sizeof(buf), MSG_PEEK);\n    /* data is still in the buffer -- next recv/read returns it again */\n\n    /* On Linux: avoid SIGPIPE on broken connections */\n    #ifdef MSG_NOSIGNAL\n    send(sockfd, msg, strlen(msg), MSG_NOSIGNAL);\n    #endif\n\n    /* MSG_DONTWAIT: non-blocking for just this call */\n    n = recv(sockfd, buf, sizeof(buf), MSG_DONTWAIT);\n    /* returns -1 with errno=EAGAIN if no data available */\n}",
+          "code_language": "c",
+          "key_points": [
+            "send(fd, buf, len, 0) == write(fd, buf, len)",
+            "recv(fd, buf, len, 0) == read(fd, buf, len)",
+            "MSG_WAITALL blocks until exactly len bytes are received",
+            "MSG_PEEK reads data without consuming it from the buffer",
+            "MSG_NOSIGNAL (Linux) prevents SIGPIPE on broken connections"
+          ],
+          "gotchas": [
+            "read()/recv() may return fewer bytes than requested (partial read) -- you must loop to get all data",
+            "write()/send() can also do short writes -- always check the return value and loop",
+            "Without MSG_NOSIGNAL, writing to a closed TCP connection sends SIGPIPE which terminates the process by default",
+            "MSG_WAITALL does not guarantee exactly len bytes if the connection closes or an error occurs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "With `flags=0`, `send()`==`write()` and `recv()`==`read()`. The flags parameter adds socket-specific behavior: `MSG_WAITALL`, `MSG_PEEK`, `MSG_NOSIGNAL`, `MSG_DONTWAIT`.",
+          "pseudo_code": "",
+          "actual_code": "/* Equivalent calls */\nwrite(fd, buf, len);         /* same as: */\nsend(fd, buf, len, 0);\n\nread(fd, buf, len);          /* same as: */\nrecv(fd, buf, len, 0);\n\n/* Useful flags */\nrecv(fd, buf, n, MSG_WAITALL);   /* block until n bytes */\nrecv(fd, buf, n, MSG_PEEK);      /* peek without consuming */\nsend(fd, buf, n, MSG_NOSIGNAL);  /* no SIGPIPE on broken conn */",
+          "code_language": "c",
+          "key_points": [
+            "send/recv add a flags parameter; with flags=0 they equal write/read",
+            "MSG_WAITALL, MSG_PEEK, MSG_NOSIGNAL are the most commonly used flags"
+          ],
+          "gotchas": [
+            "Always loop on read/recv -- partial reads are normal on TCP sockets"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does UDP communication work with sendto() and recvfrom()?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["udp", "sendto", "recvfrom", "SOCK_DGRAM", "connectionless"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "UDP is connectionless -- there is no `connect()`, `listen()`, or `accept()`. Each datagram is sent independently to a specified destination.\n\n**Server flow**: `socket()` -> `bind()` -> `recvfrom()`/`sendto()` loop.\n**Client flow**: `socket()` -> `sendto()`/`recvfrom()`.\n\n**Key functions**:\n```\nssize_t sendto(int sockfd, const void *buf, size_t len, int flags,\n               const struct sockaddr *dest_addr, socklen_t addrlen);\nssize_t recvfrom(int sockfd, void *buf, size_t len, int flags,\n                struct sockaddr *src_addr, socklen_t *addrlen);\n```\n\n`recvfrom()` fills in the source address of the sender, which you can then use to reply with `sendto()`. This is how a UDP server knows who to respond to.\n\n**UDP preserves message boundaries**: Unlike TCP, each `sendto()` produces exactly one datagram, and each `recvfrom()` reads exactly one complete datagram. If the buffer is too small, excess bytes are discarded.\n\n**Optional**: You can call `connect()` on a UDP socket to set a default destination. After that, you can use `send()`/`recv()` instead of `sendto()`/`recvfrom()`. This does not create a real connection -- it just sets the default address and filters incoming datagrams.",
+          "pseudo_code": "UDP Server:\n1. sockfd = socket(AF_INET, SOCK_DGRAM, 0)\n2. bind(sockfd, server_addr, addrlen)\n3. Loop:\n   a. n = recvfrom(sockfd, buf, BUFSIZE, 0, &client_addr, &addrlen)\n   b. Process buf\n   c. sendto(sockfd, reply, reply_len, 0, &client_addr, addrlen)\n4. close(sockfd)\n\nUDP Client:\n1. sockfd = socket(AF_INET, SOCK_DGRAM, 0)\n2. sendto(sockfd, msg, len, 0, &server_addr, addrlen)\n3. recvfrom(sockfd, buf, BUFSIZE, 0, NULL, NULL)\n4. close(sockfd)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <arpa/inet.h>\n\n#define PORT 9090\n#define BUFSIZE 1024\n\n/* --- UDP Server --- */\nvoid udp_server(void) {\n    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);\n    if (sockfd == -1) { perror(\"socket\"); exit(1); }\n\n    struct sockaddr_in serv_addr;\n    memset(&serv_addr, 0, sizeof(serv_addr));\n    serv_addr.sin_family = AF_INET;\n    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    serv_addr.sin_port = htons(PORT);\n\n    if (bind(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {\n        perror(\"bind\"); close(sockfd); exit(1);\n    }\n\n    char buf[BUFSIZE];\n    struct sockaddr_in cli_addr;\n    socklen_t cli_len = sizeof(cli_addr);\n\n    printf(\"UDP server listening on port %d\\n\", PORT);\n    ssize_t n = recvfrom(sockfd, buf, BUFSIZE - 1, 0,\n                         (struct sockaddr *)&cli_addr, &cli_len);\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Received: %s\\n\", buf);\n        const char *reply = \"ACK\";\n        sendto(sockfd, reply, strlen(reply), 0,\n               (struct sockaddr *)&cli_addr, cli_len);\n    }\n    close(sockfd);\n}\n\n/* --- UDP Client --- */\nvoid udp_client(void) {\n    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);\n    if (sockfd == -1) { perror(\"socket\"); exit(1); }\n\n    struct sockaddr_in serv_addr;\n    memset(&serv_addr, 0, sizeof(serv_addr));\n    serv_addr.sin_family = AF_INET;\n    serv_addr.sin_port = htons(PORT);\n    inet_pton(AF_INET, \"127.0.0.1\", &serv_addr.sin_addr);\n\n    const char *msg = \"Hello UDP\";\n    sendto(sockfd, msg, strlen(msg), 0,\n           (struct sockaddr *)&serv_addr, sizeof(serv_addr));\n\n    char buf[BUFSIZE];\n    ssize_t n = recvfrom(sockfd, buf, BUFSIZE - 1, 0, NULL, NULL);\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Reply: %s\\n\", buf);\n    }\n    close(sockfd);\n}",
+          "code_language": "c",
+          "key_points": [
+            "UDP uses sendto()/recvfrom() instead of send()/recv()",
+            "No connect/listen/accept needed -- each datagram is independent",
+            "recvfrom() tells you who sent the datagram (fills src_addr)",
+            "UDP preserves message boundaries -- one sendto = one recvfrom",
+            "connect() on UDP just sets a default destination (no real connection)"
+          ],
+          "gotchas": [
+            "UDP datagrams can be lost, duplicated, or arrive out of order -- your application must handle this",
+            "If recvfrom() buffer is smaller than the datagram, excess bytes are silently discarded",
+            "UDP has no flow control -- a fast sender can overwhelm a slow receiver",
+            "Maximum UDP payload is ~65507 bytes (65535 - 8 byte UDP header - 20 byte IP header)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "UDP: `sendto()` sends a datagram to a specified address, `recvfrom()` receives and tells you who sent it. No connection setup. Message boundaries are preserved.",
+          "pseudo_code": "",
+          "actual_code": "/* UDP server */\nint fd = socket(AF_INET, SOCK_DGRAM, 0);\nbind(fd, (struct sockaddr *)&addr, sizeof(addr));\nrecvfrom(fd, buf, sizeof(buf), 0, (struct sockaddr *)&cli, &cli_len);\nsendto(fd, reply, len, 0, (struct sockaddr *)&cli, cli_len);\n\n/* UDP client -- no bind needed */\nsendto(fd, msg, len, 0, (struct sockaddr *)&srv, sizeof(srv));\nrecvfrom(fd, buf, sizeof(buf), 0, NULL, NULL);",
+          "code_language": "c",
+          "key_points": [
+            "sendto/recvfrom specify the address per datagram",
+            "No connect/listen/accept for UDP"
+          ],
+          "gotchas": [
+            "Datagrams can be lost or arrive out of order -- UDP provides no reliability guarantees"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do struct sockaddr_in and byte order functions (htons/htonl/ntohs/ntohl) work?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["sockaddr_in", "htons", "htonl", "byte-order", "endianness"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`struct sockaddr_in` is the IPv4 socket address structure used by `bind()`, `connect()`, `accept()`, `sendto()`, and `recvfrom()`.\n\n**Structure**:\n```c\nstruct sockaddr_in {\n    sa_family_t    sin_family;  /* AF_INET */\n    in_port_t      sin_port;    /* port in NETWORK byte order */\n    struct in_addr sin_addr;    /* IPv4 address in NETWORK byte order */\n    char           sin_zero[8]; /* padding (zeroed) */\n};\n```\n\n**Network byte order** is big-endian. Most x86/x86_64 CPUs are little-endian. You must convert between host and network byte order:\n\n- `htons(x)` -- Host TO Network Short (16-bit, for ports)\n- `htonl(x)` -- Host TO Network Long (32-bit, for addresses)\n- `ntohs(x)` -- Network TO Host Short\n- `ntohl(x)` -- Network TO Host Long\n\n**Why cast to `struct sockaddr *`?**\nThe socket API uses a generic `struct sockaddr` as the parameter type. You fill in a `struct sockaddr_in` (or `sockaddr_in6` for IPv6) and cast it. This is the C way of achieving polymorphism.\n\n**Always zero the struct** before filling it -- `sin_zero` must be zero, and uninitialized padding can cause issues.",
+          "pseudo_code": "1. memset(&addr, 0, sizeof(addr))\n2. addr.sin_family = AF_INET\n3. addr.sin_port = htons(PORT)     /* convert port to network order */\n4. addr.sin_addr.s_addr = htonl(INADDR_ANY)  /* or use inet_pton */\n5. Cast: (struct sockaddr *)&addr when passing to bind/connect/etc.",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <arpa/inet.h>\n#include <netinet/in.h>\n\nint main(void) {\n    /* Byte order conversion */\n    uint16_t port = 8080;\n    uint16_t net_port = htons(port);\n    printf(\"Host port: 0x%04x, Network port: 0x%04x\\n\", port, net_port);\n    printf(\"Back to host: %d\\n\", ntohs(net_port));\n\n    uint32_t addr = 0x7f000001; /* 127.0.0.1 in host order */\n    uint32_t net_addr = htonl(addr);\n    printf(\"Host addr: 0x%08x, Network addr: 0x%08x\\n\", addr, net_addr);\n\n    /* Fill sockaddr_in */\n    struct sockaddr_in serv;\n    memset(&serv, 0, sizeof(serv));           /* Zero the struct */\n    serv.sin_family = AF_INET;\n    serv.sin_port = htons(8080);              /* Port in network order */\n    serv.sin_addr.s_addr = htonl(INADDR_ANY); /* 0.0.0.0 */\n\n    /* Or use inet_pton for a specific IP */\n    inet_pton(AF_INET, \"192.168.1.1\", &serv.sin_addr);\n\n    /* Print back */\n    char ip_str[INET_ADDRSTRLEN];\n    inet_ntop(AF_INET, &serv.sin_addr, ip_str, sizeof(ip_str));\n    printf(\"Address: %s, Port: %d\\n\", ip_str, ntohs(serv.sin_port));\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Network byte order is big-endian; x86 is little-endian -- conversion is mandatory",
+            "htons/htonl convert host-to-network; ntohs/ntohl convert network-to-host",
+            "sin_port and sin_addr must be in network byte order",
+            "Always memset the sockaddr_in to zero before filling it",
+            "Cast sockaddr_in* to sockaddr* when passing to socket functions"
+          ],
+          "gotchas": [
+            "Forgetting htons() on the port leads to binding to the wrong port (e.g., 8080 becomes port 36895 on little-endian)",
+            "INADDR_ANY is 0 so htonl(INADDR_ANY) == 0, but using htonl is still correct practice",
+            "On big-endian machines, htons/htonl are no-ops but you must still call them for portability",
+            "sin_zero must be zeroed -- some systems check it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sockaddr_in` holds IP+port in network byte order (big-endian). Use `htons()` for ports, `htonl()` for addresses, and their `ntoh*` inverses to convert back.",
+          "pseudo_code": "",
+          "actual_code": "struct sockaddr_in addr;\nmemset(&addr, 0, sizeof(addr));\naddr.sin_family = AF_INET;\naddr.sin_port = htons(8080);              /* port -> network order */\naddr.sin_addr.s_addr = htonl(INADDR_ANY); /* bind all interfaces */\n\n/* Read back */\nprintf(\"Port: %d\\n\", ntohs(addr.sin_port));",
+          "code_language": "c",
+          "key_points": [
+            "htons for ports (16-bit), htonl for addresses (32-bit)",
+            "Always zero the struct with memset before use"
+          ],
+          "gotchas": [
+            "Forgetting htons() on ports causes binding to the wrong port number"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do inet_pton() and inet_ntop() work for address conversion?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["inet_pton", "inet_ntop", "address-conversion", "IPv4", "IPv6"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "These are the modern, protocol-independent functions for converting between human-readable IP strings and binary network addresses. They replace the deprecated `inet_aton()`/`inet_ntoa()`.\n\n**inet_pton()** -- Presentation TO Network:\n```c\nint inet_pton(int af, const char *src, void *dst);\n```\nConverts an IP string (\"192.168.1.1\" or \"::1\") to binary form.\n- Returns 1 on success, 0 if the string is not valid, -1 on error (with errno).\n\n**inet_ntop()** -- Network TO Presentation:\n```c\nconst char *inet_ntop(int af, const void *src, char *dst, socklen_t size);\n```\nConverts binary address to a human-readable string.\n- Returns pointer to `dst` on success, NULL on error.\n- Use `INET_ADDRSTRLEN` (16) for IPv4 buffer size, `INET6_ADDRSTRLEN` (46) for IPv6.\n\n**Why not inet_ntoa()?**\n`inet_ntoa()` returns a pointer to a static buffer, making it non-thread-safe and non-reentrant. Calling it twice in the same `printf()` gives the same string for both calls. `inet_ntop()` writes to a caller-supplied buffer, avoiding this problem.",
+          "pseudo_code": "String to binary:\n1. inet_pton(AF_INET, \"192.168.1.1\", &addr.sin_addr)\n2. Check return: 1=success, 0=invalid string, -1=error\n\nBinary to string:\n1. char str[INET_ADDRSTRLEN]\n2. inet_ntop(AF_INET, &addr.sin_addr, str, sizeof(str))\n3. Check return: non-NULL=success",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <arpa/inet.h>\n\nint main(void) {\n    /* --- inet_pton: string -> binary --- */\n    struct in_addr ipv4_addr;\n    int ret = inet_pton(AF_INET, \"192.168.1.100\", &ipv4_addr);\n    if (ret == 1) {\n        printf(\"Converted OK. Binary: 0x%08x\\n\", ntohl(ipv4_addr.s_addr));\n    } else if (ret == 0) {\n        printf(\"Invalid address string\\n\");\n    } else {\n        perror(\"inet_pton\");\n    }\n\n    /* --- inet_ntop: binary -> string --- */\n    char str[INET_ADDRSTRLEN];\n    if (inet_ntop(AF_INET, &ipv4_addr, str, sizeof(str)) != NULL) {\n        printf(\"String: %s\\n\", str); /* 192.168.1.100 */\n    }\n\n    /* --- IPv6 example --- */\n    struct in6_addr ipv6_addr;\n    inet_pton(AF_INET6, \"::1\", &ipv6_addr);\n    char str6[INET6_ADDRSTRLEN];\n    inet_ntop(AF_INET6, &ipv6_addr, str6, sizeof(str6));\n    printf(\"IPv6: %s\\n\", str6); /* ::1 */\n\n    /* --- Why inet_ntoa is dangerous --- */\n    /* inet_ntoa uses a static buffer: */\n    /* printf(\"%s %s\", inet_ntoa(a), inet_ntoa(b)); */\n    /* Both %s print the SAME string (b's address)! */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "inet_pton converts IP string to binary (presentation-to-network)",
+            "inet_ntop converts binary to IP string (network-to-presentation)",
+            "Both support AF_INET (IPv4) and AF_INET6 (IPv6)",
+            "Use INET_ADDRSTRLEN (16) for IPv4 and INET6_ADDRSTRLEN (46) for IPv6 buffers",
+            "These replace the deprecated inet_aton/inet_ntoa functions"
+          ],
+          "gotchas": [
+            "inet_ntoa() uses a static buffer -- it is not thread-safe and breaks with multiple calls in one expression",
+            "inet_pton returns 0 (not -1) for invalid address strings -- check for both 0 and -1",
+            "The buffer passed to inet_ntop must be large enough or you get an error"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`inet_pton(AF_INET, str, &addr)` converts string to binary. `inet_ntop(AF_INET, &addr, str, len)` converts binary to string. Both work with IPv4 and IPv6. They replace the non-thread-safe `inet_ntoa()`.",
+          "pseudo_code": "",
+          "actual_code": "struct in_addr addr;\ninet_pton(AF_INET, \"10.0.0.1\", &addr);  /* string -> binary */\n\nchar buf[INET_ADDRSTRLEN];\ninet_ntop(AF_INET, &addr, buf, sizeof(buf));  /* binary -> string */\nprintf(\"%s\\n\", buf);  /* 10.0.0.1 */",
+          "code_language": "c",
+          "key_points": [
+            "pton = presentation-to-network, ntop = network-to-presentation",
+            "Thread-safe replacements for inet_aton/inet_ntoa"
+          ],
+          "gotchas": [
+            "inet_ntoa uses a static buffer and is not thread-safe -- always use inet_ntop instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is SO_REUSEADDR and why is it important for server sockets?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["SO_REUSEADDR", "setsockopt", "TIME_WAIT", "server"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**SO_REUSEADDR** is a socket option that allows a socket to bind to an address that is already in the TIME_WAIT state.\n\n**The problem**: When a TCP connection closes, the side that sends the final FIN enters the TIME_WAIT state for 2*MSL (Maximum Segment Lifetime, typically 60 seconds). During this period, the address:port pair is considered \"in use.\" If you restart a server, `bind()` fails with `EADDRINUSE` because the old socket is still in TIME_WAIT.\n\n**The solution**: Set `SO_REUSEADDR` before `bind()`. This tells the kernel to allow binding even if the address is in TIME_WAIT.\n\n**What SO_REUSEADDR does NOT do**:\n- It does NOT allow two active sockets to bind to the same port simultaneously (that requires `SO_REUSEPORT`).\n- It does NOT skip the TIME_WAIT state -- it just allows binding over it.\n\n**SO_REUSEPORT** (Linux 3.9+): Allows multiple sockets to bind to the same address:port pair. Used for load balancing across multiple server processes. Each incoming connection is distributed to one of the bound sockets.\n\n**Best practice**: Almost every TCP server should set SO_REUSEADDR. There is virtually no downside.",
+          "pseudo_code": "1. sockfd = socket(AF_INET, SOCK_STREAM, 0)\n2. int opt = 1\n3. setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))\n4. bind(sockfd, ...)  /* Now succeeds even if port is in TIME_WAIT */",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\nint main(void) {\n    int sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    if (sockfd == -1) { perror(\"socket\"); exit(1); }\n\n    /* Set SO_REUSEADDR -- MUST be done before bind() */\n    int opt = 1;\n    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1) {\n        perror(\"setsockopt\");\n        close(sockfd);\n        exit(1);\n    }\n\n    struct sockaddr_in addr;\n    memset(&addr, 0, sizeof(addr));\n    addr.sin_family = AF_INET;\n    addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    addr.sin_port = htons(8080);\n\n    /* This bind succeeds even if port 8080 is in TIME_WAIT */\n    if (bind(sockfd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {\n        perror(\"bind\");\n        close(sockfd);\n        exit(1);\n    }\n\n    printf(\"Bound successfully with SO_REUSEADDR\\n\");\n\n    /* Check current value */\n    int val;\n    socklen_t len = sizeof(val);\n    getsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val, &len);\n    printf(\"SO_REUSEADDR = %d\\n\", val); /* 1 */\n\n    close(sockfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SO_REUSEADDR allows binding to a port that is in TIME_WAIT state",
+            "Must be set before bind() using setsockopt()",
+            "Prevents 'Address already in use' errors when restarting a server",
+            "TIME_WAIT lasts ~60 seconds after TCP connection close",
+            "Almost every TCP server should enable SO_REUSEADDR"
+          ],
+          "gotchas": [
+            "SO_REUSEADDR must be set BEFORE bind() -- setting it after has no effect",
+            "SO_REUSEADDR does not allow two active listeners on the same port -- that needs SO_REUSEPORT",
+            "On some systems, SO_REUSEADDR has subtly different semantics (Windows allows port hijacking with it)",
+            "TIME_WAIT exists for a reason (preventing delayed packets from old connections) -- do not try to disable it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`SO_REUSEADDR` lets a server socket bind to a port still in TIME_WAIT (the ~60s state after TCP close). Set it with `setsockopt()` before `bind()`. Almost every server should use it.",
+          "pseudo_code": "",
+          "actual_code": "int opt = 1;\nsetsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));\nbind(sockfd, ...); /* succeeds even if port in TIME_WAIT */",
+          "code_language": "c",
+          "key_points": [
+            "Prevents 'Address already in use' on server restart",
+            "Must be called before bind()"
+          ],
+          "gotchas": [
+            "SO_REUSEADDR must be set before bind(), not after"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you build a concurrent TCP server using fork() per client?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["concurrent", "fork", "server", "SIGCHLD", "zombie"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A simple iterative server handles one client at a time. To serve multiple clients concurrently, the classic Unix approach is to `fork()` a child process for each accepted connection.\n\n**Pattern**:\n1. Parent process loops on `accept()`.\n2. After `accept()` returns a new fd, `fork()`.\n3. **Child process**: closes the listening socket (not needed), handles the client, then `exit()`.\n4. **Parent process**: closes the connected fd (child owns it), continues accepting.\n\n**Zombie prevention**: When a child exits, it becomes a zombie until the parent calls `wait()`. To avoid zombie accumulation:\n- Install a `SIGCHLD` handler that calls `waitpid(-1, NULL, WNOHANG)` in a loop.\n- Or set `signal(SIGCHLD, SIG_IGN)` (on Linux, this auto-reaps children).\n\n**Why close fds in both processes?**\nAfter `fork()`, both parent and child have copies of both fds. The listening socket has refcount=2. The connected socket has refcount=2. Each process must close the fd it does not need, so the refcount drops to 1 and the fd is properly cleaned up when the owning process closes it.",
+          "pseudo_code": "1. Install SIGCHLD handler to reap zombies\n2. sockfd = socket + bind + listen\n3. Loop:\n   a. connfd = accept(sockfd, ...)\n   b. pid = fork()\n   c. If child (pid==0):\n      - close(sockfd)     /* child doesn't need listener */\n      - handle_client(connfd)\n      - close(connfd)\n      - exit(0)\n   d. If parent (pid>0):\n      - close(connfd)     /* parent doesn't need this client */\n      - continue loop",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <signal.h>\n#include <sys/socket.h>\n#include <sys/wait.h>\n#include <netinet/in.h>\n\n#define PORT 8080\n#define BUFSIZE 1024\n\nvoid sigchld_handler(int sig) {\n    (void)sig;\n    /* Reap all dead children (non-blocking) */\n    while (waitpid(-1, NULL, WNOHANG) > 0)\n        ;\n}\n\nvoid handle_client(int connfd) {\n    char buf[BUFSIZE];\n    ssize_t n;\n    while ((n = read(connfd, buf, BUFSIZE - 1)) > 0) {\n        buf[n] = '\\0';\n        write(connfd, buf, n); /* echo back */\n    }\n}\n\nint main(void) {\n    /* Install SIGCHLD handler to prevent zombies */\n    struct sigaction sa;\n    sa.sa_handler = sigchld_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART; /* restart accept() after signal */\n    sigaction(SIGCHLD, &sa, NULL);\n\n    int sockfd = socket(AF_INET, SOCK_STREAM, 0);\n    int opt = 1;\n    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));\n\n    struct sockaddr_in addr = {0};\n    addr.sin_family = AF_INET;\n    addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    addr.sin_port = htons(PORT);\n    bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));\n    listen(sockfd, 128);\n\n    printf(\"Concurrent server on port %d\\n\", PORT);\n\n    for (;;) {\n        int connfd = accept(sockfd, NULL, NULL);\n        if (connfd == -1) continue; /* interrupted by signal */\n\n        pid_t pid = fork();\n        if (pid == 0) {\n            /* Child */\n            close(sockfd);\n            handle_client(connfd);\n            close(connfd);\n            exit(0);\n        } else if (pid > 0) {\n            /* Parent */\n            close(connfd); /* parent doesn't need client fd */\n        } else {\n            perror(\"fork\");\n            close(connfd);\n        }\n    }\n}",
+          "code_language": "c",
+          "key_points": [
+            "fork() after accept() creates one child process per client",
+            "Child closes listening socket; parent closes connected socket",
+            "SIGCHLD handler with waitpid(WNOHANG) prevents zombie processes",
+            "SA_RESTART flag prevents accept() from failing with EINTR on signal delivery",
+            "Each client gets a dedicated process with its own address space"
+          ],
+          "gotchas": [
+            "Without SIGCHLD handling, zombie processes accumulate and exhaust the process table",
+            "Both parent and child must close the fd they don't use, or the TCP connection stays open (refcount > 0)",
+            "fork() per client is expensive for high concurrency -- use thread pools or event loops (select/epoll) for thousands of clients",
+            "accept() can return EINTR when a signal is delivered -- use SA_RESTART or loop on EINTR"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "After `accept()`, `fork()`. Child closes listener and handles client. Parent closes client fd and loops. Install `SIGCHLD` handler with `waitpid(WNOHANG)` to reap zombies.",
+          "pseudo_code": "",
+          "actual_code": "for (;;) {\n    int connfd = accept(sockfd, NULL, NULL);\n    if (fork() == 0) {\n        close(sockfd);         /* child: close listener */\n        handle_client(connfd);\n        close(connfd);\n        exit(0);\n    }\n    close(connfd);             /* parent: close client fd */\n}",
+          "code_language": "c",
+          "key_points": [
+            "fork() per client; child handles, parent continues accepting",
+            "Reap zombies via SIGCHLD handler"
+          ],
+          "gotchas": [
+            "Without zombie reaping, dead child processes accumulate and exhaust the process table"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does select() work for I/O multiplexing on sockets?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["select", "fd_set", "multiplexing", "FD_SET", "FD_ISSET"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`select()` monitors multiple file descriptors to see if any are ready for reading, writing, or have exceptional conditions.\n\n**Signature**:\n```c\nint select(int nfds, fd_set *readfds, fd_set *writefds,\n           fd_set *exceptfds, struct timeval *timeout);\n```\n\n- `nfds` -- highest fd + 1 (not the count of fds).\n- `readfds` -- set of fds to watch for readability.\n- `writefds` -- set of fds to watch for writability.\n- `exceptfds` -- set of fds to watch for exceptions.\n- `timeout` -- NULL blocks forever, {0,0} returns immediately (poll), or a specific duration.\n\n**fd_set macros**:\n- `FD_ZERO(&set)` -- Clear the set.\n- `FD_SET(fd, &set)` -- Add fd to the set.\n- `FD_CLR(fd, &set)` -- Remove fd from the set.\n- `FD_ISSET(fd, &set)` -- Test if fd is in the set (use after select returns).\n\n**Return value**: Number of ready fds, 0 on timeout, -1 on error.\n\n**Critical detail**: `select()` *modifies* the fd_sets. You must re-initialize them before each call. This is a common bug.\n\n**Typical server pattern**: Put the listening socket and all connected sockets in readfds. When select returns, if the listening socket is readable, call accept(). If a client socket is readable, call read().",
+          "pseudo_code": "1. FD_ZERO all sets\n2. FD_SET(listenfd, &readfds)\n3. For each active client fd: FD_SET(clientfd, &readfds)\n4. maxfd = highest fd among all\n5. select(maxfd + 1, &readfds, NULL, NULL, timeout)\n6. If FD_ISSET(listenfd, &readfds): accept new client\n7. For each client: if FD_ISSET(clientfd, &readfds): read data\n8. Re-initialize fd_sets and repeat",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <sys/select.h>\n#include <netinet/in.h>\n\n#define PORT 8080\n#define MAX_CLIENTS 10\n#define BUFSIZE 1024\n\nint main(void) {\n    int listenfd = socket(AF_INET, SOCK_STREAM, 0);\n    int opt = 1;\n    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));\n\n    struct sockaddr_in addr = {0};\n    addr.sin_family = AF_INET;\n    addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    addr.sin_port = htons(PORT);\n    bind(listenfd, (struct sockaddr *)&addr, sizeof(addr));\n    listen(listenfd, 5);\n\n    int clients[MAX_CLIENTS];\n    int ncli = 0;\n\n    for (;;) {\n        fd_set readfds;\n        FD_ZERO(&readfds);\n        FD_SET(listenfd, &readfds);\n        int maxfd = listenfd;\n\n        for (int i = 0; i < ncli; i++) {\n            FD_SET(clients[i], &readfds);\n            if (clients[i] > maxfd) maxfd = clients[i];\n        }\n\n        int ready = select(maxfd + 1, &readfds, NULL, NULL, NULL);\n        if (ready == -1) { perror(\"select\"); break; }\n\n        /* New connection? */\n        if (FD_ISSET(listenfd, &readfds)) {\n            int connfd = accept(listenfd, NULL, NULL);\n            if (connfd >= 0 && ncli < MAX_CLIENTS) {\n                clients[ncli++] = connfd;\n                printf(\"New client (fd=%d)\\n\", connfd);\n            }\n        }\n\n        /* Data from existing clients? */\n        for (int i = 0; i < ncli; i++) {\n            if (FD_ISSET(clients[i], &readfds)) {\n                char buf[BUFSIZE];\n                ssize_t n = read(clients[i], buf, BUFSIZE - 1);\n                if (n <= 0) {\n                    close(clients[i]);\n                    clients[i] = clients[--ncli]; /* remove */\n                    i--;\n                } else {\n                    buf[n] = '\\0';\n                    write(clients[i], buf, n); /* echo */\n                }\n            }\n        }\n    }\n    close(listenfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "select() monitors multiple fds for readability/writability/exceptions",
+            "nfds must be highest_fd + 1, not the count of fds",
+            "select() modifies the fd_sets -- re-initialize before each call",
+            "FD_ZERO, FD_SET, FD_CLR, FD_ISSET are the four fd_set macros",
+            "Single-threaded server can handle many clients with select()"
+          ],
+          "gotchas": [
+            "fd_sets are modified by select() -- forgetting to reinitialize them before each call is the #1 bug",
+            "FD_SETSIZE (typically 1024) limits the maximum fd number -- select cannot handle fds >= 1024",
+            "select() uses a linear scan internally -- O(n) per call, poor for thousands of fds",
+            "On Linux, the timeout is modified by select() to reflect time remaining -- on other systems it is not"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`select(nfds, &readfds, &writefds, &exceptfds, &timeout)` monitors multiple fds. Use `FD_ZERO`/`FD_SET`/`FD_ISSET` macros. Re-initialize fd_sets before each call.",
+          "pseudo_code": "",
+          "actual_code": "fd_set readfds;\nFD_ZERO(&readfds);\nFD_SET(listenfd, &readfds);\nFD_SET(clientfd, &readfds);\nint maxfd = (listenfd > clientfd) ? listenfd : clientfd;\n\nselect(maxfd + 1, &readfds, NULL, NULL, NULL);\n\nif (FD_ISSET(listenfd, &readfds))  /* new connection */\nif (FD_ISSET(clientfd, &readfds))  /* data from client */",
+          "code_language": "c",
+          "key_points": [
+            "nfds = highest fd + 1",
+            "Must reinitialize fd_sets before every select() call"
+          ],
+          "gotchas": [
+            "select() modifies the fd_sets in-place -- reinitialize them every iteration"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the differences between poll() and select(), and when should you use each?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["poll", "select", "pollfd", "comparison", "scalability"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`poll()` was designed to fix the shortcomings of `select()`.\n\n**Signature**:\n```c\nint poll(struct pollfd *fds, nfds_t nfds, int timeout);\n\nstruct pollfd {\n    int   fd;       /* file descriptor */\n    short events;   /* requested events (input) */\n    short revents;  /* returned events (output) */\n};\n```\n\n**Key differences**:\n\n| Feature | select() | poll() |\n|---------|----------|--------|\n| fd limit | FD_SETSIZE (1024) | No limit (array-based) |\n| fd_set mutation | Modifies input sets | Separate events/revents fields |\n| Interface | Bitmask (FD_SET/FD_ISSET) | Array of structs |\n| Sparse fds | Scans 0..nfds-1 | Only scans provided fds |\n| Portability | POSIX + Windows | POSIX (not native Windows) |\n| Timeout | struct timeval (microseconds) | int milliseconds |\n\n**poll() events**:\n- `POLLIN` -- Ready to read (equivalent to select readfds)\n- `POLLOUT` -- Ready to write\n- `POLLERR` -- Error condition (always checked, even if not set)\n- `POLLHUP` -- Hang up (peer closed connection)\n- `POLLNVAL` -- Invalid fd\n\n**Neither is ideal for high concurrency** (10K+ connections). Both are O(n) per call. Use `epoll` (Linux), `kqueue` (BSD/macOS), or `io_uring` (Linux 5.1+) for high-performance servers.",
+          "pseudo_code": "1. Create array: struct pollfd fds[MAX]\n2. fds[0].fd = listenfd, fds[0].events = POLLIN\n3. For each client: fds[i].fd = clientfd, fds[i].events = POLLIN\n4. poll(fds, nfds, timeout_ms)\n5. Check fds[i].revents & POLLIN for each i\n6. No need to reinitialize -- events field is not modified",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <poll.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\n#define PORT 8080\n#define MAX_FDS 100\n#define BUFSIZE 1024\n\nint main(void) {\n    int listenfd = socket(AF_INET, SOCK_STREAM, 0);\n    int opt = 1;\n    setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));\n\n    struct sockaddr_in addr = {0};\n    addr.sin_family = AF_INET;\n    addr.sin_addr.s_addr = htonl(INADDR_ANY);\n    addr.sin_port = htons(PORT);\n    bind(listenfd, (struct sockaddr *)&addr, sizeof(addr));\n    listen(listenfd, 5);\n\n    struct pollfd fds[MAX_FDS];\n    int nfds = 1;\n    fds[0].fd = listenfd;\n    fds[0].events = POLLIN;\n\n    for (;;) {\n        int ready = poll(fds, nfds, -1); /* -1 = block forever */\n        if (ready == -1) { perror(\"poll\"); break; }\n\n        /* Check listener */\n        if (fds[0].revents & POLLIN) {\n            int connfd = accept(listenfd, NULL, NULL);\n            if (connfd >= 0 && nfds < MAX_FDS) {\n                fds[nfds].fd = connfd;\n                fds[nfds].events = POLLIN;\n                nfds++;\n            }\n        }\n\n        /* Check clients */\n        for (int i = 1; i < nfds; i++) {\n            if (fds[i].revents & (POLLIN | POLLHUP | POLLERR)) {\n                char buf[BUFSIZE];\n                ssize_t n = read(fds[i].fd, buf, BUFSIZE - 1);\n                if (n <= 0) {\n                    close(fds[i].fd);\n                    fds[i] = fds[--nfds]; /* remove */\n                    i--;\n                } else {\n                    write(fds[i].fd, buf, n); /* echo */\n                }\n            }\n        }\n    }\n    close(listenfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "poll() has no FD_SETSIZE limit -- handles any number of fds",
+            "Separate events (input) and revents (output) fields -- no need to reinitialize",
+            "POLLIN, POLLOUT, POLLERR, POLLHUP, POLLNVAL are the key event flags",
+            "Both select() and poll() are O(n) -- use epoll/kqueue for 10K+ connections",
+            "poll() timeout is in milliseconds; -1 blocks forever, 0 returns immediately"
+          ],
+          "gotchas": [
+            "poll() is not available natively on Windows -- select() is more portable",
+            "POLLERR and POLLHUP are always reported even if not requested in events",
+            "Both poll() and select() copy the entire fd array to/from kernel on every call -- this is the O(n) cost",
+            "For high-performance servers, use epoll (Linux) or kqueue (macOS/BSD) instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`poll()` fixes select()'s limits: no FD_SETSIZE cap, separate input/output event fields, cleaner API. Both are O(n). Use `epoll`/`kqueue` for high concurrency.",
+          "pseudo_code": "",
+          "actual_code": "struct pollfd fds[2];\nfds[0].fd = listenfd; fds[0].events = POLLIN;\nfds[1].fd = clientfd; fds[1].events = POLLIN;\n\npoll(fds, 2, -1); /* block until event */\n\nif (fds[0].revents & POLLIN)  /* new connection */\nif (fds[1].revents & POLLIN)  /* client data ready */",
+          "code_language": "c",
+          "key_points": [
+            "No FD_SETSIZE limit; events/revents separation",
+            "Both poll and select are O(n) -- use epoll/kqueue for scale"
+          ],
+          "gotchas": [
+            "poll() is not natively available on Windows"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you make a socket non-blocking and handle EAGAIN/EWOULDBLOCK?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["non-blocking", "fcntl", "O_NONBLOCK", "EAGAIN", "EWOULDBLOCK"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "By default, socket operations (accept, read, write, connect) block until they complete. A **non-blocking socket** returns immediately with an error if the operation cannot be completed right away.\n\n**How to set non-blocking**:\nUse `fcntl()` to add the `O_NONBLOCK` flag to the socket's file status flags.\n\n**Behavior changes**:\n- `read()`/`recv()`: Returns -1 with `errno = EAGAIN` (or `EWOULDBLOCK`) if no data is available.\n- `write()`/`send()`: Returns -1 with `errno = EAGAIN` if the send buffer is full.\n- `accept()`: Returns -1 with `errno = EAGAIN` if no pending connections.\n- `connect()`: Returns -1 with `errno = EINPROGRESS`. The connection continues in the background. Use `select()`/`poll()` on the socket for writability to detect completion, then check `SO_ERROR` with `getsockopt()`.\n\n**EAGAIN vs EWOULDBLOCK**: On Linux, they are the same value (11). POSIX allows them to differ. Always check for both:\n```c\nif (errno == EAGAIN || errno == EWOULDBLOCK)\n```\n\n**Use case**: Non-blocking sockets are essential for event-driven servers (with select/poll/epoll) that handle many connections in a single thread without any blocking.",
+          "pseudo_code": "1. flags = fcntl(fd, F_GETFL, 0)\n2. fcntl(fd, F_SETFL, flags | O_NONBLOCK)\n3. On read: if returns -1 and errno==EAGAIN, no data yet\n4. On write: if returns -1 and errno==EAGAIN, buffer full\n5. On connect: if returns -1 and errno==EINPROGRESS, still connecting\n6. Use select/poll to wait for readiness, then retry",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <errno.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n\n/* Make a socket non-blocking */\nint set_nonblocking(int fd) {\n    int flags = fcntl(fd, F_GETFL, 0);\n    if (flags == -1) return -1;\n    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);\n}\n\nvoid non_blocking_read_example(int sockfd) {\n    char buf[1024];\n\n    set_nonblocking(sockfd);\n\n    for (;;) {\n        ssize_t n = read(sockfd, buf, sizeof(buf) - 1);\n        if (n > 0) {\n            buf[n] = '\\0';\n            printf(\"Got: %s\\n\", buf);\n        } else if (n == 0) {\n            printf(\"Connection closed\\n\");\n            break;\n        } else { /* n == -1 */\n            if (errno == EAGAIN || errno == EWOULDBLOCK) {\n                /* No data available right now -- do other work */\n                printf(\"Would block, try later\\n\");\n                break; /* or use select/poll to wait */\n            } else {\n                perror(\"read\");\n                break;\n            }\n        }\n    }\n}\n\n/* Non-blocking connect */\nint nonblocking_connect(const char *ip, int port) {\n    int fd = socket(AF_INET, SOCK_STREAM, 0);\n    set_nonblocking(fd);\n\n    struct sockaddr_in addr = {0};\n    addr.sin_family = AF_INET;\n    addr.sin_port = htons(port);\n    inet_pton(AF_INET, ip, &addr.sin_addr);\n\n    int ret = connect(fd, (struct sockaddr *)&addr, sizeof(addr));\n    if (ret == -1 && errno == EINPROGRESS) {\n        /* Connection in progress -- use select/poll to wait */\n        fd_set wfds;\n        FD_ZERO(&wfds);\n        FD_SET(fd, &wfds);\n        struct timeval tv = {5, 0}; /* 5 second timeout */\n        select(fd + 1, NULL, &wfds, NULL, &tv);\n\n        int err;\n        socklen_t len = sizeof(err);\n        getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len);\n        if (err != 0) {\n            fprintf(stderr, \"Connect failed: %s\\n\", strerror(err));\n            close(fd);\n            return -1;\n        }\n    }\n    return fd;\n}",
+          "code_language": "c",
+          "key_points": [
+            "fcntl(fd, F_SETFL, flags | O_NONBLOCK) makes a socket non-blocking",
+            "Non-blocking read returns -1 with EAGAIN when no data is available",
+            "Non-blocking connect returns -1 with EINPROGRESS -- use select for writability to detect completion",
+            "Check both EAGAIN and EWOULDBLOCK for portability",
+            "Essential for event-driven single-threaded servers"
+          ],
+          "gotchas": [
+            "EAGAIN and EWOULDBLOCK may have different values on some platforms -- check both",
+            "Non-blocking connect requires checking SO_ERROR with getsockopt after select reports writable",
+            "Forgetting to handle partial writes on non-blocking sockets leads to data loss",
+            "O_NONBLOCK affects ALL operations on the fd, not just read/write"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `fcntl(fd, F_SETFL, flags | O_NONBLOCK)` to make a socket non-blocking. Operations return -1 with `EAGAIN`/`EWOULDBLOCK` instead of blocking. Use with select/poll for event-driven I/O.",
+          "pseudo_code": "",
+          "actual_code": "int flags = fcntl(fd, F_GETFL, 0);\nfcntl(fd, F_SETFL, flags | O_NONBLOCK);\n\nssize_t n = read(fd, buf, sizeof(buf));\nif (n == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {\n    /* No data right now -- try again later */\n}",
+          "code_language": "c",
+          "key_points": [
+            "O_NONBLOCK via fcntl makes all operations non-blocking",
+            "EAGAIN/EWOULDBLOCK means 'try again later'"
+          ],
+          "gotchas": [
+            "Always check for both EAGAIN and EWOULDBLOCK -- they can differ on some platforms"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does getaddrinfo() work for DNS resolution and protocol-independent addressing?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["getaddrinfo", "DNS", "addrinfo", "freeaddrinfo", "protocol-independent"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`getaddrinfo()` is the modern, protocol-independent way to resolve hostnames and service names to socket addresses. It replaces the deprecated `gethostbyname()`.\n\n**Signature**:\n```c\nint getaddrinfo(const char *node, const char *service,\n                const struct addrinfo *hints, struct addrinfo **res);\n```\n\n- `node` -- Hostname (\"example.com\") or IP string (\"1.2.3.4\").\n- `service` -- Port number (\"80\") or service name (\"http\").\n- `hints` -- Filter criteria (address family, socket type, etc.).\n- `res` -- Output: linked list of results.\n\n**The `hints` struct** filters results:\n- `ai_family = AF_UNSPEC` -- Return both IPv4 and IPv6 results.\n- `ai_socktype = SOCK_STREAM` -- Only TCP results.\n- `ai_flags = AI_PASSIVE` -- For servers: fill in wildcard address (use with `node = NULL`).\n\n**Each result** in the linked list contains a ready-to-use `struct sockaddr` and its length. You can pass them directly to `socket()`, `bind()`, and `connect()`.\n\n**Memory**: You must call `freeaddrinfo(res)` when done.\n\n**Error handling**: Returns 0 on success, non-zero error code. Use `gai_strerror()` to convert the error code to a string (not `perror()` or `strerror()`).",
+          "pseudo_code": "1. Set hints: family=AF_UNSPEC, socktype=SOCK_STREAM\n2. getaddrinfo(hostname, port_str, &hints, &results)\n3. Loop through results linked list:\n   a. fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol)\n   b. connect(fd, res->ai_addr, res->ai_addrlen)\n   c. If success, break\n4. freeaddrinfo(results)",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netdb.h>\n\nint connect_to_host(const char *host, const char *port) {\n    struct addrinfo hints, *res, *p;\n    int sockfd;\n\n    memset(&hints, 0, sizeof(hints));\n    hints.ai_family = AF_UNSPEC;     /* IPv4 or IPv6 */\n    hints.ai_socktype = SOCK_STREAM; /* TCP */\n\n    int status = getaddrinfo(host, port, &hints, &res);\n    if (status != 0) {\n        fprintf(stderr, \"getaddrinfo: %s\\n\", gai_strerror(status));\n        return -1;\n    }\n\n    /* Try each result until one works */\n    for (p = res; p != NULL; p = p->ai_next) {\n        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);\n        if (sockfd == -1) continue;\n\n        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == 0) {\n            break; /* Success */\n        }\n        close(sockfd);\n    }\n\n    freeaddrinfo(res); /* Free the linked list */\n\n    if (p == NULL) {\n        fprintf(stderr, \"Failed to connect to %s:%s\\n\", host, port);\n        return -1;\n    }\n\n    return sockfd;\n}\n\nint main(void) {\n    int fd = connect_to_host(\"example.com\", \"80\");\n    if (fd >= 0) {\n        printf(\"Connected!\\n\");\n        close(fd);\n    }\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "getaddrinfo replaces gethostbyname -- it is thread-safe and protocol-independent",
+            "Returns a linked list of results; try each until one works",
+            "Use AI_PASSIVE flag with node=NULL for server bind addresses",
+            "Must call freeaddrinfo() to free the result linked list",
+            "Use gai_strerror() for error messages, not strerror()"
+          ],
+          "gotchas": [
+            "getaddrinfo can block for DNS resolution -- consider using it in a separate thread for non-blocking servers",
+            "Forgetting freeaddrinfo() causes a memory leak",
+            "gethostbyname is deprecated, not thread-safe, and IPv4-only -- always use getaddrinfo",
+            "Error codes from getaddrinfo are NOT errno values -- use gai_strerror(), not perror()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`getaddrinfo(host, port, &hints, &res)` resolves hostnames to socket addresses. Returns a linked list of results. Use `gai_strerror()` for errors. Free with `freeaddrinfo()`.",
+          "pseudo_code": "",
+          "actual_code": "struct addrinfo hints = {0}, *res;\nhints.ai_family = AF_UNSPEC;\nhints.ai_socktype = SOCK_STREAM;\ngetaddrinfo(\"example.com\", \"80\", &hints, &res);\n\nint fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);\nconnect(fd, res->ai_addr, res->ai_addrlen);\nfreeaddrinfo(res);",
+          "code_language": "c",
+          "key_points": [
+            "Protocol-independent replacement for gethostbyname",
+            "Must call freeaddrinfo() when done"
+          ],
+          "gotchas": [
+            "Use gai_strerror() for errors, not perror() -- getaddrinfo does not set errno"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a simple HTTP client in C using sockets?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["http", "client", "GET", "request", "response"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "HTTP/1.1 is a text-based protocol over TCP. A minimal HTTP client:\n1. Resolves the hostname and connects to port 80.\n2. Sends an HTTP request (text).\n3. Reads the HTTP response.\n\n**HTTP GET request format**:\n```\nGET /path HTTP/1.1\\r\\n\nHost: hostname\\r\\n\nConnection: close\\r\\n\n\\r\\n\n```\n\n**Key details**:\n- Lines are terminated by `\\r\\n` (CRLF).\n- The `Host` header is mandatory in HTTP/1.1.\n- `Connection: close` tells the server to close after the response (simplifies our read loop).\n- An empty line (`\\r\\n`) marks the end of headers.\n\n**Reading the response**: Since we set `Connection: close`, we read until `read()` returns 0 (server closed connection). The response contains headers followed by a blank line, then the body.\n\n**Limitations**: This does not handle HTTPS (needs TLS via OpenSSL/mbedTLS), chunked transfer encoding, redirects, or HTTP/2.",
+          "pseudo_code": "1. getaddrinfo(hostname, \"80\", &hints, &res)\n2. socket + connect to the resolved address\n3. snprintf the HTTP GET request into a buffer\n4. send the request\n5. Loop: read response until read returns 0\n6. Print response\n7. close + freeaddrinfo",
+          "actual_code": "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <unistd.h>\n#include <sys/socket.h>\n#include <netdb.h>\n\n#define BUFSIZE 4096\n\nint main(int argc, char *argv[]) {\n    const char *host = (argc > 1) ? argv[1] : \"example.com\";\n    const char *path = (argc > 2) ? argv[2] : \"/\";\n\n    /* Resolve and connect */\n    struct addrinfo hints = {0}, *res, *p;\n    hints.ai_family = AF_UNSPEC;\n    hints.ai_socktype = SOCK_STREAM;\n\n    int status = getaddrinfo(host, \"80\", &hints, &res);\n    if (status != 0) {\n        fprintf(stderr, \"getaddrinfo: %s\\n\", gai_strerror(status));\n        return 1;\n    }\n\n    int sockfd = -1;\n    for (p = res; p; p = p->ai_next) {\n        sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);\n        if (sockfd == -1) continue;\n        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == 0) break;\n        close(sockfd);\n        sockfd = -1;\n    }\n    freeaddrinfo(res);\n\n    if (sockfd == -1) {\n        fprintf(stderr, \"Could not connect to %s\\n\", host);\n        return 1;\n    }\n\n    /* Build and send HTTP request */\n    char request[1024];\n    int reqlen = snprintf(request, sizeof(request),\n        \"GET %s HTTP/1.1\\r\\n\"\n        \"Host: %s\\r\\n\"\n        \"Connection: close\\r\\n\"\n        \"\\r\\n\", path, host);\n\n    write(sockfd, request, reqlen);\n\n    /* Read response */\n    char buf[BUFSIZE];\n    ssize_t n;\n    while ((n = read(sockfd, buf, BUFSIZE - 1)) > 0) {\n        buf[n] = '\\0';\n        printf(\"%s\", buf);\n    }\n\n    close(sockfd);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "HTTP is text over TCP: send request lines terminated by CRLF, blank line ends headers",
+            "Host header is mandatory in HTTP/1.1",
+            "Connection: close simplifies reading -- just read until EOF",
+            "Use getaddrinfo for DNS resolution instead of hardcoding IPs",
+            "This handles HTTP only -- HTTPS requires TLS (OpenSSL/mbedTLS)"
+          ],
+          "gotchas": [
+            "Forgetting \\r\\n line terminators produces malformed HTTP that servers reject",
+            "Without Connection: close, HTTP/1.1 uses keep-alive by default and the server won't close the connection",
+            "This does not handle chunked transfer encoding -- real HTTP clients need to parse Content-Length or chunk headers",
+            "No HTTPS support -- connecting to port 443 without TLS handshake will fail"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Connect to port 80, send `GET / HTTP/1.1\\r\\nHost: ...\\r\\nConnection: close\\r\\n\\r\\n`, then read until EOF. HTTP is just text over TCP.",
+          "pseudo_code": "",
+          "actual_code": "/* After connecting to host:80 */\nchar req[512];\nsnprintf(req, sizeof(req),\n    \"GET / HTTP/1.1\\r\\n\"\n    \"Host: example.com\\r\\n\"\n    \"Connection: close\\r\\n\\r\\n\");\nwrite(sockfd, req, strlen(req));\n\nchar buf[4096];\nssize_t n;\nwhile ((n = read(sockfd, buf, sizeof(buf) - 1)) > 0) {\n    buf[n] = '\\0';\n    printf(\"%s\", buf);\n}",
+          "code_language": "c",
+          "key_points": [
+            "HTTP = text protocol: GET line + Host header + blank line",
+            "Connection: close makes server close after response"
+          ],
+          "gotchas": [
+            "Lines must end with \\r\\n (CRLF), not just \\n"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key differences between TCP and UDP for socket programming interviews?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["tcp", "udp", "comparison", "reliability", "connection"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "This is one of the most common interview questions on networking. Here is a thorough comparison:\n\n| Feature | TCP | UDP |\n|---------|-----|-----|\n| Connection | Connection-oriented (3-way handshake) | Connectionless |\n| Reliability | Guaranteed delivery (ACKs, retransmissions) | No delivery guarantee |\n| Ordering | In-order delivery | No ordering guarantee |\n| Flow control | Yes (sliding window) | No |\n| Congestion control | Yes (slow start, AIMD) | No |\n| Message boundaries | Byte stream (no boundaries) | Datagram (preserves boundaries) |\n| Speed | Slower (overhead) | Faster (minimal overhead) |\n| Header size | 20-60 bytes | 8 bytes |\n| Socket type | SOCK_STREAM | SOCK_DGRAM |\n| System calls | connect/accept/send/recv | sendto/recvfrom |\n\n**When to use TCP**:\n- File transfer, web (HTTP), email, SSH\n- Any protocol requiring reliable, ordered delivery\n- When data integrity matters more than latency\n\n**When to use UDP**:\n- DNS queries, DHCP, video/audio streaming, online games\n- When low latency matters more than reliability\n- When the application can handle packet loss\n- Multicast/broadcast (TCP is point-to-point only)\n\n**Interview tip**: TCP guarantees delivery to the receiving TCP stack, but NOT to the application. If the receiver crashes after the kernel ACKed but before the app read() the data, it is lost. Similarly, `send()` returning success means data is in the kernel buffer, not that the peer received it.",
+          "pseudo_code": "TCP flow:\n  Server: socket -> bind -> listen -> accept -> recv/send -> close\n  Client: socket -> connect -> send/recv -> close\n\nUDP flow:\n  Server: socket -> bind -> recvfrom/sendto -> close\n  Client: socket -> sendto/recvfrom -> close",
+          "actual_code": "#include <stdio.h>\n#include <string.h>\n#include <sys/socket.h>\n#include <netinet/in.h>\n#include <unistd.h>\n\n/* TCP: byte stream, no message boundaries */\nvoid tcp_example(void) {\n    int fd = socket(AF_INET, SOCK_STREAM, 0); /* TCP */\n    /* Must connect before sending */\n    /* send(fd, data, len, 0); -- byte stream */\n    /* Two send() calls may arrive as one recv() */\n    close(fd);\n}\n\n/* UDP: datagram, preserves message boundaries */\nvoid udp_example(void) {\n    int fd = socket(AF_INET, SOCK_DGRAM, 0); /* UDP */\n    /* No connect needed */\n    struct sockaddr_in dest = {0};\n    dest.sin_family = AF_INET;\n    dest.sin_port = htons(9090);\n    /* sendto(fd, data, len, 0, &dest, sizeof(dest)); */\n    /* Each sendto = exactly one datagram received */\n    close(fd);\n}\n\n/* Common interview question: message framing for TCP */\n/* Since TCP is a byte stream, you need a protocol to\n   delimit messages. Common approaches: */\n/* 1. Length prefix: send 4-byte length, then data */\n/* 2. Delimiter: use \\n or \\0 to mark end of message */\n/* 3. Fixed-size messages */\n\n/* Length-prefixed send */\nint send_message(int fd, const char *msg, size_t len) {\n    uint32_t net_len = htonl((uint32_t)len);\n    write(fd, &net_len, sizeof(net_len));  /* send length */\n    write(fd, msg, len);                    /* send data */\n    return 0;\n}\n\n/* Length-prefixed receive */\nint recv_message(int fd, char *buf, size_t bufsize) {\n    uint32_t net_len;\n    read(fd, &net_len, sizeof(net_len));   /* read length */\n    uint32_t msg_len = ntohl(net_len);\n    if (msg_len > bufsize) return -1;\n    read(fd, buf, msg_len);                /* read data */\n    return (int)msg_len;\n}",
+          "code_language": "c",
+          "key_points": [
+            "TCP = reliable, ordered, byte stream; UDP = unreliable, unordered, datagrams",
+            "TCP requires connection setup (3-way handshake); UDP is connectionless",
+            "TCP has no message boundaries -- you must implement framing (length prefix or delimiter)",
+            "UDP preserves message boundaries -- one sendto = one recvfrom",
+            "TCP has flow/congestion control; UDP does not",
+            "Use TCP for reliability (HTTP, FTP, SSH); UDP for speed (DNS, gaming, streaming)"
+          ],
+          "gotchas": [
+            "TCP send() success does NOT mean the peer received the data -- it means the kernel accepted it into the send buffer",
+            "TCP byte stream means two 100-byte sends may arrive as one 200-byte recv or any other split",
+            "UDP can silently drop packets -- your application must handle retransmission if needed",
+            "UDP maximum datagram is ~65507 bytes, but practical MTU is ~1472 bytes to avoid IP fragmentation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TCP = reliable, ordered, connection-oriented byte stream (`SOCK_STREAM`). UDP = unreliable, connectionless datagrams (`SOCK_DGRAM`). TCP needs connect/accept; UDP uses sendto/recvfrom. TCP has no message boundaries; UDP preserves them.",
+          "pseudo_code": "",
+          "actual_code": "/* TCP: reliable byte stream */\nint tcp = socket(AF_INET, SOCK_STREAM, 0);\nconnect(tcp, ...);  /* 3-way handshake */\nsend(tcp, data, len, 0);\n\n/* UDP: unreliable datagrams */\nint udp = socket(AF_INET, SOCK_DGRAM, 0);\nsendto(udp, data, len, 0, &dest, sizeof(dest)); /* no connect */",
+          "code_language": "c",
+          "key_points": [
+            "TCP = SOCK_STREAM (reliable); UDP = SOCK_DGRAM (fast)",
+            "TCP is a byte stream needing framing; UDP preserves message boundaries"
+          ],
+          "gotchas": [
+            "TCP send() returning success only means data is in the kernel buffer, not delivered to the peer"
+          ]
+        }
+      ]
+    }
+  ]
+}

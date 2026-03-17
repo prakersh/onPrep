@@ -1,0 +1,635 @@
+{
+  "concept_slug": "signals",
+  "questions": [
+    {
+      "title": "What is the signal() function, and why is it considered unreliable?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": ["signal", "unreliable-signals", "handler"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`signal()` is the original (pre-POSIX) API for installing signal handlers.\n\n**Prototype:**\n```c\n#include <signal.h>\ntypedef void (*sighandler_t)(int);\nsighandler_t signal(int signum, sighandler_t handler);\n```\n\n**Why it is \"unreliable\":**\n\n1. **Handler reset:** On some systems (System V), after the handler is called, the disposition is reset to `SIG_DFL`. If another signal arrives before the handler reinstalls itself, it gets the default action (which may terminate the process). This creates a race window.\n\n2. **No signal blocking:** The signal is not blocked while the handler runs. If the same signal arrives again during handler execution, the handler is interrupted recursively.\n\n3. **Implementation varies:** BSD systems do NOT reset the handler and DO block the signal during handling. This inconsistency across platforms makes `signal()` non-portable.\n\n4. **EINTR behavior:** No control over whether interrupted system calls are restarted.\n\n**Solution:** Use `sigaction()` instead. It gives explicit control over:\n- Whether the handler resets (`SA_RESETHAND`)\n- What signals are blocked during handling (`sa_mask`)\n- Whether to restart interrupted syscalls (`SA_RESTART`)\n- Whether to use the old or new signal handler prototype",
+          "pseudo_code": "signal() problems:\n  1. Handler installed\n  2. Signal arrives -> handler called\n  3. On System V: disposition reset to SIG_DFL (race window!)\n  4. Another signal arrives before handler reinstalls -> DEFAULT ACTION\n\nsigaction() fixes:\n  1. Handler installed with sigaction()\n  2. Signal arrives -> signal blocked -> handler called\n  3. Handler returns -> signal unblocked\n  4. No reset, no race window",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n\n/* Using signal() -- unreliable on System V */\nvoid old_handler(int sig) {\n    /* On System V, disposition is now SIG_DFL!\n       Another SIGINT here would kill the process */\n    signal(sig, old_handler);  /* try to reinstall (race!) */\n    printf(\"Caught signal %d (unreliable)\\n\", sig);\n}\n\n/* Using sigaction() -- reliable */\nvoid safe_handler(int sig) {\n    /* Signal is blocked during this handler (no race) */\n    /* Disposition is NOT reset */\n    const char msg[] = \"Caught signal (reliable)\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);  /* async-signal-safe */\n}\n\nint main(void) {\n    /* Unreliable way (avoid in production) */\n    signal(SIGINT, old_handler);\n\n    /* Reliable way (always prefer this) */\n    struct sigaction sa;\n    sa.sa_handler = safe_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART;  /* restart interrupted syscalls */\n    if (sigaction(SIGINT, &sa, NULL) == -1) {\n        perror(\"sigaction\");\n        return 1;\n    }\n\n    printf(\"Press Ctrl+C to test (pid=%d)\\n\", getpid());\n    pause();  /* wait for signal */\n    printf(\"Returned from pause\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "signal() behavior varies across platforms (System V vs BSD)",
+            "System V resets handler to SIG_DFL after delivery (race condition)",
+            "signal() does not block the signal during handler execution on some systems",
+            "sigaction() provides reliable, portable signal handling",
+            "Always prefer sigaction() over signal() in production code"
+          ],
+          "gotchas": [
+            "signal() semantics differ between Linux (BSD-like) and older System V",
+            "Reinstalling the handler inside signal() has a race window",
+            "signal() gives no control over SA_RESTART behavior",
+            "The return value of signal() is the previous handler (or SIG_ERR on error)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`signal()` installs a signal handler but is unreliable: on some systems it resets to SIG_DFL after delivery (race condition). Use `sigaction()` instead, which blocks the signal during handling and does not reset.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n\nvoid handler(int sig) {\n    /* safe_handler code */\n}\n\nint main(void) {\n    struct sigaction sa = { .sa_handler = handler, .sa_flags = SA_RESTART };\n    sigemptyset(&sa.sa_mask);\n    sigaction(SIGINT, &sa, NULL);  /* reliable */\n    pause();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "signal() resets handler on System V (race condition)",
+            "Always use sigaction() instead"
+          ],
+          "gotchas": [
+            "signal() behavior is platform-dependent"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does sigaction() provide reliable signal handling?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": ["sigaction", "reliable-signals", "sa_mask", "SA_RESTART"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`sigaction()` is the POSIX-standard way to examine and change signal dispositions.\n\n**Prototype:**\n```c\n#include <signal.h>\nint sigaction(int signum, const struct sigaction *act,\n              struct sigaction *oldact);\n```\n\n**struct sigaction fields:**\n- `sa_handler` -- handler function (or SIG_DFL / SIG_IGN)\n- `sa_sigaction` -- alternative handler with more info (used with SA_SIGINFO)\n- `sa_mask` -- additional signals to block during handler execution\n- `sa_flags` -- behavior flags\n\n**Important flags:**\n- `SA_RESTART` -- automatically restart interrupted system calls (read, write, accept)\n- `SA_SIGINFO` -- use `sa_sigaction` handler (gets siginfo_t with details)\n- `SA_NOCLDSTOP` -- for SIGCHLD: do not notify when children stop, only when they terminate\n- `SA_NOCLDWAIT` -- for SIGCHLD: auto-reap children (no zombies)\n- `SA_RESETHAND` -- reset to SIG_DFL after first delivery (like old signal())\n- `SA_NODEFER` -- do not block the signal during handler (like old signal())\n\n**Key guarantee:** The signal being handled is automatically blocked during handler execution (added to the mask). The `sa_mask` specifies ADDITIONAL signals to block.\n\nPassing NULL for `act` with non-NULL `oldact` queries the current disposition without changing it.",
+          "pseudo_code": "1. Fill struct sigaction:\n   sa.sa_handler = my_handler\n   sigemptyset(&sa.sa_mask)      -- no extra signals blocked\n   sigaddset(&sa.sa_mask, SIGQUIT) -- also block SIGQUIT during handler\n   sa.sa_flags = SA_RESTART       -- restart interrupted syscalls\n2. sigaction(SIGINT, &sa, &old_sa)  -- install, save old\n3. Signal SIGINT arrives:\n   a. SIGINT is blocked (automatic)\n   b. SIGQUIT is blocked (from sa_mask)\n   c. my_handler(SIGINT) runs\n   d. Handler returns, blocked signals restored\n4. sigaction(SIGINT, &old_sa, NULL) -- restore old handler",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n#include <errno.h>\n\nstatic volatile sig_atomic_t got_sigint = 0;\n\nvoid int_handler(int sig) {\n    (void)sig;\n    got_sigint = 1;\n    /* Only async-signal-safe functions here */\n    const char msg[] = \"\\nCaught SIGINT\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\n/* SA_SIGINFO handler with extra information */\nvoid info_handler(int sig, siginfo_t *info, void *ucontext) {\n    (void)ucontext;\n    char buf[128];\n    int n = snprintf(buf, sizeof(buf),\n                     \"Signal %d from PID %d, UID %d\\n\",\n                     sig, info->si_pid, info->si_uid);\n    write(STDOUT_FILENO, buf, (size_t)n);\n}\n\nint main(void) {\n    /* Basic reliable handler */\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = int_handler;\n    sigemptyset(&sa.sa_mask);\n    sigaddset(&sa.sa_mask, SIGQUIT);  /* also block SIGQUIT during handler */\n    sa.sa_flags = SA_RESTART;          /* restart interrupted syscalls */\n\n    if (sigaction(SIGINT, &sa, NULL) == -1) {\n        perror(\"sigaction\");\n        return 1;\n    }\n\n    /* SA_SIGINFO handler for detailed signal info */\n    struct sigaction sa2;\n    memset(&sa2, 0, sizeof(sa2));\n    sa2.sa_sigaction = info_handler;\n    sigemptyset(&sa2.sa_mask);\n    sa2.sa_flags = SA_SIGINFO | SA_RESTART;\n    sigaction(SIGUSR1, &sa2, NULL);\n\n    printf(\"pid=%d, send SIGINT or SIGUSR1\\n\", getpid());\n\n    while (!got_sigint) {\n        pause();  /* wait for signals */\n    }\n\n    printf(\"Exiting after SIGINT\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sigaction() provides reliable, portable signal handling",
+            "The handled signal is automatically blocked during handler execution",
+            "sa_mask specifies additional signals to block during handling",
+            "SA_RESTART restarts interrupted slow system calls automatically",
+            "SA_SIGINFO gives the handler access to siginfo_t (sender PID, UID, etc.)"
+          ],
+          "gotchas": [
+            "SA_RESTART does not restart all syscalls -- select/poll/nanosleep/pause are NOT restarted",
+            "sa_handler and sa_sigaction are typically a union -- set only one",
+            "Forgetting sigemptyset(&sa.sa_mask) leaves the mask with garbage (undefined behavior)",
+            "SIGKILL and SIGSTOP cannot be caught or ignored (sigaction returns EINVAL)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sigaction()` provides reliable signal handling: signal auto-blocked during handler, no reset, control over restart behavior. Use `sa_mask` for extra blocking, `SA_RESTART` for syscall restart, `SA_SIGINFO` for sender details.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <string.h>\n\nvoid handler(int sig) { /* async-signal-safe code */ }\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART;\n    sigaction(SIGINT, &sa, NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Signal auto-blocked during handler",
+            "SA_RESTART restarts interrupted syscalls"
+          ],
+          "gotchas": [
+            "SA_RESTART does not restart select/poll/pause"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the commonly used UNIX signals, and what are their default actions?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": ["SIGINT", "SIGTERM", "SIGKILL", "SIGSEGV", "SIGCHLD", "SIGPIPE"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Signals are software interrupts sent to processes. Each has a default action.\n\n**Key signals:**\n\n| Signal | Number | Default | Description |\n|--------|--------|---------|-------------|\n| SIGHUP | 1 | Terminate | Hangup (terminal closed) |\n| SIGINT | 2 | Terminate | Interrupt (Ctrl+C) |\n| SIGQUIT | 3 | Core dump | Quit (Ctrl+\\\\) |\n| SIGILL | 4 | Core dump | Illegal instruction |\n| SIGABRT | 6 | Core dump | abort() called |\n| SIGFPE | 8 | Core dump | Floating point exception (div by zero) |\n| SIGKILL | 9 | Terminate | Kill (cannot be caught or ignored) |\n| SIGSEGV | 11 | Core dump | Segmentation fault |\n| SIGPIPE | 13 | Terminate | Write to pipe with no reader |\n| SIGALRM | 14 | Terminate | Alarm timer expired |\n| SIGTERM | 15 | Terminate | Termination (polite kill) |\n| SIGCHLD | 17* | Ignore | Child stopped or terminated |\n| SIGCONT | 18* | Continue | Continue stopped process |\n| SIGSTOP | 19* | Stop | Stop process (cannot be caught) |\n| SIGTSTP | 20* | Stop | Terminal stop (Ctrl+Z) |\n| SIGUSR1 | 10* | Terminate | User-defined |\n| SIGUSR2 | 12* | Terminate | User-defined |\n\n*Signal numbers vary by architecture. Always use symbolic names.\n\n**Default actions:** Terminate, Terminate+Core, Stop, Continue, Ignore\n\n**Uncatchable signals:** SIGKILL (9) and SIGSTOP (19) cannot be caught, blocked, or ignored. This ensures the kernel can always terminate or stop a process.",
+          "pseudo_code": "Signal categories:\n  Terminate: SIGHUP, SIGINT, SIGTERM, SIGPIPE, SIGALRM, SIGUSR1/2\n  Core dump: SIGQUIT, SIGILL, SIGABRT, SIGFPE, SIGSEGV\n  Stop:      SIGSTOP, SIGTSTP, SIGTTIN, SIGTTOU\n  Continue:  SIGCONT\n  Ignore:    SIGCHLD, SIGURG\n\nUncatchable: SIGKILL, SIGSTOP\n\nCommon usage:\n  SIGTERM = polite shutdown request (handle gracefully)\n  SIGKILL = forced kill (cannot handle)\n  SIGINT  = Ctrl+C (interactive interrupt)\n  SIGCHLD = child terminated (reap zombies)\n  SIGPIPE = write to broken pipe (ignore in servers)",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nvoid handler(int sig) {\n    const char *name = \"UNKNOWN\";\n    switch (sig) {\n        case SIGINT:  name = \"SIGINT\";  break;\n        case SIGTERM: name = \"SIGTERM\"; break;\n        case SIGHUP:  name = \"SIGHUP\";  break;\n        case SIGUSR1: name = \"SIGUSR1\"; break;\n    }\n    char buf[64];\n    int n = snprintf(buf, sizeof(buf), \"Received %s (%d)\\n\", name, sig);\n    write(STDOUT_FILENO, buf, (size_t)n);\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART;\n\n    sigaction(SIGINT, &sa, NULL);   /* Ctrl+C */\n    sigaction(SIGTERM, &sa, NULL);  /* kill <pid> */\n    sigaction(SIGHUP, &sa, NULL);   /* terminal hangup */\n    sigaction(SIGUSR1, &sa, NULL);  /* user-defined */\n\n    /* Ignore SIGPIPE (common in servers) */\n    signal(SIGPIPE, SIG_IGN);\n\n    /* Cannot catch SIGKILL or SIGSTOP */\n    if (sigaction(SIGKILL, &sa, NULL) == -1)\n        perror(\"sigaction SIGKILL\");  /* EINVAL */\n\n    printf(\"pid=%d, waiting for signals...\\n\", getpid());\n    for (;;) pause();\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SIGKILL and SIGSTOP cannot be caught, blocked, or ignored",
+            "SIGTERM is the polite shutdown request; SIGKILL is the forced kill",
+            "SIGCHLD default is ignore; handle it to reap children",
+            "SIGPIPE should be ignored in network servers to prevent unexpected termination",
+            "Signal numbers vary by architecture; always use symbolic names"
+          ],
+          "gotchas": [
+            "SIGCHLD default is ignore, but zombies still accumulate unless you explicitly handle it",
+            "SIGPIPE kills the process by default -- servers must ignore or handle it",
+            "kill -9 (SIGKILL) does not allow cleanup -- always try SIGTERM first",
+            "SIGFPE is sent for integer division by zero, not just floating-point errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Key signals: SIGINT (Ctrl+C), SIGTERM (polite kill), SIGKILL (forced, uncatchable), SIGSEGV (segfault, core dump), SIGCHLD (child died), SIGPIPE (write to broken pipe). SIGKILL and SIGSTOP cannot be caught.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n\nint main(void) {\n    signal(SIGPIPE, SIG_IGN);  /* servers should ignore SIGPIPE */\n    /* SIGKILL/SIGSTOP cannot be caught */\n    kill(getpid(), SIGTERM);   /* send SIGTERM to self */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SIGKILL/SIGSTOP are uncatchable",
+            "SIGPIPE should be ignored in servers"
+          ],
+          "gotchas": [
+            "kill -9 allows no cleanup -- try SIGTERM first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are signal dispositions, and how do SIG_DFL, SIG_IGN, and custom handlers work?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": ["SIG_DFL", "SIG_IGN", "signal-disposition", "handler"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every signal has a **disposition** (action) that determines what happens when the signal is delivered.\n\n**Three possible dispositions:**\n\n1. **SIG_DFL (default action):** The kernel's default handling -- terminate, core dump, stop, continue, or ignore depending on the signal.\n\n2. **SIG_IGN (ignore):** The signal is silently discarded. Cannot ignore SIGKILL or SIGSTOP.\n\n3. **Custom handler:** A user-defined function that is called when the signal arrives.\n\n**Inheritance rules:**\n- `fork()`: Child inherits all dispositions from parent\n- `exec()`: Custom handlers are reset to SIG_DFL (the handler code no longer exists). SIG_IGN dispositions are preserved.\n\nThis is why shells set certain signals to SIG_IGN for background processes -- the ignore disposition survives exec.\n\n**Checking current disposition:**\n```c\nstruct sigaction old;\nsigaction(SIGINT, NULL, &old);  /* query without changing */\nif (old.sa_handler == SIG_IGN)\n    /* signal was being ignored */\n```",
+          "pseudo_code": "Dispositions:\n  SIG_DFL = kernel default (terminate/core/stop/ignore)\n  SIG_IGN = discard signal silently\n  handler = user function called on delivery\n\nAcross fork(): all dispositions inherited\nAcross exec():\n  - Custom handlers -> SIG_DFL (handler code is gone)\n  - SIG_IGN -> SIG_IGN (preserved)\n  - SIG_DFL -> SIG_DFL (preserved)\n\nShell pattern for background jobs:\n  signal(SIGINT, SIG_IGN)  // survives exec\n  exec(background_command)",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nvoid my_handler(int sig) {\n    write(STDOUT_FILENO, \"handled!\\n\", 9);\n}\n\nint main(void) {\n    /* Set to default */\n    signal(SIGINT, SIG_DFL);  /* Ctrl+C will terminate */\n\n    /* Ignore */\n    signal(SIGINT, SIG_IGN);  /* Ctrl+C has no effect */\n\n    /* Custom handler */\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = my_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = 0;\n    sigaction(SIGINT, &sa, NULL);\n\n    /* Query current disposition without changing it */\n    struct sigaction old;\n    sigaction(SIGUSR1, NULL, &old);\n    if (old.sa_handler == SIG_DFL)\n        printf(\"SIGUSR1: default action\\n\");\n    else if (old.sa_handler == SIG_IGN)\n        printf(\"SIGUSR1: ignored\\n\");\n    else\n        printf(\"SIGUSR1: custom handler\\n\");\n\n    /* Respect inherited SIG_IGN (shell backgrounded us) */\n    sigaction(SIGINT, NULL, &old);\n    if (old.sa_handler != SIG_IGN) {\n        sa.sa_handler = my_handler;\n        sigaction(SIGINT, &sa, NULL);\n    }\n    /* If shell set SIG_IGN, we respect it */\n\n    printf(\"pid=%d\\n\", getpid());\n    pause();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Three dispositions: SIG_DFL, SIG_IGN, or custom handler",
+            "Custom handlers reset to SIG_DFL across exec; SIG_IGN is preserved",
+            "fork inherits all signal dispositions",
+            "SIGKILL/SIGSTOP cannot be set to SIG_IGN or a handler",
+            "Check for inherited SIG_IGN before overriding (respect shell's setting)"
+          ],
+          "gotchas": [
+            "After exec, handler addresses are meaningless so they reset to SIG_DFL",
+            "SIG_IGN survives exec, which is how shells implement background job ignore",
+            "Ignoring SIGCHLD with SIG_IGN has the side effect of auto-reaping children",
+            "Some signals like SIGCONT have effects even when ignored (continue stopped process)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Signal dispositions: SIG_DFL (default), SIG_IGN (ignore), or custom handler. fork inherits all; exec resets handlers to SIG_DFL but preserves SIG_IGN. SIGKILL/SIGSTOP cannot be changed.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n\nint main(void) {\n    signal(SIGPIPE, SIG_IGN);     /* ignore broken pipe */\n    signal(SIGINT, SIG_DFL);      /* default (terminate) */\n    /* Custom: use sigaction (see other answers) */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SIG_DFL/SIG_IGN/handler are the three options",
+            "SIG_IGN survives exec; handlers reset to SIG_DFL"
+          ],
+          "gotchas": [
+            "Ignoring SIGCHLD auto-reaps children (side effect)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do signal masks work with sigprocmask() and sigpending()?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": ["sigprocmask", "sigpending", "signal-mask", "blocking"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Every process (and thread) has a **signal mask** -- a set of signals currently blocked from delivery. Blocked signals are held as **pending** and delivered when unblocked.\n\n**sigprocmask() -- modify signal mask:**\n```c\n#include <signal.h>\nint sigprocmask(int how, const sigset_t *set, sigset_t *oldset);\n```\n\n`how` values:\n- `SIG_BLOCK` -- add `set` to the current mask (OR)\n- `SIG_UNBLOCK` -- remove `set` from the current mask\n- `SIG_SETMASK` -- replace the mask entirely with `set`\n\n**sigpending() -- check pending signals:**\n```c\nint sigpending(sigset_t *set);\n```\nReturns the set of signals that are currently pending (sent but blocked).\n\n**Signal set operations:**\n```c\nsigemptyset(&set);        /* clear all */\nsigfillset(&set);         /* set all */\nsigaddset(&set, SIGINT);  /* add one */\nsigdelset(&set, SIGINT);  /* remove one */\nsigismember(&set, SIGINT); /* test membership */\n```\n\n**Key points:**\n- Blocking delays delivery; it does NOT discard the signal\n- Standard signals are not queued: if the same signal arrives multiple times while blocked, only one is delivered when unblocked\n- SIGKILL and SIGSTOP cannot be blocked",
+          "pseudo_code": "1. Create a signal set: sigemptyset(&set); sigaddset(&set, SIGINT)\n2. Block signals: sigprocmask(SIG_BLOCK, &set, &old)\n   -- SIGINT is now blocked (held pending if sent)\n3. Do critical section work (no SIGINT interruption)\n4. Check pending: sigpending(&pending); sigismember(&pending, SIGINT)\n5. Restore old mask: sigprocmask(SIG_SETMASK, &old, NULL)\n   -- If SIGINT was pending, it is now delivered",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n\nvoid handler(int sig) {\n    const char msg[] = \"SIGINT delivered!\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\nint main(void) {\n    /* Install SIGINT handler */\n    struct sigaction sa = { .sa_handler = handler, .sa_flags = 0 };\n    sigemptyset(&sa.sa_mask);\n    sigaction(SIGINT, &sa, NULL);\n\n    /* Block SIGINT */\n    sigset_t block_set, old_set;\n    sigemptyset(&block_set);\n    sigaddset(&block_set, SIGINT);\n    sigprocmask(SIG_BLOCK, &block_set, &old_set);\n\n    printf(\"SIGINT blocked. Send Ctrl+C within 5 seconds...\\n\");\n    sleep(5);  /* SIGINT cannot be delivered during this time */\n\n    /* Check if SIGINT is pending */\n    sigset_t pending;\n    sigpending(&pending);\n    if (sigismember(&pending, SIGINT))\n        printf(\"SIGINT is pending (was sent while blocked)\\n\");\n    else\n        printf(\"No SIGINT pending\\n\");\n\n    /* Unblock -- pending SIGINT is delivered NOW */\n    printf(\"Unblocking SIGINT...\\n\");\n    sigprocmask(SIG_SETMASK, &old_set, NULL);\n\n    printf(\"After unblock\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Signal mask blocks delivery but does not discard signals",
+            "SIG_BLOCK adds to mask; SIG_UNBLOCK removes; SIG_SETMASK replaces",
+            "sigpending() shows which blocked signals are waiting for delivery",
+            "Standard signals are not queued -- multiple identical signals collapse to one",
+            "Always initialize sigset_t with sigemptyset or sigfillset before use"
+          ],
+          "gotchas": [
+            "Uninitialized sigset_t has undefined content -- always call sigemptyset/sigfillset first",
+            "SIGKILL and SIGSTOP cannot be blocked (silently ignored if added to mask)",
+            "Unblocking a pending signal delivers it before sigprocmask returns",
+            "In multithreaded programs, use pthread_sigmask instead of sigprocmask"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sigprocmask()` blocks/unblocks signal delivery. Blocked signals become pending (not lost). `sigpending()` checks what is pending. Standard signals are not queued (multiple occurrences collapse to one).",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n\nint main(void) {\n    sigset_t set, old;\n    sigemptyset(&set);\n    sigaddset(&set, SIGINT);\n    sigprocmask(SIG_BLOCK, &set, &old);  /* block SIGINT */\n    /* ... critical section ... */\n    sigprocmask(SIG_SETMASK, &old, NULL); /* restore */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Blocking delays, does not discard",
+            "Standard signals collapse (not queued)"
+          ],
+          "gotchas": [
+            "Always initialize sigset_t with sigemptyset first"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are async-signal-safe functions, and why do they matter?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": ["async-signal-safe", "signal-handler", "reentrant"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A signal handler can interrupt a process at ANY point -- even in the middle of a library function call. If the handler calls the same library function, it can corrupt shared internal state.\n\n**Async-signal-safe functions** are functions that are guaranteed to work correctly when called from a signal handler, even if they interrupt a non-reentrant function.\n\n**Safe functions include (partial list from POSIX):**\n`_exit, write, read, open, close, fork, execve, kill, signal, sigaction, sigprocmask, sigemptyset, sigaddset, alarm, pause, getpid, access, chdir, dup, dup2, fcntl, fstat, link, lseek, mkdir, pipe, rename, rmdir, stat, umask, unlink, wait, waitpid`\n\n**NOT safe (common offenders):**\n`printf, fprintf, malloc, free, fflush, syslog, strtol, snprintf` (on many systems)\n\n**Why printf is unsafe:**\nprintf uses an internal buffer with a lock. If a signal interrupts printf (lock held), and the handler calls printf too, it deadlocks or corrupts the buffer.\n\n**Best practices:**\n1. Keep signal handlers minimal\n2. Only call async-signal-safe functions\n3. Set a `volatile sig_atomic_t` flag and check it in the main loop\n4. Use `write()` instead of `printf()` for output",
+          "pseudo_code": "UNSAFE:\n  main thread: printf(\"hello\")  -- holds internal lock\n  signal arrives, handler called\n  handler: printf(\"signal!\")  -- DEADLOCK or CORRUPTION\n\nSAFE:\n  handler: write(fd, \"signal!\\n\", 8)  -- no internal state\n  handler: got_signal = 1  -- set volatile flag\n  main loop: if (got_signal) { handle it; got_signal = 0; }",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <string.h>\n#include <stdio.h>\n#include <errno.h>\n\nstatic volatile sig_atomic_t got_signal = 0;\n\n/* CORRECT: only async-signal-safe operations */\nvoid safe_handler(int sig) {\n    (void)sig;\n    got_signal = 1;  /* set flag */\n    /* write() is async-signal-safe */\n    const char msg[] = \"Signal caught (write is safe)\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\n/* WRONG: calls non-async-signal-safe functions */\n/*\nvoid unsafe_handler(int sig) {\n    printf(\"Signal %d caught\\n\", sig);  // BAD: printf is not safe\n    char *p = malloc(100);                // BAD: malloc is not safe\n    free(p);                              // BAD: free is not safe\n}\n*/\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = safe_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART;\n    sigaction(SIGUSR1, &sa, NULL);\n\n    printf(\"pid=%d, send SIGUSR1\\n\", getpid());\n\n    /* Main loop checks the flag */\n    while (!got_signal) {\n        pause();  /* async-signal-safe */\n    }\n\n    /* Safe to use printf here (not in handler) */\n    printf(\"Signal processed in main loop\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Signal handlers can interrupt code at any point (between any two instructions)",
+            "Only async-signal-safe functions are allowed in handlers",
+            "write() is safe; printf/malloc/free are NOT safe",
+            "Best pattern: set a volatile sig_atomic_t flag, handle in main loop",
+            "Save and restore errno in the handler (errno is global)"
+          ],
+          "gotchas": [
+            "printf in a signal handler can deadlock (holds internal mutex)",
+            "malloc/free in a handler can corrupt the heap",
+            "errno must be saved/restored in the handler since safe functions may modify it",
+            "snprintf is NOT async-signal-safe on all platforms (despite being useful)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Signal handlers can only safely call async-signal-safe functions (`write`, `_exit`, `kill`, etc.). `printf`, `malloc`, `free` are NOT safe. Best practice: set a `volatile sig_atomic_t` flag in handler, process in main loop.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n\nstatic volatile sig_atomic_t flag = 0;\n\nvoid handler(int sig) {\n    (void)sig;\n    flag = 1;  /* only safe operation */\n    write(1, \"sig\\n\", 4);  /* write is async-signal-safe */\n}\n\nint main(void) {\n    signal(SIGUSR1, handler);\n    while (!flag) pause();\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Only async-signal-safe functions in handlers",
+            "volatile sig_atomic_t for flag communication"
+          ],
+          "gotchas": [
+            "printf in a handler can deadlock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do kill() and raise() send signals to processes?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": ["kill", "raise", "signal-sending"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`kill()` sends a signal to a process or process group. `raise()` sends a signal to the calling process itself.\n\n**Prototypes:**\n```c\n#include <signal.h>\nint kill(pid_t pid, int sig);\nint raise(int sig);  /* equivalent to kill(getpid(), sig) */\n```\n\n**kill() pid interpretations:**\n- `pid > 0` -- send to specific process\n- `pid == 0` -- send to all processes in the caller's process group\n- `pid == -1` -- send to all processes the caller has permission to signal (except init)\n- `pid < -1` -- send to all processes in process group `|pid|`\n\n**Permission rules:**\n- Root can send signals to any process\n- Non-root: real or effective UID of sender must match real or saved set-user-ID of the target\n- Exception: SIGCONT can be sent to any process in the same session\n\n**Special: sig == 0 (null signal):**\nNo signal is sent, but error checking is performed. Used to check if a process exists:\n```c\nif (kill(pid, 0) == -1 && errno == ESRCH)\n    /* process does not exist */\n```",
+          "pseudo_code": "kill(pid, sig):\n  pid > 0:  send to specific process\n  pid == 0: send to own process group\n  pid == -1: send to all permissible processes\n  pid < -1: send to process group |pid|\n\nkill(pid, 0): check if process exists (no signal sent)\n  errno == ESRCH: process does not exist\n  errno == EPERM: exists but no permission\n\nraise(sig) == kill(getpid(), sig)",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <errno.h>\n#include <sys/wait.h>\n\nint main(void) {\n    /* Send signal to self */\n    printf(\"Raising SIGUSR1 to self\\n\");\n    signal(SIGUSR1, SIG_IGN);  /* ignore so we don't die */\n    raise(SIGUSR1);  /* equivalent to kill(getpid(), SIGUSR1) */\n\n    /* Check if a process exists */\n    pid_t test_pid = 99999;\n    if (kill(test_pid, 0) == -1) {\n        if (errno == ESRCH)\n            printf(\"Process %d does not exist\\n\", test_pid);\n        else if (errno == EPERM)\n            printf(\"Process %d exists but no permission\\n\", test_pid);\n    }\n\n    /* Send to child process */\n    pid_t child = fork();\n    if (child == 0) {\n        signal(SIGUSR1, SIG_DFL);  /* default: terminate */\n        pause();  /* wait for signal */\n        _exit(0);\n    }\n\n    sleep(1);\n    printf(\"Sending SIGUSR1 to child %d\\n\", child);\n    kill(child, SIGUSR1);  /* terminate child */\n\n    int status;\n    waitpid(child, &status, 0);\n    if (WIFSIGNALED(status))\n        printf(\"Child killed by signal %d\\n\", WTERMSIG(status));\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "kill() sends signal to process(es); raise() sends to self",
+            "pid > 0 = specific; 0 = own group; -1 = all; < -1 = group |pid|",
+            "kill(pid, 0) is a process existence check",
+            "Permission: sender UID must match target real/saved-set-user-ID",
+            "SIGCONT can always be sent within the same session"
+          ],
+          "gotchas": [
+            "kill with pid == -1 sends to ALL processes you can signal (not just your children)",
+            "The process may have exited between your kill(pid, 0) check and the real kill()",
+            "Sending to a zombie does nothing (signal delivered to the zombie entry, which ignores it)",
+            "raise() in a multithreaded program sends to the calling thread, not the process"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`kill(pid, sig)` sends a signal. `raise(sig)` sends to self. `kill(pid, 0)` checks if process exists. Negative pid sends to process group.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <errno.h>\n\nint main(void) {\n    raise(SIGUSR1);         /* signal self */\n    kill(getpid(), SIGINT); /* same as raise(SIGINT) */\n    if (kill(12345, 0) == -1 && errno == ESRCH)\n        ; /* process 12345 does not exist */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "kill with sig=0 is a process existence check",
+            "Negative pid targets process group"
+          ],
+          "gotchas": [
+            "kill(-1, sig) sends to ALL processes you can signal"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do alarm() and pause() work for simple timing?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": ["alarm", "pause", "SIGALRM", "timer"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`alarm()` sets a timer that delivers `SIGALRM` to the process after the specified number of seconds.\n\n**Prototypes:**\n```c\n#include <unistd.h>\nunsigned int alarm(unsigned int seconds);\nint pause(void);\n```\n\n**alarm():**\n- `alarm(n)` -- deliver SIGALRM in `n` seconds\n- `alarm(0)` -- cancel any pending alarm\n- Returns the number of seconds remaining from a previous alarm (0 if none)\n- There is only ONE alarm timer per process (setting a new one cancels the old)\n\n**pause():**\n- Suspends the process until any signal is delivered\n- Always returns -1 with errno == EINTR (interrupted by signal)\n- Never returns successfully (by definition)\n\n**Implementing sleep() with alarm():**\nYou can implement a crude `sleep()` using `alarm()` + `pause()`, but there are race conditions between setting the alarm and calling pause. If the alarm fires between `alarm()` and `pause()`, `pause()` blocks forever.\n\n**Modern alternatives:** `nanosleep()`, `clock_nanosleep()`, or timer_create() for more precise and flexible timing.",
+          "pseudo_code": "alarm(5):  deliver SIGALRM in 5 seconds\nalarm(0):  cancel pending alarm\nalarm(n):  returns seconds remaining from previous alarm\n\npause():   blocks until any signal is delivered\n           always returns -1 with errno=EINTR\n\nCrude sleep:\n  alarm(n)\n  pause()  -- RACE: alarm might fire before pause!\n\nBetter: use sigsuspend() to atomically unmask and wait",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <string.h>\n\nstatic volatile sig_atomic_t alarm_fired = 0;\n\nvoid alarm_handler(int sig) {\n    (void)sig;\n    alarm_fired = 1;\n    const char msg[] = \"SIGALRM!\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = alarm_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = 0;\n    sigaction(SIGALRM, &sa, NULL);\n\n    /* Set a 3-second alarm */\n    printf(\"Setting alarm for 3 seconds...\\n\");\n    alarm(3);\n\n    /* Wait for the alarm */\n    pause();  /* returns after SIGALRM handler */\n    printf(\"alarm_fired = %d\\n\", alarm_fired);\n\n    /* Cancel a pending alarm */\n    alarm(10);\n    unsigned int remaining = alarm(0);  /* cancel */\n    printf(\"Cancelled alarm with %u seconds remaining\\n\", remaining);\n\n    /* Timeout pattern for I/O */\n    alarm(5);  /* 5 second timeout */\n    char buf[128];\n    printf(\"Type something (5 sec timeout): \");\n    fflush(stdout);\n    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));\n    alarm(0);  /* cancel alarm */\n    if (n > 0) {\n        buf[n] = '\\0';\n        printf(\"Read: %s\", buf);\n    } else {\n        printf(\"Timeout or error\\n\");\n    }\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "alarm() sets a one-shot SIGALRM timer (seconds granularity)",
+            "Only one alarm per process -- setting a new one cancels the old",
+            "alarm(0) cancels the pending alarm",
+            "pause() blocks until any signal; always returns -1 (EINTR)",
+            "Common use: timeout for I/O operations"
+          ],
+          "gotchas": [
+            "There is only ONE alarm per process -- multiple alarm users conflict",
+            "Race between alarm() and pause(): alarm can fire before pause starts",
+            "alarm interacts poorly with sleep() on some systems (both use SIGALRM)",
+            "For sub-second timing, use nanosleep() or timer_create() instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`alarm(n)` delivers SIGALRM in n seconds (one timer per process). `alarm(0)` cancels. `pause()` blocks until any signal. Common use: I/O timeouts.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <stdio.h>\n\nvoid handler(int sig) { (void)sig; write(1, \"alarm!\\n\", 7); }\n\nint main(void) {\n    signal(SIGALRM, handler);\n    alarm(2);  /* SIGALRM in 2 seconds */\n    pause();   /* wait for it */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "One alarm per process",
+            "alarm(0) cancels pending alarm"
+          ],
+          "gotchas": [
+            "alarm conflicts with sleep() on some systems"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle SIGCHLD to properly reap child processes?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": ["SIGCHLD", "waitpid", "zombie", "reaping"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SIGCHLD is sent to the parent whenever a child process terminates (or stops, unless `SA_NOCLDSTOP` is set). Proper handling prevents zombie accumulation.\n\n**The correct SIGCHLD handler:**\n\n```c\nvoid sigchld_handler(int sig) {\n    int saved_errno = errno;  /* save errno */\n    while (waitpid(-1, NULL, WNOHANG) > 0)\n        ;  /* reap ALL terminated children */\n    errno = saved_errno;  /* restore errno */\n}\n```\n\n**Why the loop with WNOHANG is critical:**\n- Multiple children can terminate before the handler runs (signals are not queued)\n- Without the loop, only one child is reaped per signal delivery\n- WNOHANG ensures we do not block if no more children are available\n\n**The errno save/restore:**\n- `waitpid()` can modify `errno` (it is async-signal-safe but writes errno)\n- If the handler interrupts code that was about to check errno, it would get the wrong value\n\n**Alternative: SIG_IGN:**\n```c\nsignal(SIGCHLD, SIG_IGN);  /* auto-reap, no zombies */\n```\nBut then `wait()` cannot retrieve child exit status.\n\n**Flags:**\n- `SA_NOCLDSTOP` -- only deliver SIGCHLD for termination, not stop/continue\n- `SA_NOCLDWAIT` -- auto-reap children (like SIG_IGN but handler still called)",
+          "pseudo_code": "SIGCHLD handler:\n  1. Save errno\n  2. Loop: while (waitpid(-1, &status, WNOHANG) > 0)\n     - Process child status if needed (log it, etc.)\n  3. Restore errno\n\nWhy loop:\n  - 3 children exit simultaneously\n  - Only 1 SIGCHLD delivered (not queued)\n  - Loop reaps all 3 in one handler invocation",
+          "actual_code": "#include <signal.h>\n#include <sys/wait.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <string.h>\n#include <errno.h>\n\nstatic volatile sig_atomic_t child_count = 0;\n\nvoid sigchld_handler(int sig) {\n    (void)sig;\n    int saved_errno = errno;\n    pid_t pid;\n    int status;\n\n    /* Reap ALL available children */\n    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {\n        child_count--;\n        /* write is async-signal-safe; printf is NOT */\n        char buf[64];\n        int n;\n        if (WIFEXITED(status))\n            n = snprintf(buf, sizeof(buf), \"Child %d exited (%d)\\n\",\n                         pid, WEXITSTATUS(status));\n        else\n            n = snprintf(buf, sizeof(buf), \"Child %d killed\\n\", pid);\n        write(STDOUT_FILENO, buf, (size_t)n);\n    }\n\n    errno = saved_errno;\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = sigchld_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;\n    sigaction(SIGCHLD, &sa, NULL);\n\n    /* Fork 5 children */\n    for (int i = 0; i < 5; i++) {\n        if (fork() == 0) {\n            sleep((unsigned)i);  /* stagger exits */\n            _exit(i);\n        }\n        child_count++;\n    }\n\n    /* Parent: do work while children run */\n    while (child_count > 0) {\n        pause();  /* wait for signals */\n    }\n\n    printf(\"All children reaped\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SIGCHLD handler must loop with waitpid(-1, &status, WNOHANG)",
+            "Signals are not queued -- multiple children may exit before handler runs",
+            "Save and restore errno in the handler",
+            "SA_NOCLDSTOP avoids SIGCHLD for stopped children",
+            "signal(SIGCHLD, SIG_IGN) auto-reaps but loses exit status information"
+          ],
+          "gotchas": [
+            "Without the WNOHANG loop, multiple simultaneous child exits leave zombies",
+            "SA_NOCLDWAIT + handler: handler is called but wait status may be unavailable",
+            "The handler must not call printf (not async-signal-safe)",
+            "SIGCHLD can also be sent when a child is stopped or continued (use SA_NOCLDSTOP)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Handle SIGCHLD by looping `waitpid(-1, NULL, WNOHANG)` until it returns <= 0. Loop is needed because signals are not queued. Save/restore errno. Use `SA_NOCLDSTOP` to ignore stop notifications.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <sys/wait.h>\n#include <errno.h>\n\nvoid sigchld(int sig) {\n    (void)sig;\n    int e = errno;\n    while (waitpid(-1, NULL, WNOHANG) > 0);\n    errno = e;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Loop with WNOHANG -- signals not queued",
+            "Save/restore errno"
+          ],
+          "gotchas": [
+            "Without loop, simultaneous child exits leave zombies"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What happens when a signal interrupts a system call (SA_RESTART and EINTR)?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": ["EINTR", "SA_RESTART", "interrupted-syscall"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When a signal is delivered while a process is blocked in a \"slow\" system call (one that can block indefinitely), the syscall can be interrupted.\n\n**Two behaviors:**\n\n1. **Without SA_RESTART:** The syscall returns -1 with `errno = EINTR`. The application must check for EINTR and retry.\n\n2. **With SA_RESTART:** The kernel automatically restarts the syscall after the handler returns. The application never sees EINTR.\n\n**Slow system calls that can be interrupted:**\n- `read()` / `write()` on pipes, sockets, terminals\n- `accept()` / `connect()`\n- `wait()` / `waitpid()`\n- `flock()` / `fcntl()` locking\n- `ioctl()`, `select()`, `poll()`\n\n**SA_RESTART does NOT restart ALL syscalls.** These are NEVER automatically restarted:\n- `select()`, `poll()`, `epoll_wait()`\n- `nanosleep()`, `clock_nanosleep()`\n- `pause()`, `sigsuspend()`\n- `connect()` (TCP, once interrupted)\n- `msgsnd()` / `msgrcv()` with `IPC_NOWAIT`\n\nFor these, you MUST handle EINTR manually.",
+          "pseudo_code": "Without SA_RESTART:\n  read() blocked on pipe\n  signal arrives -> handler runs\n  read() returns -1, errno = EINTR\n  Application: if (errno == EINTR) retry read()\n\nWith SA_RESTART:\n  read() blocked on pipe\n  signal arrives -> handler runs\n  kernel restarts read() automatically\n  Application: never sees EINTR\n\nException: select/poll/epoll ALWAYS return EINTR\n  Must handle manually regardless of SA_RESTART",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <stdio.h>\n#include <errno.h>\n#include <string.h>\n\nvoid handler(int sig) {\n    (void)sig;\n    const char msg[] = \"Signal caught\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\n/* EINTR-safe read wrapper */\nssize_t safe_read(int fd, void *buf, size_t n) {\n    ssize_t nread;\n    while ((nread = read(fd, buf, n)) == -1 && errno == EINTR)\n        ;  /* retry on EINTR */\n    return nread;\n}\n\nint main(void) {\n    /* Handler WITHOUT SA_RESTART */\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = 0;  /* no SA_RESTART */\n    sigaction(SIGUSR1, &sa, NULL);\n\n    printf(\"pid=%d, reading stdin (send SIGUSR1 to interrupt)...\\n\", getpid());\n\n    char buf[128];\n    ssize_t n = read(STDIN_FILENO, buf, sizeof(buf));\n    if (n == -1) {\n        if (errno == EINTR)\n            printf(\"read interrupted by signal (EINTR)\\n\");\n        else\n            perror(\"read\");\n    } else {\n        buf[n] = '\\0';\n        printf(\"Read: %s\", buf);\n    }\n\n    /* With SA_RESTART: read would auto-restart */\n    sa.sa_flags = SA_RESTART;\n    sigaction(SIGUSR1, &sa, NULL);\n    printf(\"Now with SA_RESTART -- read will auto-restart\\n\");\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Slow syscalls return EINTR when interrupted by a signal",
+            "SA_RESTART makes the kernel auto-restart most interrupted syscalls",
+            "select/poll/epoll/nanosleep are NEVER auto-restarted",
+            "Always have an EINTR retry loop for non-restartable syscalls",
+            "Fast syscalls (reading from disk) are not interrupted"
+          ],
+          "gotchas": [
+            "SA_RESTART does NOT restart select/poll/epoll/nanosleep",
+            "connect() is tricky: once interrupted, you must use select/poll to check completion",
+            "Some libraries (glibc) wrap certain functions with EINTR retry loops internally",
+            "A global EINTR wrapper is a good utility: while (ret == -1 && errno == EINTR) retry"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Signals interrupt slow syscalls. Without `SA_RESTART`, they return -1 with `EINTR` (must retry). With `SA_RESTART`, kernel auto-restarts most (but not select/poll/epoll/nanosleep).",
+          "pseudo_code": "",
+          "actual_code": "#include <unistd.h>\n#include <errno.h>\n\n/* EINTR-safe read */\nssize_t safe_read(int fd, void *buf, size_t n) {\n    ssize_t r;\n    do { r = read(fd, buf, n); } while (r == -1 && errno == EINTR);\n    return r;\n}",
+          "code_language": "c",
+          "key_points": [
+            "SA_RESTART auto-restarts most syscalls",
+            "select/poll/epoll must handle EINTR manually"
+          ],
+          "gotchas": [
+            "SA_RESTART does not restart all syscalls"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between blocked and pending signals?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": ["blocked", "pending", "signal-mask", "delivery"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Understanding the signal delivery pipeline is essential:\n\n**Signal lifecycle:**\n1. **Generated:** A signal is sent to a process (via `kill()`, kernel event, etc.)\n2. **Pending:** The signal exists but has not been delivered yet\n3. **Delivered:** The signal's action is performed (handler called, default action, or ignored)\n\n**Blocked signals:**\n- Signals in the process's signal mask are **blocked**\n- A blocked signal that is generated becomes **pending**\n- It remains pending until it is unblocked\n- When unblocked, it is delivered (handler runs or default action)\n\n**Key distinction:**\n- **Blocked** = a state of the signal mask (affects future delivery)\n- **Pending** = a signal has been sent but not yet delivered (waiting)\n- A signal can be pending because it is blocked, or simply because the kernel has not scheduled delivery yet\n\n**Standard signals (non-real-time):**\n- NOT queued: if the same signal is generated multiple times while blocked, only ONE delivery occurs when unblocked\n- The pending set is a bitmask (one bit per signal)\n\n**Real-time signals (SIGRTMIN..SIGRTMAX):**\n- ARE queued: each instance is delivered separately\n- Delivered in order (lowest number first)",
+          "pseudo_code": "Signal states:\n  mask[SIGINT] = 1       -> SIGINT is BLOCKED\n  pending[SIGINT] = 0    -> no SIGINT waiting\n\n  kill(pid, SIGINT) sent:\n  pending[SIGINT] = 1    -> SIGINT is now PENDING (blocked, so not delivered)\n\n  kill(pid, SIGINT) sent again:\n  pending[SIGINT] = 1    -> STILL just 1 (not queued for standard signals)\n\n  sigprocmask(SIG_UNBLOCK, {SIGINT}):\n  mask[SIGINT] = 0       -> unblocked\n  pending[SIGINT] = 1    -> delivered NOW (handler called ONCE, not twice)\n  pending[SIGINT] = 0    -> cleared after delivery",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nstatic volatile sig_atomic_t count = 0;\n\nvoid handler(int sig) {\n    (void)sig;\n    count++;\n    const char msg[] = \"SIGUSR1 delivered\\n\";\n    write(STDOUT_FILENO, msg, sizeof(msg) - 1);\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sigaction(SIGUSR1, &sa, NULL);\n\n    /* Block SIGUSR1 */\n    sigset_t block, old;\n    sigemptyset(&block);\n    sigaddset(&block, SIGUSR1);\n    sigprocmask(SIG_BLOCK, &block, &old);\n    printf(\"SIGUSR1 blocked\\n\");\n\n    /* Send SIGUSR1 three times while blocked */\n    kill(getpid(), SIGUSR1);\n    kill(getpid(), SIGUSR1);\n    kill(getpid(), SIGUSR1);\n\n    /* Check pending */\n    sigset_t pend;\n    sigpending(&pend);\n    printf(\"SIGUSR1 pending: %s\\n\",\n           sigismember(&pend, SIGUSR1) ? \"yes\" : \"no\");  /* yes */\n\n    /* Unblock -- handler called only ONCE (not queued) */\n    printf(\"Unblocking...\\n\");\n    sigprocmask(SIG_SETMASK, &old, NULL);\n\n    printf(\"Handler called %d time(s)\\n\", count);  /* 1 */\n\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Blocked = in the signal mask; Pending = sent but not yet delivered",
+            "Blocked signals become pending until unblocked",
+            "Standard signals are NOT queued (multiple sends = one delivery)",
+            "Real-time signals ARE queued (each sent instance is delivered)",
+            "sigpending() checks which signals are currently pending"
+          ],
+          "gotchas": [
+            "Sending the same standard signal 10 times while blocked results in only 1 delivery",
+            "Unblocking a pending signal delivers it before sigprocmask returns",
+            "SIGKILL/SIGSTOP are never pending (they are immediately acted upon)",
+            "In multithreaded programs, signals can be pending for the process or for individual threads"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Blocked = signal mask prevents delivery. Pending = signal sent but not yet delivered (e.g., because blocked). Standard signals not queued: 3 sends while blocked = 1 delivery when unblocked.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n#include <stdio.h>\n\nint main(void) {\n    sigset_t set;\n    sigemptyset(&set);\n    sigaddset(&set, SIGUSR1);\n    sigprocmask(SIG_BLOCK, &set, NULL);  /* block */\n    kill(getpid(), SIGUSR1);  /* now pending */\n    sigset_t pend;\n    sigpending(&pend);\n    printf(\"%d\\n\", sigismember(&pend, SIGUSR1));  /* 1 */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Blocked delays delivery; pending means waiting",
+            "Standard signals: not queued"
+          ],
+          "gotchas": [
+            "Multiple identical signals while blocked collapse to one delivery"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are real-time signals, and how do they differ from standard signals?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": ["real-time-signals", "SIGRTMIN", "SIGRTMAX", "queuing"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "POSIX real-time signals provide enhanced semantics compared to standard signals.\n\n**Range:** `SIGRTMIN` to `SIGRTMAX` (typically 32 to 64, giving ~32 signals)\n\n**Key differences from standard signals:**\n\n| Feature | Standard (1-31) | Real-time (SIGRTMIN-SIGRTMAX) |\n|---------|-----------------|------------------------------|\n| Queuing | NOT queued (collapses) | Queued (each instance delivered) |\n| Ordering | Undefined | Lowest number first |\n| Data | No payload | Can carry `sigval` (int or pointer) |\n| Default action | Varies | Terminate |\n\n**Sending with data:**\n```c\n#include <signal.h>\nunion sigval val;\nval.sival_int = 42;\nsigqueue(pid, SIGRTMIN, val);  /* send with payload */\n```\n\n**Receiving data (SA_SIGINFO handler):**\n```c\nvoid handler(int sig, siginfo_t *info, void *ucontext) {\n    printf(\"Received value: %d\\n\", info->si_value.sival_int);\n}\n```\n\n**Use cases:**\n- Application-specific notifications between processes\n- When multiple signals of the same type must not be lost\n- Timer notifications (timer_create with SIGEV_SIGNAL)\n- When you need to pass data with the signal",
+          "pseudo_code": "Standard signal: multiple sends while blocked -> 1 delivery\nReal-time signal: multiple sends while blocked -> multiple deliveries (queued)\n\nSending:\n  sigqueue(pid, SIGRTMIN+0, val)  -- val.sival_int = 42\n\nReceiving (SA_SIGINFO handler):\n  info->si_value.sival_int  -- the sent value\n  info->si_pid              -- sender PID\n  info->si_uid              -- sender UID\n\nDelivery order:\n  SIGRTMIN+0 delivered before SIGRTMIN+1\n  Multiple SIGRTMIN+0 delivered in FIFO order",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nvoid rt_handler(int sig, siginfo_t *info, void *uctx) {\n    (void)uctx;\n    char buf[128];\n    int n = snprintf(buf, sizeof(buf),\n                     \"RT signal %d, value=%d, from pid=%d\\n\",\n                     sig, info->si_value.sival_int, info->si_pid);\n    write(STDOUT_FILENO, buf, (size_t)n);\n}\n\nint main(void) {\n    /* Install real-time signal handler with SA_SIGINFO */\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_sigaction = rt_handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = SA_SIGINFO;\n    sigaction(SIGRTMIN, &sa, NULL);\n\n    /* Block the signal, queue multiple instances */\n    sigset_t block, old;\n    sigemptyset(&block);\n    sigaddset(&block, SIGRTMIN);\n    sigprocmask(SIG_BLOCK, &block, &old);\n\n    /* Send 3 instances with different values */\n    union sigval val;\n    for (int i = 1; i <= 3; i++) {\n        val.sival_int = i * 10;\n        sigqueue(getpid(), SIGRTMIN, val);\n    }\n\n    /* Unblock -- all 3 will be delivered (queued!) */\n    printf(\"Unblocking (expect 3 deliveries):\\n\");\n    sigprocmask(SIG_SETMASK, &old, NULL);\n\n    printf(\"Range: SIGRTMIN=%d, SIGRTMAX=%d\\n\", SIGRTMIN, SIGRTMAX);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Real-time signals are queued (each instance delivered separately)",
+            "Range: SIGRTMIN to SIGRTMAX (use symbolic constants, not numbers)",
+            "Can carry data via sigqueue() and sigval union",
+            "Delivered in order: lowest signal number first, FIFO for same signal",
+            "Require SA_SIGINFO handler to access the payload"
+          ],
+          "gotchas": [
+            "The queue has a limit (RLIMIT_SIGPENDING); sigqueue fails with EAGAIN when full",
+            "SIGRTMIN/SIGRTMAX values differ across systems -- never hardcode numbers",
+            "kill() cannot send a payload -- must use sigqueue()",
+            "Real-time signal numbers may overlap with system-specific signals on some platforms"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Real-time signals (SIGRTMIN..SIGRTMAX) are queued (no collapse), delivered in order, and can carry data via `sigqueue()` + `sigval`. Standard signals are not queued and carry no data.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <unistd.h>\n\nint main(void) {\n    union sigval val;\n    val.sival_int = 42;\n    sigqueue(getpid(), SIGRTMIN, val);  /* queued with data */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Queued (not collapsed like standard signals)",
+            "sigqueue sends with payload"
+          ],
+          "gotchas": [
+            "Queue has a limit (RLIMIT_SIGPENDING)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Why must signal handler variables use volatile sig_atomic_t?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": ["volatile", "sig_atomic_t", "signal-handler", "compiler-optimization"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When a signal handler sets a flag that is read by the main program, the variable must be declared as `volatile sig_atomic_t` for correct behavior.\n\n**volatile:**\n- Tells the compiler that the variable can change at any time (asynchronously)\n- Prevents the compiler from optimizing away reads (e.g., caching the value in a register)\n- Without volatile, the compiler might generate code that never re-reads the variable from memory\n\n**sig_atomic_t:**\n- Guaranteed to be read and written atomically (in a single instruction)\n- Accessing it cannot be interrupted by a signal in the middle of the operation\n- Typically defined as `int` or `long` on most platforms\n- The ONLY type that POSIX guarantees can be safely accessed from a signal handler and main code\n\n**Why both are needed:**\n- `volatile` alone: compiler reads from memory, but the read/write might not be atomic (e.g., 64-bit value on 32-bit CPU = two instructions)\n- `sig_atomic_t` alone: compiler might cache the value in a register and never see the handler's update\n\n**POSIX rule:** The only type that can be safely shared between a signal handler and the main program (without additional synchronization) is `volatile sig_atomic_t`.",
+          "pseudo_code": "WITHOUT volatile:\n  int flag = 0;  // compiler caches in register\n  while (!flag) { /* loop */ }  // compiler: flag is always 0, optimize to infinite loop\n  // signal handler sets flag = 1 -> main loop never sees it!\n\nWITH volatile sig_atomic_t:\n  volatile sig_atomic_t flag = 0;\n  while (!flag) { /* loop */ }  // compiler: must re-read flag from memory each iteration\n  // signal handler sets flag = 1 -> main loop sees it on next check",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\n/* CORRECT: volatile sig_atomic_t */\nstatic volatile sig_atomic_t got_signal = 0;\n\n/* WRONG: compiler may optimize away the read */\n/* static int got_signal = 0; */\n\nvoid handler(int sig) {\n    (void)sig;\n    got_signal = 1;  /* atomic write */\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sa.sa_flags = 0;\n    sigaction(SIGINT, &sa, NULL);\n\n    printf(\"Press Ctrl+C...\\n\");\n\n    /* This loop MUST see the handler's write */\n    while (!got_signal) {\n        /* Without volatile, compiler may optimize to:\n           if (!got_signal) while(1) {}  -- infinite loop! */\n        pause();  /* or usleep or real work */\n    }\n\n    printf(\"Signal received, exiting cleanly\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "volatile prevents compiler from caching the variable in a register",
+            "sig_atomic_t guarantees atomic read/write (single instruction)",
+            "Both are needed: volatile for visibility, sig_atomic_t for atomicity",
+            "Only type safe to share between handler and main code without sync",
+            "Typically values 0 and 1 are used (flag pattern)"
+          ],
+          "gotchas": [
+            "Without volatile, -O2 optimization can make the main loop infinite",
+            "sig_atomic_t is only guaranteed for simple load/store, NOT for increment (flag++)",
+            "Complex data structures cannot be safely shared via sig_atomic_t alone",
+            "C11 _Atomic provides stronger guarantees but is not async-signal-safe for complex types"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`volatile` prevents compiler from caching the value (must re-read from memory). `sig_atomic_t` guarantees atomic access. Together: safe flag between signal handler and main code. Without volatile, compiler optimizations can create infinite loops.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n\nstatic volatile sig_atomic_t flag = 0;\n\nvoid handler(int sig) {\n    (void)sig;\n    flag = 1;  /* atomic, visible to main */\n}\n\nint main(void) {\n    signal(SIGINT, handler);\n    while (!flag) pause();  /* compiler re-reads flag each time */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "volatile = memory visibility; sig_atomic_t = atomicity",
+            "Only safe type for handler-main communication"
+          ],
+          "gotchas": [
+            "Without volatile, -O2 can create infinite loops"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does sigsuspend() atomically unmask signals and wait?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": ["sigsuspend", "atomic", "signal-wait"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`sigsuspend()` atomically replaces the signal mask and suspends the process until a signal is delivered. This solves a critical race condition.\n\n**Prototype:**\n```c\n#include <signal.h>\nint sigsuspend(const sigset_t *mask);\n```\n\n**The race condition without sigsuspend:**\n```c\nsigprocmask(SIG_UNBLOCK, &set, NULL);  // unblock SIGINT\npause();  // wait for signal\n// RACE: SIGINT can arrive between unblock and pause!\n// If it does, pause() blocks forever.\n```\n\n**With sigsuspend (atomic):**\n```c\nsigset_t empty;\nsigemptyset(&empty);\nsigsuspend(&empty);  // atomically: set mask to empty + wait\n// No race window -- mask change and wait are one operation\n```\n\n`sigsuspend()` temporarily replaces the mask with `*mask`, then suspends. When a signal (not in `*mask`) is caught and the handler returns, sigsuspend restores the original mask and returns -1 with `errno = EINTR`.\n\n**Common pattern:**\n1. Block signals you are waiting for\n2. Do setup work (critical section)\n3. `sigsuspend(&mask_without_those_signals)` -- atomically unmask and wait\n4. Handler runs\n5. sigsuspend returns, original mask is restored",
+          "pseudo_code": "RACE (broken):\n  sigprocmask(SIG_UNBLOCK, {SIGINT})  // step 1\n  -- SIGINT arrives HERE, handler runs --\n  pause()  // step 2: blocks forever! signal already delivered\n\nSAFE (sigsuspend):\n  sigsuspend(&mask_without_SIGINT)  // atomic step 1+2\n  -- mask changed AND suspended in one operation\n  -- SIGINT arrives -> handler runs -> sigsuspend returns\n  -- original mask restored automatically",
+          "actual_code": "#include <signal.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nstatic volatile sig_atomic_t got_it = 0;\n\nvoid handler(int sig) {\n    (void)sig;\n    got_it = 1;\n}\n\nint main(void) {\n    struct sigaction sa;\n    memset(&sa, 0, sizeof(sa));\n    sa.sa_handler = handler;\n    sigemptyset(&sa.sa_mask);\n    sigaction(SIGUSR1, &sa, NULL);\n\n    /* Block SIGUSR1 during critical setup */\n    sigset_t block, old;\n    sigemptyset(&block);\n    sigaddset(&block, SIGUSR1);\n    sigprocmask(SIG_BLOCK, &block, &old);\n\n    printf(\"pid=%d, SIGUSR1 blocked during setup\\n\", getpid());\n    /* ... critical setup work ... */\n    /* SIGUSR1 arriving now is held pending */\n\n    /* Atomically unmask SIGUSR1 and wait */\n    sigset_t wait_mask;\n    sigemptyset(&wait_mask);  /* empty = all signals unblocked */\n\n    if (!got_it) {\n        printf(\"Waiting for SIGUSR1 (atomic unmask+wait)...\\n\");\n        sigsuspend(&wait_mask);  /* atomic: unmask + suspend */\n        /* Handler runs; then original mask (SIGUSR1 blocked) restored */\n    }\n\n    /* Restore original mask */\n    sigprocmask(SIG_SETMASK, &old, NULL);\n\n    printf(\"Signal received, continuing\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "sigsuspend atomically sets the mask and suspends the process",
+            "Solves the race between sigprocmask(UNBLOCK) and pause()",
+            "Always returns -1 with errno = EINTR after a signal is caught",
+            "The original signal mask is restored when sigsuspend returns",
+            "Pass a mask WITHOUT the signals you are waiting for"
+          ],
+          "gotchas": [
+            "sigsuspend always returns -1 (EINTR), never 0",
+            "The mask argument specifies what to set, not what to unblock",
+            "sigsuspend does not restart on SA_RESTART (it always returns after handling)",
+            "If the signal arrives before sigsuspend (while still pending), sigsuspend returns immediately"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`sigsuspend(&mask)` atomically replaces the signal mask with `mask` and suspends until a signal arrives. Solves the unblock+pause race. Always returns -1 (EINTR). Restores original mask on return.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n\nint main(void) {\n    sigset_t block, empty;\n    sigemptyset(&block);\n    sigaddset(&block, SIGUSR1);\n    sigprocmask(SIG_BLOCK, &block, NULL);\n    /* ... setup ... */\n    sigemptyset(&empty);\n    sigsuspend(&empty);  /* atomic unmask + wait */\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Atomic unmask + suspend (no race window)",
+            "Always returns -1 with EINTR"
+          ],
+          "gotchas": [
+            "Pass the mask you WANT during suspend, not what to unblock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does signal handling work in multithreaded programs (pthread_sigmask)?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": ["pthread_sigmask", "threads", "signal-handling", "sigwait"],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Signal handling in multithreaded programs is significantly more complex:\n\n**Key rules:**\n1. Each thread has its own signal mask (set with `pthread_sigmask()`)\n2. Signal dispositions (handlers) are per-process (shared by all threads)\n3. Process-directed signals (e.g., from `kill()`) are delivered to any thread that has the signal unblocked\n4. Thread-directed signals (e.g., from `pthread_kill()`) are delivered to the specific thread\n5. SIGFPE, SIGSEGV, SIGBUS are delivered to the thread that caused them\n\n**Recommended pattern (dedicated signal-handling thread):**\n1. Block all signals in `main()` before creating any threads\n2. All threads inherit the blocked mask\n3. Create one dedicated thread that calls `sigwait()` in a loop\n4. `sigwait()` synchronously dequeues signals (safer than async handlers)\n\nThis avoids the complexity of async signal handlers in multithreaded code entirely.\n\n**pthread_sigmask** -- per-thread version of sigprocmask:\n```c\nint pthread_sigmask(int how, const sigset_t *set, sigset_t *oldset);\n```\n\n**sigwait** -- synchronously wait for a signal:\n```c\nint sigwait(const sigset_t *set, int *sig);\n```",
+          "pseudo_code": "Recommended pattern:\n1. main: sigfillset(&block); pthread_sigmask(SIG_BLOCK, &block, NULL)\n2. Create worker threads (they inherit blocked mask)\n3. Create signal thread:\n   while (1) {\n     sigwait(&expected_signals, &sig)\n     switch (sig) {\n       case SIGTERM: graceful_shutdown(); break;\n       case SIGHUP:  reload_config(); break;\n     }\n   }\n4. Worker threads never deal with signals directly",
+          "actual_code": "#include <signal.h>\n#include <pthread.h>\n#include <stdio.h>\n#include <unistd.h>\n#include <string.h>\n\nstatic volatile sig_atomic_t running = 1;\n\nvoid *signal_thread(void *arg) {\n    sigset_t *set = (sigset_t *)arg;\n    int sig;\n\n    while (running) {\n        /* Synchronously wait for signals */\n        int ret = sigwait(set, &sig);\n        if (ret != 0) continue;\n\n        switch (sig) {\n            case SIGINT:\n                printf(\"Signal thread: SIGINT received, shutting down\\n\");\n                running = 0;\n                break;\n            case SIGHUP:\n                printf(\"Signal thread: SIGHUP received, reloading config\\n\");\n                break;\n            default:\n                printf(\"Signal thread: signal %d received\\n\", sig);\n                break;\n        }\n    }\n    return NULL;\n}\n\nvoid *worker_thread(void *arg) {\n    int id = *(int *)arg;\n    while (running) {\n        printf(\"Worker %d doing work...\\n\", id);\n        sleep(2);\n    }\n    printf(\"Worker %d exiting\\n\", id);\n    return NULL;\n}\n\nint main(void) {\n    /* Block all signals in main thread */\n    sigset_t block_all;\n    sigfillset(&block_all);\n    pthread_sigmask(SIG_BLOCK, &block_all, NULL);\n\n    /* Signals we want to handle */\n    sigset_t handle_set;\n    sigemptyset(&handle_set);\n    sigaddset(&handle_set, SIGINT);\n    sigaddset(&handle_set, SIGHUP);\n\n    /* Start dedicated signal thread */\n    pthread_t sig_tid;\n    pthread_create(&sig_tid, NULL, signal_thread, &handle_set);\n\n    /* Start worker threads (inherit blocked mask) */\n    pthread_t workers[2];\n    int ids[] = {1, 2};\n    for (int i = 0; i < 2; i++)\n        pthread_create(&workers[i], NULL, worker_thread, &ids[i]);\n\n    printf(\"pid=%d, press Ctrl+C to stop\\n\", getpid());\n\n    /* Wait for workers */\n    for (int i = 0; i < 2; i++)\n        pthread_join(workers[i], NULL);\n    pthread_join(sig_tid, NULL);\n\n    printf(\"Clean shutdown complete\\n\");\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Each thread has its own signal mask (pthread_sigmask)",
+            "Signal dispositions (handlers) are shared by all threads",
+            "Dedicated signal thread with sigwait() is the recommended pattern",
+            "Block all signals before creating threads; only signal thread unblocks them",
+            "Process-directed signals go to any thread with the signal unblocked"
+          ],
+          "gotchas": [
+            "Using sigprocmask in a multithreaded program is undefined -- use pthread_sigmask",
+            "Async signal handlers in multithreaded programs are extremely hard to get right",
+            "sigwait does not invoke a handler -- it returns the signal number synchronously",
+            "SIGFPE/SIGSEGV/SIGBUS are always delivered to the offending thread"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "In multithreaded programs: block all signals in main, create a dedicated thread that calls `sigwait()` in a loop. Use `pthread_sigmask()` (not `sigprocmask`). Avoids async handler complexity.",
+          "pseudo_code": "",
+          "actual_code": "#include <signal.h>\n#include <pthread.h>\n#include <stdio.h>\n\nvoid *sig_thread(void *arg) {\n    sigset_t *set = (sigset_t *)arg;\n    int sig;\n    sigwait(set, &sig);\n    printf(\"Got signal %d\\n\", sig);\n    return NULL;\n}\n\nint main(void) {\n    sigset_t set;\n    sigfillset(&set);\n    pthread_sigmask(SIG_BLOCK, &set, NULL);\n    pthread_t tid;\n    sigset_t wait_set;\n    sigemptyset(&wait_set);\n    sigaddset(&wait_set, SIGINT);\n    pthread_create(&tid, NULL, sig_thread, &wait_set);\n    pthread_join(tid, NULL);\n    return 0;\n}",
+          "code_language": "c",
+          "key_points": [
+            "Dedicated signal thread + sigwait is the pattern",
+            "Use pthread_sigmask, not sigprocmask"
+          ],
+          "gotchas": [
+            "sigprocmask in multithreaded programs is undefined behavior"
+          ]
+        }
+      ]
+    }
+  ]
+}
