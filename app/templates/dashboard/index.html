@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — onPrep{% endblock %}
+{% block title %}Dashboard — awesomePrep{% endblock %}
 {% block content %}
 {% if total_questions == 0 %}
 <div class="flex flex-col items-center justify-center min-h-[70vh] text-center fade-up">
     <div class="w-20 h-20 rounded-2xl bg-accent/10 dark:bg-accent/[.08] flex items-center justify-center mb-8">
         <svg class="w-10 h-10 text-accent/60" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25"/></svg>
     </div>
-    <h1 class="font-display text-4xl sm:text-5xl tracking-tight mb-4">Welcome to <span class="text-accent">onPrep</span></h1>
+    <h1 class="font-display text-4xl sm:text-5xl tracking-tight mb-4">Welcome to <span class="text-accent">awesomePrep</span></h1>
     <p class="text-surface-800/50 dark:text-surface-200/40 text-lg max-w-lg leading-relaxed mb-10">Master interview topics with structured study plans, detailed code walkthroughs, and quick revision cards.</p>
     <a href="/study/languages" class="group bg-accent hover:bg-accent-500 text-white text-base font-medium px-8 py-3.5 rounded-xl cursor-pointer transition-all hover:shadow-lg hover:shadow-accent/20 flex items-center gap-2">
         Start Learning
@@ -156,7 +156,7 @@
 
     // Global stats
     var totalQ = {{ total_questions }};
-    var completedCount = onprepProgress.countDone(allQids);
+    var completedCount = awesomePrepProgress.countDone(allQids);
     var pct = totalQ > 0 ? Math.round(completedCount / totalQ * 100) : 0;
 
     var elCompleted = document.getElementById('stat-completed');
@@ -177,7 +177,7 @@
         if (!card) return;
         var qids = [{{ ls.qids|join(',') }}];
         var total = {{ ls.total }};
-        var done = onprepProgress.countDone(qids);
+        var done = awesomePrepProgress.countDone(qids);
         var p = total > 0 ? Math.round(done / total * 100) : 0;
         card.querySelector('.lang-done-label').textContent = done + ' done';
         card.querySelector('.lang-pct-label').textContent = p + '%';
@@ -192,7 +192,7 @@
         var conceptSlugs = {{ ls.concepts|map(attribute='concept')|map(attribute='slug')|list|tojson }};
         var langSlug = '{{ ls.language.slug }}';
         for (var i = 0; i < concepts.length; i++) {
-            var cDone = onprepProgress.countDone(concepts[i]);
+            var cDone = awesomePrepProgress.countDone(concepts[i]);
             var cTotal = concepts[i].length;
             if (cDone > 0 && cDone < cTotal) {
                 inProgressCount++;
@@ -229,7 +229,7 @@
     }
 
     // Recently viewed
-    var recent = onprepProgress.getRecent(5);
+    var recent = awesomePrepProgress.getRecent(5);
     var recentList = document.getElementById('recent-list');
     if (recentList && recent.length > 0) {
         var html = '<div class="space-y-1">';
@@ -249,7 +249,7 @@
     document.querySelectorAll('[data-diff-qids]').forEach(function(el) {
         var qids = el.dataset.diffQids.split(',').map(Number).filter(Boolean);
         var total = parseInt(el.dataset.diffTotal) || qids.length;
-        var done = onprepProgress.countDone(qids);
+        var done = awesomePrepProgress.countDone(qids);
         var p = total > 0 ? Math.round(done / total * 100) : 0;
         el.querySelector('.diff-label').textContent = done + '/' + total;
         el.querySelector('.diff-bar').style.width = p + '%';

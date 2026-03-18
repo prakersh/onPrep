@@ -11,7 +11,7 @@ class BaseConfig:
 class DevelopmentConfig(BaseConfig):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(
-        os.path.dirname(basedir), 'instance', 'onprep.db'
+        os.path.dirname(basedir), 'instance', 'awesomeprep.db'
     )
 
 
@@ -24,7 +24,7 @@ class TestingConfig(BaseConfig):
 class ProductionConfig(BaseConfig):
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
-        'sqlite:///' + os.path.join(os.path.dirname(basedir), 'instance', 'onprep.db'),
+        'sqlite:///' + os.path.join(os.path.dirname(basedir), 'instance', 'awesomeprep.db'),
     )
 
 

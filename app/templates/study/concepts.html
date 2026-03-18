@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ language.name }} — onPrep{% endblock %}
+{% block title %}{{ language.name }} — awesomePrep{% endblock %}
 {% block content %}
 <div class="mt-2 mb-1 fade-up">
     <a href="/study/languages" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">&larr; Languages</a>
@@ -70,7 +70,7 @@
 document.querySelectorAll('[data-concept-qids]').forEach(function(card) {
     var qids = card.dataset.conceptQids.split(',').map(Number).filter(Boolean);
     var total = parseInt(card.dataset.conceptTotal) || qids.length;
-    var done = onprepProgress.countDone(qids);
+    var done = awesomePrepProgress.countDone(qids);
     var pct = total > 0 ? Math.round(done / total * 100) : 0;
 
     var label = card.querySelector('.concept-progress-label');

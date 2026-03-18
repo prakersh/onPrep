@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ concept.title }} — onPrep{% endblock %}
+{% block title %}{{ concept.title }} — awesomePrep{% endblock %}
 {% block main_class %}pt-14 flex flex-col overflow-hidden{% endblock %}
 
 {% block content %}
@@ -328,7 +328,7 @@ function showQuestion(qid, btn) {
     document.getElementById('content-area').scrollTop = 0;
     const url = new URL(window.location); url.searchParams.set('q', qid); history.replaceState(null, '', url);
     // Track view in localStorage
-    onprepProgress.markViewed(qid);
+    awesomePrepProgress.markViewed(qid);
 }
 
 function addCheckmark(el) {
@@ -344,7 +344,7 @@ function addCheckmark(el) {
 }
 
 function markDone(qid, btn) {
-    onprepProgress.markDone(qid);
+    awesomePrepProgress.markDone(qid);
     btn.textContent = 'Done';
     btn.className = 'shrink-0 text-[13px] font-medium px-3 py-1.5 rounded-lg border cursor-pointer bg-emerald-50 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400';
     document.querySelectorAll('.sidebar-q[data-qid="' + qid + '"]').forEach(el => {
@@ -851,7 +851,7 @@ setMode(currentMode);
 (function() {
     // Add checkmarks to completed questions in sidebar
     questionOrder.forEach(function(qid) {
-        if (onprepProgress.isDone(qid)) {
+        if (awesomePrepProgress.isDone(qid)) {
             document.querySelectorAll('.sidebar-q[data-qid="' + qid + '"]').forEach(function(el) {
                 el.dataset.done = 'true';
                 addCheckmark(el);
@@ -872,7 +872,7 @@ setMode(currentMode);
     if (urlQ) {
         showQuestion(parseInt(urlQ));
     } else {
-        var firstUndone = onprepProgress.firstUndone(questionOrder);
+        var firstUndone = awesomePrepProgress.firstUndone(questionOrder);
         showQuestion(firstUndone || questionOrder[0]);
     }
 })();

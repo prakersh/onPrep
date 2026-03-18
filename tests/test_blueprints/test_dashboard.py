@@ -6,7 +6,7 @@ class TestDashboard:
     def test_dashboard_empty_state(self, client):
         resp = client.get('/')
         assert resp.status_code == 200
-        assert b'Welcome to' in resp.data and b'onPrep' in resp.data
+        assert b'Welcome to' in resp.data and b'awesomePrep' in resp.data
 
     def test_dashboard_renders_with_content(self, client, db, sample_language, sample_concept, sample_question):
         """Dashboard renders when content exists (progress is now client-side)."""
@@ -37,4 +37,4 @@ class TestDashboard:
         """Dashboard includes localStorage hydration script."""
         resp = client.get('/')
         assert resp.status_code == 200
-        assert b'onprepProgress' in resp.data
+        assert b'awesomePrepProgress' in resp.data

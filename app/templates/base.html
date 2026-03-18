@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}onPrep{% endblock %}</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a09'/><text x='16' y='22' text-anchor='middle' font-family='system-ui' font-weight='700' font-size='18' fill='%232aa198'>P</text></svg>">
+    <title>{% block title %}awesomePrep{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%230a0a09'/><text x='16' y='22' text-anchor='middle' font-family='system-ui' font-weight='700' font-size='18' fill='%232aa198'>A</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
     tailwind.config = {
@@ -188,7 +188,7 @@
                 <div class="w-7 h-7 rounded-lg bg-accent/10 dark:bg-accent/15 flex items-center justify-center group-hover:bg-accent/20 transition-colors">
                     <svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342"/></svg>
                 </div>
-                <span class="font-display text-xl tracking-tight">onPrep</span>
+                <span class="font-display text-xl tracking-tight">awesomePrep</span>
             </a>
             <div class="flex items-center gap-1">
                 <a href="/" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Dashboard</a>
@@ -222,8 +222,8 @@
                 <span>Built by <a href="https://onllm.dev" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">onllm.dev</a></span>
             </div>
             <div class="flex items-center gap-4 text-surface-800/30 dark:text-surface-200/25">
-                <a href="https://github.com/prakersh/onPrep" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">GitHub</a>
-                <a href="https://buymeacoffee.com/prakersh" target="_blank" rel="noopener" class="hover:text-warm-400 transition-colors cursor-pointer">Support onPrep</a>
+                <a href="https://github.com/prakersh/awesomePrep" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">GitHub</a>
+                <a href="https://buymeacoffee.com/prakersh" target="_blank" rel="noopener" class="hover:text-warm-400 transition-colors cursor-pointer">Support awesomePrep</a>
             </div>
         </div>
     </footer>
@@ -234,10 +234,10 @@
     (function(){var d=document.documentElement.classList.contains('dark');document.getElementById('hljs-dark').disabled=!d;document.getElementById('hljs-light').disabled=d})();
     hljs.highlightAll();
 
-    /* ── onPrep Progress (localStorage) ── */
-    const onprepProgress = {
-        _key: 'onprep:progress',
-        _recentKey: 'onprep:recent',
+    /* ── awesomePrep Progress (localStorage) ── */
+    const awesomePrepProgress = {
+        _key: 'awesomeprep:progress',
+        _recentKey: 'awesomeprep:recent',
         _getAll() {
             try { return JSON.parse(localStorage.getItem(this._key)) || {}; } catch(e) { return {}; }
         },
