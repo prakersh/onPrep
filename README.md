@@ -1,12 +1,12 @@
-# awesomePrep
+# [awesomePrep](https://awesomeprep.prakersh.in)
 
-Open source interview prep for software engineers. 1100+ questions across Python and C with runnable code, expected output, SVG visualizations, and text-to-speech narration. No accounts required -- progress is saved in your browser.
+Open source interview prep for software engineers. 774 questions across Python and C with runnable code, expected output, SVG visualizations, and text-to-speech narration. No accounts required -- progress is saved in your browser.
 
-**Live:** [awesomeprep.prakersh.in](https://awesomeprep.prakersh.in)
+**Try it now -->** [awesomeprep.prakersh.in](https://awesomeprep.prakersh.in)
 
 ## Features
 
-- **1100+ questions** across 53 modules (28 Python, 25 C)
+- **774 questions** across 53 modules (28 Python, 25 C)
 - **Dual study modes** -- Detailed (full explanation, pseudo code, actual code, gotchas) and Quick (key points, minimal code)
 - **Expected output** on every code block -- collapsible panel inside the code card
 - **28 SVG visualizations** for data structures, memory layout, sorting algorithms, process lifecycle
@@ -18,8 +18,8 @@ Open source interview prep for software engineers. 1100+ questions across Python
 ## Quick Start
 
 ```bash
-git clone https://github.com/prakersh/awesomePrep.git
-cd awesomePrep
+git clone https://github.com/prakersh/awesomeprep.git
+cd awesomeprep
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -89,4 +89,4 @@ If this project helps your interview prep:
 
 ## License
 
-MIT
+GPL-3.0. See [LICENSE](LICENSE) for details.

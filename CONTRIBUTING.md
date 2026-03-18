@@ -1,4 +1,4 @@
-# Contributing to awesomePrep
+# Contributing to [awesomePrep](https://awesomeprep.prakersh.in)
 
 Thanks for your interest in improving awesomePrep. This guide covers how to add content, fix bugs, and submit changes.
 
@@ -16,8 +16,8 @@ Thanks for your interest in improving awesomePrep. This guide covers how to add 
 ## Setup
 
 ```bash
-git clone https://github.com/prakersh/awesomePrep.git
-cd awesomePrep
+git clone https://github.com/prakersh/awesomeprep.git
+cd awesomeprep
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
