@@ -240,35 +240,33 @@
                     </div>
                     {% endfor %}
 
-                    <!-- Nav -->
-                    <div class="flex items-center justify-between mt-10 pt-5 border-t border-surface-200/60 dark:border-white/[.06]">
-                        {% if not loop.first %}
-                        <button onclick="showQuestion({{ concept.questions[loop.index0 - 1].id }})" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">&larr; Previous</button>
-                        {% else %}<span></span>{% endif %}
-                        {% if not loop.last %}
-                        <button onclick="showQuestion({{ concept.questions[loop.index0 + 1].id }})" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">Next &rarr;</button>
-                        {% else %}<span></span>{% endif %}
-                    </div>
                 </div>
             </article>
             {% endfor %}
+        </div>
 
-            <!-- Footer inside scroll area -->
-            <footer class="shrink-0 border-t border-surface-200/60 dark:border-white/[.04] mt-8">
-                <div class="px-6 sm:px-10 lg:px-12 xl:px-16 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-[13px]">
-                    <div class="flex items-center gap-2 text-surface-800/30 dark:text-surface-200/25">
-                        <div class="w-5 h-5 rounded-md bg-accent/10 flex items-center justify-center">
-                            <svg class="w-3 h-3 text-accent/60" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342"/></svg>
-                        </div>
-                        <span>Built by <a href="https://onllm.dev" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">onllm.dev</a></span>
-                    </div>
-                    <div class="flex items-center gap-4 text-surface-800/30 dark:text-surface-200/25">
-                        <a href="/landing" class="hover:text-accent transition-colors cursor-pointer">Home</a>
-                        <a href="https://github.com/prakersh/awesomePrep" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">GitHub</a>
-                        <a href="https://buymeacoffee.com/prakersh" target="_blank" rel="noopener" class="hover:text-warm-400 transition-colors cursor-pointer">Support awesomePrep</a>
-                    </div>
+        <!-- Fixed bottom bar: Nav + Footer (outside scroll area) -->
+        <div class="shrink-0 border-t border-surface-200/60 dark:border-white/[.06] bg-surface-50 dark:bg-surface-950">
+            <!-- Question nav -->
+            {% for q in concept.questions %}
+            <div class="q-nav hidden px-6 sm:px-10 lg:px-12 xl:px-16 py-2.5 flex items-center justify-between" data-qnav="{{ q.id }}">
+                {% if not loop.first %}
+                <button onclick="showQuestion({{ concept.questions[loop.index0 - 1].id }})" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">&larr; Previous</button>
+                {% else %}<span></span>{% endif %}
+                <span class="text-xs text-surface-800/25 dark:text-surface-200/15 tabular-nums">{{ loop.index }} / {{ concept.questions|length }}</span>
+                {% if not loop.last %}
+                <button onclick="showQuestion({{ concept.questions[loop.index0 + 1].id }})" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">Next &rarr;</button>
+                {% else %}<span></span>{% endif %}
+            </div>
+            {% endfor %}
+            <!-- Footer -->
+            <div class="border-t border-surface-200/40 dark:border-white/[.03] px-6 sm:px-10 lg:px-12 xl:px-16 py-3 flex items-center justify-between text-[12px] text-surface-800/25 dark:text-surface-200/20">
+                <span>Built by <a href="https://onllm.dev" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">onllm.dev</a></span>
+                <div class="flex items-center gap-3">
+                    <a href="/landing" class="hover:text-accent transition-colors cursor-pointer">Home</a>
+                    <a href="https://github.com/prakersh/awesomePrep" target="_blank" rel="noopener" class="hover:text-accent transition-colors cursor-pointer">GitHub</a>
                 </div>
-            </footer>
+            </div>
         </div>
     </div>
 </div>
@@ -332,6 +330,10 @@ function showQuestion(qid, btn) {
     document.querySelectorAll('.q-panel').forEach(el => el.classList.add('hidden'));
     const panel = document.getElementById('q-' + qid);
     if (panel) panel.classList.remove('hidden');
+    // Show matching bottom nav
+    document.querySelectorAll('.q-nav').forEach(el => el.classList.add('hidden'));
+    var nav = document.querySelector('.q-nav[data-qnav="' + qid + '"]');
+    if (nav) nav.classList.remove('hidden');
     // Sidebar highlight
     document.querySelectorAll('.sidebar-q').forEach(el => {
         const a = String(el.dataset.qid) === String(qid);
