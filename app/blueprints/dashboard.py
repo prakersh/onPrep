@@ -1,9 +1,35 @@
-from flask import Blueprint, render_template, redirect
+from flask import Blueprint, render_template, redirect, Response
 from datetime import date
 from app.extensions import db
 from app.models import Language, Question, Deadline, ScheduleItem, Concept
 
 bp = Blueprint('dashboard', __name__)
+
+
+@bp.route('/robots.txt')
+def robots():
+    content = "User-agent: *\nAllow: /\nSitemap: https://awesomeprep.prakersh.in/sitemap.xml\n"
+    return Response(content, mimetype='text/plain')
+
+
+@bp.route('/sitemap.xml')
+def sitemap():
+    languages = db.session.query(Language).filter_by(is_active=True).all()
+    urls = [
+        'https://awesomeprep.prakersh.in/landing',
+        'https://awesomeprep.prakersh.in/dashboard',
+        'https://awesomeprep.prakersh.in/study/languages',
+    ]
+    for lang in languages:
+        urls.append(f'https://awesomeprep.prakersh.in/study/{lang.slug}')
+        for c in lang.concepts:
+            urls.append(f'https://awesomeprep.prakersh.in/study/{lang.slug}/{c.slug}')
+    xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    for url in urls:
+        xml += f'  <url><loc>{url}</loc></url>\n'
+    xml += '</urlset>'
+    return Response(xml, mimetype='application/xml')
 
 
 @bp.route('/')

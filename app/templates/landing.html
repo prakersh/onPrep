@@ -1,6 +1,25 @@
 {% extends "base.html" %}
 {% block title %}awesomePrep — Interview Prep for Developers{% endblock %}
+{% block meta_description %}Free, open source interview preparation for software engineers. 1100+ questions across Python and C with runnable code, expected output, SVG visualizations, and text-to-speech narration. No signup required.{% endblock %}
+{% block og_url %}/landing{% endblock %}
+{% block canonical %}/landing{% endblock %}
 {% block main_class %}pt-14 flex flex-col{% endblock %}
+
+{% block scripts %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "awesomePrep",
+    "url": "https://awesomeprep.prakersh.in",
+    "description": "Open source interview preparation for software engineers. 1100+ questions across Python and C.",
+    "applicationCategory": "EducationalApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Person", "name": "prakersh", "url": "https://github.com/prakersh" }
+}
+</script>
+{% endblock %}
 
 {% block content %}
 <div class="flex-1 flex flex-col justify-center px-5 sm:px-8 lg:px-12 xl:px-20 py-10">
