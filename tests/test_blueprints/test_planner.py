@@ -1,81 +1,46 @@
-from datetime import date, timedelta
-from app.models import Deadline
-
-
 class TestPlannerSetup:
-    def test_setup_page(self, client, db, sample_language):
+    def test_setup_page_renders(self, client, db, sample_language):
+        """Setup page should render with language options."""
         resp = client.get('/planner/setup')
         assert resp.status_code == 200
-        assert b'Interview Date' in resp.data
+        assert b'Interview Planner' in resp.data
+        assert b'Python' in resp.data
 
-    def test_create_deadline(self, client, db, sample_language, sample_concept):
-        future = (date.today() + timedelta(days=30)).isoformat()
-        resp = client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future,
-            'company_name': 'Google',
-            'role': 'SWE',
-        }, follow_redirects=True)
+    def test_setup_page_has_form(self, client, db, sample_language):
+        """Setup page should have the add interview form."""
+        resp = client.get('/planner/setup')
         assert resp.status_code == 200
-        deadline = db.session.query(Deadline).first()
-        assert deadline is not None
-        assert deadline.company_name == 'Google'
-        assert deadline.is_active is True
+        assert b'Add Interview' in resp.data
+        assert b'interview_date' in resp.data
 
-    def test_multiple_deadlines_supported(self, client, db, sample_language, sample_concept):
-        future1 = (date.today() + timedelta(days=30)).isoformat()
-        future2 = (date.today() + timedelta(days=60)).isoformat()
-        client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future1,
-            'company_name': 'Google',
-        })
-        client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future2,
-            'company_name': 'Meta',
-        })
-        deadlines = db.session.query(Deadline).filter_by(is_active=True).all()
-        assert len(deadlines) == 2
-
-    def test_delete_deadline(self, client, db, sample_language, sample_concept):
-        future = (date.today() + timedelta(days=30)).isoformat()
-        client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future,
-            'company_name': 'Test',
-        })
-        deadline = db.session.query(Deadline).first()
-        resp = client.post(f'/planner/delete/{deadline.id}', follow_redirects=True)
+    def test_setup_page_has_localstorage_js(self, client, db, sample_language):
+        """Setup page should use localStorage for deadlines."""
+        resp = client.get('/planner/setup')
         assert resp.status_code == 200
-        assert db.session.query(Deadline).count() == 0
+        assert b'awesomeprep:deadlines' in resp.data
+
+    def test_setup_page_passes_languages_as_json(self, client, db, sample_language):
+        """Setup page should include language data for JS."""
+        resp = client.get('/planner/setup')
+        assert resp.status_code == 200
+        assert b'python' in resp.data
 
 
 class TestPlannerSchedule:
-    def test_schedule_page_no_deadline(self, client, db):
+    def test_schedule_page_renders(self, client, db):
+        """Schedule page should render (data comes from localStorage)."""
         resp = client.get('/planner/schedule')
         assert resp.status_code == 200
-        assert b'No active schedule' in resp.data
+        assert b'Study Schedules' in resp.data
 
-    def test_schedule_page_with_items(self, client, db, sample_language, sample_concept):
-        future = (date.today() + timedelta(days=30)).isoformat()
-        client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future,
-            'company_name': 'TestCorp',
-        })
+    def test_schedule_page_has_localstorage_js(self, client, db):
+        """Schedule page should read from localStorage."""
         resp = client.get('/planner/schedule')
         assert resp.status_code == 200
-        assert b'TestCorp' in resp.data
+        assert b'awesomeprep:deadlines' in resp.data
 
-    def test_schedule_detail(self, client, db, sample_language, sample_concept):
-        future = (date.today() + timedelta(days=30)).isoformat()
-        client.post('/planner/setup', data={
-            'language_id': sample_language.id,
-            'interview_date': future,
-            'company_name': 'Amazon',
-        })
-        deadline = db.session.query(Deadline).first()
-        resp = client.get(f'/planner/schedule/{deadline.id}')
+    def test_schedule_detail_page_renders(self, client, db):
+        """Schedule detail page should render (data from localStorage via query param)."""
+        resp = client.get('/planner/schedule/detail')
         assert resp.status_code == 200
-        assert b'Amazon' in resp.data
+        assert b'awesomeprep:deadlines' in resp.data

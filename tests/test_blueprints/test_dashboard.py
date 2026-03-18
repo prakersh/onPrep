@@ -1,7 +1,3 @@
-from datetime import date, timedelta
-from app.models import Deadline
-
-
 class TestHome:
     def test_home_redirect_page(self, client):
         """/ serves a JS redirect page."""
@@ -35,18 +31,11 @@ class TestDashboard:
         assert b'Dashboard' in resp.data
         assert b'Python' in resp.data
 
-    def test_dashboard_shows_deadlines(self, client, db, sample_language, sample_concept, sample_question):
-        d = Deadline(
-            language_id=sample_language.id,
-            company_name='Google',
-            interview_date=date.today() + timedelta(days=10),
-            is_active=True,
-        )
-        db.session.add(d)
-        db.session.commit()
+    def test_dashboard_no_server_deadlines(self, client, db, sample_language, sample_concept, sample_question):
+        """Dashboard should use localStorage for deadlines, not server data."""
         resp = client.get('/dashboard')
         assert resp.status_code == 200
-        assert b'Google' in resp.data
+        assert b'awesomeprep:deadlines' in resp.data
 
     def test_dashboard_difficulty_stats(self, client, db, sample_language, sample_concept, sample_question):
         resp = client.get('/dashboard')

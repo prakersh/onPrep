@@ -1,7 +1,6 @@
-from flask import Blueprint, render_template, redirect, Response
-from datetime import date
+from flask import Blueprint, render_template, Response
 from app.extensions import db
-from app.models import Language, Question, Deadline, ScheduleItem, Concept
+from app.models import Language, Question, Concept
 
 bp = Blueprint('dashboard', __name__)
 
@@ -59,19 +58,6 @@ def landing():
 def index():
     total_questions = db.session.query(Question).count()
 
-    # All active deadlines sorted by date
-    deadlines = (
-        db.session.query(Deadline)
-        .filter_by(is_active=True)
-        .order_by(Deadline.interview_date)
-        .all()
-    )
-
-    deadline_data = []
-    for d in deadlines:
-        days_remaining = (d.interview_date - date.today()).days
-        deadline_data.append({'deadline': d, 'days_remaining': days_remaining})
-
     # Languages with question IDs for client-side progress hydration
     languages = db.session.query(Language).filter_by(is_active=True).order_by(Language.display_order).all()
 
@@ -121,7 +107,6 @@ def index():
     return render_template(
         'dashboard/index.html',
         total_questions=total_questions,
-        deadline_data=deadline_data,
         language_stats=language_stats,
         difficulty_stats=difficulty_stats,
         all_questions=all_questions,

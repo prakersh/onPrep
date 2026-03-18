@@ -9,55 +9,19 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Active interviews list -->
     <div class="lg:col-span-2 fade-up" style="animation-delay:.06s">
-        {% if deadlines %}
-        <div class="space-y-3">
-            {% for d in deadlines %}
-            {% set days = (d.interview_date - _today).days if _today else 0 %}
-            <div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-5 card-hover">
-                <div class="flex items-start justify-between gap-4">
-                    <div class="flex items-start gap-3">
-                        <div class="w-1 h-full min-h-[3rem] rounded-full shrink-0 mt-0.5" style="background:{{ d.color|color_hex }}"></div>
-                        <div>
-                            <div class="text-lg font-semibold text-surface-800 dark:text-surface-200">{{ d.company_name }}</div>
-                            <div class="flex items-center gap-2 mt-0.5 text-sm text-surface-800/40 dark:text-surface-200/30">
-                                {% if d.role %}<span>{{ d.role }}</span><span>&middot;</span>{% endif %}
-                                <span>{{ d.language.name }}</span>
-                                <span>&middot;</span>
-                                <span>{{ d.interview_date.strftime('%B %d, %Y') }}</span>
-                            </div>
-                            <div class="flex items-center gap-3 mt-3">
-                                <a href="/planner/schedule/{{ d.id }}" class="text-sm text-accent hover:text-accent-500 font-medium cursor-pointer">View schedule &rarr;</a>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-4 shrink-0">
-                        <div class="text-right">
-                            <div class="text-2xl font-bold {% if (d.interview_date - _today).days <= 3 %}text-red-500{% elif (d.interview_date - _today).days <= 7 %}text-amber-500{% else %}text-emerald-500{% endif %}">{{ (d.interview_date - _today).days }}d</div>
-                            <div class="text-[11px] text-surface-800/25 dark:text-surface-200/20">remaining</div>
-                        </div>
-                        <form method="POST" action="/planner/delete/{{ d.id }}" onsubmit="return confirm('Remove this interview?')">
-                            <button type="submit" class="w-8 h-8 rounded-md flex items-center justify-center text-surface-800/25 dark:text-surface-200/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer" aria-label="Delete">
-                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
-                            </button>
-                        </form>
-                    </div>
-                </div>
+        <div id="deadline-list">
+            <div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-12 text-center">
+                <svg class="w-12 h-12 text-surface-300 dark:text-surface-200/10 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
+                <h3 class="text-lg font-medium text-surface-800 dark:text-surface-200 mb-1">No interviews scheduled</h3>
+                <p class="text-sm text-surface-800/40 dark:text-surface-200/30">Add your first interview using the form</p>
             </div>
-            {% endfor %}
         </div>
-        {% else %}
-        <div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-12 text-center">
-            <svg class="w-12 h-12 text-surface-300 dark:text-surface-200/10 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>
-            <h3 class="text-lg font-medium text-surface-800 dark:text-surface-200 mb-1">No interviews scheduled</h3>
-            <p class="text-sm text-surface-800/40 dark:text-surface-200/30">Add your first interview using the form</p>
-        </div>
-        {% endif %}
     </div>
 
     <!-- Add new interview form -->
     <div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-5 h-fit sticky top-16 fade-up" style="animation-delay:.12s">
         <h2 class="text-base font-semibold mb-4">Add Interview</h2>
-        <form method="POST" action="/planner/setup" class="space-y-3.5">
+        <form id="add-interview-form" class="space-y-3.5">
             <div>
                 <label for="company_name" class="block text-sm font-medium mb-1">Company</label>
                 <input type="text" name="company_name" id="company_name" placeholder="e.g. Google, Meta"
@@ -69,9 +33,9 @@
                     class="w-full rounded-lg border border-surface-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2 text-sm text-surface-800 dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50 placeholder-surface-800/25 dark:placeholder-surface-200/15">
             </div>
             <div>
-                <label for="language_id" class="block text-sm font-medium mb-1">Language</label>
-                <select name="language_id" id="language_id" class="w-full rounded-lg border border-surface-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2 text-sm text-surface-800 dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50 cursor-pointer">
-                    {% for lang in languages %}<option value="{{ lang.id }}">{{ lang.name }}</option>{% endfor %}
+                <label for="language_slug" class="block text-sm font-medium mb-1">Language</label>
+                <select name="language_slug" id="language_slug" class="w-full rounded-lg border border-surface-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2 text-sm text-surface-800 dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50 cursor-pointer">
+                    {% for lang in languages %}<option value="{{ lang.slug }}" data-name="{{ lang.name }}">{{ lang.name }}</option>{% endfor %}
                 </select>
             </div>
             <div>
@@ -79,8 +43,231 @@
                 <input type="date" name="interview_date" id="interview_date" required
                     class="w-full rounded-lg border border-surface-200 dark:border-white/10 bg-white dark:bg-white/[.03] px-3 py-2 text-sm text-surface-800 dark:text-surface-200 focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50">
             </div>
+            <div id="form-error" class="hidden text-sm text-red-600 dark:text-red-400"></div>
             <button type="submit" class="w-full bg-accent hover:bg-accent-500 text-white text-sm font-medium py-2.5 rounded-xl cursor-pointer mt-1">Add & Generate Schedule</button>
         </form>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var STORAGE_KEY = 'awesomeprep:deadlines';
+    var COLORS = {{ colors|tojson }};
+    var COLOR_MAP = {{ color_map|tojson }};
+
+    function getDeadlines() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { return []; }
+    }
+
+    function saveDeadlines(deadlines) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(deadlines));
+    }
+
+    function daysRemaining(dateStr) {
+        var today = new Date();
+        today.setHours(0,0,0,0);
+        var target = new Date(dateStr + 'T00:00:00');
+        return Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+    }
+
+    function formatDate(dateStr) {
+        var d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    }
+
+    function generateSchedule(concepts, interviewDateStr) {
+        var today = new Date();
+        today.setHours(0,0,0,0);
+        var interviewDate = new Date(interviewDateStr + 'T00:00:00');
+        var availableDays = Math.ceil((interviewDate - today) / (1000 * 60 * 60 * 24));
+
+        if (availableDays < 1 || !concepts.length) return [];
+
+        var schedule = [];
+        var studyDays = availableDays > 1 ? availableDays - 1 : availableDays;
+
+        if (studyDays <= 0) {
+            var nextDay = new Date(today);
+            nextDay.setDate(nextDay.getDate() + 1);
+            var nextDayStr = nextDay.toISOString().split('T')[0];
+            concepts.forEach(function(c) {
+                schedule.push({
+                    concept_slug: c.slug,
+                    concept_title: c.title,
+                    scheduled_date: nextDayStr,
+                    is_review: false,
+                    estimated_minutes: c.estimated_minutes
+                });
+            });
+        } else {
+            var conceptsPerDay = Math.max(1, Math.floor(concepts.length / studyDays));
+            var dayOffset = 1;
+            concepts.forEach(function(c, i) {
+                var scheduled = new Date(today);
+                scheduled.setDate(scheduled.getDate() + dayOffset);
+                if (scheduled >= interviewDate) {
+                    scheduled = new Date(interviewDate);
+                    scheduled.setDate(scheduled.getDate() - 1);
+                }
+                var scheduledStr = scheduled.toISOString().split('T')[0];
+                schedule.push({
+                    concept_slug: c.slug,
+                    concept_title: c.title,
+                    scheduled_date: scheduledStr,
+                    is_review: false,
+                    estimated_minutes: c.estimated_minutes
+                });
+                if ((i + 1) % conceptsPerDay === 0 && dayOffset < studyDays) {
+                    dayOffset++;
+                }
+            });
+        }
+
+        // Add review day on interview date
+        if (availableDays > 1) {
+            concepts.forEach(function(c) {
+                schedule.push({
+                    concept_slug: c.slug,
+                    concept_title: c.title,
+                    scheduled_date: interviewDateStr,
+                    is_review: true,
+                    estimated_minutes: c.estimated_minutes
+                });
+            });
+        }
+
+        return schedule;
+    }
+
+    function deleteDeadline(id) {
+        if (!confirm('Remove this interview?')) return;
+        var deadlines = getDeadlines().filter(function(d) { return d.id !== id; });
+        saveDeadlines(deadlines);
+        renderDeadlines();
+    }
+
+    // Expose for onclick
+    window._deleteDeadline = deleteDeadline;
+
+    function renderDeadlines() {
+        var deadlines = getDeadlines();
+        var container = document.getElementById('deadline-list');
+        if (!deadlines.length) {
+            container.innerHTML = '<div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-12 text-center">' +
+                '<svg class="w-12 h-12 text-surface-300 dark:text-surface-200/10 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/></svg>' +
+                '<h3 class="text-lg font-medium text-surface-800 dark:text-surface-200 mb-1">No interviews scheduled</h3>' +
+                '<p class="text-sm text-surface-800/40 dark:text-surface-200/30">Add your first interview using the form</p></div>';
+            return;
+        }
+
+        var html = '<div class="space-y-3">';
+        deadlines.sort(function(a, b) { return a.interview_date.localeCompare(b.interview_date); });
+        deadlines.forEach(function(d) {
+            var days = daysRemaining(d.interview_date);
+            var colorHex = COLOR_MAP[d.color] || '#6366f1';
+            var daysClass = days <= 3 ? 'text-red-500' : (days <= 7 ? 'text-amber-500' : 'text-emerald-500');
+            html += '<div class="rounded-2xl border border-surface-200/60 dark:border-white/[.06] bg-white/50 dark:bg-white/[.02] p-5 card-hover">' +
+                '<div class="flex items-start justify-between gap-4">' +
+                '<div class="flex items-start gap-3">' +
+                '<div class="w-1 h-full min-h-[3rem] rounded-full shrink-0 mt-0.5" style="background:' + colorHex + '"></div>' +
+                '<div>' +
+                '<div class="text-lg font-semibold text-surface-800 dark:text-surface-200">' + escapeHtml(d.company_name) + '</div>' +
+                '<div class="flex items-center gap-2 mt-0.5 text-sm text-surface-800/40 dark:text-surface-200/30">' +
+                (d.role ? '<span>' + escapeHtml(d.role) + '</span><span>&middot;</span>' : '') +
+                '<span>' + escapeHtml(d.language_name) + '</span>' +
+                '<span>&middot;</span>' +
+                '<span>' + formatDate(d.interview_date) + '</span>' +
+                '</div>' +
+                '<div class="flex items-center gap-3 mt-3">' +
+                '<a href="/planner/schedule/detail?id=' + d.id + '" class="text-sm text-accent hover:text-accent-500 font-medium cursor-pointer">View schedule &rarr;</a>' +
+                '</div></div></div>' +
+                '<div class="flex items-center gap-4 shrink-0">' +
+                '<div class="text-right">' +
+                '<div class="text-2xl font-bold ' + daysClass + '">' + days + 'd</div>' +
+                '<div class="text-[11px] text-surface-800/25 dark:text-surface-200/20">remaining</div>' +
+                '</div>' +
+                '<button onclick="_deleteDeadline(\'' + d.id + '\')" class="w-8 h-8 rounded-md flex items-center justify-center text-surface-800/25 dark:text-surface-200/20 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer" aria-label="Delete">' +
+                '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>' +
+                '</button></div></div></div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // Form submission
+    document.getElementById('add-interview-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var errorEl = document.getElementById('form-error');
+        errorEl.classList.add('hidden');
+
+        var langSelect = document.getElementById('language_slug');
+        var langSlug = langSelect.value;
+        var langName = langSelect.options[langSelect.selectedIndex].dataset.name;
+        var companyName = document.getElementById('company_name').value.trim() || 'Interview';
+        var role = document.getElementById('role').value.trim();
+        var interviewDate = document.getElementById('interview_date').value;
+
+        if (!langSlug || !interviewDate) {
+            errorEl.textContent = 'Please fill in all required fields.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        var today = new Date();
+        today.setHours(0,0,0,0);
+        var target = new Date(interviewDate + 'T00:00:00');
+        if (target <= today) {
+            errorEl.textContent = 'Interview date must be in the future.';
+            errorEl.classList.remove('hidden');
+            return;
+        }
+
+        // Fetch concepts and generate schedule
+        fetch('/api/concepts/' + langSlug)
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('Failed to fetch concepts');
+                return resp.json();
+            })
+            .then(function(concepts) {
+                var deadlines = getDeadlines();
+                var color = COLORS[deadlines.length % COLORS.length];
+                var schedule = generateSchedule(concepts, interviewDate);
+
+                var deadline = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    language_slug: langSlug,
+                    language_name: langName,
+                    company_name: companyName,
+                    role: role,
+                    interview_date: interviewDate,
+                    color: color,
+                    created_at: new Date().toISOString(),
+                    schedule: schedule
+                };
+
+                deadlines.push(deadline);
+                saveDeadlines(deadlines);
+                renderDeadlines();
+
+                // Reset form
+                document.getElementById('add-interview-form').reset();
+            })
+            .catch(function(err) {
+                errorEl.textContent = 'Error generating schedule. Please try again.';
+                errorEl.classList.remove('hidden');
+            });
+    });
+
+    // Initial render
+    renderDeadlines();
+})();
+</script>
 {% endblock %}

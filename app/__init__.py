@@ -17,7 +17,7 @@ def create_app(config_name='development'):
     db.init_app(app)
     migrate.init_app(app, db)
 
-    from app.models import content, progress  # noqa: F401
+    from app.models import content  # noqa: F401
 
     from app.blueprints.dashboard import bp as dashboard_bp
     from app.blueprints.study import bp as study_bp

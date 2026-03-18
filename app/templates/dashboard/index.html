@@ -47,7 +47,7 @@
     </div>
     <div class="rounded-2xl border border-surface-200/60 dark:border-white/[.04] bg-white/50 dark:bg-white/[.02] p-5">
         <div class="text-[11px] font-semibold text-surface-800/30 dark:text-surface-200/25 uppercase tracking-widest mb-2">Interviews</div>
-        <div class="text-3xl font-bold text-violet-600 dark:text-violet-400">{{ deadline_data|length }}</div>
+        <div class="text-3xl font-bold text-violet-600 dark:text-violet-400" id="stat-interviews">0</div>
     </div>
 </div>
 
@@ -78,29 +78,15 @@
 
 <!-- Bottom Grid: Interviews + In Progress + Recently Viewed -->
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 mb-6 fade-up fade-up-delay-3">
-    <!-- Upcoming interviews -->
+    <!-- Upcoming interviews (from localStorage) -->
     <div class="lg:col-span-1 rounded-2xl border border-surface-200/60 dark:border-white/[.04] bg-white/50 dark:bg-white/[.02] p-5">
         <div class="flex items-center justify-between mb-4">
             <h2 class="text-sm font-semibold">Upcoming Interviews</h2>
             <a href="/planner/setup" class="text-xs text-accent hover:text-accent-500 cursor-pointer transition-colors">Manage</a>
         </div>
-        {% if deadline_data %}
-        <div class="space-y-2.5">
-            {% for dd in deadline_data[:4] %}
-            {% set d = dd.deadline %}
-            <a href="/planner/schedule/{{ d.id }}" class="flex items-center gap-3 py-2 hover:text-accent cursor-pointer group transition-colors rounded-lg px-2 -mx-2 hover:bg-surface-100/50 dark:hover:bg-white/[.02]">
-                <div class="w-1 h-10 rounded-full shrink-0" style="background:{{ d.color|color_hex }}"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium truncate">{{ d.company_name }}</div>
-                    <div class="text-xs text-surface-800/35 dark:text-surface-200/25">{% if d.role %}{{ d.role }} &middot; {% endif %}{{ d.interview_date.strftime('%b %d') }}</div>
-                </div>
-                <div class="text-lg font-bold shrink-0 tabular-nums {% if dd.days_remaining <= 3 %}text-red-500{% elif dd.days_remaining <= 7 %}text-warm-500{% else %}text-emerald-500{% endif %}">{{ dd.days_remaining }}d</div>
-            </a>
-            {% endfor %}
+        <div id="upcoming-interviews">
+            <p class="text-sm text-surface-800/30 dark:text-surface-200/20 py-6 text-center">No interviews yet. <a href="/planner/setup" class="text-accent cursor-pointer">Add one</a></p>
         </div>
-        {% else %}
-        <p class="text-sm text-surface-800/30 dark:text-surface-200/20 py-6 text-center">No interviews yet. <a href="/planner/setup" class="text-accent cursor-pointer">Add one</a></p>
-        {% endif %}
     </div>
 
     <!-- In Progress Modules (hydrated by JS) -->
@@ -228,6 +214,55 @@
         html += '</div>';
         ipList.innerHTML = html;
     }
+
+    // Upcoming interviews from localStorage
+    var DEADLINE_KEY = 'awesomeprep:deadlines';
+    var COLOR_MAP = {
+        'indigo': '#6366f1', 'emerald': '#10b981', 'rose': '#f43f5e',
+        'amber': '#f59e0b', 'cyan': '#06b6d4', 'violet': '#8b5cf6',
+        'orange': '#f97316', 'teal': '#14b8a6'
+    };
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    try {
+        var deadlines = JSON.parse(localStorage.getItem(DEADLINE_KEY)) || [];
+        deadlines.sort(function(a, b) { return a.interview_date.localeCompare(b.interview_date); });
+
+        // Update interview count stat
+        var elInterviews = document.getElementById('stat-interviews');
+        if (elInterviews) elInterviews.textContent = deadlines.length;
+
+        var upcomingEl = document.getElementById('upcoming-interviews');
+        if (upcomingEl && deadlines.length > 0) {
+            var html = '<div class="space-y-2.5">';
+            deadlines.slice(0, 4).forEach(function(d) {
+                var today = new Date();
+                today.setHours(0,0,0,0);
+                var target = new Date(d.interview_date + 'T00:00:00');
+                var daysRemaining = Math.ceil((target - today) / (1000 * 60 * 60 * 24));
+                var colorHex = COLOR_MAP[d.color] || '#6366f1';
+                var daysClass = daysRemaining <= 3 ? 'text-red-500' : (daysRemaining <= 7 ? 'text-warm-500' : 'text-emerald-500');
+                var dateObj = new Date(d.interview_date + 'T00:00:00');
+                var dateLabel = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                html += '<a href="/planner/schedule/detail?id=' + d.id + '" class="flex items-center gap-3 py-2 hover:text-accent cursor-pointer group transition-colors rounded-lg px-2 -mx-2 hover:bg-surface-100/50 dark:hover:bg-white/[.02]">' +
+                    '<div class="w-1 h-10 rounded-full shrink-0" style="background:' + colorHex + '"></div>' +
+                    '<div class="flex-1 min-w-0">' +
+                    '<div class="text-sm font-medium truncate">' + escapeHtml(d.company_name) + '</div>' +
+                    '<div class="text-xs text-surface-800/35 dark:text-surface-200/25">' +
+                    (d.role ? escapeHtml(d.role) + ' &middot; ' : '') + dateLabel +
+                    '</div></div>' +
+                    '<div class="text-lg font-bold shrink-0 tabular-nums ' + daysClass + '">' + daysRemaining + 'd</div>' +
+                    '</a>';
+            });
+            html += '</div>';
+            upcomingEl.innerHTML = html;
+        }
+    } catch(e) {}
 
     // Recently viewed
     var recent = awesomePrepProgress.getRecent(5);

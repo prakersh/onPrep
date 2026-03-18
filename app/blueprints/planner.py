@@ -1,8 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash
-from datetime import date, datetime
+from flask import Blueprint, render_template
 from app.extensions import db
-from app.models import Language, Deadline, ScheduleItem
-from app.services.scheduler import generate_schedule
+from app.models import Language
 
 bp = Blueprint('planner', __name__, url_prefix='/planner')
 
@@ -16,78 +14,33 @@ COLORS = list(COLOR_MAP.keys())
 
 @bp.route('/setup', methods=['GET'])
 def setup():
-    languages = db.session.query(Language).filter_by(is_active=True).order_by(Language.display_order).all()
-    deadlines = (
-        db.session.query(Deadline)
+    """Render planner setup page. All deadline data is in localStorage."""
+    languages = (
+        db.session.query(Language)
         .filter_by(is_active=True)
-        .order_by(Deadline.interview_date)
+        .order_by(Language.display_order)
         .all()
     )
-    from datetime import date as _date
-    return render_template('planner/setup.html', languages=languages, deadlines=deadlines, _today=_date.today())
-
-
-@bp.route('/setup', methods=['POST'])
-def create_deadline():
-    language_id = request.form.get('language_id', type=int)
-    interview_date_str = request.form.get('interview_date')
-    company_name = request.form.get('company_name', '').strip()
-    role = request.form.get('role', '').strip()
-
-    if not language_id or not interview_date_str:
-        flash('Please fill in all fields.', 'error')
-        return redirect(url_for('planner.setup'))
-
-    interview_date = datetime.strptime(interview_date_str, '%Y-%m-%d').date()
-
-    if interview_date <= date.today():
-        flash('Interview date must be in the future.', 'error')
-        return redirect(url_for('planner.setup'))
-
-    # Pick a color based on how many active deadlines exist
-    active_count = db.session.query(Deadline).filter_by(is_active=True).count()
-    color = COLORS[active_count % len(COLORS)]
-
-    deadline = Deadline(
-        language_id=language_id,
-        interview_date=interview_date,
-        company_name=company_name or 'Interview',
-        role=role,
-        is_active=True,
-        color=color,
+    lang_data = [
+        {'id': lang.id, 'name': lang.name, 'slug': lang.slug}
+        for lang in languages
+    ]
+    return render_template(
+        'planner/setup.html',
+        languages=languages,
+        lang_data=lang_data,
+        colors=COLORS,
+        color_map=COLOR_MAP,
     )
-    db.session.add(deadline)
-    db.session.flush()
-
-    generate_schedule(deadline)
-    db.session.commit()
-
-    return redirect(url_for('planner.setup'))
-
-
-@bp.route('/delete/<int:deadline_id>', methods=['POST'])
-def delete_deadline(deadline_id):
-    deadline = db.session.get(Deadline, deadline_id)
-    if deadline:
-        db.session.delete(deadline)
-        db.session.commit()
-    return redirect(url_for('planner.setup'))
 
 
 @bp.route('/schedule')
 def schedule():
-    deadlines = (
-        db.session.query(Deadline)
-        .filter_by(is_active=True)
-        .order_by(Deadline.interview_date)
-        .all()
-    )
-    return render_template('planner/schedule.html', deadlines=deadlines)
+    """Render schedule list page. All data comes from localStorage via JS."""
+    return render_template('planner/schedule.html')
 
 
-@bp.route('/schedule/<int:deadline_id>')
-def schedule_detail(deadline_id):
-    deadline = db.session.get(Deadline, deadline_id)
-    if not deadline:
-        return redirect(url_for('planner.schedule'))
-    return render_template('planner/schedule_detail.html', deadline=deadline)
+@bp.route('/schedule/detail')
+def schedule_detail():
+    """Render schedule detail page. Deadline ID comes from query param, data from localStorage."""
+    return render_template('planner/schedule_detail.html')

@@ -1,35 +1,87 @@
 {% extends "base.html" %}
-{% block title %}{{ deadline.company_name }} Schedule — awesomePrep{% endblock %}
+{% block title %}Schedule Detail — awesomePrep{% endblock %}
 {% block content %}
 <div class="mt-4 mb-6 fade-up">
     <a href="/planner/schedule" class="text-sm text-surface-800/40 dark:text-surface-200/30 hover:text-accent cursor-pointer">&larr; All schedules</a>
-    <div class="flex items-center gap-3 mt-2">
-        <div class="w-2.5 h-2.5 rounded-full" style="background:{{ deadline.color|color_hex }}"></div>
-        <h1 class="font-display text-3xl tracking-tight">{{ deadline.company_name }}</h1>
+    <div id="detail-header">
+        <p class="text-sm text-surface-800/25 dark:text-surface-200/20 mt-4">Loading schedule...</p>
     </div>
-    <p class="text-base text-surface-800/40 dark:text-surface-200/30 mt-0.5 ml-5">
-        {% if deadline.role %}{{ deadline.role }} &middot; {% endif %}{{ deadline.language.name }} &middot; {{ deadline.interview_date.strftime('%B %d, %Y') }}
-    </p>
 </div>
 
-{% set items = deadline.schedule_items %}
-{% if items %}
-{% set ns = namespace(current_date=None) %}
-<div class="ml-5 fade-up" style="animation-delay:.06s">
-{% for item in items %}
-    {% if item.scheduled_date != ns.current_date %}
-    {% set ns.current_date = item.scheduled_date %}
-    <div class="{% if not loop.first %}mt-6{% endif %} mb-2">
-        <div class="text-xs font-semibold text-surface-800/30 dark:text-surface-200/25 uppercase tracking-widest">{{ item.scheduled_date.strftime('%A, %b %d') }}</div>
-    </div>
-    {% endif %}
-    <a href="/study/{{ deadline.language.slug }}/{{ item.concept.slug }}" class="flex items-center justify-between px-4 py-2.5 rounded-lg hover:bg-surface-100/50 dark:hover:bg-white/[.02] cursor-pointer group border border-transparent hover:border-surface-200/60 dark:hover:border-white/[.06]">
-        <span class="text-[15px] text-surface-800 dark:text-surface-200 group-hover:text-accent">{{ item.concept.title }}</span>
-        {% if item.is_review %}<span class="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Review</span>{% endif %}
-    </a>
-{% endfor %}
-</div>
-{% else %}
-<p class="text-sm text-surface-800/25 dark:text-surface-200/20 ml-5">No items scheduled.</p>
-{% endif %}
+<div id="detail-content" class="ml-5 fade-up" style="animation-delay:.06s"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var STORAGE_KEY = 'awesomeprep:deadlines';
+    var COLOR_MAP = {
+        'indigo': '#6366f1', 'emerald': '#10b981', 'rose': '#f43f5e',
+        'amber': '#f59e0b', 'cyan': '#06b6d4', 'violet': '#8b5cf6',
+        'orange': '#f97316', 'teal': '#14b8a6'
+    };
+
+    function getDeadlines() {
+        try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; } catch(e) { return []; }
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    var params = new URLSearchParams(window.location.search);
+    var deadlineId = params.get('id');
+    var deadlines = getDeadlines();
+    var deadline = deadlines.find(function(d) { return d.id === deadlineId; });
+
+    var headerEl = document.getElementById('detail-header');
+    var contentEl = document.getElementById('detail-content');
+
+    if (!deadline) {
+        headerEl.innerHTML = '<h1 class="font-display text-3xl tracking-tight mt-2">Schedule not found</h1>' +
+            '<p class="text-sm text-surface-800/40 dark:text-surface-200/30 mt-1">This interview may have been removed.</p>';
+        contentEl.innerHTML = '';
+        return;
+    }
+
+    var colorHex = COLOR_MAP[deadline.color] || '#6366f1';
+    var dateObj = new Date(deadline.interview_date + 'T00:00:00');
+    var dateStr = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    headerEl.innerHTML = '<div class="flex items-center gap-3 mt-2">' +
+        '<div class="w-2.5 h-2.5 rounded-full" style="background:' + colorHex + '"></div>' +
+        '<h1 class="font-display text-3xl tracking-tight">' + escapeHtml(deadline.company_name) + '</h1>' +
+        '</div>' +
+        '<p class="text-base text-surface-800/40 dark:text-surface-200/30 mt-0.5 ml-5">' +
+        (deadline.role ? escapeHtml(deadline.role) + ' &middot; ' : '') +
+        escapeHtml(deadline.language_name) + ' &middot; ' + dateStr +
+        '</p>';
+
+    var items = deadline.schedule || [];
+    if (!items.length) {
+        contentEl.innerHTML = '<p class="text-sm text-surface-800/25 dark:text-surface-200/20">No items scheduled.</p>';
+        return;
+    }
+
+    var html = '';
+    var currentDate = null;
+    items.forEach(function(item, i) {
+        if (item.scheduled_date !== currentDate) {
+            currentDate = item.scheduled_date;
+            var d = new Date(item.scheduled_date + 'T00:00:00');
+            var label = d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+            html += '<div class="' + (i > 0 ? 'mt-6' : '') + ' mb-2">' +
+                '<div class="text-xs font-semibold text-surface-800/30 dark:text-surface-200/25 uppercase tracking-widest">' + label + '</div>' +
+                '</div>';
+        }
+        html += '<a href="/study/' + deadline.language_slug + '/' + item.concept_slug + '" class="flex items-center justify-between px-4 py-2.5 rounded-lg hover:bg-surface-100/50 dark:hover:bg-white/[.02] cursor-pointer group border border-transparent hover:border-surface-200/60 dark:hover:border-white/[.06]">' +
+            '<span class="text-[15px] text-surface-800 dark:text-surface-200 group-hover:text-accent">' + escapeHtml(item.concept_title) + '</span>' +
+            (item.is_review ? '<span class="text-[11px] font-semibold text-amber-500 uppercase tracking-wider">Review</span>' : '') +
+            '</a>';
+    });
+    contentEl.innerHTML = html;
+})();
+</script>
 {% endblock %}

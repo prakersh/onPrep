@@ -1,31 +1,29 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, jsonify
 from app.extensions import db
-from app.models import Deadline
-from app.services.scheduler import generate_schedule
+from app.models import Language, Concept
 
 bp = Blueprint('api', __name__, url_prefix='/api')
 
 
-@bp.route('/schedule/regenerate', methods=['POST'])
-def regenerate_schedule():
-    data = request.get_json() or {}
-    deadline_id = data.get('deadline_id')
+@bp.route('/concepts/<lang_slug>')
+def concepts(lang_slug: str):
+    """Return concepts for a language as JSON (used by client-side scheduler)."""
+    language = db.session.query(Language).filter_by(slug=lang_slug, is_active=True).first()
+    if not language:
+        return jsonify({'error': 'Language not found'}), 404
 
-    if deadline_id:
-        deadline = db.session.get(Deadline, deadline_id)
-        if not deadline:
-            return jsonify({'error': 'Deadline not found'}), 404
-        deadlines = [deadline]
-    else:
-        deadlines = db.session.query(Deadline).filter_by(is_active=True).all()
-        if not deadlines:
-            return jsonify({'error': 'No active deadline'}), 404
-
-    for deadline in deadlines:
-        for item in list(deadline.schedule_items):
-            db.session.delete(item)
-        db.session.flush()
-        generate_schedule(deadline)
-
-    db.session.commit()
-    return jsonify({'status': 'ok'})
+    concepts_list = (
+        db.session.query(Concept)
+        .filter_by(language_id=language.id)
+        .order_by(Concept.display_order)
+        .all()
+    )
+    return jsonify([
+        {
+            'slug': c.slug,
+            'title': c.title,
+            'estimated_minutes': c.estimated_minutes,
+            'display_order': c.display_order,
+        }
+        for c in concepts_list
+    ])
