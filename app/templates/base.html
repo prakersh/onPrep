@@ -191,15 +191,28 @@
                 <span class="font-display text-xl tracking-tight">awesomePrep</span>
             </a>
             <div class="flex items-center gap-1">
-                <a href="/dashboard" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Dashboard</a>
-                <a href="/study/languages" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Study</a>
-                <a href="/planner/setup" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Planner</a>
-                <div class="w-px h-5 bg-surface-200 dark:bg-white/[.06] mx-2"></div>
+                <!-- Desktop nav -->
+                <div class="hidden sm:flex items-center gap-1">
+                    <a href="/dashboard" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Dashboard</a>
+                    <a href="/study/languages" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Study</a>
+                    <a href="/planner/setup" class="nav-link px-3.5 py-2 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-surface-800 dark:hover:text-white transition-colors cursor-pointer">Planner</a>
+                    <div class="w-px h-5 bg-surface-200 dark:bg-white/[.06] mx-2"></div>
+                </div>
                 <button onclick="toggleTheme()" class="theme-btn w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-200/60 dark:hover:bg-white/[.06] cursor-pointer" aria-label="Toggle theme">
                     <svg class="w-[18px] h-[18px] hidden dark:block text-warm-300" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"/></svg>
                     <svg class="w-[18px] h-[18px] block dark:hidden text-surface-800/50" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"/></svg>
                 </button>
+                <!-- Mobile hamburger -->
+                <button onclick="document.getElementById('mobile-menu').classList.toggle('hidden')" class="sm:hidden w-9 h-9 rounded-lg flex items-center justify-center hover:bg-surface-200/60 dark:hover:bg-white/[.06] cursor-pointer" aria-label="Menu">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+                </button>
             </div>
+        </div>
+        <!-- Mobile dropdown -->
+        <div id="mobile-menu" class="hidden sm:hidden border-t border-surface-200/60 dark:border-white/[.04] bg-surface-50/95 dark:bg-surface-950/95 backdrop-blur-xl px-5 py-3 space-y-1">
+            <a href="/dashboard" class="block px-3 py-2.5 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-accent hover:bg-surface-100/50 dark:hover:bg-white/[.04] cursor-pointer transition-colors">Dashboard</a>
+            <a href="/study/languages" class="block px-3 py-2.5 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-accent hover:bg-surface-100/50 dark:hover:bg-white/[.04] cursor-pointer transition-colors">Study</a>
+            <a href="/planner/setup" class="block px-3 py-2.5 rounded-lg text-sm font-medium text-surface-800/60 dark:text-surface-200/60 hover:text-accent hover:bg-surface-100/50 dark:hover:bg-white/[.04] cursor-pointer transition-colors">Planner</a>
         </div>
     </nav>
 
