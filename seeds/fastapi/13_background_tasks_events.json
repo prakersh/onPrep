@@ -1,0 +1,563 @@
+{
+  "concept_slug": "background-tasks-events",
+  "questions": [
+    {
+      "title": "How do BackgroundTasks work in FastAPI?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "background-tasks",
+        "async",
+        "starlette"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**BackgroundTasks** in FastAPI allow you to run functions after the response has been sent to the client. They are built on top of Starlette's `BackgroundTask` class.\n\n### How it works:\n1. Declare `BackgroundTasks` as a parameter in your endpoint (FastAPI injects it automatically)\n2. Call `background_tasks.add_task(func, *args, **kwargs)` to schedule work\n3. The response is sent immediately, and the tasks run afterward in the same process\n\n### Key characteristics:\n- Tasks run **in the same process** as the request (no separate worker)\n- They execute **after** the response is sent\n- Both sync and async functions are supported\n- Tasks run sequentially in the order they were added\n- If the task is a sync function, it runs in a thread pool; async functions run on the event loop\n\n### When to use:\n- Sending emails or notifications\n- Writing audit logs\n- Light post-processing (thumbnails, cache warming)\n- Any work that doesn't need to be in the response",
+          "pseudo_code": "from fastapi import BackgroundTasks\n\ndef do_work(data):\n    # runs after response is sent\n    process(data)\n\n@app.post(\"/items/\")\nasync def create_item(background_tasks: BackgroundTasks):\n    background_tasks.add_task(do_work, data)\n    return {\"status\": \"accepted\"}",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nimport time\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\ndef send_email(to: str, subject: str, body: str):\n    \"\"\"Simulates sending an email (runs after response).\"\"\"\n    logger.info(f\"Sending email to {to}: {subject}\")\n    time.sleep(2)  # Simulate slow email service\n    logger.info(f\"Email sent to {to}\")\n\ndef write_audit_log(action: str, user_id: int):\n    \"\"\"Simulates writing an audit log.\"\"\"\n    logger.info(f\"Audit: user {user_id} performed '{action}'\")\n\n@app.post(\"/register\")\nasync def register_user(\n    background_tasks: BackgroundTasks,\n):\n    # User is created immediately\n    user = {\"id\": 42, \"email\": \"alice@example.com\"}\n\n    # These run AFTER the response is sent\n    background_tasks.add_task(\n        send_email,\n        to=user[\"email\"],\n        subject=\"Welcome!\",\n        body=\"Thanks for registering.\",\n    )\n    background_tasks.add_task(\n        write_audit_log,\n        action=\"register\",\n        user_id=user[\"id\"],\n    )\n\n    # Client gets this immediately, without waiting for email\n    return {\"id\": user[\"id\"], \"status\": \"registered\"}\n\n# Async background task\nasync def update_search_index(item_id: int):\n    \"\"\"Async tasks run on the event loop.\"\"\"\n    import asyncio\n    await asyncio.sleep(1)  # Simulate async work\n    logger.info(f\"Search index updated for item {item_id}\")\n\n@app.post(\"/items/\")\nasync def create_item(background_tasks: BackgroundTasks):\n    item_id = 99\n    background_tasks.add_task(update_search_index, item_id)\n    return {\"id\": item_id, \"status\": \"created\"}",
+          "code_language": "python",
+          "key_points": [
+            "BackgroundTasks run after the response is sent, in the same process",
+            "Both sync and async functions are supported -- sync runs in a threadpool",
+            "Tasks execute sequentially in the order they were added",
+            "FastAPI automatically injects BackgroundTasks when declared as a parameter"
+          ],
+          "gotchas": [
+            "Background tasks share the same process -- a CPU-heavy task will block the event loop for async tasks",
+            "If the server crashes, queued background tasks are lost (no persistence)",
+            "Exceptions in background tasks are not reported to the client since the response is already sent",
+            "Do not use BackgroundTasks for long-running jobs -- use Celery or ARQ instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI's `BackgroundTasks` lets you schedule functions that run after the response is sent. Declare it as a parameter, call `add_task(func, *args)`, and the client gets the response immediately while the task runs in the background.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\n\napp = FastAPI()\n\ndef send_email(to: str):\n    print(f\"Email sent to {to}\")\n\n@app.post(\"/signup\")\nasync def signup(background_tasks: BackgroundTasks):\n    background_tasks.add_task(send_email, to=\"user@example.com\")\n    return {\"status\": \"signed up\"}",
+          "code_language": "python",
+          "key_points": [
+            "Tasks run after response is sent, in the same process",
+            "Both sync and async functions are supported"
+          ],
+          "gotchas": [
+            "Background tasks are lost if the server crashes -- they have no persistence layer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add multiple background tasks to a single endpoint?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "background-tasks",
+        "chaining",
+        "dependencies"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "You can add multiple background tasks to a single endpoint by calling `add_task()` multiple times. Tasks are executed **sequentially** in the order they were added.\n\n### Multiple calls on the same BackgroundTasks instance:\n```\nbackground_tasks.add_task(task_a, ...)\nbackground_tasks.add_task(task_b, ...)\nbackground_tasks.add_task(task_c, ...)\n```\n\n### From dependencies:\nIf a dependency also receives `BackgroundTasks`, it shares the same instance with the endpoint. This means tasks added in dependencies are combined with endpoint tasks.\n\n### Execution order:\n1. Tasks from dependencies run first (in dependency resolution order)\n2. Then tasks from the endpoint\n3. All tasks run sequentially -- not in parallel\n\n### Running tasks concurrently:\nIf you need concurrent execution, create a wrapper async task that uses `asyncio.gather()`.",
+          "pseudo_code": "# Sequential tasks\n@app.post(\"/order\")\nasync def place_order(bg: BackgroundTasks):\n    bg.add_task(charge_payment, order_id)\n    bg.add_task(send_confirmation, email)\n    bg.add_task(update_inventory, items)\n    return {\"status\": \"placed\"}\n\n# Concurrent wrapper\nasync def all_notifications(order_id):\n    await asyncio.gather(\n        notify_email(order_id),\n        notify_sms(order_id),\n        notify_slack(order_id),\n    )",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks, Depends\nfrom typing import Annotated\nimport asyncio\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n# --- Sequential tasks ---\ndef charge_payment(order_id: int):\n    logger.info(f\"Charging payment for order {order_id}\")\n\ndef send_confirmation(email: str, order_id: int):\n    logger.info(f\"Sending confirmation to {email} for order {order_id}\")\n\ndef update_inventory(item_ids: list[int]):\n    logger.info(f\"Updating inventory for items: {item_ids}\")\n\n@app.post(\"/orders\")\nasync def place_order(background_tasks: BackgroundTasks):\n    order_id = 101\n    # Tasks run sequentially in this order after response\n    background_tasks.add_task(charge_payment, order_id)\n    background_tasks.add_task(\n        send_confirmation, \"buyer@example.com\", order_id\n    )\n    background_tasks.add_task(update_inventory, [1, 2, 3])\n    return {\"order_id\": order_id, \"status\": \"placed\"}\n\n# --- Tasks from dependencies share the same BackgroundTasks ---\ndef log_request_dep(background_tasks: BackgroundTasks):\n    \"\"\"Dependency that adds its own background task.\"\"\"\n    background_tasks.add_task(\n        logger.info, \"Request logged from dependency\"\n    )\n\n@app.post(\"/items\")\nasync def create_item(\n    _: Annotated[None, Depends(log_request_dep)],\n    background_tasks: BackgroundTasks,\n):\n    # This task runs AFTER the dependency's task\n    background_tasks.add_task(logger.info, \"Item created\")\n    return {\"status\": \"created\"}\n\n# --- Concurrent background tasks ---\nasync def notify_email(order_id: int):\n    await asyncio.sleep(1)\n    logger.info(f\"Email sent for order {order_id}\")\n\nasync def notify_sms(order_id: int):\n    await asyncio.sleep(1)\n    logger.info(f\"SMS sent for order {order_id}\")\n\nasync def send_all_notifications(order_id: int):\n    \"\"\"Wrapper that runs multiple notifications concurrently.\"\"\"\n    await asyncio.gather(\n        notify_email(order_id),\n        notify_sms(order_id),\n    )\n\n@app.post(\"/orders/{order_id}/notify\")\nasync def notify_order(\n    order_id: int,\n    background_tasks: BackgroundTasks,\n):\n    # Single task that internally runs concurrent work\n    background_tasks.add_task(send_all_notifications, order_id)\n    return {\"status\": \"notifications queued\"}",
+          "code_language": "python",
+          "key_points": [
+            "Call add_task() multiple times to schedule multiple tasks sequentially",
+            "Dependencies and endpoints share the same BackgroundTasks instance",
+            "Tasks from dependencies execute before tasks from the endpoint",
+            "Wrap concurrent work in an async function using asyncio.gather()"
+          ],
+          "gotchas": [
+            "Tasks are sequential by default -- if one blocks for 30 seconds, the next waits",
+            "A failing task does not cancel subsequent tasks, but the exception is logged",
+            "Do not pass mutable objects that the endpoint might modify after returning"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Call `background_tasks.add_task()` multiple times -- tasks run sequentially in order. Dependencies and endpoints share the same `BackgroundTasks` instance. For concurrent execution, wrap tasks in an async function with `asyncio.gather()`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\n\napp = FastAPI()\n\n@app.post(\"/orders\")\nasync def place_order(background_tasks: BackgroundTasks):\n    background_tasks.add_task(charge_payment, 101)\n    background_tasks.add_task(send_email, \"buyer@example.com\")\n    background_tasks.add_task(update_stock, [1, 2, 3])\n    return {\"status\": \"placed\"}",
+          "code_language": "python",
+          "key_points": [
+            "Multiple add_task() calls execute sequentially after the response"
+          ],
+          "gotchas": [
+            "Tasks are sequential -- use asyncio.gather() inside a wrapper for concurrency"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the lifespan context manager work (replacing deprecated @app.on_event)?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "lifespan",
+        "startup",
+        "shutdown",
+        "context-manager"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **lifespan** context manager is the modern replacement for the deprecated `@app.on_event(\"startup\")` and `@app.on_event(\"shutdown\")` decorators. It uses an async generator that yields once.\n\n### How it works:\n1. Code **before** `yield` runs on startup\n2. The `yield` hands control to the application (it serves requests)\n3. Code **after** `yield` runs on shutdown\n\n### Advantages over @app.on_event:\n- **Single function** for both startup and shutdown logic\n- **Shared state**: Resources created at startup can be passed to the app via `app.state` or through the yielded value\n- **Guaranteed cleanup**: The `finally` block ensures cleanup even on errors\n- **Type-safe**: Works with `contextlib.asynccontextmanager`\n\n### Deprecation timeline:\n- `@app.on_event(\"startup\")` and `@app.on_event(\"shutdown\")` are deprecated since FastAPI 0.93\n- They still work but will be removed in a future version\n- New projects should always use lifespan",
+          "pseudo_code": "from contextlib import asynccontextmanager\n\n@asynccontextmanager\nasync def lifespan(app):\n    # Startup: create resources\n    resource = await create_resource()\n    yield  # App runs and serves requests\n    # Shutdown: cleanup resources\n    await resource.close()\n\napp = FastAPI(lifespan=lifespan)",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n# Simulated resources\nclass DatabasePool:\n    async def connect(self):\n        logger.info(\"DB pool: connected\")\n    async def disconnect(self):\n        logger.info(\"DB pool: disconnected\")\n\nclass RedisClient:\n    async def connect(self):\n        logger.info(\"Redis: connected\")\n    async def disconnect(self):\n        logger.info(\"Redis: disconnected\")\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    \"\"\"Manage application lifecycle resources.\"\"\"\n    # --- Startup ---\n    logger.info(\"Starting up...\")\n    db = DatabasePool()\n    await db.connect()\n    app.state.db = db\n\n    redis = RedisClient()\n    await redis.connect()\n    app.state.redis = redis\n\n    logger.info(\"Startup complete\")\n\n    yield  # Application runs here\n\n    # --- Shutdown ---\n    logger.info(\"Shutting down...\")\n    await redis.disconnect()\n    await db.disconnect()\n    logger.info(\"Shutdown complete\")\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\"}\n\n\n@app.get(\"/db-status\")\nasync def db_status():\n    # Access startup resources via app.state\n    db = app.state.db\n    return {\"db_connected\": db is not None}\n\n\n# --- The deprecated way (do NOT use in new code) ---\n# @app.on_event(\"startup\")\n# async def startup():\n#     app.state.db = await connect_db()\n#\n# @app.on_event(\"shutdown\")\n# async def shutdown():\n#     await app.state.db.disconnect()\n\n\n# --- With try/finally for guaranteed cleanup ---\n@asynccontextmanager\nasync def robust_lifespan(app: FastAPI):\n    db = DatabasePool()\n    try:\n        await db.connect()\n        app.state.db = db\n        yield\n    finally:\n        # Always runs, even if app crashes\n        await db.disconnect()",
+          "code_language": "python",
+          "key_points": [
+            "Code before yield runs on startup, code after yield runs on shutdown",
+            "Use app.state to share startup resources with route handlers",
+            "asynccontextmanager ensures proper typing and structure",
+            "Lifespan replaces the deprecated @app.on_event decorators"
+          ],
+          "gotchas": [
+            "You must use @asynccontextmanager -- a plain async generator will not work",
+            "If startup code raises an exception, the app will not start and shutdown code will not run unless wrapped in try/finally",
+            "The lifespan parameter and @app.on_event cannot be mixed -- lifespan takes precedence",
+            "The yield must happen exactly once -- yielding multiple times causes an error"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The lifespan context manager replaces `@app.on_event`. Code before `yield` runs at startup, code after `yield` runs at shutdown. Use `@asynccontextmanager` and pass it as `FastAPI(lifespan=lifespan)`. Share resources via `app.state`.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Startup\n    app.state.db = await connect_db()\n    yield\n    # Shutdown\n    await app.state.db.close()\n\napp = FastAPI(lifespan=lifespan)",
+          "code_language": "python",
+          "key_points": [
+            "Before yield = startup, after yield = shutdown",
+            "Share resources via app.state"
+          ],
+          "gotchas": [
+            "Must use @asynccontextmanager -- plain async generators do not work"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use Celery instead of BackgroundTasks?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "celery",
+        "background-tasks",
+        "task-queue",
+        "architecture"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**BackgroundTasks** and **Celery** solve different problems. Choosing between them depends on task duration, reliability needs, and infrastructure complexity.\n\n### Use BackgroundTasks when:\n- Tasks are **lightweight** (< 10 seconds)\n- **Losing a task** on server crash is acceptable\n- No need for **retries**, **scheduling**, or **monitoring**\n- You want **zero infrastructure** overhead (no Redis/RabbitMQ)\n- Examples: sending a quick email, writing a log entry, cache invalidation\n\n### Use Celery when:\n- Tasks are **long-running** (minutes to hours)\n- Tasks must **survive** server restarts\n- You need **retries** with exponential backoff\n- You need **periodic/scheduled** tasks (Celery Beat)\n- You need to **monitor** task status (Flower dashboard)\n- Tasks are **CPU-intensive** (image processing, ML inference)\n- You need **rate limiting** or **priority queues**\n\n### Architecture comparison:\n| Feature | BackgroundTasks | Celery |\n|---------|----------------|--------|\n| Infrastructure | None | Redis/RabbitMQ + worker processes |\n| Persistence | None | Broker persists tasks |\n| Retries | Manual | Built-in with backoff |\n| Monitoring | None | Flower, Prometheus |\n| Scheduling | None | Celery Beat |\n| Scalability | Single process | Horizontal worker scaling |",
+          "pseudo_code": "# BackgroundTasks: simple, in-process\n@app.post(\"/notify\")\nasync def notify(bg: BackgroundTasks):\n    bg.add_task(send_email, email)  # Quick, fire-and-forget\n    return {\"ok\": True}\n\n# Celery: distributed, persistent\n@app.post(\"/generate-report\")\nasync def generate_report():\n    task = generate_report_task.delay(report_id)\n    return {\"task_id\": task.id}  # Client polls for result",
+          "actual_code": "# --- Celery setup (tasks.py) ---\nfrom celery import Celery\n\ncelery_app = Celery(\n    \"worker\",\n    broker=\"redis://localhost:6379/0\",\n    backend=\"redis://localhost:6379/1\",\n)\n\ncelery_app.conf.update(\n    task_serializer=\"json\",\n    result_serializer=\"json\",\n    accept_content=[\"json\"],\n    task_track_started=True,\n    task_acks_late=True,  # Re-deliver if worker crashes\n)\n\n@celery_app.task(bind=True, max_retries=3)\ndef generate_report(self, report_id: int):\n    \"\"\"Long-running task with automatic retries.\"\"\"\n    try:\n        # Simulate heavy work\n        import time\n        time.sleep(60)\n        return {\"report_id\": report_id, \"status\": \"complete\"}\n    except Exception as exc:\n        # Retry with exponential backoff\n        raise self.retry(exc=exc, countdown=2 ** self.request.retries)\n\n\n# --- FastAPI integration (main.py) ---\nfrom fastapi import FastAPI\nfrom celery.result import AsyncResult\n\napp = FastAPI()\n\n@app.post(\"/reports\")\nasync def create_report():\n    \"\"\"Dispatch heavy work to Celery.\"\"\"\n    task = generate_report.delay(report_id=42)\n    return {\"task_id\": task.id, \"status\": \"queued\"}\n\n@app.get(\"/reports/status/{task_id}\")\nasync def report_status(task_id: str):\n    \"\"\"Poll task status.\"\"\"\n    result = AsyncResult(task_id, app=celery_app)\n    response = {\n        \"task_id\": task_id,\n        \"status\": result.status,  # PENDING, STARTED, SUCCESS, FAILURE\n    }\n    if result.ready():\n        response[\"result\"] = result.get()\n    return response\n\n# Run Celery worker:\n# celery -A tasks worker --loglevel=info\n\n# Run Celery Beat for periodic tasks:\n# celery -A tasks beat --loglevel=info",
+          "code_language": "python",
+          "key_points": [
+            "BackgroundTasks: zero-infrastructure, in-process, fire-and-forget",
+            "Celery: requires a broker (Redis/RabbitMQ), supports retries, monitoring, and scheduling",
+            "Use BackgroundTasks for quick, non-critical tasks under 10 seconds",
+            "Use Celery for long-running, critical, or CPU-intensive tasks that need persistence"
+          ],
+          "gotchas": [
+            "Celery adds significant infrastructure complexity (broker, worker processes, monitoring)",
+            "BackgroundTasks run in the web server process -- CPU-heavy tasks degrade request performance",
+            "Celery tasks must be serializable (JSON by default) -- you cannot pass arbitrary Python objects",
+            "Mixing BackgroundTasks and Celery in the same endpoint is valid but can be confusing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use **BackgroundTasks** for quick, fire-and-forget work (emails, logs). Use **Celery** for long-running, critical, or CPU-intensive tasks that need retries, persistence, and monitoring. BackgroundTasks requires no infrastructure; Celery requires Redis/RabbitMQ.",
+          "pseudo_code": "",
+          "actual_code": "# Quick task: BackgroundTasks (in-process)\n@app.post(\"/notify\")\nasync def notify(bg: BackgroundTasks):\n    bg.add_task(send_email, \"user@example.com\")\n    return {\"status\": \"sent\"}\n\n# Heavy task: Celery (separate worker)\n@app.post(\"/reports\")\nasync def create_report():\n    task = generate_report.delay(42)\n    return {\"task_id\": task.id}",
+          "code_language": "python",
+          "key_points": [
+            "BackgroundTasks: lightweight, no infrastructure, non-persistent",
+            "Celery: distributed, persistent, retries, scheduling"
+          ],
+          "gotchas": [
+            "CPU-heavy BackgroundTasks block the web server's event loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement StreamingResponse for large data?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "streaming",
+        "response",
+        "generator",
+        "large-data"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**StreamingResponse** sends data to the client in chunks instead of buffering the entire response in memory. It accepts an async generator, a sync generator, or any iterable.\n\n### Use cases:\n- **Large file downloads**: Stream a multi-GB file without loading it all into RAM\n- **CSV/JSON export**: Generate rows on the fly from a database cursor\n- **Server-Sent Events (SSE)**: Push real-time updates to the client\n- **Proxying**: Forward a response from an upstream service chunk by chunk\n\n### Key parameters:\n- `content`: An iterable/generator that yields bytes or strings\n- `media_type`: The MIME type (e.g., `text/csv`, `application/octet-stream`)\n- `headers`: Additional headers (e.g., `Content-Disposition` for downloads)\n- `status_code`: HTTP status code (default 200)\n\n### Memory efficiency:\nWithout streaming, a 1GB file requires 1GB of RAM. With streaming, you only need the chunk size (typically 1KB-1MB) at any time.",
+          "pseudo_code": "from fastapi.responses import StreamingResponse\n\nasync def generate_data():\n    for chunk in data_source:\n        yield process(chunk)\n\n@app.get(\"/download\")\nasync def download():\n    return StreamingResponse(\n        generate_data(),\n        media_type=\"application/octet-stream\",\n    )",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import StreamingResponse\nimport asyncio\nimport io\nimport csv\n\napp = FastAPI()\n\n\n# --- Stream a large file ---\n@app.get(\"/download/largefile\")\nasync def download_large_file():\n    async def file_generator():\n        # Read file in chunks instead of loading entirely\n        chunk_size = 1024 * 64  # 64KB chunks\n        with open(\"/tmp/large_dataset.bin\", \"rb\") as f:\n            while chunk := f.read(chunk_size):\n                yield chunk\n\n    return StreamingResponse(\n        file_generator(),\n        media_type=\"application/octet-stream\",\n        headers={\n            \"Content-Disposition\": \"attachment; filename=dataset.bin\"\n        },\n    )\n\n\n# --- Stream CSV rows from a database ---\n@app.get(\"/export/users\")\nasync def export_users_csv():\n    async def csv_generator():\n        # Write header\n        output = io.StringIO()\n        writer = csv.writer(output)\n        writer.writerow([\"id\", \"name\", \"email\"])\n        yield output.getvalue()\n\n        # Simulate database rows (use async cursor in production)\n        users = [\n            (1, \"Alice\", \"alice@example.com\"),\n            (2, \"Bob\", \"bob@example.com\"),\n            (3, \"Charlie\", \"charlie@example.com\"),\n        ]\n        for user in users:\n            output = io.StringIO()\n            writer = csv.writer(output)\n            writer.writerow(user)\n            yield output.getvalue()\n\n    return StreamingResponse(\n        csv_generator(),\n        media_type=\"text/csv\",\n        headers={\n            \"Content-Disposition\": \"attachment; filename=users.csv\"\n        },\n    )\n\n\n# --- Server-Sent Events (SSE) ---\n@app.get(\"/events\")\nasync def server_sent_events():\n    async def event_generator():\n        for i in range(5):\n            await asyncio.sleep(1)\n            yield f\"data: Event {i}\\n\\n\"\n        yield \"data: [DONE]\\n\\n\"\n\n    return StreamingResponse(\n        event_generator(),\n        media_type=\"text/event-stream\",\n        headers={\"Cache-Control\": \"no-cache\"},\n    )\n\n\n# --- Stream JSON lines (NDJSON) ---\nimport json\n\n@app.get(\"/stream/items\")\nasync def stream_items():\n    async def ndjson_generator():\n        for i in range(100):\n            item = {\"id\": i, \"value\": f\"item_{i}\"}\n            yield json.dumps(item) + \"\\n\"\n\n    return StreamingResponse(\n        ndjson_generator(),\n        media_type=\"application/x-ndjson\",\n    )",
+          "code_language": "python",
+          "key_points": [
+            "StreamingResponse sends data in chunks, keeping memory usage constant regardless of total size",
+            "Accepts async generators, sync generators, or any iterable",
+            "Set Content-Disposition header for file downloads",
+            "Use text/event-stream media type for Server-Sent Events"
+          ],
+          "gotchas": [
+            "You cannot set Content-Length since the total size may be unknown -- some clients may not show download progress",
+            "Errors that occur mid-stream cannot change the HTTP status code (already sent as 200)",
+            "Sync generators run in a threadpool, which can limit concurrency",
+            "Some reverse proxies (Nginx) may buffer the entire response -- disable proxy_buffering for SSE"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`StreamingResponse` sends data in chunks via a generator, avoiding loading the entire response into memory. Useful for large file downloads, CSV exports, and Server-Sent Events.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import StreamingResponse\n\napp = FastAPI()\n\n@app.get(\"/download\")\nasync def download():\n    async def generate():\n        with open(\"large.csv\", \"rb\") as f:\n            while chunk := f.read(65536):\n                yield chunk\n\n    return StreamingResponse(\n        generate(),\n        media_type=\"text/csv\",\n        headers={\"Content-Disposition\": \"attachment; filename=data.csv\"},\n    )",
+          "code_language": "python",
+          "key_points": [
+            "Yields chunks to keep memory usage constant",
+            "Set media_type and Content-Disposition for downloads"
+          ],
+          "gotchas": [
+            "Errors mid-stream cannot change the HTTP status code since headers are already sent"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle errors in background tasks?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "background-tasks",
+        "error-handling",
+        "logging",
+        "retry"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Since background tasks run **after** the response is sent, any exceptions they raise cannot be reported to the client. You must handle errors within the tasks themselves.\n\n### Error handling strategies:\n\n1. **Try/except with logging**: Catch exceptions and log them for observability\n2. **Retry logic**: Implement manual retries with backoff for transient failures\n3. **Dead letter / fallback**: Write failed tasks to a queue or database for manual retry\n4. **Alerts**: Send alerts (Slack, PagerDuty) for critical task failures\n\n### What happens by default:\n- Starlette catches unhandled exceptions in background tasks and logs them\n- The exception does NOT affect the already-sent response\n- Other queued background tasks still run even if one fails\n\n### Best practices:\n- Always wrap task bodies in try/except\n- Log structured errors (task name, arguments, traceback)\n- Use a circuit breaker for external service calls\n- Consider moving error-prone tasks to Celery for built-in retry support",
+          "pseudo_code": "def safe_task(func, *args, retries=3):\n    for attempt in range(retries):\n        try:\n            func(*args)\n            return\n        except TransientError:\n            sleep(2 ** attempt)\n    log_failure(func, args)\n\n@app.post(\"/action\")\nasync def action(bg: BackgroundTasks):\n    bg.add_task(safe_task, risky_function, data)\n    return {\"status\": \"accepted\"}",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nimport logging\nimport time\nimport traceback\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# Strategy 1: Try/except with structured logging\ndef send_notification(user_id: int, message: str):\n    try:\n        # Simulate an API call that might fail\n        if user_id == 0:\n            raise ConnectionError(\"Notification service unavailable\")\n        logger.info(f\"Notification sent to user {user_id}\")\n    except Exception:\n        logger.error(\n            \"Background task failed\",\n            extra={\n                \"task\": \"send_notification\",\n                \"user_id\": user_id,\n                \"traceback\": traceback.format_exc(),\n            },\n        )\n\n\n# Strategy 2: Retry with exponential backoff\ndef send_email_with_retry(\n    to: str,\n    subject: str,\n    max_retries: int = 3,\n):\n    for attempt in range(max_retries):\n        try:\n            # Simulate email sending\n            if attempt < 2:\n                raise ConnectionError(\"SMTP timeout\")\n            logger.info(f\"Email sent to {to}: {subject}\")\n            return  # Success\n        except ConnectionError as e:\n            wait = 2 ** attempt  # 1s, 2s, 4s\n            logger.warning(\n                f\"Attempt {attempt + 1}/{max_retries} failed: {e}. \"\n                f\"Retrying in {wait}s...\"\n            )\n            time.sleep(wait)\n    # All retries exhausted\n    logger.error(f\"Failed to send email to {to} after {max_retries} attempts\")\n\n\n# Strategy 3: Generic safe wrapper\ndef safe_background_task(func, *args, **kwargs):\n    \"\"\"Wraps any function with error handling.\"\"\"\n    try:\n        result = func(*args, **kwargs)\n        logger.info(f\"Task {func.__name__} completed successfully\")\n        return result\n    except Exception:\n        logger.error(\n            f\"Task {func.__name__} failed: {traceback.format_exc()}\"\n        )\n\n\ndef risky_calculation(x: int):\n    return 100 / x  # Might raise ZeroDivisionError\n\n\n@app.post(\"/process/{user_id}\")\nasync def process_user(\n    user_id: int,\n    background_tasks: BackgroundTasks,\n):\n    background_tasks.add_task(send_notification, user_id, \"Processing\")\n    background_tasks.add_task(\n        send_email_with_retry, \"admin@example.com\", \"Report\"\n    )\n    background_tasks.add_task(\n        safe_background_task, risky_calculation, user_id\n    )\n    return {\"user_id\": user_id, \"status\": \"processing\"}",
+          "code_language": "python",
+          "key_points": [
+            "Background task exceptions cannot reach the client -- the response is already sent",
+            "Always wrap task bodies in try/except with structured logging",
+            "Implement retry logic with exponential backoff for transient failures",
+            "Other queued tasks still run even if one task fails"
+          ],
+          "gotchas": [
+            "Unhandled exceptions in background tasks are silently logged by Starlette -- easy to miss",
+            "Retry logic with sleep() blocks the thread -- keep retry counts low",
+            "There is no built-in dead-letter queue -- you must implement persistence manually",
+            "If you need robust retry semantics, use Celery or ARQ instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Background tasks run after the response is sent, so exceptions cannot reach the client. Always use try/except with logging inside your tasks. For retries, implement manual backoff logic or use Celery for built-in retry support.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nimport logging\n\nlogger = logging.getLogger(__name__)\napp = FastAPI()\n\ndef safe_email(to: str):\n    try:\n        send_smtp(to)  # Might fail\n    except Exception:\n        logger.error(f\"Email to {to} failed\", exc_info=True)\n\n@app.post(\"/notify\")\nasync def notify(bg: BackgroundTasks):\n    bg.add_task(safe_email, \"user@example.com\")\n    return {\"status\": \"queued\"}",
+          "code_language": "python",
+          "key_points": [
+            "Wrap task bodies in try/except -- exceptions cannot reach the client"
+          ],
+          "gotchas": [
+            "Unhandled exceptions are silently logged and easy to miss in production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use background tasks with dependencies?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "background-tasks",
+        "dependencies",
+        "dependency-injection"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Background tasks can be combined with FastAPI's dependency injection system in several ways:\n\n### 1. BackgroundTasks in dependencies:\nIf a dependency declares `BackgroundTasks` as a parameter, it receives the **same instance** as the endpoint. Tasks added in the dependency are merged.\n\n### 2. Using dependency results in background tasks:\nYou can pass values from dependencies (database sessions, config, etc.) to background tasks. But be careful with **yield dependencies** -- they clean up after the response, which may be before the background task runs.\n\n### 3. Class-based dependencies:\nA class dependency can encapsulate both the task logic and the BackgroundTasks scheduling.\n\n### Critical warning about yield dependencies:\nA `yield` dependency closes its resource after the response is sent but **before** background tasks run. If a background task needs a database session from a yield dependency, the session will already be closed. You must create a **new session** inside the background task.",
+          "pseudo_code": "# WRONG: yield dep closes before bg task runs\ndef get_db():\n    db = Session()\n    yield db\n    db.close()  # Closed BEFORE background task!\n\n# RIGHT: create new session in background task\ndef bg_task_with_db(item_id: int):\n    db = Session()  # Own session\n    try:\n        process(db, item_id)\n    finally:\n        db.close()",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks, Depends\nfrom typing import Annotated\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- 1. Dependency that adds background tasks ---\ndef audit_log_dep(background_tasks: BackgroundTasks):\n    \"\"\"Dependency that schedules an audit log task.\"\"\"\n    def log_action(action: str):\n        logger.info(f\"AUDIT: {action}\")\n\n    background_tasks.add_task(log_action, \"endpoint_accessed\")\n    return \"audit_enabled\"\n\n@app.get(\"/items\")\nasync def list_items(\n    audit: Annotated[str, Depends(audit_log_dep)],\n    background_tasks: BackgroundTasks,\n):\n    # This task runs AFTER the dependency's task\n    background_tasks.add_task(logger.info, \"items listed\")\n    return {\"items\": [], \"audit\": audit}\n\n\n# --- 2. WRONG: Using yield dependency's resource in bg task ---\n# def get_db():\n#     db = FakeDB()\n#     yield db\n#     db.close()  # Closes BEFORE background tasks run!\n#\n# @app.post(\"/wrong\")\n# async def wrong(db: Annotated[FakeDB, Depends(get_db)], bg: BackgroundTasks):\n#     bg.add_task(process_in_db, db)  # db is CLOSED here!\n\n\n# --- 3. RIGHT: Background task creates its own resources ---\nclass FakeDB:\n    def __init__(self):\n        self.connected = True\n    def close(self):\n        self.connected = False\n    def query(self, sql: str):\n        return f\"Result of: {sql}\"\n\ndef get_db_factory():\n    \"\"\"Returns a factory, not a session.\"\"\"\n    def create_db():\n        return FakeDB()\n    return create_db\n\ndef background_process(item_id: int):\n    \"\"\"Background task creates its own DB session.\"\"\"\n    db = FakeDB()\n    try:\n        result = db.query(f\"UPDATE items SET status='processed' WHERE id={item_id}\")\n        logger.info(f\"Background: {result}\")\n    finally:\n        db.close()\n\n@app.post(\"/items/{item_id}/process\")\nasync def process_item(\n    item_id: int,\n    background_tasks: BackgroundTasks,\n):\n    background_tasks.add_task(background_process, item_id)\n    return {\"item_id\": item_id, \"status\": \"processing\"}\n\n\n# --- 4. Class-based dependency with background tasks ---\nclass NotificationService:\n    def __init__(self, background_tasks: BackgroundTasks):\n        self.background_tasks = background_tasks\n\n    def schedule_email(self, to: str, subject: str):\n        self.background_tasks.add_task(\n            self._send_email, to, subject\n        )\n\n    @staticmethod\n    def _send_email(to: str, subject: str):\n        logger.info(f\"Email to {to}: {subject}\")\n\n@app.post(\"/users/{user_id}/welcome\")\nasync def welcome_user(\n    user_id: int,\n    notifier: Annotated[NotificationService, Depends()],\n):\n    notifier.schedule_email(f\"user{user_id}@example.com\", \"Welcome!\")\n    return {\"user_id\": user_id, \"status\": \"welcomed\"}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies and endpoints share the same BackgroundTasks instance",
+            "Tasks from dependencies run before tasks added in the endpoint",
+            "Background tasks must create their own resources -- yield dependency resources are closed before tasks run",
+            "Class-based dependencies can encapsulate task scheduling logic"
+          ],
+          "gotchas": [
+            "Yield dependencies clean up BEFORE background tasks execute -- never pass a yielded resource to a background task",
+            "If a dependency adds too many tasks, it can be hard to debug which dependency scheduled what",
+            "BackgroundTasks injection works in sub-dependencies too -- all share one instance",
+            "Dependency caching means the same BackgroundTasks instance is shared even across multiple dependency paths"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies and endpoints share the same `BackgroundTasks` instance. Tasks from dependencies run first. Never pass a yield dependency's resource to a background task -- it will be closed. Create new resources inside the background task.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks, Depends\nfrom typing import Annotated\n\napp = FastAPI()\n\ndef audit_dep(bg: BackgroundTasks):\n    bg.add_task(print, \"Audit logged\")\n\n@app.post(\"/items\")\nasync def create(bg: BackgroundTasks, _: Annotated[None, Depends(audit_dep)]):\n    bg.add_task(print, \"Item created\")  # Runs after audit\n    return {\"status\": \"ok\"}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies share the same BackgroundTasks instance with the endpoint"
+          ],
+          "gotchas": [
+            "Yield dependency resources are closed BEFORE background tasks run -- create new resources in the task"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is ARQ and how does it compare to Celery for FastAPI?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "arq",
+        "celery",
+        "task-queue",
+        "async",
+        "redis"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**ARQ** (Asynchronous Redis Queue) is a lightweight, async-native task queue built on top of `asyncio` and `redis`/`arq`. It is a natural fit for FastAPI because both are async-first.\n\n### ARQ vs Celery comparison:\n\n| Feature | ARQ | Celery |\n|---------|-----|--------|\n| Async native | Yes (asyncio) | No (sync, async via gevent/eventlet) |\n| Broker | Redis only | Redis, RabbitMQ, SQS, etc. |\n| Result backend | Redis | Redis, DB, S3, etc. |\n| Complexity | Minimal | Heavy (many config options) |\n| Monitoring | Basic (arq CLI) | Flower, Prometheus |\n| Retries | Built-in | Built-in |\n| Scheduled tasks | Cron-like | Celery Beat |\n| Community/ecosystem | Small | Very large |\n| Learning curve | Low | Moderate |\n\n### When to choose ARQ:\n- Your app is fully async (FastAPI + async DB drivers)\n- You only need Redis as a broker\n- You want minimal setup and dependencies\n- Your task queue needs are moderate\n\n### When to choose Celery:\n- You need RabbitMQ or other non-Redis brokers\n- You need advanced features (priority queues, task chains, chords)\n- You need mature monitoring tools (Flower)\n- Your team already knows Celery",
+          "pseudo_code": "# ARQ worker definition\nclass WorkerSettings:\n    functions = [heavy_task]\n    redis_settings = RedisSettings()\n    cron_jobs = [cron(cleanup, hour=3)]\n\n# FastAPI dispatches to ARQ\n@app.post(\"/process\")\nasync def process():\n    job = await arq_pool.enqueue_job(\"heavy_task\", data)\n    return {\"job_id\": job.job_id}",
+          "actual_code": "# --- ARQ task definitions (worker.py) ---\nfrom arq import cron\nfrom arq.connections import RedisSettings\nimport asyncio\n\nasync def send_report(ctx: dict, report_id: int):\n    \"\"\"Async task -- runs natively on the event loop.\"\"\"\n    # Access shared resources from ctx\n    redis = ctx.get(\"redis\")\n    print(f\"Generating report {report_id}\")\n    await asyncio.sleep(2)  # Simulate async work\n    return {\"report_id\": report_id, \"status\": \"done\"}\n\nasync def cleanup_old_data(ctx: dict):\n    \"\"\"Periodic task to clean up stale data.\"\"\"\n    print(\"Cleaning up old data...\")\n    await asyncio.sleep(1)\n\nasync def startup(ctx: dict):\n    \"\"\"Called when worker starts -- initialize resources.\"\"\"\n    print(\"Worker starting up\")\n    # ctx[\"db\"] = await create_db_pool()\n\nasync def shutdown(ctx: dict):\n    \"\"\"Called when worker shuts down -- cleanup.\"\"\"\n    print(\"Worker shutting down\")\n    # await ctx[\"db\"].close()\n\nclass WorkerSettings:\n    \"\"\"ARQ worker configuration.\"\"\"\n    functions = [send_report]\n    cron_jobs = [\n        cron(cleanup_old_data, hour=3, minute=0),  # Daily at 3am\n    ]\n    on_startup = startup\n    on_shutdown = shutdown\n    redis_settings = RedisSettings(\n        host=\"localhost\", port=6379, database=0\n    )\n    max_jobs = 10\n    job_timeout = 300  # 5 minutes\n\n\n# --- FastAPI integration (main.py) ---\nfrom contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nfrom arq.connections import ArqRedis, create_pool, RedisSettings\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Create ARQ connection pool at startup\n    app.state.arq_pool = await create_pool(\n        RedisSettings(host=\"localhost\")\n    )\n    yield\n    await app.state.arq_pool.close()\n\napp = FastAPI(lifespan=lifespan)\n\n@app.post(\"/reports\")\nasync def create_report(report_id: int = 42):\n    pool: ArqRedis = app.state.arq_pool\n    job = await pool.enqueue_job(\"send_report\", report_id)\n    return {\"job_id\": job.job_id, \"status\": \"queued\"}\n\n@app.get(\"/reports/status/{job_id}\")\nasync def report_status(job_id: str):\n    pool: ArqRedis = app.state.arq_pool\n    job = await pool.job(job_id)\n    info = await job.info()\n    return {\n        \"job_id\": job_id,\n        \"status\": info.status if info else \"unknown\",\n    }\n\n# Run ARQ worker:\n# arq worker.WorkerSettings",
+          "code_language": "python",
+          "key_points": [
+            "ARQ is async-native (asyncio) making it a natural fit for FastAPI",
+            "ARQ only supports Redis as a broker -- simpler but less flexible than Celery",
+            "Worker startup/shutdown hooks let you manage shared resources like DB pools",
+            "Cron jobs in ARQ replace Celery Beat for periodic tasks"
+          ],
+          "gotchas": [
+            "ARQ requires Redis -- if you need RabbitMQ or SQS, use Celery",
+            "ARQ's ecosystem and monitoring tools are much smaller than Celery's",
+            "The ctx dict is worker-scoped, not task-scoped -- do not store task-specific state in it",
+            "ARQ enqueue_job returns None if a job with the same ID already exists (deduplication)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ARQ is an async-native task queue using Redis, designed for asyncio apps like FastAPI. It is simpler than Celery with less configuration, but only supports Redis as a broker and has a smaller ecosystem.",
+          "pseudo_code": "",
+          "actual_code": "from arq.connections import create_pool, RedisSettings\n\n# Dispatch task from FastAPI\n@app.post(\"/process\")\nasync def process():\n    pool = app.state.arq_pool\n    job = await pool.enqueue_job(\"heavy_task\", 42)\n    return {\"job_id\": job.job_id}\n\n# ARQ worker (worker.py)\nasync def heavy_task(ctx, item_id: int):\n    return {\"processed\": item_id}\n\nclass WorkerSettings:\n    functions = [heavy_task]\n    redis_settings = RedisSettings()",
+          "code_language": "python",
+          "key_points": [
+            "Async-native -- uses asyncio, not threads",
+            "Redis-only broker, simpler setup than Celery"
+          ],
+          "gotchas": [
+            "Much smaller ecosystem and monitoring tooling compared to Celery"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement periodic tasks with FastAPI?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "periodic-tasks",
+        "scheduling",
+        "asyncio",
+        "celery-beat",
+        "arq"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI does not have a built-in scheduler. There are several approaches to running periodic tasks:\n\n### 1. asyncio background loop (simple, in-process):\nStart an asyncio task during lifespan that loops with `asyncio.sleep()`. Good for lightweight, non-critical periodic work.\n\n### 2. ARQ cron jobs (recommended for async apps):\nARQ has built-in cron support. Tasks run in a separate worker process with proper error handling.\n\n### 3. Celery Beat (recommended for complex setups):\nCelery Beat is a mature scheduler that dispatches tasks to Celery workers on a schedule.\n\n### 4. APScheduler (standalone scheduler):\nA Python-native scheduler that can be integrated with FastAPI via lifespan.\n\n### 5. OS-level cron / systemd timers:\nUse the operating system's cron to hit an endpoint or run a script. Simple and reliable.\n\n### Comparison:\n| Approach | Persistence | Separate Process | Complexity |\n|----------|------------|-----------------|------------|\n| asyncio loop | No | No | Low |\n| ARQ cron | Yes (Redis) | Yes | Low |\n| Celery Beat | Yes (broker) | Yes | Medium |\n| APScheduler | Optional | No | Medium |\n| OS cron | OS-level | Yes | Low |",
+          "pseudo_code": "# In-process asyncio loop\nasync def periodic_cleanup():\n    while True:\n        await cleanup()\n        await asyncio.sleep(3600)  # Every hour\n\n@asynccontextmanager\nasync def lifespan(app):\n    task = asyncio.create_task(periodic_cleanup())\n    yield\n    task.cancel()",
+          "actual_code": "# --- Approach 1: asyncio background loop ---\nfrom contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nimport asyncio\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\nasync def periodic_cleanup(interval_seconds: int = 3600):\n    \"\"\"Runs every hour to clean up expired data.\"\"\"\n    while True:\n        try:\n            logger.info(\"Running periodic cleanup...\")\n            # Simulate cleanup work\n            await asyncio.sleep(0.1)\n            logger.info(\"Cleanup complete\")\n        except asyncio.CancelledError:\n            logger.info(\"Cleanup task cancelled\")\n            break\n        except Exception:\n            logger.error(\"Cleanup failed\", exc_info=True)\n        await asyncio.sleep(interval_seconds)\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Start periodic task\n    cleanup_task = asyncio.create_task(\n        periodic_cleanup(interval_seconds=3600)\n    )\n    yield\n    # Cancel on shutdown\n    cleanup_task.cancel()\n    try:\n        await cleanup_task\n    except asyncio.CancelledError:\n        pass\n\napp = FastAPI(lifespan=lifespan)\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\"}\n\n\n# --- Approach 2: ARQ cron jobs ---\nfrom arq import cron\nfrom arq.connections import RedisSettings\n\nasync def daily_report(ctx: dict):\n    logger.info(\"Generating daily report\")\n    await asyncio.sleep(1)\n\nasync def hourly_sync(ctx: dict):\n    logger.info(\"Syncing data with external API\")\n    await asyncio.sleep(1)\n\nclass WorkerSettings:\n    cron_jobs = [\n        cron(daily_report, hour=8, minute=0),      # Daily at 8 AM\n        cron(hourly_sync, minute=0),                # Every hour\n    ]\n    redis_settings = RedisSettings()\n# Run: arq worker.WorkerSettings\n\n\n# --- Approach 3: APScheduler integration ---\nfrom contextlib import asynccontextmanager\nfrom apscheduler.schedulers.asyncio import AsyncIOScheduler\nfrom apscheduler.triggers.interval import IntervalTrigger\n\nasync def check_subscriptions():\n    logger.info(\"Checking expired subscriptions\")\n\n@asynccontextmanager\nasync def lifespan_with_scheduler(app: FastAPI):\n    scheduler = AsyncIOScheduler()\n    scheduler.add_job(\n        check_subscriptions,\n        trigger=IntervalTrigger(hours=1),\n        id=\"check_subscriptions\",\n        replace_existing=True,\n    )\n    scheduler.start()\n    yield\n    scheduler.shutdown()\n\nscheduled_app = FastAPI(lifespan=lifespan_with_scheduler)",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.create_task in lifespan is simplest for lightweight periodic work",
+            "ARQ cron jobs run in a separate worker process with Redis persistence",
+            "APScheduler integrates directly with FastAPI's event loop",
+            "Always handle CancelledError when cancelling periodic asyncio tasks on shutdown"
+          ],
+          "gotchas": [
+            "In-process asyncio loops die with the server and do not survive restarts",
+            "With multiple Uvicorn workers, each worker starts its own periodic task -- use a lock or external scheduler",
+            "APScheduler's in-memory job store loses state on restart -- use a database store for persistence",
+            "Celery Beat must run as a single instance -- multiple beat processes create duplicate tasks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI has no built-in scheduler. Use `asyncio.create_task` in lifespan for simple in-process loops, ARQ cron for async apps with Redis, Celery Beat for complex setups, or APScheduler for a Python-native approach.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nimport asyncio\n\nasync def periodic_task():\n    while True:\n        print(\"Running periodic work...\")\n        await asyncio.sleep(3600)\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    task = asyncio.create_task(periodic_task())\n    yield\n    task.cancel()\n\napp = FastAPI(lifespan=lifespan)",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.create_task in lifespan for simple in-process periodic work",
+            "Use ARQ or Celery Beat for persistent, distributed scheduling"
+          ],
+          "gotchas": [
+            "Multiple Uvicorn workers each start their own periodic task -- use a distributed lock"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you manage shared state in lifespan events (e.g., database pools, caches)?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "lifespan",
+        "state-management",
+        "database-pool",
+        "app-state"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The lifespan context manager is the ideal place to create and destroy shared resources (database pools, Redis connections, HTTP clients, ML models). You store them on `app.state` and access them from route handlers.\n\n### Patterns for sharing state:\n\n1. **app.state**: The standard way. Set attributes on `app.state` during lifespan. Access via `request.app.state` in handlers.\n\n2. **Dependency injection**: Create a dependency that reads from `app.state`. This is cleaner and testable.\n\n3. **Module-level globals** (discouraged): Works but makes testing harder and ties resources to module import.\n\n### Common resources to manage:\n- **Database connection pool** (SQLAlchemy async engine, asyncpg pool)\n- **Redis client** (aioredis)\n- **HTTP client** (httpx.AsyncClient)\n- **ML models** (loaded once, reused per request)\n- **Configuration** loaded from external sources",
+          "pseudo_code": "@asynccontextmanager\nasync def lifespan(app):\n    # Create shared resources\n    app.state.db_pool = await create_pool()\n    app.state.redis = await create_redis()\n    app.state.http_client = httpx.AsyncClient()\n    yield\n    # Cleanup\n    await app.state.http_client.aclose()\n    await app.state.redis.close()\n    await app.state.db_pool.close()",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Depends, Request\nfrom typing import Annotated, AsyncGenerator\nimport httpx\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n\n# Simulated async resources\nclass AsyncDBPool:\n    async def connect(self, dsn: str):\n        logger.info(f\"DB pool connected to {dsn}\")\n    async def acquire(self):\n        return \"db_connection\"\n    async def close(self):\n        logger.info(\"DB pool closed\")\n\nclass AsyncRedis:\n    async def connect(self, url: str):\n        logger.info(f\"Redis connected to {url}\")\n    async def get(self, key: str):\n        return None\n    async def close(self):\n        logger.info(\"Redis closed\")\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    \"\"\"Manage all shared resources in one place.\"\"\"\n    # --- Startup ---\n    db_pool = AsyncDBPool()\n    await db_pool.connect(\"postgresql://localhost/mydb\")\n    app.state.db_pool = db_pool\n\n    redis = AsyncRedis()\n    await redis.connect(\"redis://localhost:6379\")\n    app.state.redis = redis\n\n    # Shared HTTP client (connection pooling)\n    http_client = httpx.AsyncClient(\n        timeout=30.0,\n        limits=httpx.Limits(max_connections=100),\n    )\n    app.state.http_client = http_client\n\n    logger.info(\"All resources initialized\")\n    yield\n\n    # --- Shutdown (reverse order) ---\n    await http_client.aclose()\n    await redis.close()\n    await db_pool.close()\n    logger.info(\"All resources cleaned up\")\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n# --- Access via dependency injection (recommended) ---\nasync def get_db(request: Request):\n    \"\"\"Dependency that provides a DB connection from the pool.\"\"\"\n    pool = request.app.state.db_pool\n    conn = await pool.acquire()\n    return conn\n\nasync def get_redis(request: Request):\n    return request.app.state.redis\n\nasync def get_http_client(request: Request) -> httpx.AsyncClient:\n    return request.app.state.http_client\n\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(\n    user_id: int,\n    db: Annotated[str, Depends(get_db)],\n    redis: Annotated[AsyncRedis, Depends(get_redis)],\n):\n    # Check cache first\n    cached = await redis.get(f\"user:{user_id}\")\n    if cached:\n        return {\"user_id\": user_id, \"source\": \"cache\"}\n    # Fall back to database\n    return {\"user_id\": user_id, \"source\": \"database\", \"db\": db}\n\n\n@app.get(\"/external-api\")\nasync def call_external(\n    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],\n):\n    \"\"\"Reuses the shared HTTP client (connection pooling).\"\"\"\n    response = await client.get(\"https://httpbin.org/get\")\n    return {\"status\": response.status_code}",
+          "code_language": "python",
+          "key_points": [
+            "Store shared resources on app.state during lifespan startup",
+            "Access via request.app.state in dependencies for clean, testable code",
+            "Clean up resources in reverse order during shutdown",
+            "A shared httpx.AsyncClient reuses connections, improving performance"
+          ],
+          "gotchas": [
+            "app.state is not type-safe -- use type hints in dependencies to catch errors",
+            "Resources on app.state are shared across all requests -- they must be thread/async safe",
+            "Each Uvicorn worker has its own app.state -- state is not shared across workers",
+            "Do not access app.state at module import time -- it is only populated after lifespan starts"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Store shared resources (DB pools, Redis, HTTP clients) on `app.state` during lifespan startup. Access them via `request.app.state` in dependencies. Clean up in reverse order during shutdown.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Request, Depends\nimport httpx\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    app.state.http_client = httpx.AsyncClient()\n    yield\n    await app.state.http_client.aclose()\n\napp = FastAPI(lifespan=lifespan)\n\nasync def get_client(request: Request):\n    return request.app.state.http_client\n\n@app.get(\"/fetch\")\nasync def fetch(client=Depends(get_client)):\n    r = await client.get(\"https://example.com\")\n    return {\"status\": r.status_code}",
+          "code_language": "python",
+          "key_points": [
+            "app.state stores shared resources created in lifespan",
+            "Dependencies provide type-safe access to app.state"
+          ],
+          "gotchas": [
+            "Each Uvicorn worker has its own app.state -- not shared across processes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement event-driven patterns in FastAPI?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "event-driven",
+        "pub-sub",
+        "signals",
+        "architecture"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Event-driven architecture decouples components by having them communicate through events rather than direct calls. In FastAPI, you can implement this at several levels:\n\n### 1. In-process event bus (simple pub/sub):\nA lightweight pattern where handlers register for event types. Good for decoupling within a single service.\n\n### 2. Redis Pub/Sub:\nFor cross-service communication. One FastAPI service publishes events, another subscribes.\n\n### 3. Background tasks as event handlers:\nCombine FastAPI's BackgroundTasks with an event dispatcher.\n\n### 4. Server-Sent Events (SSE):\nPush events to clients in real-time via streaming responses.\n\n### 5. External message brokers:\nFor production systems, use Kafka, RabbitMQ, or NATS for reliable event delivery.\n\n### Benefits:\n- **Loose coupling**: Publishers do not know about subscribers\n- **Extensibility**: Add new handlers without modifying existing code\n- **Async processing**: Heavy work happens in handlers, not the request path",
+          "pseudo_code": "class EventBus:\n    handlers = defaultdict(list)\n\n    def subscribe(self, event, handler):\n        handlers[event].append(handler)\n\n    async def publish(self, event, data):\n        for handler in handlers[event]:\n            await handler(data)\n\nevent_bus = EventBus()\nevent_bus.subscribe(\"user.created\", send_welcome_email)\nevent_bus.subscribe(\"user.created\", init_user_profile)",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nfrom contextlib import asynccontextmanager\nfrom collections import defaultdict\nfrom typing import Any, Callable, Coroutine\nimport asyncio\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n\n# --- In-process event bus ---\nclass EventBus:\n    \"\"\"Simple async event bus for in-process pub/sub.\"\"\"\n\n    def __init__(self):\n        self._handlers: dict[\n            str, list[Callable[..., Coroutine]]\n        ] = defaultdict(list)\n\n    def subscribe(self, event: str, handler: Callable):\n        self._handlers[event].append(handler)\n        logger.info(f\"Subscribed {handler.__name__} to '{event}'\")\n\n    async def publish(self, event: str, data: Any = None):\n        handlers = self._handlers.get(event, [])\n        logger.info(\n            f\"Publishing '{event}' to {len(handlers)} handlers\"\n        )\n        # Run all handlers concurrently\n        await asyncio.gather(\n            *(handler(data) for handler in handlers),\n            return_exceptions=True,\n        )\n\n\n# Create global event bus\nevent_bus = EventBus()\n\n\n# --- Event handlers ---\nasync def send_welcome_email(user: dict):\n    logger.info(f\"Sending welcome email to {user['email']}\")\n    await asyncio.sleep(0.1)\n\nasync def create_default_settings(user: dict):\n    logger.info(f\"Creating default settings for user {user['id']}\")\n    await asyncio.sleep(0.1)\n\nasync def notify_admin(user: dict):\n    logger.info(f\"Notifying admin about new user {user['id']}\")\n    await asyncio.sleep(0.1)\n\n\n# Register handlers\nevent_bus.subscribe(\"user.created\", send_welcome_email)\nevent_bus.subscribe(\"user.created\", create_default_settings)\nevent_bus.subscribe(\"user.created\", notify_admin)\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    app.state.event_bus = event_bus\n    yield\n\napp = FastAPI(lifespan=lifespan)\n\n\n@app.post(\"/users\")\nasync def create_user(background_tasks: BackgroundTasks):\n    user = {\"id\": 1, \"email\": \"alice@example.com\"}\n\n    # Fire event in background (non-blocking)\n    background_tasks.add_task(\n        event_bus.publish, \"user.created\", user\n    )\n\n    return {\"user\": user, \"status\": \"created\"}\n\n\n# --- Decorator-based event subscription ---\nclass DecoratorEventBus(EventBus):\n    def on(self, event: str):\n        \"\"\"Decorator to subscribe to an event.\"\"\"\n        def decorator(func):\n            self.subscribe(event, func)\n            return func\n        return decorator\n\nbus = DecoratorEventBus()\n\n@bus.on(\"order.placed\")\nasync def process_payment(order: dict):\n    logger.info(f\"Processing payment for order {order['id']}\")\n\n@bus.on(\"order.placed\")\nasync def reserve_inventory(order: dict):\n    logger.info(f\"Reserving inventory for order {order['id']}\")",
+          "code_language": "python",
+          "key_points": [
+            "An in-process event bus decouples components within a single service",
+            "asyncio.gather runs all event handlers concurrently",
+            "Combine with BackgroundTasks to fire events without blocking the response",
+            "For cross-service events, use Redis Pub/Sub, Kafka, or RabbitMQ"
+          ],
+          "gotchas": [
+            "In-process event buses are lost on restart -- no persistence or delivery guarantees",
+            "return_exceptions=True in gather prevents one failing handler from cancelling others",
+            "Event ordering is not guaranteed when handlers run concurrently",
+            "For critical business events (payments, orders), use a persistent message broker, not an in-process bus"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement an in-process event bus with a dict of event-to-handlers mappings. Use `asyncio.gather` to run handlers concurrently. Fire events from BackgroundTasks for non-blocking operation. For cross-service events, use Redis Pub/Sub or Kafka.",
+          "pseudo_code": "",
+          "actual_code": "from collections import defaultdict\nimport asyncio\n\nclass EventBus:\n    def __init__(self):\n        self._handlers = defaultdict(list)\n\n    def subscribe(self, event, handler):\n        self._handlers[event].append(handler)\n\n    async def publish(self, event, data=None):\n        await asyncio.gather(\n            *(h(data) for h in self._handlers[event]),\n            return_exceptions=True,\n        )\n\nbus = EventBus()\nbus.subscribe(\"user.created\", send_welcome_email)\nbus.subscribe(\"user.created\", create_profile)",
+          "code_language": "python",
+          "key_points": [
+            "Event bus decouples publishers from subscribers",
+            "asyncio.gather runs handlers concurrently"
+          ],
+          "gotchas": [
+            "In-process buses have no persistence -- use a message broker for critical events"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test endpoints that use background tasks?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "testing",
+        "background-tasks",
+        "pytest",
+        "mocking"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Testing endpoints with background tasks requires verifying both the response and the side effects of the tasks. FastAPI's `TestClient` runs background tasks **synchronously** before the test assertion, making them easy to test.\n\n### Key behaviors in testing:\n1. **TestClient (sync)**: Background tasks run before the response is returned to the test. This means side effects are visible immediately.\n2. **httpx.AsyncClient**: Same behavior -- tasks complete before the response.\n3. **Mocking tasks**: Use `unittest.mock.patch` or `dependency_overrides` to mock task functions.\n4. **Verifying task execution**: Use mock assertions, check side effects (files, DB records), or capture log messages.\n\n### Testing strategies:\n- **Integration**: Let tasks run and verify side effects\n- **Unit**: Mock the task functions and verify they were called with correct arguments\n- **Override**: Replace BackgroundTasks with a no-op for endpoint-only testing",
+          "pseudo_code": "def test_endpoint_with_bg_tasks():\n    # TestClient runs bg tasks synchronously\n    response = client.post(\"/register\")\n    assert response.status_code == 200\n    # Background task side effects are already complete\n    assert email_was_sent(\"user@example.com\")\n\ndef test_with_mock():\n    with patch(\"app.send_email\") as mock:\n        response = client.post(\"/register\")\n        mock.assert_called_once_with(\"user@example.com\")",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nfrom fastapi.testclient import TestClient\nfrom unittest.mock import patch, MagicMock\nimport pytest\n\n# --- App code ---\napp = FastAPI()\n\nnotification_log: list[str] = []\n\ndef send_notification(user_id: int, message: str):\n    \"\"\"Side effect: appends to notification_log.\"\"\"\n    notification_log.append(f\"{user_id}:{message}\")\n\ndef write_audit(action: str):\n    notification_log.append(f\"audit:{action}\")\n\n@app.post(\"/users/{user_id}/activate\")\nasync def activate_user(\n    user_id: int,\n    background_tasks: BackgroundTasks,\n):\n    background_tasks.add_task(\n        send_notification, user_id, \"activated\"\n    )\n    background_tasks.add_task(write_audit, \"user_activated\")\n    return {\"user_id\": user_id, \"status\": \"active\"}\n\n\n# --- Tests ---\nclient = TestClient(app)\n\n\ndef test_activate_returns_correct_response():\n    \"\"\"Test the response, ignoring background tasks.\"\"\"\n    response = client.post(\"/users/42/activate\")\n    assert response.status_code == 200\n    assert response.json() == {\"user_id\": 42, \"status\": \"active\"}\n\n\ndef test_background_tasks_execute():\n    \"\"\"TestClient runs background tasks synchronously.\"\"\"\n    notification_log.clear()\n    response = client.post(\"/users/42/activate\")\n    assert response.status_code == 200\n    # Background tasks have already completed\n    assert \"42:activated\" in notification_log\n    assert \"audit:user_activated\" in notification_log\n\n\ndef test_background_task_with_mock():\n    \"\"\"Mock the task function to verify it was called.\"\"\"\n    with patch(\"__main__.send_notification\") as mock_notify:\n        response = client.post(\"/users/7/activate\")\n        assert response.status_code == 200\n        mock_notify.assert_called_once_with(7, \"activated\")\n\n\ndef test_background_task_with_dependency_override():\n    \"\"\"Replace BackgroundTasks entirely for isolation.\"\"\"\n    mock_bg = MagicMock(spec=BackgroundTasks)\n    # Note: BackgroundTasks cannot be overridden via dependency_overrides\n    # Instead, test by checking side effects after the request completes\n\n    response = client.post(\"/users/5/activate\")\n    assert response.status_code == 200\n    # Verify add_task was called (tasks did NOT run)\n    assert mock_bg.add_task.call_count == 2\n\n    app.dependency_overrides.clear()\n\n\n# --- Async test with httpx ---\nimport httpx\n\n@pytest.mark.anyio\nasync def test_async_background_tasks():\n    \"\"\"Background tasks also run with async test client.\"\"\"\n    notification_log.clear()\n    async with httpx.AsyncClient(\n        app=app, base_url=\"http://test\"\n    ) as ac:\n        response = await ac.post(\"/users/99/activate\")\n    assert response.status_code == 200\n    assert \"99:activated\" in notification_log",
+          "code_language": "python",
+          "key_points": [
+            "TestClient runs background tasks synchronously -- side effects are visible immediately in tests",
+            "Use unittest.mock.patch to verify task functions were called with correct arguments",
+            "dependency_overrides can replace BackgroundTasks entirely for isolated testing",
+            "Both sync TestClient and async httpx.AsyncClient complete background tasks before returning"
+          ],
+          "gotchas": [
+            "In production, background tasks run AFTER the response -- but in tests they run BEFORE assertions",
+            "Patching the task function requires the correct import path (where it is used, not where it is defined)",
+            "dependency_overrides.clear() must be called in teardown to avoid affecting other tests",
+            "If a background task raises an exception, TestClient will propagate it -- unlike production where it is silently logged"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI's `TestClient` runs background tasks synchronously before returning the response, so side effects are immediately visible. Use `mock.patch` to verify task calls, or `dependency_overrides` to replace `BackgroundTasks` entirely.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi.testclient import TestClient\nfrom unittest.mock import patch\n\nclient = TestClient(app)\n\ndef test_bg_task_side_effects():\n    log.clear()\n    client.post(\"/users/42/activate\")\n    assert \"42:activated\" in log  # Task already ran\n\ndef test_bg_task_was_called():\n    with patch(\"app.send_notification\") as mock:\n        client.post(\"/users/42/activate\")\n        mock.assert_called_once_with(42, \"activated\")",
+          "code_language": "python",
+          "key_points": [
+            "TestClient runs background tasks synchronously for easy testing"
+          ],
+          "gotchas": [
+            "In tests, background task exceptions propagate -- unlike production where they are silently logged"
+          ]
+        }
+      ]
+    }
+  ]
+}

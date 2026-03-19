@@ -1,0 +1,547 @@
+{
+  "concept_slug": "error-handling",
+  "questions": [
+    {
+      "title": "How does HTTPException work in FastAPI?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "HTTPException",
+        "error-handling",
+        "status-codes",
+        "http"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**HTTPException** is FastAPI's built-in way to return HTTP error responses from endpoints and dependencies. It immediately stops request processing and sends a JSON error response.\n\n### How it works:\n1. You `raise HTTPException(status_code=..., detail=...)` anywhere in your endpoint or dependency\n2. FastAPI catches it and returns a JSON response with the given status code\n3. The `detail` field can be a string, dict, or list -- it is JSON-serialized automatically\n4. An optional `headers` dict adds extra HTTP headers to the error response\n\n### Parameters:\n- `status_code` (int): The HTTP status code (400, 401, 403, 404, 422, 500, etc.)\n- `detail` (Any): The error message or structured error data\n- `headers` (dict | None): Additional response headers (e.g., `WWW-Authenticate` for 401)\n\n### Default response format:\n```json\n{\"detail\": \"your error message\"}\n```\n\n### Common status codes:\n| Code | Meaning | Use case |\n|---|---|---|\n| 400 | Bad Request | Invalid input that passes validation |\n| 401 | Unauthorized | Missing or invalid auth |\n| 403 | Forbidden | Authenticated but not authorized |\n| 404 | Not Found | Resource does not exist |\n| 409 | Conflict | Duplicate resource |\n| 422 | Unprocessable Entity | Validation error (FastAPI's default) |",
+          "pseudo_code": "# Simple string error\nraise HTTPException(status_code=404, detail=\"Item not found\")\n\n# Structured error with dict\nraise HTTPException(status_code=400, detail={\"field\": \"email\", \"error\": \"invalid\"})\n\n# With custom headers\nraise HTTPException(\n    status_code=401,\n    detail=\"Token expired\",\n    headers={\"WWW-Authenticate\": \"Bearer\"},\n)",
+          "actual_code": "from fastapi import FastAPI, HTTPException, status\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Simulated database\nITEMS = {1: {\"name\": \"Widget\", \"price\": 9.99}, 2: {\"name\": \"Gadget\", \"price\": 24.99}}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id < 0:\n        # String detail\n        raise HTTPException(\n            status_code=status.HTTP_400_BAD_REQUEST,\n            detail=\"Item ID must be positive\",\n        )\n    if item_id not in ITEMS:\n        # Structured detail (dict)\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail={\"error\": \"not_found\", \"item_id\": item_id},\n        )\n    return ITEMS[item_id]\n\n@app.delete(\"/items/{item_id}\")\ndef delete_item(item_id: int):\n    if item_id not in ITEMS:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail=\"Item not found\",\n            headers={\"X-Error-Code\": \"ITEM_NOT_FOUND\"},\n        )\n    return {\"deleted\": item_id}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Valid item\nresp = client.get(\"/items/1\")\nprint(f\"200: {resp.json()}\")\n\n# Negative ID -> 400\nresp = client.get(\"/items/-1\")\nprint(f\"400: {resp.status_code} {resp.json()}\")\n\n# Not found -> 404 with structured detail\nresp = client.get(\"/items/999\")\nprint(f\"404: {resp.status_code} {resp.json()}\")\n\n# Delete not found -> custom header\nresp = client.delete(\"/items/999\")\nprint(f\"Header: {resp.headers.get('X-Error-Code')}\")\n\n# Expected Output:\n# 200: {'name': 'Widget', 'price': 9.99}\n# 400: 400 {'detail': 'Item ID must be positive'}\n# 404: 404 {'detail': {'error': 'not_found', 'item_id': 999}}\n# Header: ITEM_NOT_FOUND",
+          "code_language": "python",
+          "key_points": [
+            "HTTPException immediately stops execution and returns a JSON error response",
+            "detail can be a string, dict, or list -- it is JSON-serialized automatically",
+            "Use status module constants (status.HTTP_404_NOT_FOUND) for readability",
+            "The optional headers parameter adds custom HTTP headers to the error response"
+          ],
+          "gotchas": [
+            "HTTPException is raised, not returned -- use raise, not return",
+            "detail is the only field in the default JSON response body -- for richer error formats, use custom exception handlers",
+            "FastAPI's HTTPException extends Starlette's and adds the detail parameter to accept any JSON-serializable type, not just strings"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`raise HTTPException(status_code=404, detail=\"Not found\")` immediately returns a JSON error response `{\"detail\": \"Not found\"}` with the given status code. The `detail` can be a string, dict, or list. Use `headers` to add custom response headers.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, HTTPException, status\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id not in db:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail=\"Item not found\",\n        )\n    return db[item_id]",
+          "code_language": "python",
+          "key_points": [
+            "raise HTTPException stops execution and returns JSON {\"detail\": ...}"
+          ],
+          "gotchas": [
+            "HTTPException is raised, not returned -- use raise, not return"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create custom exception handlers?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "exception-handler",
+        "error-handling",
+        "custom-errors",
+        "decorator"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Custom exception handlers** let you control exactly how exceptions are turned into HTTP responses. Instead of the default `{\"detail\": ...}` format, you can return any response structure.\n\n### How to register a handler:\nUse `@app.exception_handler(ExceptionClass)` to register a function that handles a specific exception type. The function receives the `Request` and the exception instance.\n\n### Handler signature:\n```python\nasync def handler(request: Request, exc: MyException) -> Response:\n```\n\n### What you can customize:\n- Response body structure (add error codes, timestamps, request IDs)\n- Response content type (JSON, HTML, plain text)\n- Status code\n- Response headers\n\n### Execution order:\n1. Exception is raised in endpoint or dependency\n2. FastAPI looks for a handler registered for that exact exception class\n3. If found, it calls the handler and returns its response\n4. If not found, it checks parent exception classes\n5. If no handler matches, FastAPI returns a default 500 Internal Server Error\n\n### Built-in exceptions you can override:\n- `HTTPException`: Override the default JSON error format\n- `RequestValidationError`: Override validation error responses\n- `StarletteHTTPException`: Starlette's base HTTP exception",
+          "pseudo_code": "class ItemNotFoundError(Exception):\n    def __init__(self, item_id: int):\n        self.item_id = item_id\n\n@app.exception_handler(ItemNotFoundError)\nasync def handle_item_not_found(request, exc):\n    return JSONResponse(\n        status_code=404,\n        content={\"error\": \"not_found\", \"item_id\": exc.item_id},\n    )\n\n# In endpoint:\nraise ItemNotFoundError(item_id=42)",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom datetime import datetime, timezone\n\napp = FastAPI()\n\n# --- Custom exception classes ---\nclass AppException(Exception):\n    \"\"\"Base exception for the application.\"\"\"\n    def __init__(self, code: str, message: str, status_code: int = 400):\n        self.code = code\n        self.message = message\n        self.status_code = status_code\n\nclass ItemNotFoundError(AppException):\n    def __init__(self, item_id: int):\n        super().__init__(\n            code=\"ITEM_NOT_FOUND\",\n            message=f\"Item {item_id} does not exist\",\n            status_code=404,\n        )\n        self.item_id = item_id\n\nclass InsufficientStockError(AppException):\n    def __init__(self, item_id: int, available: int):\n        super().__init__(\n            code=\"INSUFFICIENT_STOCK\",\n            message=f\"Only {available} units available\",\n            status_code=409,\n        )\n\n# --- Register handler for the base exception class ---\n@app.exception_handler(AppException)\nasync def app_exception_handler(request: Request, exc: AppException):\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\n            \"error\": {\n                \"code\": exc.code,\n                \"message\": exc.message,\n                \"timestamp\": datetime.now(timezone.utc).isoformat(),\n                \"path\": str(request.url.path),\n            }\n        },\n    )\n\nITEMS = {1: {\"name\": \"Widget\", \"stock\": 5}}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id not in ITEMS:\n        raise ItemNotFoundError(item_id=item_id)\n    return ITEMS[item_id]\n\n@app.post(\"/items/{item_id}/purchase\")\ndef purchase_item(item_id: int, quantity: int = 1):\n    if item_id not in ITEMS:\n        raise ItemNotFoundError(item_id=item_id)\n    if ITEMS[item_id][\"stock\"] < quantity:\n        raise InsufficientStockError(item_id, ITEMS[item_id][\"stock\"])\n    return {\"purchased\": quantity}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Not found -> custom error format\nresp = client.get(\"/items/999\")\nprint(f\"Status: {resp.status_code}\")\nerror = resp.json()[\"error\"]\nprint(f\"Code: {error['code']}\")\nprint(f\"Message: {error['message']}\")\nprint(f\"Path: {error['path']}\")\n\n# Insufficient stock\nresp = client.post(\"/items/1/purchase?quantity=100\")\nprint(f\"Stock error: {resp.status_code} {resp.json()['error']['code']}\")\n\n# Expected Output:\n# Status: 404\n# Code: ITEM_NOT_FOUND\n# Message: Item 999 does not exist\n# Path: /items/999\n# Stock error: 409 INSUFFICIENT_STOCK",
+          "code_language": "python",
+          "key_points": [
+            "@app.exception_handler(ExceptionClass) registers a custom handler for that exception type",
+            "The handler receives the Request and exception instance, and must return a Response",
+            "Registering a handler for a base class catches all subclasses too",
+            "Custom handlers let you return structured error formats with codes, timestamps, and paths"
+          ],
+          "gotchas": [
+            "The handler must return a Response object (e.g., JSONResponse) -- it cannot raise another exception",
+            "A handler for a base class catches all subclass exceptions -- register more specific handlers first if you need different behavior",
+            "Custom exception handlers do not catch exceptions in middleware -- only in endpoints and dependencies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `@app.exception_handler(MyException)` to register a function that converts exceptions into custom JSON responses. The handler receives `request` and `exc`, and must return a `Response` (e.g., `JSONResponse`). A handler for a base class catches all subclasses.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\n\napp = FastAPI()\n\nclass NotFoundError(Exception):\n    def __init__(self, resource: str, id: int):\n        self.resource = resource\n        self.id = id\n\n@app.exception_handler(NotFoundError)\nasync def not_found_handler(request: Request, exc: NotFoundError):\n    return JSONResponse(\n        status_code=404,\n        content={\"error\": f\"{exc.resource} {exc.id} not found\"},\n    )",
+          "code_language": "python",
+          "key_points": [
+            "@app.exception_handler registers a function to convert exceptions to responses"
+          ],
+          "gotchas": [
+            "The handler must return a Response -- it cannot raise another exception"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is RequestValidationError and how do you customize its response?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "validation",
+        "RequestValidationError",
+        "pydantic",
+        "error-handling"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**RequestValidationError** is raised automatically when FastAPI (via Pydantic) cannot validate the incoming request data -- path parameters, query parameters, headers, or the request body.\n\n### Default behavior:\nFastAPI returns a 422 Unprocessable Entity with a detailed error response showing exactly which fields failed and why:\n```json\n{\n  \"detail\": [\n    {\n      \"type\": \"missing\",\n      \"loc\": [\"body\", \"name\"],\n      \"msg\": \"Field required\",\n      \"input\": {},\n      \"url\": \"...\"\n    }\n  ]\n}\n```\n\n### When it is raised:\n- Missing required fields in the request body\n- Wrong data types (string where int expected)\n- Failed Pydantic validators (min_length, ge, regex, etc.)\n- Invalid path parameters (e.g., non-integer for `int` path param)\n- Invalid query parameters\n\n### Customizing the response:\nOverride the handler by registering your own for `RequestValidationError`. This is useful for:\n- Returning a simpler error format for frontend consumption\n- Translating technical Pydantic errors into user-friendly messages\n- Logging validation errors for debugging\n- Matching your API's standard error format\n\n### Accessing error details:\n- `exc.errors()` returns the list of validation errors\n- `exc.body` returns the raw request body that failed validation\n- Each error has `loc` (location), `msg` (message), `type` (error type), and `input` (the value received)",
+          "pseudo_code": "from fastapi.exceptions import RequestValidationError\n\n@app.exception_handler(RequestValidationError)\nasync def validation_handler(request, exc):\n    errors = []\n    for error in exc.errors():\n        field = \".\".join(str(loc) for loc in error[\"loc\"])\n        errors.append({\"field\": field, \"message\": error[\"msg\"]})\n    return JSONResponse(status_code=422, content={\"errors\": errors})",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# --- Custom validation error handler ---\n@app.exception_handler(RequestValidationError)\nasync def custom_validation_handler(request: Request, exc: RequestValidationError):\n    \"\"\"Transform Pydantic errors into a simpler format.\"\"\"\n    errors = []\n    for error in exc.errors():\n        # loc is a tuple like (\"body\", \"name\") or (\"query\", \"page\")\n        location = \".\".join(str(part) for part in error[\"loc\"])\n        errors.append({\n            \"field\": location,\n            \"message\": error[\"msg\"],\n            \"type\": error[\"type\"],\n        })\n    return JSONResponse(\n        status_code=422,\n        content={\n            \"error\": \"validation_failed\",\n            \"message\": f\"{len(errors)} validation error(s)\",\n            \"details\": errors,\n        },\n    )\n\nclass CreateUser(BaseModel):\n    name: str = Field(min_length=2, max_length=50)\n    email: str\n    age: int = Field(ge=18, le=120)\n\n@app.post(\"/users\")\ndef create_user(user: CreateUser):\n    return {\"created\": user.name}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int, page: int = 1):\n    return {\"item_id\": item_id, \"page\": page}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Missing required fields\nresp = client.post(\"/users\", json={})\nprint(f\"Status: {resp.status_code}\")\ndata = resp.json()\nprint(f\"Error: {data['error']}\")\nprint(f\"Count: {data['message']}\")\nfor err in data[\"details\"]:\n    print(f\"  {err['field']}: {err['message']}\")\n\n# Invalid types\nresp = client.post(\"/users\", json={\"name\": \"A\", \"email\": \"test@test.com\", \"age\": 10})\nprint(f\"\\nAge too low: {resp.json()['details'][0]['message']}\")\n\n# Invalid path param\nresp = client.get(\"/items/not-a-number\")\nprint(f\"Bad path: {resp.json()['details'][0]['field']}\")\n\n# Expected Output:\n# Status: 422\n# Error: validation_failed\n# Count: 3 validation error(s)\n#   body.name: Field required\n#   body.email: Field required\n#   body.age: Field required\n# \n# Age too low: Input should be greater than or equal to 18\n# Bad path: path.item_id",
+          "code_language": "python",
+          "key_points": [
+            "RequestValidationError is raised automatically when request data fails Pydantic validation",
+            "Override with @app.exception_handler(RequestValidationError) to customize the 422 response",
+            "exc.errors() returns a list of dicts with loc, msg, type, and input fields",
+            "exc.body contains the raw request body that failed validation"
+          ],
+          "gotchas": [
+            "Import RequestValidationError from fastapi.exceptions, not from pydantic",
+            "The loc tuple includes the source -- ('body', 'field'), ('query', 'param'), ('path', 'param') -- so you know where the error occurred",
+            "Overriding the handler replaces ALL validation error responses -- ensure your format covers all cases"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`RequestValidationError` is raised when request data fails Pydantic validation (wrong types, missing fields, constraint violations). Override its handler with `@app.exception_handler(RequestValidationError)` to return a custom error format. Access errors via `exc.errors()` and the raw body via `exc.body`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\n\napp = FastAPI()\n\n@app.exception_handler(RequestValidationError)\nasync def validation_handler(request: Request, exc: RequestValidationError):\n    errors = [{\"field\": \".\".join(str(l) for l in e[\"loc\"]), \"msg\": e[\"msg\"]} for e in exc.errors()]\n    return JSONResponse(status_code=422, content={\"errors\": errors})",
+          "code_language": "python",
+          "key_points": [
+            "exc.errors() returns structured validation error details with loc and msg"
+          ],
+          "gotchas": [
+            "Import from fastapi.exceptions, not from pydantic"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between FastAPI's HTTPException and Starlette's HTTPException?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "starlette",
+        "HTTPException",
+        "error-handling",
+        "inheritance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI has its **own HTTPException** that extends Starlette's. They look similar but behave differently, and mixing them up causes subtle bugs.\n\n### Key differences:\n\n| Feature | Starlette HTTPException | FastAPI HTTPException |\n|---|---|---|\n| Import | `from starlette.exceptions import HTTPException` | `from fastapi import HTTPException` |\n| `detail` type | `str` only | Any JSON-serializable (str, dict, list) |\n| Default handler | Returns plain text | Returns JSON `{\"detail\": ...}` |\n| Inheritance | Base class | Subclass of Starlette's HTTPException |\n\n### Why it matters:\n- FastAPI's `HTTPException` accepts `detail={\"code\": \"ERR\", \"fields\": [...]}` -- Starlette's does not\n- If you override `@app.exception_handler(StarletteHTTPException)`, it catches **both** FastAPI's and Starlette's since FastAPI's is a subclass\n- If you override `@app.exception_handler(FastAPIHTTPException)`, it only catches FastAPI's\n- Third-party middleware (from Starlette ecosystem) raises Starlette's HTTPException, not FastAPI's\n\n### Best practice:\n- Use `from fastapi import HTTPException` in your endpoints\n- When overriding the exception handler, import Starlette's to catch all HTTP exceptions:\n  ```python\n  from starlette.exceptions import HTTPException as StarletteHTTPException\n  ```\n- Register the handler for `StarletteHTTPException` to catch exceptions from both FastAPI and Starlette middleware",
+          "pseudo_code": "from fastapi import HTTPException as FastAPIHTTPException\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\n\n# FastAPI's -- accepts dict detail\nraise FastAPIHTTPException(status_code=400, detail={\"code\": \"INVALID\"})\n\n# Starlette's -- string detail only\nraise StarletteHTTPException(status_code=400, detail=\"Bad request\")\n\n# To catch ALL HTTP exceptions (both FastAPI and Starlette):\n@app.exception_handler(StarletteHTTPException)\nasync def handle_all(request, exc):\n    ...",
+          "actual_code": "from fastapi import FastAPI, HTTPException as FastAPIHTTPException, Request\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# --- Handler for ALL HTTPExceptions (Starlette base catches FastAPI subclass too) ---\n@app.exception_handler(StarletteHTTPException)\nasync def unified_http_exception_handler(\n    request: Request, exc: StarletteHTTPException\n):\n    \"\"\"Handles both FastAPI and Starlette HTTPExceptions.\"\"\"\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\n            \"error\": {\n                \"status\": exc.status_code,\n                \"detail\": exc.detail,\n                \"type\": type(exc).__module__ + \".\" + type(exc).__name__,\n            }\n        },\n    )\n\n@app.get(\"/fastapi-error\")\ndef fastapi_error():\n    # FastAPI's HTTPException -- dict detail works\n    raise FastAPIHTTPException(\n        status_code=400,\n        detail={\"code\": \"INVALID_INPUT\", \"field\": \"email\"},\n    )\n\n@app.get(\"/starlette-error\")\ndef starlette_error():\n    # Starlette's HTTPException -- string detail only\n    raise StarletteHTTPException(\n        status_code=400,\n        detail=\"Bad request from Starlette\",\n    )\n\n# --- Test ---\nclient = TestClient(app)\n\n# FastAPI exception with dict detail\nresp = client.get(\"/fastapi-error\")\nprint(f\"FastAPI: {resp.json()}\")\n\n# Starlette exception with string detail\nresp = client.get(\"/starlette-error\")\nprint(f\"Starlette: {resp.json()}\")\n\n# Check inheritance\nprint(f\"FastAPI is subclass: {issubclass(FastAPIHTTPException, StarletteHTTPException)}\")\n\n# Expected Output:\n# FastAPI: {'error': {'status': 400, 'detail': {'code': 'INVALID_INPUT', 'field': 'email'}, 'type': 'fastapi.exceptions.HTTPException'}}\n# Starlette: {'error': {'status': 400, 'detail': 'Bad request from Starlette', 'type': 'starlette.exceptions.HTTPException'}}\n# FastAPI is subclass: True",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI's HTTPException accepts any JSON-serializable detail (str, dict, list)",
+            "Starlette's HTTPException only accepts string detail",
+            "FastAPI's HTTPException is a subclass of Starlette's -- catching Starlette's catches both",
+            "Third-party Starlette middleware raises Starlette's HTTPException, not FastAPI's"
+          ],
+          "gotchas": [
+            "If you only handle FastAPI's HTTPException, errors from Starlette middleware will use the default plain-text handler",
+            "Passing a dict to Starlette's HTTPException detail will work but get converted to a string representation, not JSON",
+            "When overriding the handler, register for StarletteHTTPException to catch all HTTP errors from both frameworks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI's `HTTPException` extends Starlette's and allows `detail` to be any JSON-serializable type (dict, list), not just strings. To catch all HTTP exceptions (from both FastAPI and Starlette middleware), register your handler for `starlette.exceptions.HTTPException` since FastAPI's is a subclass.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import HTTPException  # Accepts dict/list detail\nfrom starlette.exceptions import HTTPException as StarletteHTTPException  # String only\n\n# FastAPI's -- structured detail\nraise HTTPException(status_code=400, detail={\"code\": \"ERR\", \"field\": \"email\"})\n\n# Catch ALL HTTP exceptions:\n@app.exception_handler(StarletteHTTPException)\nasync def handle_all(request, exc):\n    return JSONResponse(status_code=exc.status_code, content={\"error\": exc.detail})",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI's HTTPException is a subclass of Starlette's with richer detail support"
+          ],
+          "gotchas": [
+            "Only handling FastAPI's HTTPException misses errors from Starlette middleware"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you format error responses consistently?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "error-handling",
+        "error-format",
+        "API-design",
+        "consistency"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Consistent error formatting** means every error response from your API follows the same structure, regardless of whether it is a validation error, an HTTPException, or an unhandled exception.\n\n### Why consistency matters:\n- Frontend developers can write a single error parser\n- Easier to log, monitor, and alert on errors\n- Better developer experience for API consumers\n- Machine-readable error codes enable programmatic handling\n\n### Recommended error format:\n```json\n{\n  \"error\": {\n    \"code\": \"ITEM_NOT_FOUND\",\n    \"message\": \"Item 42 does not exist\",\n    \"details\": [],\n    \"path\": \"/items/42\",\n    \"timestamp\": \"2024-01-15T10:30:00Z\"\n  }\n}\n```\n\n### Implementation strategy:\n1. Define an `ErrorResponse` Pydantic model for the error structure\n2. Create a helper function to build consistent error responses\n3. Override handlers for `HTTPException`, `RequestValidationError`, and `Exception`\n4. Use the same format in all three handlers\n\n### Fields to include:\n- `code`: Machine-readable error code (e.g., `\"ITEM_NOT_FOUND\"`, `\"VALIDATION_FAILED\"`)\n- `message`: Human-readable description\n- `details`: Additional context (validation errors, field-level issues)\n- `path`: The request path that caused the error\n- `timestamp`: When the error occurred (ISO 8601)",
+          "pseudo_code": "def make_error_response(code, message, status, path, details=None):\n    return JSONResponse(\n        status_code=status,\n        content={\n            \"error\": {\n                \"code\": code,\n                \"message\": message,\n                \"details\": details or [],\n                \"path\": path,\n                \"timestamp\": now_iso(),\n            }\n        },\n    )\n\n# Register for HTTPException, RequestValidationError, and Exception\n# All use make_error_response() for consistent format",
+          "actual_code": "from datetime import datetime, timezone\nfrom fastapi import FastAPI, Request, HTTPException\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\n\napp = FastAPI()\n\n# --- Consistent error response builder ---\ndef error_response(\n    status_code: int,\n    code: str,\n    message: str,\n    path: str,\n    details: list | None = None,\n) -> JSONResponse:\n    return JSONResponse(\n        status_code=status_code,\n        content={\n            \"error\": {\n                \"code\": code,\n                \"message\": message,\n                \"details\": details or [],\n                \"path\": path,\n                \"timestamp\": datetime.now(timezone.utc).isoformat(),\n            }\n        },\n    )\n\n# --- Override all error handlers ---\n@app.exception_handler(StarletteHTTPException)\nasync def http_exception_handler(request: Request, exc: StarletteHTTPException):\n    return error_response(\n        status_code=exc.status_code,\n        code=f\"HTTP_{exc.status_code}\",\n        message=str(exc.detail),\n        path=request.url.path,\n    )\n\n@app.exception_handler(RequestValidationError)\nasync def validation_exception_handler(request: Request, exc: RequestValidationError):\n    details = [\n        {\"field\": \".\".join(str(l) for l in e[\"loc\"]), \"message\": e[\"msg\"]}\n        for e in exc.errors()\n    ]\n    return error_response(\n        status_code=422,\n        code=\"VALIDATION_FAILED\",\n        message=f\"{len(details)} validation error(s)\",\n        path=request.url.path,\n        details=details,\n    )\n\n@app.exception_handler(Exception)\nasync def unhandled_exception_handler(request: Request, exc: Exception):\n    return error_response(\n        status_code=500,\n        code=\"INTERNAL_ERROR\",\n        message=\"An unexpected error occurred\",\n        path=request.url.path,\n    )\n\nclass CreateItem(BaseModel):\n    name: str = Field(min_length=1)\n    price: float = Field(gt=0)\n\n@app.post(\"/items\")\ndef create_item(item: CreateItem):\n    return {\"created\": item.name}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    raise HTTPException(status_code=404, detail=\"Item not found\")\n\n# --- Test ---\nclient = TestClient(app, raise_server_exceptions=False)\n\n# HTTP exception -> consistent format\nresp = client.get(\"/items/1\")\nprint(f\"HTTP error: {resp.json()['error']['code']}\")\n\n# Validation error -> consistent format\nresp = client.post(\"/items\", json={\"name\": \"\", \"price\": -5})\nerr = resp.json()[\"error\"]\nprint(f\"Validation: {err['code']} - {err['message']}\")\nfor d in err[\"details\"]:\n    print(f\"  {d['field']}: {d['message']}\")\n\n# All errors have the same top-level structure\nprint(f\"Both have 'error' key: {True}\")\n\n# Expected Output:\n# HTTP error: HTTP_404\n# Validation: VALIDATION_FAILED - 2 validation error(s)\n#   body.name: String should have at least 1 character\n#   body.price: Input should be greater than 0\n# Both have 'error' key: True",
+          "code_language": "python",
+          "key_points": [
+            "Create a helper function that builds error responses in a consistent format",
+            "Override handlers for HTTPException, RequestValidationError, and Exception",
+            "Include machine-readable codes, human-readable messages, and contextual details",
+            "Always include the request path and timestamp for debugging and logging"
+          ],
+          "gotchas": [
+            "The Exception handler catches truly unhandled errors -- never expose stack traces or internal details to clients",
+            "Register the handler for StarletteHTTPException (not FastAPI's) to catch errors from Starlette middleware too",
+            "The Exception handler requires raise_server_exceptions=False in TestClient to test properly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a helper function that returns `JSONResponse` with a consistent structure (`code`, `message`, `details`, `path`, `timestamp`). Override handlers for `HTTPException`, `RequestValidationError`, and `Exception` -- all three use the same helper for uniform output.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\nfrom fastapi.exceptions import RequestValidationError\n\napp = FastAPI()\n\ndef error_response(status: int, code: str, message: str, path: str):\n    return JSONResponse(status_code=status, content={\"error\": {\"code\": code, \"message\": message, \"path\": path}})\n\n@app.exception_handler(StarletteHTTPException)\nasync def http_handler(request: Request, exc):\n    return error_response(exc.status_code, f\"HTTP_{exc.status_code}\", str(exc.detail), request.url.path)\n\n@app.exception_handler(RequestValidationError)\nasync def validation_handler(request: Request, exc):\n    return error_response(422, \"VALIDATION_FAILED\", \"Invalid input\", request.url.path)",
+          "code_language": "python",
+          "key_points": [
+            "One helper function ensures every error has the same JSON structure"
+          ],
+          "gotchas": [
+            "Never expose internal error details (stack traces, file paths) in the Exception handler"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add logging to exception handlers?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "logging",
+        "error-handling",
+        "exception-handler",
+        "observability"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Adding logging to exception handlers** is essential for debugging production issues. You want to log error details server-side while returning a clean, safe response to the client.\n\n### What to log:\n- Request method and path\n- Exception type and message\n- Full traceback (for unhandled exceptions)\n- Request body (for validation errors, sanitized)\n- Client IP and user agent\n- Request ID (for correlation with other logs)\n\n### Log levels:\n- `logger.warning()`: For expected errors (404, 422) -- these are not bugs\n- `logger.error()`: For unexpected errors (500) -- these need investigation\n- `logger.exception()`: Same as error but automatically includes the traceback\n\n### Security considerations:\n- Never log passwords, tokens, or sensitive headers\n- Sanitize request bodies before logging\n- Do not expose internal details (stack traces, file paths) to the client\n- Log the full traceback server-side but return a generic message to the client\n\n### Structured logging:\nFor production, use structured logging (JSON) with libraries like `structlog` or `python-json-logger` for easy parsing by log aggregators (ELK, Datadog, CloudWatch).",
+          "pseudo_code": "@app.exception_handler(Exception)\nasync def handle_unhandled(request, exc):\n    logger.exception(\n        \"Unhandled error\",\n        extra={\n            \"path\": request.url.path,\n            \"method\": request.method,\n            \"error\": str(exc),\n        }\n    )\n    return JSONResponse(status_code=500, content={\"error\": \"Internal error\"})",
+          "actual_code": "import logging\nimport traceback\nfrom fastapi import FastAPI, Request, HTTPException\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO, format=\"%(levelname)s: %(message)s\")\nlogger = logging.getLogger(\"api.errors\")\n\napp = FastAPI()\n\n@app.exception_handler(HTTPException)\nasync def http_exception_with_logging(request: Request, exc: HTTPException):\n    \"\"\"Log HTTP exceptions at WARNING level.\"\"\"\n    logger.warning(\n        f\"HTTP {exc.status_code} on {request.method} {request.url.path}: {exc.detail}\"\n    )\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\"error\": {\"code\": f\"HTTP_{exc.status_code}\", \"message\": str(exc.detail)}},\n    )\n\n@app.exception_handler(RequestValidationError)\nasync def validation_error_with_logging(request: Request, exc: RequestValidationError):\n    \"\"\"Log validation errors at WARNING level.\"\"\"\n    error_count = len(exc.errors())\n    fields = [\".\".join(str(l) for l in e[\"loc\"]) for e in exc.errors()]\n    logger.warning(\n        f\"Validation failed on {request.method} {request.url.path}: \"\n        f\"{error_count} error(s) in fields: {', '.join(fields)}\"\n    )\n    return JSONResponse(\n        status_code=422,\n        content={\"error\": {\"code\": \"VALIDATION_FAILED\", \"message\": f\"{error_count} error(s)\"}},\n    )\n\n@app.exception_handler(Exception)\nasync def unhandled_exception_with_logging(request: Request, exc: Exception):\n    \"\"\"Log unhandled exceptions at ERROR level with traceback.\"\"\"\n    logger.error(\n        f\"Unhandled {type(exc).__name__} on {request.method} {request.url.path}: {exc}\"\n    )\n    logger.error(f\"Traceback:\\n{traceback.format_exc()}\")\n    # Never expose internal details to the client\n    return JSONResponse(\n        status_code=500,\n        content={\"error\": {\"code\": \"INTERNAL_ERROR\", \"message\": \"An unexpected error occurred\"}},\n    )\n\nclass CreateUser(BaseModel):\n    name: str = Field(min_length=1)\n\n@app.post(\"/users\")\ndef create_user(user: CreateUser):\n    return {\"name\": user.name}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    raise HTTPException(status_code=404, detail=\"Item not found\")\n\n@app.get(\"/crash\")\ndef crash():\n    raise RuntimeError(\"Something broke\")\n\n# --- Test ---\nclient = TestClient(app, raise_server_exceptions=False)\n\n# HTTP exception -> WARNING log\nresp = client.get(\"/items/1\")\nprint(f\"404 response: {resp.json()['error']['code']}\")\n\n# Validation error -> WARNING log\nresp = client.post(\"/users\", json={\"name\": \"\"})\nprint(f\"422 response: {resp.json()['error']['code']}\")\n\n# Unhandled exception -> ERROR log with traceback\nresp = client.get(\"/crash\")\nprint(f\"500 response: {resp.json()['error']['message']}\")\n\n# Expected Output:\n# WARNING: HTTP 404 on GET /items/1: Item not found\n# 404 response: HTTP_404\n# WARNING: Validation failed on POST /users: 1 error(s) in fields: body.name\n# 422 response: VALIDATION_FAILED\n# ERROR: Unhandled RuntimeError on GET /crash: Something broke\n# ERROR: Traceback:\n# ...\n# 500 response: An unexpected error occurred",
+          "code_language": "python",
+          "key_points": [
+            "Use logger.warning() for expected errors (404, 422) and logger.error() for unexpected ones (500)",
+            "logger.exception() automatically includes the traceback -- use it instead of manually formatting",
+            "Log full error details server-side but return safe, generic messages to the client",
+            "Include request method, path, and error type in log messages for easy debugging"
+          ],
+          "gotchas": [
+            "Never log sensitive data (passwords, auth tokens, PII) -- sanitize request bodies before logging",
+            "The Exception handler in TestClient requires raise_server_exceptions=False to avoid re-raising in tests",
+            "logging.exception() must be called inside an except block -- otherwise it logs 'NoneType: None' for the traceback"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Add `logger.warning()` in HTTP/validation handlers and `logger.error()` (with traceback) in the unhandled exception handler. Log method, path, and error details server-side. Return clean, safe error messages to the client -- never expose stack traces.",
+          "pseudo_code": "",
+          "actual_code": "import logging\nfrom fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\n\nlogger = logging.getLogger(\"api\")\napp = FastAPI()\n\n@app.exception_handler(Exception)\nasync def log_unhandled(request: Request, exc: Exception):\n    logger.exception(f\"Unhandled error on {request.method} {request.url.path}\")\n    return JSONResponse(status_code=500, content={\"error\": \"Internal error\"})",
+          "code_language": "python",
+          "key_points": [
+            "logger.exception() logs the error message plus the full traceback automatically"
+          ],
+          "gotchas": [
+            "Never expose stack traces or internal paths to the client in the error response"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle 404 errors for missing resources?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "404",
+        "not-found",
+        "error-handling",
+        "REST"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Handling 404 errors** properly is fundamental to good API design. There are two types of 404s in FastAPI:\n\n### 1. Route not found (no matching endpoint):\n- FastAPI/Starlette returns a default `{\"detail\": \"Not Found\"}` response\n- Customize by overriding the `HTTPException` handler\n\n### 2. Resource not found (endpoint exists, item does not):\n- You `raise HTTPException(status_code=404)` in your endpoint\n- This is the more common case in CRUD APIs\n\n### Patterns for resource lookups:\n\n**Pattern A: Direct raise in endpoint**\n```python\nif item_id not in db:\n    raise HTTPException(404, detail=\"Item not found\")\n```\n\n**Pattern B: Dependency that raises**\n```python\ndef get_item_or_404(item_id: int) -> Item:\n    item = db.get(item_id)\n    if not item:\n        raise HTTPException(404)\n    return item\n```\n\n**Pattern C: Custom exception class**\n```python\nclass NotFoundError(Exception): ...\n```\n\n### Best practices:\n- Include the resource type and ID in the error message\n- Use dependencies for reusable lookup-or-404 logic\n- Return consistent error format across all 404s\n- Consider returning helpful information (e.g., \"Did you mean...?\") for search-like endpoints",
+          "pseudo_code": "# Dependency pattern (most reusable)\ndef get_item_or_404(item_id: int, db = Depends(get_db)) -> Item:\n    item = db.query(Item).get(item_id)\n    if not item:\n        raise HTTPException(404, detail=f\"Item {item_id} not found\")\n    return item\n\n@app.get(\"/items/{item_id}\")\ndef read_item(item: Annotated[Item, Depends(get_item_or_404)]):\n    return item\n\n@app.put(\"/items/{item_id}\")\ndef update_item(item: Annotated[Item, Depends(get_item_or_404)], data: UpdateData):\n    ...",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# Simulated database\nclass Item(BaseModel):\n    id: int\n    name: str\n    price: float\n\nITEMS_DB: dict[int, Item] = {\n    1: Item(id=1, name=\"Widget\", price=9.99),\n    2: Item(id=2, name=\"Gadget\", price=24.99),\n}\n\n# --- Reusable dependency for lookup-or-404 ---\ndef get_item_or_404(item_id: int) -> Item:\n    \"\"\"Reusable dependency: returns item or raises 404.\"\"\"\n    item = ITEMS_DB.get(item_id)\n    if item is None:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail={\n                \"error\": \"not_found\",\n                \"resource\": \"item\",\n                \"id\": item_id,\n                \"message\": f\"Item {item_id} does not exist\",\n            },\n        )\n    return item\n\nFoundItem = Annotated[Item, Depends(get_item_or_404)]\n\n# Same dependency used across multiple endpoints\n@app.get(\"/items/{item_id}\")\ndef read_item(item: FoundItem):\n    return item\n\n@app.put(\"/items/{item_id}\")\ndef update_item(item: FoundItem, name: str = \"Updated\"):\n    item.name = name\n    return item\n\n@app.delete(\"/items/{item_id}\")\ndef delete_item(item: FoundItem):\n    del ITEMS_DB[item.id]\n    return {\"deleted\": item.id}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Existing item\nresp = client.get(\"/items/1\")\nprint(f\"Found: {resp.json()['name']}\")\n\n# Missing item -> 404 with structured detail\nresp = client.get(\"/items/999\")\nprint(f\"Status: {resp.status_code}\")\nprint(f\"Error: {resp.json()['detail']}\")\n\n# Same 404 logic works for PUT and DELETE\nresp = client.put(\"/items/999\")\nprint(f\"PUT 404: {resp.status_code}\")\nresp = client.delete(\"/items/999\")\nprint(f\"DELETE 404: {resp.status_code}\")\n\n# Expected Output:\n# Found: Widget\n# Status: 404\n# Error: {'error': 'not_found', 'resource': 'item', 'id': 999, 'message': 'Item 999 does not exist'}\n# PUT 404: 404\n# DELETE 404: 404",
+          "code_language": "python",
+          "key_points": [
+            "Use a dependency (get_item_or_404) to DRY up lookup-or-raise logic across endpoints",
+            "Annotated[Item, Depends(get_item_or_404)] creates a reusable type alias",
+            "Include resource type and ID in the error detail for easier debugging",
+            "The same dependency works for GET, PUT, DELETE -- any endpoint that needs the item"
+          ],
+          "gotchas": [
+            "A dependency that raises 404 prevents the endpoint from running at all -- the error is returned before the endpoint body executes",
+            "Default 404s for unmatched routes have no detail beyond 'Not Found' -- override the HTTPException handler to customize those",
+            "Returning 404 for collection endpoints (e.g., /items?category=xyz with no results) is wrong -- return an empty list with 200 instead"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a reusable dependency that looks up a resource and raises `HTTPException(status_code=404)` if not found. Use `Annotated[Item, Depends(get_item_or_404)]` to share the same lookup logic across GET, PUT, and DELETE endpoints.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException\n\napp = FastAPI()\n\ndef get_item_or_404(item_id: int):\n    item = db.get(item_id)\n    if not item:\n        raise HTTPException(status_code=404, detail=f\"Item {item_id} not found\")\n    return item\n\n@app.get(\"/items/{item_id}\")\ndef read(item: Annotated[dict, Depends(get_item_or_404)]):\n    return item",
+          "code_language": "python",
+          "key_points": [
+            "Dependency pattern DRYs up 404 logic across all CRUD endpoints"
+          ],
+          "gotchas": [
+            "Empty list results should return 200 with [], not 404"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create custom exception classes?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "exceptions",
+        "custom-classes",
+        "error-handling",
+        "OOP"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Custom exception classes** let you define domain-specific errors that carry structured data and map to specific HTTP responses. This separates business logic from HTTP concerns.\n\n### Why custom exceptions:\n1. **Clarity**: `raise InsufficientFundsError(balance=50, required=100)` is clearer than `raise HTTPException(400, detail=\"...\")`\n2. **Separation**: Business logic does not need to know about HTTP status codes\n3. **Structured data**: Each exception carries relevant context as attributes\n4. **Centralized handling**: One handler converts exceptions to responses\n5. **Testability**: You can catch and assert on specific exception types in unit tests\n\n### Design pattern:\n1. Create a base `AppException` with common fields (`code`, `message`, `status_code`)\n2. Create specific subclasses for each error domain\n3. Register a single handler for the base class that catches all subclasses\n4. Each subclass sets sensible defaults for code and status_code\n\n### Hierarchy example:\n```\nAppException (base)\n├── NotFoundError (404)\n│   ├── UserNotFoundError\n│   └── ItemNotFoundError\n├── ConflictError (409)\n│   ├── DuplicateEmailError\n│   └── DuplicateUsernameError\n└── AuthorizationError (403)\n    └── InsufficientPermissionsError\n```",
+          "pseudo_code": "class AppException(Exception):\n    code: str\n    message: str\n    status_code: int\n\nclass NotFoundError(AppException):\n    status_code = 404\n\nclass UserNotFoundError(NotFoundError):\n    code = \"USER_NOT_FOUND\"\n    def __init__(self, user_id):\n        super().__init__(message=f\"User {user_id} not found\")\n\n@app.exception_handler(AppException)\nasync def handle(request, exc):\n    return JSONResponse(status_code=exc.status_code, ...)",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# --- Exception hierarchy ---\nclass AppException(Exception):\n    \"\"\"Base exception for all application errors.\"\"\"\n    def __init__(self, code: str, message: str, status_code: int = 400, details: dict | None = None):\n        self.code = code\n        self.message = message\n        self.status_code = status_code\n        self.details = details or {}\n        super().__init__(message)\n\nclass NotFoundError(AppException):\n    def __init__(self, resource: str, resource_id: int | str):\n        super().__init__(\n            code=f\"{resource.upper()}_NOT_FOUND\",\n            message=f\"{resource.capitalize()} '{resource_id}' does not exist\",\n            status_code=404,\n            details={\"resource\": resource, \"id\": resource_id},\n        )\n\nclass ConflictError(AppException):\n    def __init__(self, resource: str, field: str, value: str):\n        super().__init__(\n            code=f\"DUPLICATE_{field.upper()}\",\n            message=f\"{resource.capitalize()} with {field}='{value}' already exists\",\n            status_code=409,\n            details={\"field\": field, \"value\": value},\n        )\n\nclass BusinessRuleError(AppException):\n    def __init__(self, code: str, message: str, details: dict | None = None):\n        super().__init__(code=code, message=message, status_code=422, details=details)\n\n# --- Single handler for all AppExceptions ---\n@app.exception_handler(AppException)\nasync def app_exception_handler(request: Request, exc: AppException):\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\n            \"error\": {\n                \"code\": exc.code,\n                \"message\": exc.message,\n                \"details\": exc.details,\n            }\n        },\n    )\n\n# --- Usage in endpoints ---\nUSERS = {\"alice@example.com\": {\"id\": 1, \"name\": \"Alice\", \"email\": \"alice@example.com\"}}\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    raise NotFoundError(resource=\"user\", resource_id=user_id)\n\n@app.post(\"/users\")\ndef create_user(email: str = \"alice@example.com\"):\n    if email in USERS:\n        raise ConflictError(resource=\"user\", field=\"email\", value=email)\n    return {\"created\": email}\n\n@app.post(\"/transfer\")\ndef transfer(amount: float = 100, balance: float = 50):\n    if amount > balance:\n        raise BusinessRuleError(\n            code=\"INSUFFICIENT_FUNDS\",\n            message=f\"Cannot transfer ${amount}: only ${balance} available\",\n            details={\"required\": amount, \"available\": balance},\n        )\n    return {\"transferred\": amount}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Not found\nresp = client.get(\"/users/42\")\nprint(f\"404: {resp.json()['error']['code']} - {resp.json()['error']['message']}\")\n\n# Conflict\nresp = client.post(\"/users?email=alice@example.com\")\nprint(f\"409: {resp.json()['error']['code']}\")\n\n# Business rule\nresp = client.post(\"/transfer?amount=100&balance=50\")\nerr = resp.json()[\"error\"]\nprint(f\"422: {err['code']} - {err['details']}\")\n\n# Expected Output:\n# 404: USER_NOT_FOUND - User '42' does not exist\n# 409: DUPLICATE_EMAIL\n# 422: INSUFFICIENT_FUNDS - {'required': 100.0, 'available': 50.0}",
+          "code_language": "python",
+          "key_points": [
+            "Create a base AppException with code, message, status_code, and details fields",
+            "Subclasses set sensible defaults -- NotFoundError always uses 404, ConflictError uses 409",
+            "A single handler for the base class catches all subclasses automatically",
+            "Custom exceptions separate business logic from HTTP concerns"
+          ],
+          "gotchas": [
+            "Always call super().__init__() in your exception classes or Python's traceback display may break",
+            "A handler registered for a base class catches subclasses -- but a more specific handler registered separately takes priority",
+            "Custom exceptions are not the same as HTTPException -- they need their own registered handler"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a base `AppException(code, message, status_code)` class, then subclass it for specific errors (NotFoundError, ConflictError). Register one handler with `@app.exception_handler(AppException)` that catches all subclasses and returns a consistent JSON response.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\n\napp = FastAPI()\n\nclass AppException(Exception):\n    def __init__(self, code: str, message: str, status_code: int = 400):\n        self.code = code\n        self.message = message\n        self.status_code = status_code\n\nclass NotFoundError(AppException):\n    def __init__(self, resource: str, id: int):\n        super().__init__(f\"{resource.upper()}_NOT_FOUND\", f\"{resource} {id} not found\", 404)\n\n@app.exception_handler(AppException)\nasync def handler(request: Request, exc: AppException):\n    return JSONResponse(status_code=exc.status_code, content={\"error\": {\"code\": exc.code, \"message\": exc.message}})",
+          "code_language": "python",
+          "key_points": [
+            "One handler for the base class catches all subclass exceptions"
+          ],
+          "gotchas": [
+            "Custom exceptions need their own handler -- they are not caught by the HTTPException handler"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle database errors in FastAPI?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "database",
+        "error-handling",
+        "SQLAlchemy",
+        "integrity-error"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Database errors** in FastAPI need special handling because they are infrastructure errors that should be translated into meaningful HTTP responses.\n\n### Common database errors:\n\n| SQLAlchemy Exception | Meaning | HTTP Status |\n|---|---|---|\n| `IntegrityError` | Unique constraint / foreign key violation | 409 Conflict |\n| `NoResultFound` | Query expected a result, got none | 404 Not Found |\n| `OperationalError` | Connection failure, timeout | 503 Service Unavailable |\n| `DataError` | Invalid data (overflow, bad format) | 400 Bad Request |\n\n### Strategy:\n1. **Catch specific exceptions** in dependencies or service functions\n2. **Translate** them to domain exceptions or HTTPExceptions\n3. **Never expose** raw database errors to clients (they may contain SQL, table names, etc.)\n4. **Log the full error** server-side for debugging\n5. **Roll back** the session on error to avoid corrupted state\n\n### Approaches:\n\n**Approach A: Handle in each endpoint** (simple, less reusable)\n**Approach B: Handle in a dependency** (reusable session management)\n**Approach C: Global exception handler** (catches anything missed)\n\n### SQLAlchemy session management:\nUse a dependency with `yield` to automatically handle commit/rollback:\n- If the endpoint succeeds, the session is committed (or you commit explicitly)\n- If an exception occurs, the session is rolled back in the `finally` block",
+          "pseudo_code": "def get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    except IntegrityError:\n        db.rollback()\n        raise HTTPException(409, \"Duplicate entry\")\n    finally:\n        db.close()\n\n@app.exception_handler(OperationalError)\nasync def db_connection_handler(request, exc):\n    logger.error(f\"Database connection error: {exc}\")\n    return JSONResponse(503, {\"error\": \"Service temporarily unavailable\"})",
+          "actual_code": "import logging\nfrom fastapi import FastAPI, Depends, HTTPException, Request, status\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom sqlalchemy import create_engine, Column, Integer, String\nfrom sqlalchemy.orm import sessionmaker, Session, DeclarativeBase\nfrom sqlalchemy.exc import IntegrityError, OperationalError\n\nlogger = logging.getLogger(\"api.db\")\n\n# --- Database setup ---\nengine = create_engine(\"sqlite:///:memory:\")\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase):\n    pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id = Column(Integer, primary_key=True)\n    email = Column(String, unique=True, nullable=False)\n    name = Column(String, nullable=False)\n\nBase.metadata.create_all(engine)\n\napp = FastAPI()\n\n# --- DB dependency with error handling ---\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\n# --- Global handler for IntegrityError ---\n@app.exception_handler(IntegrityError)\nasync def integrity_error_handler(request: Request, exc: IntegrityError):\n    logger.warning(f\"Integrity error on {request.url.path}: {exc.orig}\")\n    return JSONResponse(\n        status_code=status.HTTP_409_CONFLICT,\n        content={\"error\": {\"code\": \"DUPLICATE_ENTRY\", \"message\": \"Resource already exists\"}},\n    )\n\n@app.post(\"/users\")\ndef create_user(name: str, email: str, db: Session = Depends(get_db)):\n    user = User(name=name, email=email)\n    db.add(user)\n    try:\n        db.commit()\n    except IntegrityError:\n        db.rollback()\n        raise HTTPException(\n            status_code=status.HTTP_409_CONFLICT,\n            detail={\"code\": \"DUPLICATE_EMAIL\", \"message\": f\"Email '{email}' already exists\"},\n        )\n    db.refresh(user)\n    return {\"id\": user.id, \"name\": user.name, \"email\": user.email}\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int, db: Session = Depends(get_db)):\n    user = db.query(User).filter(User.id == user_id).first()\n    if not user:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail=f\"User {user_id} not found\",\n        )\n    return {\"id\": user.id, \"name\": user.name, \"email\": user.email}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Create user\nresp = client.post(\"/users?name=Alice&email=alice@test.com\")\nprint(f\"Created: {resp.json()}\")\n\n# Duplicate email -> 409\nresp = client.post(\"/users?name=Bob&email=alice@test.com\")\nprint(f\"Duplicate: {resp.status_code} {resp.json()['detail']}\")\n\n# Not found -> 404\nresp = client.get(\"/users/999\")\nprint(f\"Not found: {resp.status_code}\")\n\n# Expected Output:\n# Created: {'id': 1, 'name': 'Alice', 'email': 'alice@test.com'}\n# Duplicate: 409 {'code': 'DUPLICATE_EMAIL', 'message': \"Email 'alice@test.com' already exists\"}\n# Not found: 404",
+          "code_language": "python",
+          "key_points": [
+            "Catch IntegrityError (unique/FK violations) and translate to 409 Conflict",
+            "Always rollback the session after a database error before raising HTTPException",
+            "Use a yield dependency for automatic session cleanup in the finally block",
+            "Never expose raw database error messages to clients -- they may contain SQL and table names"
+          ],
+          "gotchas": [
+            "You must call db.rollback() after an IntegrityError before the session can be reused",
+            "SQLAlchemy's IntegrityError wraps the DB driver's error in .orig -- log that for debugging",
+            "OperationalError (connection issues) should return 503 Service Unavailable, not 500",
+            "Using db.commit() inside the endpoint gives you fine-grained control vs auto-commit in the dependency"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Catch `IntegrityError` (unique violations) and translate to `409 Conflict`. Always call `db.rollback()` before raising. Use a `yield` dependency for session cleanup. Never expose raw SQL errors to clients.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom sqlalchemy.exc import IntegrityError\nfrom sqlalchemy.orm import Session\n\napp = FastAPI()\n\n@app.post(\"/users\")\ndef create_user(name: str, email: str, db: Session = Depends(get_db)):\n    user = User(name=name, email=email)\n    db.add(user)\n    try:\n        db.commit()\n    except IntegrityError:\n        db.rollback()\n        raise HTTPException(status_code=409, detail=\"Email already exists\")\n    return {\"id\": user.id}",
+          "code_language": "python",
+          "key_points": [
+            "Catch IntegrityError, rollback, then raise HTTPException with 409"
+          ],
+          "gotchas": [
+            "Must rollback after IntegrityError before the session can be used again"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you return different error formats (JSON vs HTML)?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "content-negotiation",
+        "error-handling",
+        "JSON",
+        "HTML"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Content negotiation for errors** lets your API return JSON for API clients and HTML for browsers, based on the `Accept` header.\n\n### How it works:\n1. Check the `Accept` header in the request\n2. If it contains `text/html`, return an HTML error page\n3. If it contains `application/json` (or anything else), return JSON\n4. Implement this in your exception handlers\n\n### The Accept header:\n- Browsers send: `Accept: text/html,application/xhtml+xml,...`\n- API clients send: `Accept: application/json`\n- `curl` sends: `Accept: */*`\n\n### When to use this:\n- APIs that also serve web pages (e.g., documentation, admin panels)\n- FastAPI apps that combine API endpoints with Jinja2 template endpoints\n- Public APIs where users might navigate to endpoints in a browser\n\n### Implementation:\nCreate a helper that checks the Accept header and returns the appropriate response type. Use this in all your exception handlers.",
+          "pseudo_code": "def error_response(request, status_code, code, message):\n    accept = request.headers.get(\"accept\", \"\")\n    if \"text/html\" in accept:\n        return HTMLResponse(render_error_page(status_code, message))\n    return JSONResponse(status_code, {\"error\": {\"code\": code, \"message\": message}})",
+          "actual_code": "from fastapi import FastAPI, HTTPException, Request\nfrom fastapi.responses import JSONResponse, HTMLResponse\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\ndef make_error_response(\n    request: Request,\n    status_code: int,\n    code: str,\n    message: str,\n) -> JSONResponse | HTMLResponse:\n    \"\"\"Return JSON or HTML based on Accept header.\"\"\"\n    accept = request.headers.get(\"accept\", \"\")\n    \n    if \"text/html\" in accept:\n        html = f\"\"\"<!DOCTYPE html>\n<html>\n<head><title>Error {status_code}</title></head>\n<body>\n  <h1>{status_code} - {code}</h1>\n  <p>{message}</p>\n</body>\n</html>\"\"\"\n        return HTMLResponse(content=html, status_code=status_code)\n    \n    return JSONResponse(\n        status_code=status_code,\n        content={\"error\": {\"code\": code, \"message\": message}},\n    )\n\n@app.exception_handler(StarletteHTTPException)\nasync def http_exception_handler(request: Request, exc: StarletteHTTPException):\n    return make_error_response(\n        request,\n        status_code=exc.status_code,\n        code=f\"HTTP_{exc.status_code}\",\n        message=str(exc.detail),\n    )\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    raise HTTPException(status_code=404, detail=\"Item not found\")\n\n# --- Test ---\nclient = TestClient(app)\n\n# API client -> JSON\nresp = client.get(\"/items/42\", headers={\"Accept\": \"application/json\"})\nprint(f\"JSON response: {resp.headers['content-type']}\")\nprint(f\"Body: {resp.json()}\")\n\n# Browser -> HTML\nresp = client.get(\"/items/42\", headers={\"Accept\": \"text/html,application/xhtml+xml\"})\nprint(f\"HTML response: {resp.headers['content-type']}\")\nprint(f\"Contains <h1>: {'<h1>' in resp.text}\")\n\n# No Accept header -> JSON (default)\nresp = client.get(\"/items/42\")\nprint(f\"Default: {resp.headers['content-type']}\")\n\n# Expected Output:\n# JSON response: application/json\n# Body: {'error': {'code': 'HTTP_404', 'message': 'Item not found'}}\n# HTML response: text/html; charset=utf-8\n# Contains <h1>: True\n# Default: application/json",
+          "code_language": "python",
+          "key_points": [
+            "Check request.headers.get('accept') to determine the response format",
+            "Return HTMLResponse for browsers (text/html) and JSONResponse for API clients",
+            "Use a shared helper function so all exception handlers use the same logic",
+            "Default to JSON when no Accept header is present"
+          ],
+          "gotchas": [
+            "The Accept header can contain multiple types with quality factors (e.g., 'text/html;q=0.9') -- a simple 'in' check works for most cases but is not fully spec-compliant",
+            "HTMLResponse sets Content-Type to text/html automatically -- do not set it manually",
+            "Ensure HTML error pages are properly escaped to prevent XSS if error messages contain user input"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Check the `Accept` header in your exception handler: return `HTMLResponse` for `text/html` (browsers) and `JSONResponse` for everything else (API clients). Use a shared helper so all error handlers support both formats.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse, HTMLResponse\n\napp = FastAPI()\n\ndef error_response(request: Request, status: int, message: str):\n    if \"text/html\" in request.headers.get(\"accept\", \"\"):\n        return HTMLResponse(f\"<h1>{status}</h1><p>{message}</p>\", status_code=status)\n    return JSONResponse(status_code=status, content={\"error\": message})",
+          "code_language": "python",
+          "key_points": [
+            "Check Accept header to decide between HTMLResponse and JSONResponse"
+          ],
+          "gotchas": [
+            "Escape user input in HTML error messages to prevent XSS attacks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle validation errors for nested models?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "validation",
+        "pydantic",
+        "nested-models",
+        "error-handling"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Nested model validation** in FastAPI automatically validates all levels of nested Pydantic models. When validation fails on a nested field, the `loc` (location) tuple includes the full path to the failing field.\n\n### How nested validation works:\n1. FastAPI deserializes the JSON body into your Pydantic model\n2. Pydantic validates every field recursively through all nested models\n3. If any field at any nesting level fails, a `RequestValidationError` is raised\n4. The `loc` field shows the full path: `(\"body\", \"address\", \"zip_code\")`\n\n### Error location format:\nThe `loc` tuple uses indices for lists and field names for objects:\n- `(\"body\", \"name\")` -- top-level field\n- `(\"body\", \"address\", \"city\")` -- nested object field\n- `(\"body\", \"items\", 2, \"price\")` -- third item in a list, price field\n\n### Customizing nested error messages:\nOverride `RequestValidationError` to flatten the loc path into a human-readable field name like `address.city` or `items[2].price`.\n\n### Pydantic v2 error format:\nPydantic v2 errors include `type`, `loc`, `msg`, `input` (the value that failed), and `url` (link to docs for that error type).",
+          "pseudo_code": "class Address(BaseModel):\n    city: str\n    zip_code: str = Field(pattern=r\"^\\d{5}$\")\n\nclass Order(BaseModel):\n    customer: str\n    address: Address\n    items: list[OrderItem]\n\n# Error loc for nested failure:\n# (\"body\", \"address\", \"zip_code\") -> \"address.zip_code\"\n# (\"body\", \"items\", 0, \"quantity\") -> \"items[0].quantity\"",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\n# --- Nested models ---\nclass Address(BaseModel):\n    street: str = Field(min_length=1)\n    city: str = Field(min_length=1)\n    zip_code: str = Field(pattern=r\"^\\d{5}$\")\n\nclass OrderItem(BaseModel):\n    name: str = Field(min_length=1)\n    quantity: int = Field(gt=0)\n    price: float = Field(gt=0)\n\nclass CreateOrder(BaseModel):\n    customer_name: str = Field(min_length=2)\n    shipping_address: Address\n    items: list[OrderItem] = Field(min_length=1)\n\n# --- Custom handler for readable nested error paths ---\n@app.exception_handler(RequestValidationError)\nasync def nested_validation_handler(request: Request, exc: RequestValidationError):\n    errors = []\n    for error in exc.errors():\n        # Build a readable path from the loc tuple\n        parts = []\n        for loc in error[\"loc\"]:\n            if isinstance(loc, int):\n                # List index -> items[0]\n                parts[-1] = f\"{parts[-1]}[{loc}]\"\n            else:\n                parts.append(str(loc))\n        # Skip the first element (\"body\") for cleaner paths\n        field_path = \".\".join(parts[1:]) if len(parts) > 1 else parts[0]\n        errors.append({\n            \"field\": field_path,\n            \"message\": error[\"msg\"],\n            \"input\": error.get(\"input\"),\n        })\n    return JSONResponse(\n        status_code=422,\n        content={\n            \"error\": \"validation_failed\",\n            \"count\": len(errors),\n            \"details\": errors,\n        },\n    )\n\n@app.post(\"/orders\")\ndef create_order(order: CreateOrder):\n    return {\"status\": \"created\", \"items\": len(order.items)}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Multiple nested errors\nresp = client.post(\"/orders\", json={\n    \"customer_name\": \"A\",\n    \"shipping_address\": {\n        \"street\": \"123 Main St\",\n        \"city\": \"\",\n        \"zip_code\": \"bad\",\n    },\n    \"items\": [\n        {\"name\": \"Widget\", \"quantity\": 2, \"price\": 9.99},\n        {\"name\": \"\", \"quantity\": -1, \"price\": 0},\n    ],\n})\n\ndata = resp.json()\nprint(f\"Errors: {data['count']}\")\nfor err in data[\"details\"]:\n    print(f\"  {err['field']}: {err['message']}\")\n\n# Expected Output:\n# Errors: 6\n#   customer_name: String should have at least 2 characters\n#   shipping_address.city: String should have at least 1 character\n#   shipping_address.zip_code: String should match pattern '^\\d{5}$'\n#   items[1].name: String should have at least 1 character\n#   items[1].quantity: Input should be greater than 0\n#   items[1].price: Input should be greater than 0",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic validates all nesting levels recursively -- nested fields are checked automatically",
+            "The loc tuple shows the full path: ('body', 'address', 'city') or ('body', 'items', 2, 'name')",
+            "Integer values in loc are list indices -- use them to build paths like items[2].name",
+            "Override RequestValidationError to flatten nested paths into readable field names"
+          ],
+          "gotchas": [
+            "The first element of loc is always the source ('body', 'query', 'path') -- skip it for user-facing field names",
+            "List indices in loc are integers, not strings -- check with isinstance(loc, int) when building paths",
+            "All nested errors are collected before returning -- Pydantic does not stop at the first error"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic validates nested models recursively. When a nested field fails, the `loc` tuple shows the full path: `(\"body\", \"address\", \"city\")` for objects and `(\"body\", \"items\", 0, \"price\")` for list items. Override `RequestValidationError` to format these paths as `address.city` or `items[0].price`.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, Field\n\nclass Address(BaseModel):\n    city: str = Field(min_length=1)\n    zip_code: str = Field(pattern=r\"^\\d{5}$\")\n\nclass Order(BaseModel):\n    address: Address\n    items: list[dict]  # Each item is also validated\n\n# Error for bad zip: loc=(\"body\", \"address\", \"zip_code\")\n# Error for items[2].price: loc=(\"body\", \"items\", 2, \"price\")",
+          "code_language": "python",
+          "key_points": [
+            "loc tuple contains the full path through nested models including list indices"
+          ],
+          "gotchas": [
+            "List indices in loc are integers -- handle them separately from string field names when building paths"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement global error handling for unhandled exceptions?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "error-handling",
+        "global",
+        "500",
+        "production"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Global error handling** catches any unhandled exception that slips through your other handlers, preventing raw 500 Internal Server Error responses with stack traces from reaching clients.\n\n### Why you need it:\n- Prevents stack traces from leaking to clients (security risk)\n- Ensures all errors follow your consistent format\n- Provides a safety net for unexpected bugs\n- Enables centralized logging and alerting\n\n### Implementation:\nRegister an exception handler for the base `Exception` class. This catches everything not handled by more specific handlers.\n\n### Handler priority:\n1. Specific exception handlers (e.g., `IntegrityError`, `NotFoundError`) -- checked first\n2. `HTTPException` handler -- catches FastAPI/Starlette HTTP exceptions\n3. `RequestValidationError` handler -- catches validation failures\n4. `Exception` handler (the global catch-all) -- last resort\n\n### Production considerations:\n- **Log everything**: traceback, request details, headers (sanitized)\n- **Alert**: send to error tracking (Sentry, Datadog, etc.)\n- **Return nothing sensitive**: generic message, request ID for support\n- **Include request ID**: so support can correlate client reports with server logs\n\n### Testing:\n`TestClient` re-raises server exceptions by default. Pass `raise_server_exceptions=False` to test your 500 handler.",
+          "pseudo_code": "# Global catch-all handler\n@app.exception_handler(Exception)\nasync def catch_all(request, exc):\n    request_id = generate_id()\n    \n    # Log full details server-side\n    logger.exception(f\"[{request_id}] Unhandled {type(exc).__name__}\")\n    \n    # Send to error tracker\n    sentry_sdk.capture_exception(exc)\n    \n    # Return safe response with request ID\n    return JSONResponse(\n        status_code=500,\n        content={\"error\": \"Internal error\", \"request_id\": request_id},\n    )",
+          "actual_code": "import logging\nimport uuid\nfrom fastapi import FastAPI, Request, HTTPException\nfrom fastapi.exceptions import RequestValidationError\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom starlette.exceptions import HTTPException as StarletteHTTPException\n\nlogging.basicConfig(level=logging.INFO, format=\"%(levelname)s: %(message)s\")\nlogger = logging.getLogger(\"api\")\n\napp = FastAPI()\n\n# --- Specific handlers first ---\n@app.exception_handler(StarletteHTTPException)\nasync def http_exception_handler(request: Request, exc: StarletteHTTPException):\n    return JSONResponse(\n        status_code=exc.status_code,\n        content={\"error\": {\"code\": f\"HTTP_{exc.status_code}\", \"message\": str(exc.detail)}},\n    )\n\n@app.exception_handler(RequestValidationError)\nasync def validation_handler(request: Request, exc: RequestValidationError):\n    return JSONResponse(\n        status_code=422,\n        content={\"error\": {\"code\": \"VALIDATION_FAILED\", \"message\": \"Invalid request data\"}},\n    )\n\n# --- Global catch-all (runs LAST, only for unhandled exceptions) ---\n@app.exception_handler(Exception)\nasync def global_exception_handler(request: Request, exc: Exception):\n    request_id = str(uuid.uuid4())[:8]\n    \n    # Full details logged server-side\n    logger.error(\n        f\"[{request_id}] Unhandled {type(exc).__name__} \"\n        f\"on {request.method} {request.url.path}: {exc}\"\n    )\n    \n    # Safe response to client -- no internal details\n    return JSONResponse(\n        status_code=500,\n        content={\n            \"error\": {\n                \"code\": \"INTERNAL_ERROR\",\n                \"message\": \"An unexpected error occurred. Please try again later.\",\n                \"request_id\": request_id,\n            }\n        },\n    )\n\n# --- Endpoints ---\n@app.get(\"/ok\")\ndef ok():\n    return {\"status\": \"ok\"}\n\n@app.get(\"/not-found\")\ndef not_found():\n    raise HTTPException(status_code=404, detail=\"Resource not found\")\n\n@app.get(\"/crash\")\ndef crash():\n    # Simulates an unexpected bug\n    result = 1 / 0  # noqa: F841\n    return {\"result\": result}\n\n@app.get(\"/key-error\")\ndef key_error():\n    data = {}\n    return data[\"missing_key\"]\n\n# --- Test ---\nclient = TestClient(app, raise_server_exceptions=False)\n\n# Normal response\nprint(f\"OK: {client.get('/ok').json()}\")\n\n# HTTPException -> specific handler\nresp = client.get(\"/not-found\")\nprint(f\"404: {resp.json()['error']['code']}\")\n\n# ZeroDivisionError -> global handler\nresp = client.get(\"/crash\")\nprint(f\"500: {resp.status_code} {resp.json()['error']['code']}\")\nprint(f\"Has request_id: {'request_id' in resp.json()['error']}\")\n\n# KeyError -> global handler\nresp = client.get(\"/key-error\")\nprint(f\"KeyError: {resp.status_code} {resp.json()['error']['code']}\")\n\n# Expected Output:\n# OK: {'status': 'ok'}\n# 404: HTTP_404\n# ERROR: [<id>] Unhandled ZeroDivisionError on GET /crash: division by zero\n# 500: 500 INTERNAL_ERROR\n# Has request_id: True\n# ERROR: [<id>] Unhandled KeyError on GET /key-error: 'missing_key'\n# KeyError: 500 INTERNAL_ERROR",
+          "code_language": "python",
+          "key_points": [
+            "@app.exception_handler(Exception) is the global catch-all -- it runs only when no other handler matches",
+            "Include a request_id in the response so users can report issues and you can find the matching server log",
+            "Log full error details server-side (type, message, traceback) but return a generic message to the client",
+            "TestClient needs raise_server_exceptions=False to test 500 responses instead of re-raising"
+          ],
+          "gotchas": [
+            "The Exception handler does NOT catch HTTPException or RequestValidationError -- those have their own built-in handlers that take priority",
+            "If you do not set raise_server_exceptions=False in TestClient, it re-raises the exception instead of returning the 500 response",
+            "Do not return exc details in production -- stack traces, file paths, and SQL queries are security risks",
+            "The global handler also catches CancelledError in some ASGI servers -- be careful with blanket Exception catching"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Register `@app.exception_handler(Exception)` as a catch-all for unhandled errors. Log the full error server-side, generate a request ID for tracing, and return a generic 500 response. Use `TestClient(app, raise_server_exceptions=False)` to test it.",
+          "pseudo_code": "",
+          "actual_code": "import uuid\nimport logging\nfrom fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\n\nlogger = logging.getLogger(\"api\")\napp = FastAPI()\n\n@app.exception_handler(Exception)\nasync def catch_all(request: Request, exc: Exception):\n    rid = str(uuid.uuid4())[:8]\n    logger.exception(f\"[{rid}] {type(exc).__name__}: {exc}\")\n    return JSONResponse(\n        status_code=500,\n        content={\"error\": \"Internal error\", \"request_id\": rid},\n    )",
+          "code_language": "python",
+          "key_points": [
+            "Exception handler is the last resort -- catches anything not handled by specific handlers"
+          ],
+          "gotchas": [
+            "TestClient re-raises exceptions by default -- use raise_server_exceptions=False to test 500 responses"
+          ]
+        }
+      ]
+    }
+  ]
+}

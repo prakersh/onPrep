@@ -1,0 +1,560 @@
+{
+  "concept_slug": "websockets-realtime",
+  "questions": [
+    {
+      "title": "How do you create WebSocket endpoints in FastAPI?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "endpoint",
+        "starlette"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides WebSocket support through Starlette's `WebSocket` class. You define WebSocket endpoints using the `@app.websocket()` decorator instead of the usual `@app.get()` or `@app.post()`.\n\n### How it works:\n1. Decorate an async function with `@app.websocket(\"/path\")`\n2. The function receives a `WebSocket` object as its first parameter\n3. Call `await websocket.accept()` to complete the handshake\n4. Use `await websocket.receive_text()` or `receive_bytes()` to read messages\n5. Use `await websocket.send_text()` or `send_bytes()` to send messages\n6. Close with `await websocket.close()`\n\n### Key differences from HTTP endpoints:\n- WebSocket endpoints are **persistent connections**, not request-response\n- They do not return a value -- communication happens through the `websocket` object\n- Path parameters and query parameters still work\n- Response models and status codes do not apply\n\n### Path parameters and query parameters:\nWebSocket endpoints support the same path and query parameter extraction as regular endpoints. You can use type annotations and FastAPI will validate them.",
+          "pseudo_code": "@app.websocket(\"/ws\")\nasync def websocket_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")",
+          "actual_code": "from fastapi import FastAPI, WebSocket\nimport asyncio\n\napp = FastAPI()\n\n\n# --- Basic WebSocket endpoint ---\n@app.websocket(\"/ws\")\nasync def websocket_echo(websocket: WebSocket):\n    \"\"\"Simple echo server -- sends back whatever it receives.\"\"\"\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"Echo: {data}\")\n\n\n# --- With path parameters ---\n@app.websocket(\"/ws/rooms/{room_id}\")\nasync def room_websocket(\n    websocket: WebSocket,\n    room_id: int,\n):\n    \"\"\"Path parameters work just like HTTP endpoints.\"\"\"\n    await websocket.accept()\n    await websocket.send_text(f\"Connected to room {room_id}\")\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"[Room {room_id}] {data}\")\n\n\n# --- With query parameters ---\n@app.websocket(\"/ws/chat\")\nasync def chat_websocket(\n    websocket: WebSocket,\n    username: str = \"anonymous\",\n):\n    \"\"\"Query parameters extracted from the ws:// URL.\"\"\"\n    await websocket.accept()\n    await websocket.send_text(f\"Welcome, {username}!\")\n    while True:\n        message = await websocket.receive_text()\n        await websocket.send_text(f\"{username}: {message}\")\n\n\n# --- Client-side JavaScript example ---\n# const ws = new WebSocket(\"ws://localhost:8000/ws/chat?username=alice\");\n# ws.onmessage = (event) => console.log(event.data);\n# ws.onopen = () => ws.send(\"Hello!\");",
+          "code_language": "python",
+          "key_points": [
+            "Use @app.websocket(\"/path\") to define WebSocket endpoints",
+            "Always call await websocket.accept() before sending or receiving",
+            "Path and query parameters work identically to HTTP endpoints",
+            "WebSocket endpoints are long-lived -- they run until the connection closes or an error occurs"
+          ],
+          "gotchas": [
+            "WebSocket endpoints cannot use response_model or status_code -- they communicate through the WebSocket object directly",
+            "Forgetting to call websocket.accept() will leave the client hanging with no handshake completion",
+            "A bare while True loop will run forever if the client disconnects without sending a close frame -- always handle WebSocketDisconnect",
+            "WebSocket URLs use ws:// or wss:// scheme, not http:// or https://"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `@app.websocket(\"/path\")` to create WebSocket endpoints. Accept the connection with `await websocket.accept()`, then use `receive_text()`/`send_text()` in a loop. Path and query parameters work the same as HTTP endpoints.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket\n\napp = FastAPI()\n\n@app.websocket(\"/ws/{room_id}\")\nasync def websocket_endpoint(websocket: WebSocket, room_id: int):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(f\"[Room {room_id}] Echo: {data}\")",
+          "code_language": "python",
+          "key_points": [
+            "@app.websocket() defines persistent bidirectional connections"
+          ],
+          "gotchas": [
+            "You must call websocket.accept() before any send/receive operations"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does the WebSocket connection lifecycle work (accept, receive, send)?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "lifecycle",
+        "connection",
+        "protocol"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A WebSocket connection follows a strict lifecycle with three phases: **handshake**, **data transfer**, and **close**.\n\n### 1. Handshake (HTTP Upgrade):\n- Client sends an HTTP GET request with `Upgrade: websocket` header\n- Server responds with 101 Switching Protocols\n- In FastAPI, `await websocket.accept()` completes this handshake\n\n### 2. Data Transfer:\n- Both sides can send messages at any time (full-duplex)\n- Messages can be **text** (`receive_text()`/`send_text()`) or **binary** (`receive_bytes()`/`send_bytes()`)\n- `receive_json()`/`send_json()` are convenience wrappers for JSON\n- The generic `receive()` returns a dict with a `type` key indicating the message type\n\n### 3. Close:\n- Either side can initiate close with a close frame\n- In FastAPI, `await websocket.close(code=1000)` sends a clean close\n- When the client closes, `receive_*()` raises `WebSocketDisconnect`\n\n### WebSocket state transitions:\n```\nCONNECTING -> accept() -> CONNECTED -> close()/disconnect -> DISCONNECTED\n```\n\n### Common close codes:\n- **1000**: Normal closure\n- **1001**: Going away (browser tab closed)\n- **1008**: Policy violation\n- **1011**: Unexpected server error",
+          "pseudo_code": "# Full lifecycle\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    # Phase 1: Handshake\n    await websocket.accept()\n    try:\n        while True:\n            # Phase 2: Data transfer\n            data = await websocket.receive_text()\n            await websocket.send_text(f\"Got: {data}\")\n    except WebSocketDisconnect:\n        pass  # Phase 3: Close\n    finally:\n        cleanup()",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n@app.websocket(\"/ws/lifecycle\")\nasync def lifecycle_demo(websocket: WebSocket):\n    \"\"\"Demonstrates the full WebSocket lifecycle.\"\"\"\n\n    # Phase 1: Accept the connection (completes HTTP upgrade)\n    # You can optionally specify subprotocol and headers\n    await websocket.accept(subprotocol=None)\n    logger.info(\n        f\"Client connected: {websocket.client.host}:{websocket.client.port}\"\n    )\n\n    try:\n        # Phase 2: Data transfer loop\n        while True:\n            # receive_text() blocks until a message arrives\n            message = await websocket.receive_text()\n            logger.info(f\"Received: {message}\")\n\n            if message == \"ping\":\n                await websocket.send_text(\"pong\")\n            elif message == \"close\":\n                # Server-initiated close\n                await websocket.close(code=1000, reason=\"Requested\")\n                break\n            else:\n                await websocket.send_text(f\"Echo: {message}\")\n\n    except WebSocketDisconnect as e:\n        # Phase 3: Client disconnected\n        logger.info(\n            f\"Client disconnected: code={e.code}, reason={e.reason}\"\n        )\n    finally:\n        # Cleanup runs regardless of how the connection ended\n        logger.info(\"Connection cleanup complete\")\n\n\n# --- Different message types ---\n@app.websocket(\"/ws/types\")\nasync def message_types(websocket: WebSocket):\n    await websocket.accept()\n    try:\n        while True:\n            # Generic receive -- returns a dict with 'type' key\n            raw = await websocket.receive()\n\n            if raw[\"type\"] == \"websocket.receive\":\n                if \"text\" in raw:\n                    text = raw[\"text\"]\n                    await websocket.send_text(f\"Text: {text}\")\n                elif \"bytes\" in raw:\n                    data = raw[\"bytes\"]\n                    await websocket.send_bytes(\n                        b\"Binary echo: \" + data\n                    )\n            elif raw[\"type\"] == \"websocket.disconnect\":\n                break\n    except WebSocketDisconnect:\n        pass\n\n\n# --- Rejecting a connection ---\n@app.websocket(\"/ws/guarded\")\nasync def guarded_endpoint(websocket: WebSocket):\n    \"\"\"Reject connections that lack a required token.\"\"\"\n    token = websocket.query_params.get(\"token\")\n    if token != \"secret\":\n        # Close before accepting -- sends 403-like rejection\n        await websocket.close(code=1008, reason=\"Invalid token\")\n        return\n    await websocket.accept()\n    await websocket.send_text(\"Authenticated!\")\n    while True:\n        data = await websocket.receive_text()\n        await websocket.send_text(data)",
+          "code_language": "python",
+          "key_points": [
+            "The lifecycle is: accept (handshake) -> send/receive loop (data transfer) -> close/disconnect",
+            "receive_text(), receive_bytes(), and receive_json() handle different message formats",
+            "WebSocketDisconnect is raised when the client closes the connection",
+            "You can reject a connection by calling websocket.close() without first calling accept()"
+          ],
+          "gotchas": [
+            "Calling send_text() before accept() raises a RuntimeError",
+            "The generic receive() returns a raw ASGI dict -- prefer the typed receive_text()/receive_bytes() methods",
+            "Close codes above 4000 are reserved for application-specific use",
+            "If the server crashes without sending a close frame, the client may not know the connection is dead until a timeout"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The WebSocket lifecycle is: `accept()` (handshake), `receive_*/send_*` loop (data transfer), `close()`/`WebSocketDisconnect` (teardown). Use `receive_text()` and `send_text()` for text messages, `receive_bytes()`/`send_bytes()` for binary, and handle `WebSocketDisconnect` for client disconnections.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\n\napp = FastAPI()\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()          # Handshake\n    try:\n        while True:\n            data = await websocket.receive_text()  # Receive\n            await websocket.send_text(f\"Echo: {data}\")  # Send\n    except WebSocketDisconnect:\n        print(\"Client disconnected\")  # Close",
+          "code_language": "python",
+          "key_points": [
+            "Three phases: accept (handshake), send/receive (data), close (teardown)"
+          ],
+          "gotchas": [
+            "Always handle WebSocketDisconnect -- otherwise the server logs unhandled exceptions on every client disconnect"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle WebSocketDisconnect exceptions?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "disconnect",
+        "exception-handling",
+        "cleanup"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`WebSocketDisconnect` is raised when a WebSocket client disconnects (closes the browser tab, loses network, or sends a close frame). Handling it properly is essential for resource cleanup and connection tracking.\n\n### When it is raised:\n- Client sends a close frame (clean disconnect)\n- Client's network drops (detected on next receive/send)\n- Client closes the browser tab or navigates away\n\n### How to handle it:\n1. **Wrap the receive loop in try/except**: The most common pattern\n2. **Access the close code**: `e.code` tells you why the client disconnected\n3. **Cleanup resources**: Remove the client from connection managers, release locks, etc.\n4. **Log the disconnection**: Useful for debugging and monitoring\n\n### Important close codes:\n- **1000**: Normal closure (client called `ws.close()`)\n- **1001**: Going away (tab closed, navigation)\n- **1006**: Abnormal closure (no close frame received -- network drop)\n- **1011**: Unexpected condition on the server\n\n### What happens if you do not handle it:\n- Starlette catches it and logs a traceback\n- Connection managers will not know the client left\n- Resources tied to the connection will leak",
+          "pseudo_code": "@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    manager.add(websocket)\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await process(data)\n    except WebSocketDisconnect as e:\n        manager.remove(websocket)\n        log(f\"Disconnected: code={e.code}\")",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n# Track active connections\nactive_connections: set[WebSocket] = set()\n\n\n@app.websocket(\"/ws/chat\")\nasync def chat(websocket: WebSocket):\n    await websocket.accept()\n    active_connections.add(websocket)\n    client_id = f\"{websocket.client.host}:{websocket.client.port}\"\n    logger.info(f\"Client {client_id} connected. Total: {len(active_connections)}\")\n\n    try:\n        while True:\n            message = await websocket.receive_text()\n            # Broadcast to all other clients\n            for conn in active_connections:\n                if conn != websocket:\n                    try:\n                        await conn.send_text(f\"[{client_id}] {message}\")\n                    except Exception:\n                        # Other client might have disconnected\n                        pass\n\n    except WebSocketDisconnect as e:\n        # Clean disconnect handling\n        active_connections.discard(websocket)\n        logger.info(\n            f\"Client {client_id} disconnected: \"\n            f\"code={e.code}, reason={getattr(e, 'reason', 'N/A')}. \"\n            f\"Remaining: {len(active_connections)}\"\n        )\n        # Notify others\n        for conn in active_connections:\n            try:\n                await conn.send_text(f\"[{client_id}] left the chat\")\n            except Exception:\n                pass\n\n    except Exception as e:\n        # Unexpected errors (not a disconnect)\n        active_connections.discard(websocket)\n        logger.error(f\"Unexpected error for {client_id}: {e}\")\n        try:\n            await websocket.close(code=1011, reason=\"Internal error\")\n        except Exception:\n            pass  # Connection might already be closed\n\n\n# --- Handling different disconnect codes ---\n@app.websocket(\"/ws/monitored\")\nasync def monitored_ws(websocket: WebSocket):\n    await websocket.accept()\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(data)\n    except WebSocketDisconnect as e:\n        if e.code == 1000:\n            logger.info(\"Clean disconnect\")\n        elif e.code == 1001:\n            logger.info(\"Client navigated away\")\n        elif e.code == 1006:\n            logger.warning(\"Abnormal disconnect (network drop)\")\n        else:\n            logger.warning(f\"Disconnect with code {e.code}\")",
+          "code_language": "python",
+          "key_points": [
+            "WebSocketDisconnect is raised when receive_*() or send_*() detects a closed connection",
+            "Always remove the client from connection tracking in the except block",
+            "Access e.code to determine the reason for disconnection",
+            "Code 1006 means no close frame was received -- typically a network failure"
+          ],
+          "gotchas": [
+            "WebSocketDisconnect can be raised during send_text() too, not just receive_text()",
+            "Code 1006 is never sent on the wire -- it is synthesized locally when the TCP connection drops without a close frame",
+            "Sending a message to a disconnected client raises an exception -- always wrap broadcast sends in try/except",
+            "If you forget to remove clients from a connection set, you leak memory and get errors on every broadcast"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Wrap your receive loop in `try/except WebSocketDisconnect`. In the except block, clean up resources (remove from connection managers) and log the disconnect. Access `e.code` to learn why the client disconnected (1000 = clean, 1001 = navigated away, 1006 = network drop).",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\n\napp = FastAPI()\nclients: set[WebSocket] = set()\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    clients.add(websocket)\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(data)\n    except WebSocketDisconnect:\n        clients.discard(websocket)",
+          "code_language": "python",
+          "key_points": [
+            "Catch WebSocketDisconnect to clean up resources when a client leaves"
+          ],
+          "gotchas": [
+            "Not handling WebSocketDisconnect leaks connections in your tracking data structures"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the ConnectionManager pattern for managing multiple clients?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "connection-manager",
+        "broadcast",
+        "design-pattern"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **ConnectionManager** is a widely used pattern for tracking and broadcasting to multiple WebSocket clients. It encapsulates connection tracking, message routing, and cleanup in a single class.\n\n### Core responsibilities:\n1. **connect()**: Accept and store new WebSocket connections\n2. **disconnect()**: Remove connections that have closed\n3. **send_personal()**: Send a message to one specific client\n4. **broadcast()**: Send a message to all connected clients\n\n### Why use a class:\n- Centralizes connection logic instead of scattering it across endpoints\n- Makes it easy to add features like rooms, user tracking, and message history\n- Simplifies testing -- you can mock the manager\n\n### Advanced extensions:\n- **Room/channel support**: Group connections by topic or room\n- **User mapping**: Associate connections with authenticated user IDs\n- **Message history**: Buffer recent messages for new joiners\n- **Connection metadata**: Store per-connection state (username, join time, etc.)\n\n### Concurrency note:\nSince asyncio is single-threaded, a simple list/set is safe for tracking connections. You do not need locks unless you use multiple threads.",
+          "pseudo_code": "class ConnectionManager:\n    def __init__(self):\n        self.connections = []\n\n    async def connect(self, ws):\n        await ws.accept()\n        self.connections.append(ws)\n\n    def disconnect(self, ws):\n        self.connections.remove(ws)\n\n    async def broadcast(self, message):\n        for ws in self.connections:\n            await ws.send_text(message)",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom collections import defaultdict\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- Basic ConnectionManager ---\nclass ConnectionManager:\n    \"\"\"Manages WebSocket connections with broadcast support.\"\"\"\n\n    def __init__(self):\n        self.active_connections: list[WebSocket] = []\n\n    async def connect(self, websocket: WebSocket):\n        await websocket.accept()\n        self.active_connections.append(websocket)\n        logger.info(f\"Connected. Total: {len(self.active_connections)}\")\n\n    def disconnect(self, websocket: WebSocket):\n        self.active_connections.remove(websocket)\n        logger.info(f\"Disconnected. Total: {len(self.active_connections)}\")\n\n    async def send_personal(self, message: str, websocket: WebSocket):\n        await websocket.send_text(message)\n\n    async def broadcast(self, message: str, exclude: WebSocket | None = None):\n        \"\"\"Send message to all connected clients.\"\"\"\n        for connection in self.active_connections:\n            if connection != exclude:\n                try:\n                    await connection.send_text(message)\n                except Exception:\n                    pass  # Client may have disconnected between iterations\n\n\nmanager = ConnectionManager()\n\n\n@app.websocket(\"/ws/chat/{username}\")\nasync def chat_endpoint(websocket: WebSocket, username: str):\n    await manager.connect(websocket)\n    await manager.broadcast(f\"{username} joined the chat\")\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await manager.broadcast(f\"{username}: {data}\")\n    except WebSocketDisconnect:\n        manager.disconnect(websocket)\n        await manager.broadcast(f\"{username} left the chat\")\n\n\n# --- Room-based ConnectionManager ---\nclass RoomManager:\n    \"\"\"Manages connections organized by rooms.\"\"\"\n\n    def __init__(self):\n        self.rooms: dict[str, list[WebSocket]] = defaultdict(list)\n\n    async def connect(self, room: str, websocket: WebSocket):\n        await websocket.accept()\n        self.rooms[room].append(websocket)\n\n    def disconnect(self, room: str, websocket: WebSocket):\n        self.rooms[room].remove(websocket)\n        if not self.rooms[room]:\n            del self.rooms[room]  # Clean up empty rooms\n\n    async def broadcast_to_room(\n        self, room: str, message: str,\n        exclude: WebSocket | None = None,\n    ):\n        for ws in self.rooms.get(room, []):\n            if ws != exclude:\n                try:\n                    await ws.send_text(message)\n                except Exception:\n                    pass\n\n    def get_room_count(self, room: str) -> int:\n        return len(self.rooms.get(room, []))\n\n\nroom_manager = RoomManager()\n\n\n@app.websocket(\"/ws/rooms/{room_id}\")\nasync def room_endpoint(websocket: WebSocket, room_id: str):\n    await room_manager.connect(room_id, websocket)\n    await room_manager.broadcast_to_room(\n        room_id,\n        f\"New user joined. Users in room: {room_manager.get_room_count(room_id)}\",\n    )\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await room_manager.broadcast_to_room(\n                room_id, data, exclude=websocket\n            )\n    except WebSocketDisconnect:\n        room_manager.disconnect(room_id, websocket)\n        await room_manager.broadcast_to_room(\n            room_id,\n            f\"User left. Users in room: {room_manager.get_room_count(room_id)}\",\n        )",
+          "code_language": "python",
+          "key_points": [
+            "ConnectionManager centralizes connect, disconnect, send, and broadcast logic",
+            "Always wrap send_text() in try/except when broadcasting -- clients may disconnect between iterations",
+            "Use defaultdict(list) for room-based connection grouping",
+            "Clean up empty rooms to prevent memory leaks in long-running servers"
+          ],
+          "gotchas": [
+            "The manager is global state -- each Uvicorn worker has its own instance with its own connections",
+            "Broadcasting is sequential (await in a loop) -- for hundreds of clients, consider asyncio.gather()",
+            "list.remove() raises ValueError if the connection is not found -- use discard() with sets or guard with try/except",
+            "A slow client blocks the broadcast loop since each send is awaited sequentially"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The ConnectionManager pattern tracks active WebSocket connections in a list and provides `connect()`, `disconnect()`, `send_personal()`, and `broadcast()` methods. It centralizes all connection logic and makes room-based routing straightforward.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\n\nclass ConnectionManager:\n    def __init__(self):\n        self.active: list[WebSocket] = []\n\n    async def connect(self, ws: WebSocket):\n        await ws.accept()\n        self.active.append(ws)\n\n    def disconnect(self, ws: WebSocket):\n        self.active.remove(ws)\n\n    async def broadcast(self, message: str):\n        for ws in self.active:\n            await ws.send_text(message)\n\nmanager = ConnectionManager()\n\n@app.websocket(\"/ws/{name}\")\nasync def ws(websocket: WebSocket, name: str):\n    await manager.connect(websocket)\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await manager.broadcast(f\"{name}: {data}\")\n    except WebSocketDisconnect:\n        manager.disconnect(websocket)",
+          "code_language": "python",
+          "key_points": [
+            "Centralizes connect/disconnect/broadcast in one class for clean WebSocket management"
+          ],
+          "gotchas": [
+            "Each Uvicorn worker has its own manager instance -- connections are not shared across workers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement authentication for WebSocket connections?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "authentication",
+        "jwt",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "WebSocket authentication differs from HTTP because you cannot set custom headers during the browser's WebSocket handshake. You must use alternative strategies.\n\n### Authentication strategies:\n\n1. **Query parameter token**: Pass a JWT or API key in the WebSocket URL\n   - `ws://host/ws?token=eyJhbG...`\n   - Simple but tokens appear in server logs and browser history\n\n2. **Cookie-based**: If the user is already authenticated via HTTP cookies, the browser sends cookies with the WebSocket upgrade request\n   - `websocket.cookies[\"session_id\"]`\n   - Best for browser apps with existing session auth\n\n3. **First-message auth**: Accept the connection, then require a token in the first message before allowing further communication\n   - More secure than URL tokens (not logged)\n   - Adds a round-trip before the connection is \"active\"\n\n4. **Subprotocol header**: Some libraries support passing tokens via the Sec-WebSocket-Protocol header\n   - Requires client-side support\n\n### Why not the Authorization header?\nBrowser JavaScript's `WebSocket` API does not allow setting custom headers. Server-to-server WebSocket connections can use headers, but browser clients cannot.\n\n### Best practice:\nUse short-lived tokens. The WebSocket connection can outlive the token, so implement periodic re-validation or heartbeat-based token refresh.",
+          "pseudo_code": "# Query param auth\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket, token: str):\n    user = verify_jwt(token)\n    if not user:\n        await websocket.close(code=1008)\n        return\n    await websocket.accept()\n    ...\n\n# First-message auth\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    auth_msg = await websocket.receive_json()\n    user = verify_jwt(auth_msg[\"token\"])\n    if not user:\n        await websocket.close(code=1008)\n        return\n    ...",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Query\nfrom fastapi import status\nimport jwt\nimport logging\nfrom datetime import datetime, timezone, timedelta\nfrom typing import Annotated\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\nSECRET_KEY = \"your-secret-key\"\nALGORITHM = \"HS256\"\n\n\ndef create_token(user_id: int) -> str:\n    payload = {\n        \"sub\": str(user_id),\n        \"exp\": datetime.now(timezone.utc) + timedelta(hours=1),\n    }\n    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)\n\n\ndef verify_token(token: str) -> dict | None:\n    try:\n        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])\n        return {\"user_id\": int(payload[\"sub\"])}\n    except jwt.InvalidTokenError:\n        return None\n\n\n# --- Strategy 1: Query parameter token ---\n@app.websocket(\"/ws/query-auth\")\nasync def query_auth_ws(\n    websocket: WebSocket,\n    token: str = Query(default=\"\"),\n):\n    user = verify_token(token)\n    if not user:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    await websocket.accept()\n    await websocket.send_text(f\"Welcome, user {user['user_id']}!\")\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(f\"[User {user['user_id']}] {data}\")\n    except WebSocketDisconnect:\n        logger.info(f\"User {user['user_id']} disconnected\")\n\n\n# --- Strategy 2: Cookie-based auth ---\n@app.websocket(\"/ws/cookie-auth\")\nasync def cookie_auth_ws(websocket: WebSocket):\n    session_token = websocket.cookies.get(\"session\")\n    user = verify_token(session_token) if session_token else None\n\n    if not user:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    await websocket.accept()\n    await websocket.send_text(f\"Authenticated via cookie: user {user['user_id']}\")\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(data)\n    except WebSocketDisconnect:\n        pass\n\n\n# --- Strategy 3: First-message auth ---\n@app.websocket(\"/ws/first-msg-auth\")\nasync def first_message_auth_ws(websocket: WebSocket):\n    await websocket.accept()\n\n    # Expect the first message to be an auth token\n    try:\n        auth_data = await websocket.receive_json()\n    except Exception:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    token = auth_data.get(\"token\", \"\")\n    user = verify_token(token)\n    if not user:\n        await websocket.send_json({\"error\": \"Invalid token\"})\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    await websocket.send_json(\n        {\"status\": \"authenticated\", \"user_id\": user[\"user_id\"]}\n    )\n\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(f\"[User {user['user_id']}] {data}\")\n    except WebSocketDisconnect:\n        logger.info(f\"User {user['user_id']} disconnected\")\n\n\n# --- Helper: HTTP endpoint to get a token ---\n@app.get(\"/token\")\nasync def get_token(user_id: int = 1):\n    return {\"token\": create_token(user_id)}",
+          "code_language": "python",
+          "key_points": [
+            "Browser WebSocket API cannot set custom headers -- use query params, cookies, or first-message auth",
+            "Query param tokens are simple but appear in server logs and browser history",
+            "Cookie-based auth works seamlessly when users already have an HTTP session",
+            "First-message auth is most secure for browser clients -- tokens are not in the URL"
+          ],
+          "gotchas": [
+            "Tokens in query params are logged by most web servers and proxies -- use short-lived tokens",
+            "WebSocket connections can outlive JWT expiration -- implement periodic re-validation or heartbeat auth checks",
+            "Closing before accept() sends an HTTP 403 but some browsers show a generic connection error",
+            "If using first-message auth, set a timeout on the receive -- otherwise unauthenticated connections linger indefinitely"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Browser WebSocket APIs cannot set custom headers, so use query parameter tokens (`ws://host/ws?token=...`), cookies, or first-message authentication. Verify the token before processing any messages. Close with code 1008 (Policy Violation) on auth failure.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, status\n\napp = FastAPI()\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket, token: str = Query(default=\"\")):\n    user = verify_token(token)\n    if not user:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n    await websocket.accept()\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(data)\n    except WebSocketDisconnect:\n        pass",
+          "code_language": "python",
+          "key_points": [
+            "Query params, cookies, or first-message are the three browser-compatible auth strategies"
+          ],
+          "gotchas": [
+            "Query parameter tokens appear in server logs -- use short-lived tokens and rotate frequently"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you send and receive JSON over WebSockets?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "json",
+        "pydantic",
+        "serialization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI's `WebSocket` object provides built-in JSON support through `receive_json()` and `send_json()`. You can also combine this with Pydantic models for validation.\n\n### Built-in methods:\n- `await websocket.receive_json()` -- deserializes incoming text as JSON\n- `await websocket.send_json(data)` -- serializes a dict/list to JSON and sends as text\n\n### The `mode` parameter:\nBoth methods accept a `mode` parameter:\n- `mode=\"text\"` (default): JSON is sent/received as text frames\n- `mode=\"binary\"`: JSON is sent/received as binary frames\n\n### Pydantic validation:\nFastAPI does not automatically validate WebSocket messages with Pydantic (unlike HTTP request bodies). You must manually parse and validate incoming JSON using Pydantic models.\n\n### Structured message protocol:\nFor real apps, define a message protocol with a `type` field to distinguish between different message kinds (chat, typing indicator, system messages, etc.).",
+          "pseudo_code": "from pydantic import BaseModel\n\nclass Message(BaseModel):\n    type: str\n    content: str\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    while True:\n        data = await websocket.receive_json()\n        msg = Message(**data)  # Validate with Pydantic\n        await websocket.send_json({\"echo\": msg.content})",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom pydantic import BaseModel, ValidationError\nfrom typing import Literal\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- Pydantic models for message protocol ---\nclass ChatMessage(BaseModel):\n    type: Literal[\"chat\"]\n    content: str\n    username: str\n\nclass TypingIndicator(BaseModel):\n    type: Literal[\"typing\"]\n    username: str\n    is_typing: bool\n\nclass SystemCommand(BaseModel):\n    type: Literal[\"command\"]\n    action: str  # \"clear\", \"list_users\", etc.\n\n\n# --- Basic JSON echo ---\n@app.websocket(\"/ws/json\")\nasync def json_echo(websocket: WebSocket):\n    \"\"\"Send and receive JSON messages.\"\"\"\n    await websocket.accept()\n    try:\n        while True:\n            # receive_json() parses the text frame as JSON\n            data = await websocket.receive_json()\n            logger.info(f\"Received JSON: {data}\")\n\n            # send_json() serializes dict to JSON text\n            await websocket.send_json({\n                \"echo\": data,\n                \"status\": \"received\",\n            })\n    except WebSocketDisconnect:\n        pass\n\n\n# --- Validated JSON with Pydantic ---\n@app.websocket(\"/ws/chat\")\nasync def validated_chat(websocket: WebSocket):\n    \"\"\"Validates incoming JSON with Pydantic models.\"\"\"\n    await websocket.accept()\n    try:\n        while True:\n            raw = await websocket.receive_json()\n            msg_type = raw.get(\"type\")\n\n            try:\n                if msg_type == \"chat\":\n                    msg = ChatMessage(**raw)\n                    await websocket.send_json({\n                        \"type\": \"chat\",\n                        \"content\": msg.content,\n                        \"from\": msg.username,\n                    })\n\n                elif msg_type == \"typing\":\n                    indicator = TypingIndicator(**raw)\n                    await websocket.send_json({\n                        \"type\": \"typing\",\n                        \"username\": indicator.username,\n                        \"is_typing\": indicator.is_typing,\n                    })\n\n                elif msg_type == \"command\":\n                    cmd = SystemCommand(**raw)\n                    await websocket.send_json({\n                        \"type\": \"system\",\n                        \"message\": f\"Executed: {cmd.action}\",\n                    })\n\n                else:\n                    await websocket.send_json({\n                        \"type\": \"error\",\n                        \"message\": f\"Unknown message type: {msg_type}\",\n                    })\n\n            except ValidationError as e:\n                await websocket.send_json({\n                    \"type\": \"error\",\n                    \"message\": \"Validation failed\",\n                    \"details\": e.errors(),\n                })\n\n    except WebSocketDisconnect:\n        logger.info(\"Client disconnected\")\n\n\n# Client-side JavaScript:\n# ws.send(JSON.stringify({type: \"chat\", content: \"Hello!\", username: \"alice\"}));\n# ws.send(JSON.stringify({type: \"typing\", username: \"alice\", is_typing: true}));\n# ws.send(JSON.stringify({type: \"command\", action: \"list_users\"}));",
+          "code_language": "python",
+          "key_points": [
+            "receive_json() and send_json() handle JSON serialization/deserialization automatically",
+            "FastAPI does not auto-validate WebSocket JSON -- use Pydantic models manually",
+            "Define a message protocol with a 'type' field to distinguish message kinds",
+            "Send validation errors back to the client as JSON error messages"
+          ],
+          "gotchas": [
+            "receive_json() raises a JSONDecodeError if the client sends invalid JSON -- wrap in try/except",
+            "send_json() uses Python's json.dumps internally -- datetime and other non-serializable types need custom encoders",
+            "mode='binary' sends JSON as binary frames which some client libraries do not expect",
+            "Unlike HTTP endpoints, WebSocket messages are not documented in OpenAPI/Swagger"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `await websocket.receive_json()` and `await websocket.send_json(data)` for automatic JSON serialization. FastAPI does not auto-validate WebSocket messages -- manually validate with Pydantic using `Model(**data)` and catch `ValidationError`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom pydantic import BaseModel, ValidationError\n\nclass ChatMsg(BaseModel):\n    type: str\n    content: str\n\napp = FastAPI()\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    try:\n        while True:\n            raw = await websocket.receive_json()\n            try:\n                msg = ChatMsg(**raw)\n                await websocket.send_json({\"echo\": msg.content})\n            except ValidationError as e:\n                await websocket.send_json({\"error\": e.errors()})\n    except WebSocketDisconnect:\n        pass",
+          "code_language": "python",
+          "key_points": [
+            "receive_json()/send_json() handle JSON automatically; validate manually with Pydantic"
+          ],
+          "gotchas": [
+            "Invalid JSON from the client raises JSONDecodeError, not ValidationError -- handle both"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement a chat room with broadcasting?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "chat",
+        "broadcast",
+        "rooms"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A chat room requires a ConnectionManager that supports multiple rooms, user tracking, and message broadcasting. Each room maintains its own list of connected clients.\n\n### Architecture:\n1. **RoomConnectionManager**: Tracks connections per room\n2. **Join/leave notifications**: Broadcast when users enter or exit\n3. **Message routing**: Messages go only to clients in the same room\n4. **User metadata**: Track usernames alongside connections\n\n### Message protocol:\nUse a structured JSON format with a `type` field:\n- `{\"type\": \"chat\", \"content\": \"...\"}` -- regular message\n- `{\"type\": \"join\"}` -- system join notification\n- `{\"type\": \"leave\"}` -- system leave notification\n- `{\"type\": \"users\"}` -- list of users in the room\n\n### Scalability considerations:\n- In-memory rooms work for a single server process\n- For multiple workers/servers, use Redis Pub/Sub to relay messages across processes\n- Consider message history for new joiners (ring buffer or database-backed)",
+          "pseudo_code": "class ChatRoom:\n    rooms: dict[str, dict[WebSocket, str]] = {}\n\n    async def join(self, room, ws, username):\n        rooms[room][ws] = username\n        await broadcast(room, f\"{username} joined\")\n\n    async def leave(self, room, ws):\n        username = rooms[room].pop(ws)\n        await broadcast(room, f\"{username} left\")\n\n    async def broadcast(self, room, message):\n        for ws in rooms[room]:\n            await ws.send_json(message)",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom collections import defaultdict\nfrom datetime import datetime, timezone\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\nclass ChatRoomManager:\n    \"\"\"Manages multiple chat rooms with user tracking.\"\"\"\n\n    def __init__(self):\n        # room_id -> {websocket: username}\n        self.rooms: dict[str, dict[WebSocket, str]] = defaultdict(dict)\n\n    async def join(\n        self, room_id: str, websocket: WebSocket, username: str,\n    ):\n        await websocket.accept()\n        self.rooms[room_id][websocket] = username\n        # Notify everyone in the room\n        await self.broadcast(room_id, {\n            \"type\": \"system\",\n            \"content\": f\"{username} joined the room\",\n            \"users\": self.get_users(room_id),\n        })\n\n    async def leave(self, room_id: str, websocket: WebSocket):\n        username = self.rooms[room_id].pop(websocket, \"unknown\")\n        if not self.rooms[room_id]:\n            del self.rooms[room_id]  # Clean up empty rooms\n        else:\n            await self.broadcast(room_id, {\n                \"type\": \"system\",\n                \"content\": f\"{username} left the room\",\n                \"users\": self.get_users(room_id),\n            })\n        return username\n\n    async def broadcast(\n        self,\n        room_id: str,\n        message: dict,\n        exclude: WebSocket | None = None,\n    ):\n        \"\"\"Send a message to all clients in a room.\"\"\"\n        disconnected = []\n        for ws in self.rooms.get(room_id, {}):\n            if ws == exclude:\n                continue\n            try:\n                await ws.send_json(message)\n            except Exception:\n                disconnected.append(ws)\n        # Clean up any broken connections found during broadcast\n        for ws in disconnected:\n            self.rooms[room_id].pop(ws, None)\n\n    def get_users(self, room_id: str) -> list[str]:\n        return list(self.rooms.get(room_id, {}).values())\n\n    def get_room_count(self, room_id: str) -> int:\n        return len(self.rooms.get(room_id, {}))\n\n\nchat_manager = ChatRoomManager()\n\n\n@app.websocket(\"/ws/chat/{room_id}\")\nasync def chat_endpoint(\n    websocket: WebSocket,\n    room_id: str,\n    username: str = \"anonymous\",\n):\n    await chat_manager.join(room_id, websocket, username)\n    try:\n        while True:\n            data = await websocket.receive_json()\n            msg_type = data.get(\"type\", \"chat\")\n\n            if msg_type == \"chat\":\n                await chat_manager.broadcast(\n                    room_id,\n                    {\n                        \"type\": \"chat\",\n                        \"username\": username,\n                        \"content\": data.get(\"content\", \"\"),\n                        \"timestamp\": datetime.now(timezone.utc).isoformat(),\n                    },\n                )\n            elif msg_type == \"list_users\":\n                await websocket.send_json({\n                    \"type\": \"users\",\n                    \"users\": chat_manager.get_users(room_id),\n                })\n\n    except WebSocketDisconnect:\n        left_user = await chat_manager.leave(room_id, websocket)\n        logger.info(f\"{left_user} left room {room_id}\")\n\n\n# --- REST endpoint to list active rooms ---\n@app.get(\"/rooms\")\nasync def list_rooms():\n    return {\n        room_id: {\n            \"users\": chat_manager.get_users(room_id),\n            \"count\": chat_manager.get_room_count(room_id),\n        }\n        for room_id in chat_manager.rooms\n    }\n\n\n# Client usage:\n# ws = new WebSocket(\"ws://localhost:8000/ws/chat/general?username=alice\");\n# ws.send(JSON.stringify({type: \"chat\", content: \"Hello everyone!\"}));\n# ws.send(JSON.stringify({type: \"list_users\"}));",
+          "code_language": "python",
+          "key_points": [
+            "Use a dict[str, dict[WebSocket, str]] to map rooms to their connected users",
+            "Broadcast join/leave notifications so all users see who is online",
+            "Clean up empty rooms after the last user leaves to prevent memory leaks",
+            "Remove broken connections discovered during broadcast to keep the room state clean"
+          ],
+          "gotchas": [
+            "In-memory rooms only work within a single process -- multiple Uvicorn workers each have their own rooms",
+            "Broadcasting to many clients sequentially can be slow -- consider asyncio.gather() for large rooms",
+            "A user can open multiple tabs and appear as multiple connections in the same room",
+            "No message persistence -- users who join late miss previous messages unless you implement history"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use a `ChatRoomManager` that maps room IDs to `{WebSocket: username}` dicts. On join, broadcast a system message. Route chat messages only to clients in the same room. Clean up on disconnect.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom collections import defaultdict\n\napp = FastAPI()\n\nclass ChatRoomManager:\n    def __init__(self):\n        self.rooms: dict[str, dict[WebSocket, str]] = defaultdict(dict)\n\n    async def join(self, room, ws, username):\n        await ws.accept()\n        self.rooms[room][ws] = username\n\n    async def leave(self, room, ws):\n        self.rooms[room].pop(ws, None)\n\n    async def broadcast(self, room, message):\n        for ws in self.rooms.get(room, {}):\n            await ws.send_json(message)\n\nmanager = ChatRoomManager()\n\n@app.websocket(\"/ws/chat/{room}\")\nasync def chat(websocket: WebSocket, room: str, username: str = \"anon\"):\n    await manager.join(room, websocket, username)\n    try:\n        while True:\n            data = await websocket.receive_json()\n            await manager.broadcast(room, {\"user\": username, \"msg\": data[\"content\"]})\n    except WebSocketDisconnect:\n        await manager.leave(room, websocket)",
+          "code_language": "python",
+          "key_points": [
+            "Map room IDs to connection dicts for room-scoped broadcasting"
+          ],
+          "gotchas": [
+            "In-memory rooms are per-process -- use Redis Pub/Sub for multi-worker deployments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use WebSocket dependencies?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "dependencies",
+        "dependency-injection",
+        "middleware"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI supports dependency injection for WebSocket endpoints, similar to HTTP endpoints. However, there are important differences and limitations.\n\n### What works:\n- Regular function dependencies (`Depends()`)\n- Class-based dependencies (`Depends(MyClass)`)\n- Query parameters and path parameters\n- Nested/sub-dependencies\n- `BackgroundTasks` injection\n\n### What does NOT work:\n- `Body()`, `Form()`, `File()` -- WebSocket has no HTTP body\n- `Header()` for custom headers -- only standard WebSocket headers are available\n- `Security()` with OAuth2 -- browser WebSockets cannot set Authorization headers\n- `Response` injection -- WebSockets do not have HTTP responses\n\n### Dependency lifecycle:\n- Regular dependencies run once per WebSocket connection (not per message)\n- Yield dependencies clean up when the WebSocket handler function exits\n- This is different from HTTP where dependencies run per request\n\n### Accessing WebSocket in dependencies:\nDependencies can declare a `WebSocket` parameter to access the connection directly. This is useful for auth dependencies that need to read cookies or query params.",
+          "pseudo_code": "async def verify_ws_token(websocket: WebSocket) -> dict:\n    token = websocket.query_params.get(\"token\")\n    user = decode_jwt(token)\n    if not user:\n        await websocket.close(code=1008)\n        raise WebSocketException(code=1008)\n    return user\n\n@app.websocket(\"/ws\")\nasync def ws(\n    websocket: WebSocket,\n    user: Annotated[dict, Depends(verify_ws_token)],\n):\n    await websocket.accept()\n    ...",
+          "actual_code": "from fastapi import (\n    FastAPI, WebSocket, WebSocketDisconnect, WebSocketException,\n    Depends, Query,\n    status,\n)\nfrom typing import Annotated\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- Auth dependency for WebSocket ---\nasync def get_ws_user(\n    websocket: WebSocket,\n    token: str = Query(default=\"\"),\n) -> dict:\n    \"\"\"Validates token and returns user info.\n    Raises WebSocketException to reject the connection.\"\"\"\n    # Simulated token validation\n    valid_tokens = {\n        \"token-alice\": {\"user_id\": 1, \"name\": \"Alice\"},\n        \"token-bob\": {\"user_id\": 2, \"name\": \"Bob\"},\n    }\n    user = valid_tokens.get(token)\n    if not user:\n        raise WebSocketException(\n            code=status.WS_1008_POLICY_VIOLATION,\n            reason=\"Invalid token\",\n        )\n    return user\n\n\n@app.websocket(\"/ws/protected\")\nasync def protected_ws(\n    websocket: WebSocket,\n    user: Annotated[dict, Depends(get_ws_user)],\n):\n    \"\"\"WebSocket endpoint with auth dependency.\"\"\"\n    await websocket.accept()\n    await websocket.send_json({\"welcome\": user[\"name\"]})\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(\n                f\"[{user['name']}] {data}\"\n            )\n    except WebSocketDisconnect:\n        logger.info(f\"{user['name']} disconnected\")\n\n\n# --- Rate limiter dependency ---\nfrom collections import defaultdict\nimport time\n\nclass WebSocketRateLimiter:\n    def __init__(self, max_messages: int, window_seconds: float):\n        self.max_messages = max_messages\n        self.window = window_seconds\n        self.message_counts: dict[str, list[float]] = defaultdict(list)\n\n    def check(self, client_id: str) -> bool:\n        now = time.time()\n        timestamps = self.message_counts[client_id]\n        # Remove old timestamps\n        self.message_counts[client_id] = [\n            t for t in timestamps if now - t < self.window\n        ]\n        if len(self.message_counts[client_id]) >= self.max_messages:\n            return False\n        self.message_counts[client_id].append(now)\n        return True\n\nrate_limiter = WebSocketRateLimiter(max_messages=10, window_seconds=60)\n\n\ndef get_rate_limiter() -> WebSocketRateLimiter:\n    return rate_limiter\n\n\n@app.websocket(\"/ws/limited\")\nasync def rate_limited_ws(\n    websocket: WebSocket,\n    limiter: Annotated[WebSocketRateLimiter, Depends(get_rate_limiter)],\n):\n    await websocket.accept()\n    client_id = f\"{websocket.client.host}:{websocket.client.port}\"\n    try:\n        while True:\n            data = await websocket.receive_text()\n            if not limiter.check(client_id):\n                await websocket.send_json({\n                    \"error\": \"Rate limit exceeded. Try again later.\"\n                })\n                continue\n            await websocket.send_text(f\"Echo: {data}\")\n    except WebSocketDisconnect:\n        pass\n\n\n# --- Yield dependency with cleanup ---\nasync def ws_session_tracker(websocket: WebSocket):\n    \"\"\"Tracks session lifetime with cleanup.\"\"\"\n    client = f\"{websocket.client.host}:{websocket.client.port}\"\n    logger.info(f\"Session started: {client}\")\n    yield client\n    # Cleanup runs when the WebSocket handler exits\n    logger.info(f\"Session ended: {client}\")\n\n\n@app.websocket(\"/ws/tracked\")\nasync def tracked_ws(\n    websocket: WebSocket,\n    client_id: Annotated[str, Depends(ws_session_tracker)],\n):\n    await websocket.accept()\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(f\"[{client_id}] {data}\")\n    except WebSocketDisconnect:\n        pass  # Yield dependency cleanup runs after this",
+          "code_language": "python",
+          "key_points": [
+            "WebSocket dependencies run once per connection, not per message",
+            "Raise WebSocketException to reject a connection from within a dependency",
+            "Yield dependencies clean up when the WebSocket handler function exits (on disconnect)",
+            "Dependencies can access the WebSocket object to read cookies, query params, and headers"
+          ],
+          "gotchas": [
+            "Body(), Form(), File() do not work with WebSocket endpoints -- there is no HTTP body",
+            "Security() with OAuth2 does not work because browsers cannot set the Authorization header on WebSocket upgrades",
+            "WebSocketException can be raised both before and after accept() -- before accept it rejects the HTTP upgrade, after accept it sends a WebSocket close frame with the specified code",
+            "Dependencies are cached per-connection, so the same dependency used in multiple sub-dependencies returns the same value"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "WebSocket endpoints support `Depends()` for dependency injection. Dependencies run once per connection (not per message). Use `WebSocketException` to reject connections from within dependencies. `Body()`, `Form()`, and `Security()` with OAuth2 do not work for WebSockets.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketException, Depends, Query, status\nfrom typing import Annotated\n\napp = FastAPI()\n\nasync def verify_token(token: str = Query(default=\"\")) -> dict:\n    if token != \"valid\":\n        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)\n    return {\"user\": \"alice\"}\n\n@app.websocket(\"/ws\")\nasync def ws(\n    websocket: WebSocket,\n    user: Annotated[dict, Depends(verify_token)],\n):\n    await websocket.accept()\n    await websocket.send_json({\"hello\": user[\"user\"]})",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies run once per connection and support yield for cleanup"
+          ],
+          "gotchas": [
+            "Body(), Form(), and OAuth2 Security() are not compatible with WebSocket endpoints"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is Server-Sent Events (SSE) and how does it compare to WebSockets?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "sse",
+        "server-sent-events",
+        "websocket",
+        "streaming",
+        "realtime"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Server-Sent Events (SSE)** is a standard for server-to-client streaming over HTTP. Unlike WebSockets, SSE is unidirectional -- only the server pushes data to the client.\n\n### SSE vs WebSockets:\n\n| Feature | SSE | WebSockets |\n|---------|-----|------------|\n| Direction | Server -> Client only | Bidirectional |\n| Protocol | HTTP/1.1 or HTTP/2 | WebSocket (ws://) |\n| Reconnection | Automatic (built into EventSource API) | Manual (you must implement it) |\n| Data format | Text only (UTF-8) | Text or binary |\n| Authentication | Standard HTTP headers (cookies, Bearer) | Query params or cookies only |\n| Proxy support | Excellent (standard HTTP) | Can be problematic |\n| Browser API | EventSource | WebSocket |\n| Max connections | ~6 per domain (HTTP/1.1) | No hard limit |\n\n### When to use SSE:\n- Live feeds (stock prices, news, notifications)\n- Progress updates for long-running operations\n- Real-time dashboards where the client only reads\n- Situations where you need standard HTTP auth headers\n\n### When to use WebSockets:\n- Chat applications (bidirectional)\n- Online games (low latency, bidirectional)\n- Collaborative editing (bidirectional)\n- Binary data streaming\n\n### SSE message format:\nEach event is a text block with optional `event:`, `data:`, `id:`, and `retry:` fields, separated by double newlines.",
+          "pseudo_code": "from fastapi.responses import StreamingResponse\n\nasync def event_stream():\n    while True:\n        data = await get_next_event()\n        yield f\"event: update\\ndata: {json.dumps(data)}\\n\\n\"\n\n@app.get(\"/events\")\nasync def sse():\n    return StreamingResponse(\n        event_stream(),\n        media_type=\"text/event-stream\",\n    )",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import StreamingResponse\nimport asyncio\nimport json\nimport time\n\napp = FastAPI()\n\n\n# --- Basic SSE endpoint ---\n@app.get(\"/events\")\nasync def server_sent_events(request: Request):\n    \"\"\"Pushes events to the client every second.\"\"\"\n\n    async def event_generator():\n        counter = 0\n        while True:\n            # Check if client disconnected\n            if await request.is_disconnected():\n                break\n\n            data = {\n                \"counter\": counter,\n                \"timestamp\": time.time(),\n            }\n            # SSE format: \"data: ...\\n\\n\"\n            yield f\"data: {json.dumps(data)}\\n\\n\"\n            counter += 1\n            await asyncio.sleep(1)\n\n    return StreamingResponse(\n        event_generator(),\n        media_type=\"text/event-stream\",\n        headers={\n            \"Cache-Control\": \"no-cache\",\n            \"Connection\": \"keep-alive\",\n            \"X-Accel-Buffering\": \"no\",  # Disable Nginx buffering\n        },\n    )\n\n\n# --- SSE with named events and IDs ---\n@app.get(\"/events/named\")\nasync def named_events(request: Request):\n    \"\"\"SSE with event types and IDs for reconnection.\"\"\"\n\n    async def event_generator():\n        event_id = 0\n        while True:\n            if await request.is_disconnected():\n                break\n\n            # Named event with ID (client can resume from last ID)\n            event_id += 1\n            yield (\n                f\"id: {event_id}\\n\"\n                f\"event: price_update\\n\"\n                f\"data: {{\\\"symbol\\\": \\\"AAPL\\\", \\\"price\\\": 150.{event_id}}}\\n\\n\"\n            )\n\n            await asyncio.sleep(2)\n\n            event_id += 1\n            yield (\n                f\"id: {event_id}\\n\"\n                f\"event: notification\\n\"\n                f\"data: {{\\\"message\\\": \\\"Market update #{event_id}\\\"}}\\n\\n\"\n            )\n\n            await asyncio.sleep(2)\n\n    return StreamingResponse(\n        event_generator(),\n        media_type=\"text/event-stream\",\n        headers={\"Cache-Control\": \"no-cache\"},\n    )\n\n\n# --- Progress updates for a long-running task ---\n@app.get(\"/tasks/{task_id}/progress\")\nasync def task_progress(task_id: str, request: Request):\n    async def progress_stream():\n        for percent in range(0, 101, 10):\n            if await request.is_disconnected():\n                break\n            yield f\"data: {{\\\"task_id\\\": \\\"{task_id}\\\", \\\"progress\\\": {percent}}}\\n\\n\"\n            await asyncio.sleep(0.5)\n        yield f\"event: complete\\ndata: {{\\\"task_id\\\": \\\"{task_id}\\\"}}\\n\\n\"\n\n    return StreamingResponse(\n        progress_stream(),\n        media_type=\"text/event-stream\",\n        headers={\"Cache-Control\": \"no-cache\"},\n    )\n\n\n# Client-side JavaScript:\n# const es = new EventSource(\"/events/named\");\n# es.addEventListener(\"price_update\", (e) => console.log(JSON.parse(e.data)));\n# es.addEventListener(\"notification\", (e) => console.log(JSON.parse(e.data)));\n# es.onerror = () => console.log(\"Reconnecting...\");  // Automatic!",
+          "code_language": "python",
+          "key_points": [
+            "SSE is server-to-client only, using standard HTTP -- simpler than WebSockets for push-only use cases",
+            "The EventSource browser API has built-in automatic reconnection (WebSockets do not)",
+            "SSE supports named events (event:) and IDs (id:) for resuming after reconnection",
+            "Standard HTTP auth works with SSE -- unlike WebSockets, you can use Authorization headers"
+          ],
+          "gotchas": [
+            "HTTP/1.1 limits browsers to ~6 SSE connections per domain -- use HTTP/2 for more",
+            "Nginx and some proxies buffer SSE by default -- set X-Accel-Buffering: no and proxy_buffering off",
+            "SSE only supports UTF-8 text -- no binary data (use WebSockets for binary)",
+            "Check request.is_disconnected() in the loop -- otherwise the generator runs forever even after the client leaves"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SSE is server-to-client push over standard HTTP using `StreamingResponse` with `media_type=\"text/event-stream\"`. Unlike WebSockets, it is unidirectional, has automatic reconnection via the `EventSource` API, and supports standard HTTP auth headers. Use SSE for live feeds and notifications; use WebSockets for bidirectional communication.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.responses import StreamingResponse\nimport asyncio, json\n\napp = FastAPI()\n\n@app.get(\"/events\")\nasync def sse(request: Request):\n    async def stream():\n        while not await request.is_disconnected():\n            yield f\"data: {json.dumps({'time': 'now'})}\\n\\n\"\n            await asyncio.sleep(1)\n\n    return StreamingResponse(\n        stream(),\n        media_type=\"text/event-stream\",\n        headers={\"Cache-Control\": \"no-cache\"},\n    )",
+          "code_language": "python",
+          "key_points": [
+            "SSE = server-to-client push over HTTP with automatic reconnection"
+          ],
+          "gotchas": [
+            "HTTP/1.1 limits ~6 SSE connections per domain -- use HTTP/2 to avoid this"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement heartbeat/ping-pong for connection health?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "heartbeat",
+        "ping-pong",
+        "connection-health",
+        "keepalive"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Heartbeat (ping/pong) mechanisms detect dead connections that the TCP stack has not yet noticed. Without heartbeats, a server may keep sending to a client whose network dropped minutes ago.\n\n### Two levels of ping/pong:\n\n1. **WebSocket protocol-level (control frames)**:\n   - Built into the WebSocket standard (RFC 6455)\n   - Uvicorn/Starlette handle these automatically at the ASGI level\n   - Configure `--ws-ping-interval` and `--ws-ping-timeout` in Uvicorn\n   - Transparent to application code\n\n2. **Application-level heartbeat**:\n   - Send custom `{\"type\": \"ping\"}` messages from the server\n   - Client responds with `{\"type\": \"pong\"}`\n   - Gives you full control over timeouts and reconnection logic\n   - Useful when protocol-level pings are not sufficient (e.g., behind proxies that intercept control frames)\n\n### Uvicorn configuration:\n```\nuvicorn app:app --ws-ping-interval 20 --ws-ping-timeout 20\n```\n- `--ws-ping-interval`: Seconds between pings (default: 20)\n- `--ws-ping-timeout`: Seconds to wait for pong before closing (default: 20)\n- Set to `None` to disable\n\n### Application-level heartbeat pattern:\nUse `asyncio.wait_for()` with a timeout on `receive()`, or run a concurrent ping task alongside the receive loop.",
+          "pseudo_code": "async def heartbeat_ws(websocket):\n    await websocket.accept()\n    async def ping_loop():\n        while True:\n            await asyncio.sleep(30)\n            await websocket.send_json({\"type\": \"ping\"})\n    ping_task = asyncio.create_task(ping_loop())\n    try:\n        while True:\n            data = await asyncio.wait_for(\n                websocket.receive_text(), timeout=60\n            )\n            process(data)\n    except asyncio.TimeoutError:\n        await websocket.close()  # Dead connection\n    finally:\n        ping_task.cancel()",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nimport asyncio\nimport time\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- Application-level heartbeat with concurrent ping task ---\n@app.websocket(\"/ws/heartbeat\")\nasync def heartbeat_endpoint(websocket: WebSocket):\n    await websocket.accept()\n    last_pong = time.time()\n    PING_INTERVAL = 15  # Send ping every 15 seconds\n    PONG_TIMEOUT = 30   # Close if no pong for 30 seconds\n\n    async def ping_loop():\n        \"\"\"Periodically sends pings and checks for timeouts.\"\"\"\n        nonlocal last_pong\n        while True:\n            await asyncio.sleep(PING_INTERVAL)\n            try:\n                await websocket.send_json({\"type\": \"ping\"})\n                # Check if we have received a pong recently\n                if time.time() - last_pong > PONG_TIMEOUT:\n                    logger.warning(\"Pong timeout -- closing connection\")\n                    await websocket.close(code=1001, reason=\"Pong timeout\")\n                    return\n            except Exception:\n                return  # Connection already closed\n\n    ping_task = asyncio.create_task(ping_loop())\n\n    try:\n        while True:\n            data = await websocket.receive_json()\n            if data.get(\"type\") == \"pong\":\n                last_pong = time.time()\n                logger.debug(\"Pong received\")\n            else:\n                # Handle normal messages\n                await websocket.send_json({\n                    \"type\": \"echo\",\n                    \"data\": data,\n                })\n    except WebSocketDisconnect:\n        logger.info(\"Client disconnected\")\n    finally:\n        ping_task.cancel()\n        try:\n            await ping_task\n        except asyncio.CancelledError:\n            pass\n\n\n# --- Timeout-based approach (simpler) ---\n@app.websocket(\"/ws/timeout\")\nasync def timeout_endpoint(websocket: WebSocket):\n    \"\"\"Closes connection if no message received within timeout.\"\"\"\n    await websocket.accept()\n    IDLE_TIMEOUT = 60  # Close after 60 seconds of silence\n\n    try:\n        while True:\n            try:\n                data = await asyncio.wait_for(\n                    websocket.receive_text(),\n                    timeout=IDLE_TIMEOUT,\n                )\n                await websocket.send_text(f\"Echo: {data}\")\n            except asyncio.TimeoutError:\n                logger.info(\"Idle timeout -- closing connection\")\n                await websocket.close(\n                    code=1001, reason=\"Idle timeout\"\n                )\n                break\n    except WebSocketDisconnect:\n        logger.info(\"Client disconnected\")\n\n\n# --- Uvicorn protocol-level pings (run with these flags) ---\n# uvicorn app:app --ws-ping-interval 20 --ws-ping-timeout 20\n#\n# These are WebSocket control frames handled automatically:\n# - Server sends a Ping frame every 20 seconds\n# - If no Pong frame is received within 20 seconds, connection is closed\n# - Transparent to application code (you do not see these in receive())\n\n\n# Client-side JavaScript with heartbeat:\n# const ws = new WebSocket(\"ws://localhost:8000/ws/heartbeat\");\n# ws.onmessage = (e) => {\n#     const msg = JSON.parse(e.data);\n#     if (msg.type === \"ping\") {\n#         ws.send(JSON.stringify({type: \"pong\"}));\n#     }\n# };",
+          "code_language": "python",
+          "key_points": [
+            "Uvicorn provides protocol-level ping/pong via --ws-ping-interval and --ws-ping-timeout flags",
+            "Application-level heartbeats give full control -- useful when proxies intercept protocol-level pings",
+            "Use asyncio.create_task() for a concurrent ping loop alongside the receive loop",
+            "asyncio.wait_for() with a timeout is the simplest way to detect idle connections"
+          ],
+          "gotchas": [
+            "Protocol-level pings are invisible to your application code -- you cannot detect them in receive()",
+            "Some proxies (AWS ALB, Cloudflare) have their own idle timeouts that close connections even with heartbeats active",
+            "asyncio.wait_for() cancels the underlying receive() on timeout -- the WebSocket may be in an inconsistent state",
+            "Always cancel the ping task in a finally block to prevent it from running after the connection closes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use Uvicorn's `--ws-ping-interval` and `--ws-ping-timeout` for protocol-level pings (transparent, no code changes). For application-level heartbeats, run a concurrent `asyncio.create_task()` that sends `{\"type\": \"ping\"}` periodically and tracks when the last pong was received.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nimport asyncio, time\n\napp = FastAPI()\n\n@app.websocket(\"/ws\")\nasync def ws(websocket: WebSocket):\n    await websocket.accept()\n    last_pong = time.time()\n\n    async def ping_loop():\n        while True:\n            await asyncio.sleep(15)\n            await websocket.send_json({\"type\": \"ping\"})\n\n    task = asyncio.create_task(ping_loop())\n    try:\n        while True:\n            data = await websocket.receive_json()\n            if data.get(\"type\") == \"pong\":\n                last_pong = time.time()\n    except WebSocketDisconnect:\n        pass\n    finally:\n        task.cancel()",
+          "code_language": "python",
+          "key_points": [
+            "Uvicorn's --ws-ping-interval handles protocol-level pings automatically"
+          ],
+          "gotchas": [
+            "Proxies like AWS ALB have their own idle timeouts that override your heartbeat settings"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle reconnection logic on the client side?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "reconnection",
+        "client-side",
+        "resilience",
+        "javascript"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "WebSocket reconnection is a client-side concern -- the browser's `WebSocket` API does not reconnect automatically (unlike SSE's `EventSource`). You must implement reconnection logic yourself.\n\n### Key reconnection strategies:\n\n1. **Exponential backoff**: Wait 1s, 2s, 4s, 8s... between attempts to avoid overwhelming the server\n2. **Max retries**: Give up after N attempts or a maximum elapsed time\n3. **Jitter**: Add randomness to backoff intervals to prevent thundering herd when many clients reconnect simultaneously\n4. **Last event ID**: Track the last received message ID so the server can replay missed events after reconnection\n\n### Server-side support:\n- Accept a `last_event_id` query parameter on reconnection\n- Buffer recent messages in memory or a database\n- Replay missed messages when a client reconnects\n\n### Libraries:\n- **reconnecting-websocket** (npm): Drop-in replacement for WebSocket with automatic reconnection\n- Custom wrapper: Full control over backoff, jitter, and state management\n\n### What the server should do:\n- Support idempotent reconnection (same room, same user)\n- Send a \"caught up\" or \"replay complete\" message after sending buffered events\n- Handle duplicate connections gracefully (same user, new socket)",
+          "pseudo_code": "// Client-side reconnection with backoff\nclass ReconnectingWS {\n    constructor(url) {\n        this.url = url;\n        this.retries = 0;\n        this.connect();\n    }\n    connect() {\n        this.ws = new WebSocket(this.url);\n        this.ws.onclose = () => {\n            delay = Math.min(1000 * 2**this.retries, 30000);\n            setTimeout(() => this.connect(), delay);\n            this.retries++;\n        };\n        this.ws.onopen = () => this.retries = 0;\n    }\n}",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query\nfrom collections import defaultdict, deque\nfrom datetime import datetime, timezone\nimport json\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- Server-side: message buffer for replay on reconnect ---\nclass MessageBuffer:\n    \"\"\"Stores recent messages per room for reconnection replay.\"\"\"\n\n    def __init__(self, max_size: int = 100):\n        self.buffers: dict[str, deque] = defaultdict(\n            lambda: deque(maxlen=max_size)\n        )\n        self.counter = 0\n\n    def add(self, room: str, message: dict) -> int:\n        self.counter += 1\n        entry = {\"id\": self.counter, **message}\n        self.buffers[room].append(entry)\n        return self.counter\n\n    def get_since(self, room: str, last_id: int) -> list[dict]:\n        \"\"\"Returns all messages after the given ID.\"\"\"\n        return [\n            msg for msg in self.buffers[room]\n            if msg[\"id\"] > last_id\n        ]\n\n\nbuffer = MessageBuffer(max_size=200)\nrooms: dict[str, set[WebSocket]] = defaultdict(set)\n\n\n@app.websocket(\"/ws/chat/{room_id}\")\nasync def chat_with_replay(\n    websocket: WebSocket,\n    room_id: str,\n    last_event_id: int = Query(default=0),\n):\n    \"\"\"WebSocket endpoint that supports message replay on reconnect.\"\"\"\n    await websocket.accept()\n    rooms[room_id].add(websocket)\n\n    # Replay missed messages\n    if last_event_id > 0:\n        missed = buffer.get_since(room_id, last_event_id)\n        for msg in missed:\n            await websocket.send_json(msg)\n        await websocket.send_json({\n            \"type\": \"system\",\n            \"content\": f\"Replayed {len(missed)} missed messages\",\n        })\n\n    try:\n        while True:\n            data = await websocket.receive_json()\n            message = {\n                \"type\": \"chat\",\n                \"content\": data.get(\"content\", \"\"),\n                \"timestamp\": datetime.now(timezone.utc).isoformat(),\n            }\n            msg_id = buffer.add(room_id, message)\n            message[\"id\"] = msg_id\n\n            # Broadcast to all in room\n            dead = set()\n            for ws in rooms[room_id]:\n                try:\n                    await ws.send_json(message)\n                except Exception:\n                    dead.add(ws)\n            rooms[room_id] -= dead\n\n    except WebSocketDisconnect:\n        rooms[room_id].discard(websocket)\n        logger.info(f\"Client disconnected from room {room_id}\")\n\n\n# --- Client-side JavaScript with reconnection ---\n# Include this in your HTML served by FastAPI\nCLIENT_JS = \"\"\"\nclass ReconnectingWebSocket {\n    constructor(url, options = {}) {\n        this.url = url;\n        this.maxRetries = options.maxRetries || 10;\n        this.retries = 0;\n        this.lastEventId = 0;\n        this.onmessage = null;\n        this.onopen = null;\n        this.onclose = null;\n        this.connect();\n    }\n\n    connect() {\n        // Append last_event_id for replay\n        const sep = this.url.includes('?') ? '&' : '?';\n        const wsUrl = `${this.url}${sep}last_event_id=${this.lastEventId}`;\n        this.ws = new WebSocket(wsUrl);\n\n        this.ws.onopen = () => {\n            console.log('Connected');\n            this.retries = 0;  // Reset on successful connection\n            if (this.onopen) this.onopen();\n        };\n\n        this.ws.onmessage = (event) => {\n            const data = JSON.parse(event.data);\n            // Track last event ID for reconnection\n            if (data.id) this.lastEventId = data.id;\n            if (this.onmessage) this.onmessage(data);\n        };\n\n        this.ws.onclose = (event) => {\n            if (this.retries >= this.maxRetries) {\n                console.error('Max retries reached');\n                if (this.onclose) this.onclose(event);\n                return;\n            }\n            // Exponential backoff with jitter\n            const base = Math.min(1000 * Math.pow(2, this.retries), 30000);\n            const jitter = base * 0.5 * Math.random();\n            const delay = base + jitter;\n            console.log(`Reconnecting in ${Math.round(delay)}ms...`);\n            this.retries++;\n            setTimeout(() => this.connect(), delay);\n        };\n    }\n\n    send(data) {\n        if (this.ws.readyState === WebSocket.OPEN) {\n            this.ws.send(JSON.stringify(data));\n        }\n    }\n}\n\n// Usage:\n// const ws = new ReconnectingWebSocket('ws://localhost:8000/ws/chat/general');\n// ws.onmessage = (data) => console.log(data);\n// ws.send({content: 'Hello!'});\n\"\"\"\n\n@app.get(\"/client.js\")\nasync def serve_client_js():\n    from fastapi.responses import Response\n    return Response(content=CLIENT_JS, media_type=\"application/javascript\")",
+          "code_language": "python",
+          "key_points": [
+            "The browser WebSocket API has no automatic reconnection -- you must implement it yourself",
+            "Use exponential backoff with jitter to avoid thundering herd on server restarts",
+            "Track last_event_id on the client and pass it on reconnection for message replay",
+            "The server should buffer recent messages and replay missed ones when a client reconnects"
+          ],
+          "gotchas": [
+            "Without jitter, all clients reconnect at the same time after a server restart, causing a spike",
+            "Message buffers consume memory -- use a bounded deque or persist to Redis for large-scale apps",
+            "A reconnecting client gets a new WebSocket instance -- the server sees it as a new connection, not a resume",
+            "If the server was restarted too, the message buffer is lost -- use Redis or a database for durability"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Browser WebSockets have no automatic reconnection. Implement a wrapper class with exponential backoff and jitter. Track the last received message ID and pass it as a query parameter on reconnection so the server can replay missed messages.",
+          "pseudo_code": "",
+          "actual_code": "// Client-side reconnecting WebSocket\nclass ReconnectWS {\n    constructor(url) {\n        this.url = url;\n        this.retries = 0;\n        this.lastId = 0;\n        this.connect();\n    }\n    connect() {\n        this.ws = new WebSocket(`${this.url}?last_event_id=${this.lastId}`);\n        this.ws.onopen = () => { this.retries = 0; };\n        this.ws.onclose = () => {\n            const delay = Math.min(1000 * 2 ** this.retries, 30000);\n            setTimeout(() => this.connect(), delay + Math.random() * delay * 0.5);\n            this.retries++;\n        };\n        this.ws.onmessage = (e) => {\n            const data = JSON.parse(e.data);\n            if (data.id) this.lastId = data.id;\n        };\n    }\n}",
+          "code_language": "python",
+          "key_points": [
+            "Exponential backoff with jitter prevents thundering herd on reconnection"
+          ],
+          "gotchas": [
+            "Without a server-side message buffer, clients miss all messages sent while they were disconnected"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the limitations of in-memory WebSocket connection management?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "scaling",
+        "redis-pubsub",
+        "distributed",
+        "architecture"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In-memory WebSocket management (storing connections in a Python dict/list) has fundamental limitations that become critical as your application scales.\n\n### Limitations:\n\n1. **Per-process isolation**: Each Uvicorn worker has its own set of connections. A message sent in worker A cannot reach clients connected to worker B.\n\n2. **No persistence**: If the server restarts, all connections and state are lost. There is no replay or recovery.\n\n3. **Memory growth**: Each WebSocket connection consumes RAM. Thousands of connections can exhaust server memory.\n\n4. **No horizontal scaling**: Adding more servers does not help -- clients on different servers cannot communicate.\n\n5. **Single point of failure**: If the process dies, all connected clients are dropped simultaneously.\n\n### Solutions:\n\n1. **Redis Pub/Sub**: Each worker subscribes to a Redis channel. When a message arrives, it is published to Redis, and all workers relay it to their local clients.\n\n2. **Dedicated WebSocket service**: Use a specialized service (Socket.IO with Redis adapter, Centrifugo, Pusher, Ably) that handles connection management at scale.\n\n3. **Sticky sessions**: Configure your load balancer to route a client to the same worker. Solves cross-worker issues but not horizontal scaling.\n\n4. **Event streaming**: Use Kafka or NATS for cross-service message routing with persistence.\n\n### Redis Pub/Sub pattern:\nThis is the most common solution. Each FastAPI worker subscribes to a Redis channel and forwards messages to its local connections.",
+          "pseudo_code": "# Each worker subscribes to Redis\nasync def lifespan(app):\n    redis = await aioredis.from_url(\"redis://localhost\")\n    pubsub = redis.pubsub()\n    await pubsub.subscribe(\"chat\")\n    # Background task reads from Redis\n    asyncio.create_task(relay_from_redis(pubsub))\n    yield\n\n# Publishing: worker puts message in Redis\nasync def broadcast(room, message):\n    await redis.publish(room, json.dumps(message))\n\n# Relay: reads from Redis, sends to local clients\nasync def relay_from_redis(pubsub):\n    async for msg in pubsub.listen():\n        for ws in local_connections:\n            await ws.send_text(msg[\"data\"])",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom contextlib import asynccontextmanager\nfrom collections import defaultdict\nimport asyncio\nimport json\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n\n# --- Redis Pub/Sub solution for cross-worker broadcasting ---\n\nclass RedisBroadcaster:\n    \"\"\"Bridges local WebSocket connections with Redis Pub/Sub.\"\"\"\n\n    def __init__(self):\n        self.local_connections: dict[str, set[WebSocket]] = defaultdict(set)\n        self.redis = None\n        self.pubsub = None\n\n    async def connect(self, redis_url: str = \"redis://localhost:6379\"):\n        import redis.asyncio as aioredis\n        self.redis = aioredis.from_url(redis_url)\n        self.pubsub = self.redis.pubsub()\n        logger.info(\"Redis broadcaster connected\")\n\n    async def disconnect(self):\n        if self.pubsub:\n            await self.pubsub.unsubscribe()\n            await self.pubsub.close()\n        if self.redis:\n            await self.redis.close()\n\n    async def subscribe(self, channel: str):\n        \"\"\"Subscribe to a Redis channel and start relaying.\"\"\"\n        await self.pubsub.subscribe(channel)\n\n    async def relay_loop(self):\n        \"\"\"Reads from Redis and forwards to local connections.\"\"\"\n        try:\n            async for message in self.pubsub.listen():\n                if message[\"type\"] != \"message\":\n                    continue\n                data = json.loads(message[\"data\"])\n                channel = message[\"channel\"]\n                if isinstance(channel, bytes):\n                    channel = channel.decode()\n\n                # Forward to local connections in this channel\n                dead = set()\n                for ws in self.local_connections.get(channel, set()):\n                    try:\n                        await ws.send_json(data)\n                    except Exception:\n                        dead.add(ws)\n                self.local_connections[channel] -= dead\n        except asyncio.CancelledError:\n            pass\n\n    async def publish(self, channel: str, message: dict):\n        \"\"\"Publish to Redis -- all workers will receive it.\"\"\"\n        await self.redis.publish(channel, json.dumps(message))\n\n    def add_local(self, channel: str, websocket: WebSocket):\n        self.local_connections[channel].add(websocket)\n\n    def remove_local(self, channel: str, websocket: WebSocket):\n        self.local_connections[channel].discard(websocket)\n        if not self.local_connections[channel]:\n            del self.local_connections[channel]\n\n\nbroadcaster = RedisBroadcaster()\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Connect to Redis and start relay loop\n    await broadcaster.connect()\n    await broadcaster.subscribe(\"chat:general\")\n    relay_task = asyncio.create_task(broadcaster.relay_loop())\n    yield\n    relay_task.cancel()\n    await broadcaster.disconnect()\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n@app.websocket(\"/ws/chat/{room_id}\")\nasync def scalable_chat(\n    websocket: WebSocket,\n    room_id: str,\n):\n    await websocket.accept()\n    channel = f\"chat:{room_id}\"\n    broadcaster.add_local(channel, websocket)\n\n    # Ensure we are subscribed to this room's channel\n    await broadcaster.subscribe(channel)\n\n    try:\n        while True:\n            data = await websocket.receive_json()\n            # Publish to Redis -- ALL workers receive this\n            await broadcaster.publish(channel, {\n                \"type\": \"chat\",\n                \"content\": data.get(\"content\", \"\"),\n                \"room\": room_id,\n            })\n    except WebSocketDisconnect:\n        broadcaster.remove_local(channel, websocket)\n        logger.info(f\"Client left room {room_id}\")\n\n\n# --- In-memory limitations summary ---\n# Problem: Worker A has clients [Alice, Bob], Worker B has [Charlie]\n# Alice sends a message -> only Bob sees it (same worker)\n# Charlie never gets the message (different worker)\n#\n# Solution: All workers publish to Redis, all workers relay from Redis\n# Alice sends -> Worker A publishes to Redis -> Worker B relays to Charlie",
+          "code_language": "python",
+          "key_points": [
+            "In-memory connections are per-process -- clients on different workers cannot communicate",
+            "Redis Pub/Sub is the standard solution for cross-worker WebSocket broadcasting",
+            "Each worker subscribes to Redis channels and relays messages to its local connections",
+            "The publish-subscribe pattern decouples message production from delivery"
+          ],
+          "gotchas": [
+            "Redis Pub/Sub is fire-and-forget -- if a worker is down during publish, it misses messages (use Redis Streams for durability)",
+            "Subscribing to many channels per worker increases Redis connection overhead -- consider pattern subscriptions",
+            "The relay loop must handle CancelledError for clean shutdown",
+            "Running multiple Uvicorn workers with --workers flag creates separate processes, each with their own memory -- this is where in-memory management breaks down"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "In-memory WebSocket management is per-process. Clients on different Uvicorn workers cannot communicate. The standard solution is Redis Pub/Sub: each worker publishes messages to Redis and subscribes to relay them to local connections. For durability, use Redis Streams or Kafka instead of Pub/Sub.",
+          "pseudo_code": "",
+          "actual_code": "# Each worker publishes to Redis instead of broadcasting locally\nimport redis.asyncio as aioredis\n\nasync def publish(channel: str, message: dict):\n    redis = aioredis.from_url(\"redis://localhost\")\n    await redis.publish(channel, json.dumps(message))\n\n# Each worker runs a relay loop reading from Redis\nasync def relay_loop(pubsub, local_connections):\n    async for msg in pubsub.listen():\n        if msg[\"type\"] == \"message\":\n            data = json.loads(msg[\"data\"])\n            for ws in local_connections:\n                await ws.send_json(data)",
+          "code_language": "python",
+          "key_points": [
+            "In-memory = per-process; use Redis Pub/Sub for cross-worker communication"
+          ],
+          "gotchas": [
+            "Redis Pub/Sub is fire-and-forget -- use Streams or Kafka if messages must not be lost"
+          ]
+        }
+      ]
+    }
+  ]
+}

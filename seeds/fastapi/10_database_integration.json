@@ -1,0 +1,703 @@
+{
+  "concept_slug": "database-integration",
+  "questions": [
+    {
+      "title": "How do you set up SQLAlchemy with FastAPI?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "sqlalchemy",
+        "database",
+        "setup"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Setting up SQLAlchemy with FastAPI involves creating an engine, a session factory, and a declarative base. Unlike Flask-SQLAlchemy, FastAPI uses **plain SQLAlchemy** directly -- there is no official FastAPI-SQLAlchemy extension.\n\n### Steps:\n1. **Create the engine** with `create_engine()` pointing to your database URL\n2. **Create a session factory** with `sessionmaker()` bound to the engine\n3. **Define a declarative base** using `DeclarativeBase` (SQLAlchemy 2.0 style)\n4. **Create a dependency** that yields a session per request\n5. **Create tables** during application startup using lifespan\n\n### SQLAlchemy 2.0 style:\nSQLAlchemy 2.0 uses `DeclarativeBase` instead of `declarative_base()`, and `Mapped`/`mapped_column` instead of `Column`. This gives you better type hints and IDE support.",
+          "pseudo_code": "engine = create_engine(DATABASE_URL)\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\n@app.get(\"/items\")\ndef read_items(db: Session = Depends(get_db)):\n    return db.query(Item).all()",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom sqlalchemy import create_engine, String\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column,\n    sessionmaker, Session\n)\nfrom contextlib import asynccontextmanager\nfrom typing import Annotated\n\n# Database setup\nDATABASE_URL = \"sqlite:///./app.db\"\n\nengine = create_engine(\n    DATABASE_URL,\n    connect_args={\"check_same_thread\": False}  # SQLite only\n)\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\n# SQLAlchemy 2.0 declarative base\nclass Base(DeclarativeBase):\n    pass\n\n# Model\nclass User(Base):\n    __tablename__ = \"users\"\n\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    email: Mapped[str] = mapped_column(String(255), unique=True)\n\n# Dependency\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\n# Lifespan to create tables on startup\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    Base.metadata.create_all(bind=engine)\n    yield\n\napp = FastAPI(lifespan=lifespan)\n\n@app.get(\"/users\")\ndef list_users(db: DbDep):\n    return db.query(User).all()",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI uses plain SQLAlchemy -- no wrapper extension needed",
+            "Use DeclarativeBase and Mapped/mapped_column for SQLAlchemy 2.0 style",
+            "check_same_thread=False is required only for SQLite",
+            "Use lifespan context manager (not deprecated @app.on_event) to create tables at startup"
+          ],
+          "gotchas": [
+            "Forgetting check_same_thread=False for SQLite causes threading errors",
+            "autoflush=True (the default) can cause unexpected queries -- set autoflush=False explicitly",
+            "create_all() does not update existing tables -- use Alembic for migrations",
+            "The session must always be closed, even on exceptions -- yield in a try/finally handles this"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create an engine, a sessionmaker, and a `DeclarativeBase`. Provide a `get_db` dependency that yields a session per request and closes it in `finally`. Use lifespan to create tables at startup.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import create_engine\nfrom sqlalchemy.orm import DeclarativeBase, sessionmaker, Session\nfrom fastapi import Depends\nfrom typing import Annotated\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]",
+          "code_language": "python",
+          "key_points": [
+            "Plain SQLAlchemy with sessionmaker and DeclarativeBase",
+            "Yield-based dependency ensures session cleanup"
+          ],
+          "gotchas": [
+            "check_same_thread=False is needed only for SQLite -- omit it for PostgreSQL/MySQL"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a database session dependency using yield?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "dependency-injection",
+        "database",
+        "session",
+        "yield"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI's **yield dependencies** work like context managers. The code before `yield` runs before the endpoint, and the code after `yield` runs as cleanup -- even if the endpoint raises an exception.\n\n### How it works:\n1. FastAPI calls `get_db()`, which creates a session\n2. The `yield` pauses the generator and hands the session to the endpoint\n3. After the endpoint returns (or raises), execution resumes after `yield`\n4. The `finally` block closes the session\n\n### Why yield instead of return:\n- **Guaranteed cleanup**: `finally` always runs, preventing connection leaks\n- **Transaction management**: You can commit or rollback in the cleanup phase\n- **Resource lifecycle**: Matches the request lifecycle perfectly\n\n### Annotated pattern:\nUsing `Annotated[Session, Depends(get_db)]` as a type alias avoids repeating `Depends()` everywhere and improves readability.",
+          "pseudo_code": "def get_db():\n    db = create_session()\n    try:\n        yield db        # endpoint uses the session\n        db.commit()     # auto-commit if no error\n    except:\n        db.rollback()   # rollback on error\n    finally:\n        db.close()      # always close",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom sqlalchemy import create_engine, String\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column,\n    sessionmaker, Session\n)\nfrom typing import Annotated\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass Item(Base):\n    __tablename__ = \"items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\n# Yield dependency with cleanup\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\n# Type alias -- use this everywhere instead of repeating Depends(get_db)\nDbDep = Annotated[Session, Depends(get_db)]\n\napp = FastAPI()\n\n@app.post(\"/items\")\ndef create_item(name: str, db: DbDep):\n    item = Item(name=name)\n    db.add(item)\n    db.commit()\n    db.refresh(item)  # reload from DB to get generated id\n    return {\"id\": item.id, \"name\": item.name}\n\n@app.get(\"/items/{item_id}\")\ndef read_item(item_id: int, db: DbDep):\n    item = db.get(Item, item_id)\n    if not item:\n        raise HTTPException(status_code=404, detail=\"Item not found\")\n    return {\"id\": item.id, \"name\": item.name}\n\n# Advanced: dependency with auto-commit/rollback\ndef get_db_transactional():\n    db = SessionLocal()\n    try:\n        yield db\n        db.commit()  # commit if endpoint succeeds\n    except Exception:\n        db.rollback()  # rollback if endpoint raises\n        raise\n    finally:\n        db.close()",
+          "code_language": "python",
+          "key_points": [
+            "yield pauses the generator, handing the session to the endpoint",
+            "Code after yield runs as cleanup, like __exit__ in a context manager",
+            "finally block guarantees the session is closed even on exceptions",
+            "Annotated[Session, Depends(get_db)] creates a reusable type alias"
+          ],
+          "gotchas": [
+            "Yield dependencies cannot catch HTTPException -- FastAPI re-raises it after cleanup",
+            "If you commit in the dependency, db.refresh() in the endpoint may fail after commit",
+            "Only one yield is allowed per dependency function",
+            "Background tasks run after the response is sent, so the yielded session is already closed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A yield dependency creates a session before `yield`, hands it to the endpoint, then closes it in `finally`. This guarantees cleanup even if the endpoint raises an exception.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import Depends\nfrom sqlalchemy.orm import Session\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\n@app.get(\"/items\")\ndef list_items(db: DbDep):\n    return db.query(Item).all()",
+          "code_language": "python",
+          "key_points": [
+            "Code after yield is cleanup, guaranteed by finally"
+          ],
+          "gotchas": [
+            "Background tasks run after the response, so the yielded session is already closed"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define SQLAlchemy models for use with FastAPI?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "sqlalchemy",
+        "models",
+        "orm",
+        "mapped-column"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy 2.0 introduces **mapped columns** with full type annotation support. Models inherit from a `DeclarativeBase` subclass and use `Mapped[type]` with `mapped_column()` for column definitions.\n\n### Key concepts:\n- **`Mapped[type]`**: Declares the Python type; also implies NOT NULL\n- **`Mapped[Optional[type]]`**: Makes the column nullable\n- **`mapped_column()`**: Configures column-level details (primary key, unique, default, etc.)\n- **`relationship()`**: Defines ORM relationships with `back_populates`\n\n### Naming conventions:\n- SQLAlchemy models represent **database tables** (use plural: `users`, `posts`)\n- Pydantic schemas represent **API data shapes** (use singular: `User`, `UserCreate`)\n- Keep them in separate files to avoid confusion",
+          "pseudo_code": "class Base(DeclarativeBase): pass\n\nclass ModelName(Base):\n    __tablename__ = \"table_name\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    required_field: Mapped[str] = mapped_column(String(255))\n    optional_field: Mapped[Optional[str]] = mapped_column(default=None)\n    children: Mapped[list[\"Child\"]] = relationship(back_populates=\"parent\")",
+          "actual_code": "from datetime import datetime\nfrom typing import Optional\nfrom sqlalchemy import String, Text, ForeignKey, func\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, relationship\n)\n\nclass Base(DeclarativeBase):\n    pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n\n    id: Mapped[int] = mapped_column(primary_key=True)\n    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)\n    email: Mapped[str] = mapped_column(String(255), unique=True)\n    bio: Mapped[Optional[str]] = mapped_column(Text, default=None)\n    is_active: Mapped[bool] = mapped_column(default=True)\n    created_at: Mapped[datetime] = mapped_column(server_default=func.now())\n\n    # One-to-many relationship\n    posts: Mapped[list[\"Post\"]] = relationship(back_populates=\"author\")\n\n    def __repr__(self) -> str:\n        return f\"<User(id={self.id}, username='{self.username}')>\"\n\nclass Post(Base):\n    __tablename__ = \"posts\"\n\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n    body: Mapped[str] = mapped_column(Text)\n    is_published: Mapped[bool] = mapped_column(default=False)\n    created_at: Mapped[datetime] = mapped_column(server_default=func.now())\n\n    # Foreign key\n    author_id: Mapped[int] = mapped_column(ForeignKey(\"users.id\"))\n\n    # Many-to-one relationship\n    author: Mapped[\"User\"] = relationship(back_populates=\"posts\")\n\n    # Many-to-many through association table\n    tags: Mapped[list[\"Tag\"]] = relationship(\n        secondary=\"post_tags\", back_populates=\"posts\"\n    )\n\n# Association table for many-to-many\nfrom sqlalchemy import Table, Column, Integer\npost_tags = Table(\n    \"post_tags\",\n    Base.metadata,\n    Column(\"post_id\", Integer, ForeignKey(\"posts.id\"), primary_key=True),\n    Column(\"tag_id\", Integer, ForeignKey(\"tags.id\"), primary_key=True),\n)\n\nclass Tag(Base):\n    __tablename__ = \"tags\"\n\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(50), unique=True)\n\n    posts: Mapped[list[\"Post\"]] = relationship(\n        secondary=\"post_tags\", back_populates=\"tags\"\n    )\n\n# Verify model creation\nprint(User.__tablename__)\nprint([c.name for c in User.__table__.columns])\n\n# Expected Output:\n# users\n# ['id', 'username', 'email', 'bio', 'is_active', 'created_at']",
+          "code_language": "python",
+          "key_points": [
+            "Mapped[type] makes columns NOT NULL; Mapped[Optional[type]] makes them nullable",
+            "mapped_column() replaces Column() with better type inference",
+            "Use relationship() with back_populates for bidirectional relationships",
+            "Many-to-many uses a Table() association table with secondary parameter"
+          ],
+          "gotchas": [
+            "String columns require a length argument in MySQL -- PostgreSQL accepts both String() without length and Text without issue",
+            "server_default uses SQL expressions (runs in DB), while default uses Python values (runs in app)",
+            "Forward references in relationship type hints require quotes: Mapped[\"Post\"]",
+            "Forgetting back_populates on both sides means the relationship is one-directional in Python"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use SQLAlchemy 2.0 style: `Mapped[type]` for NOT NULL columns, `Mapped[Optional[type]]` for nullable, `mapped_column()` for configuration, and `relationship()` for ORM relations.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import String, ForeignKey\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship\nfrom typing import Optional\n\nclass Base(DeclarativeBase): pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    email: Mapped[Optional[str]] = mapped_column(default=None)\n    posts: Mapped[list[\"Post\"]] = relationship(back_populates=\"author\")\n\nclass Post(Base):\n    __tablename__ = \"posts\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n    author_id: Mapped[int] = mapped_column(ForeignKey(\"users.id\"))\n    author: Mapped[\"User\"] = relationship(back_populates=\"posts\")",
+          "code_language": "python",
+          "key_points": [
+            "Mapped[type] = NOT NULL, Mapped[Optional[type]] = nullable",
+            "relationship() with back_populates for bidirectional links"
+          ],
+          "gotchas": [
+            "String columns need a length for MySQL/SQLite -- PostgreSQL allows unbounded Text"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement CRUD operations in FastAPI?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "crud",
+        "sqlalchemy",
+        "rest-api",
+        "pydantic"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "CRUD (Create, Read, Update, Delete) operations in FastAPI combine **Pydantic schemas** for validation with **SQLAlchemy** for database access. The typical pattern separates concerns into:\n\n### Layers:\n1. **Pydantic schemas**: Validate incoming data and shape outgoing responses\n2. **CRUD functions**: Pure database operations (can be reused)\n3. **Route handlers**: Orchestrate validation, CRUD, and HTTP responses\n\n### Pydantic v2 patterns:\n- Use `model_config = ConfigDict(from_attributes=True)` instead of `class Config: orm_mode = True`\n- Use `model_dump()` instead of `.dict()`\n- Use `model_dump(exclude_unset=True)` for partial updates (PATCH)",
+          "pseudo_code": "# schemas\nclass ItemCreate(BaseModel): name: str\nclass ItemRead(BaseModel): id: int; name: str\n    model_config = ConfigDict(from_attributes=True)\n\n# crud\ndef create_item(db, data): ...\ndef get_item(db, id): ...\ndef update_item(db, id, data): ...\ndef delete_item(db, id): ...\n\n# routes\n@app.post(\"/items\", response_model=ItemRead)\ndef create(data: ItemCreate, db: DbDep): ...",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom pydantic import BaseModel, ConfigDict\nfrom sqlalchemy import create_engine, String\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column,\n    sessionmaker, Session\n)\nfrom typing import Annotated, Optional\n\n# --- Database setup ---\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass Item(Base):\n    __tablename__ = \"items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    description: Mapped[Optional[str]] = mapped_column(String(500), default=None)\n    price: Mapped[float] = mapped_column(default=0.0)\n\n# --- Pydantic schemas (Pydantic v2) ---\nclass ItemCreate(BaseModel):\n    name: str\n    description: str | None = None\n    price: float = 0.0\n\nclass ItemUpdate(BaseModel):\n    name: str | None = None\n    description: str | None = None\n    price: float | None = None\n\nclass ItemRead(BaseModel):\n    id: int\n    name: str\n    description: str | None = None\n    price: float\n\n    model_config = ConfigDict(from_attributes=True)  # Pydantic v2 ORM mode\n\n# --- CRUD functions ---\ndef create_item(db: Session, data: ItemCreate) -> Item:\n    item = Item(**data.model_dump())\n    db.add(item)\n    db.commit()\n    db.refresh(item)\n    return item\n\ndef get_item(db: Session, item_id: int) -> Item | None:\n    return db.get(Item, item_id)\n\ndef get_items(db: Session, skip: int = 0, limit: int = 100) -> list[Item]:\n    return db.query(Item).offset(skip).limit(limit).all()\n\ndef update_item(db: Session, item_id: int, data: ItemUpdate) -> Item | None:\n    item = db.get(Item, item_id)\n    if not item:\n        return None\n    update_data = data.model_dump(exclude_unset=True)  # only fields that were sent\n    for field, value in update_data.items():\n        setattr(item, field, value)\n    db.commit()\n    db.refresh(item)\n    return item\n\ndef delete_item(db: Session, item_id: int) -> bool:\n    item = db.get(Item, item_id)\n    if not item:\n        return False\n    db.delete(item)\n    db.commit()\n    return True\n\n# --- Dependency ---\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\n# --- Routes ---\napp = FastAPI()\n\n@app.post(\"/items\", response_model=ItemRead, status_code=201)\ndef create(data: ItemCreate, db: DbDep):\n    return create_item(db, data)\n\n@app.get(\"/items\", response_model=list[ItemRead])\ndef read_all(db: DbDep, skip: int = 0, limit: int = 100):\n    return get_items(db, skip, limit)\n\n@app.get(\"/items/{item_id}\", response_model=ItemRead)\ndef read_one(item_id: int, db: DbDep):\n    item = get_item(db, item_id)\n    if not item:\n        raise HTTPException(status_code=404, detail=\"Item not found\")\n    return item\n\n@app.patch(\"/items/{item_id}\", response_model=ItemRead)\ndef update(item_id: int, data: ItemUpdate, db: DbDep):\n    item = update_item(db, item_id, data)\n    if not item:\n        raise HTTPException(status_code=404, detail=\"Item not found\")\n    return item\n\n@app.delete(\"/items/{item_id}\", status_code=204)\ndef delete(item_id: int, db: DbDep):\n    if not delete_item(db, item_id):\n        raise HTTPException(status_code=404, detail=\"Item not found\")",
+          "code_language": "python",
+          "key_points": [
+            "Separate Pydantic schemas for Create, Update, and Read operations",
+            "model_dump(exclude_unset=True) enables partial updates (PATCH)",
+            "ConfigDict(from_attributes=True) replaces old orm_mode for Pydantic v2",
+            "CRUD functions are separated from routes for reusability and testability"
+          ],
+          "gotchas": [
+            "model_dump(exclude_unset=True) vs exclude_none=True: unset means not sent, None means explicitly sent as null",
+            "db.refresh() after commit is needed to load auto-generated fields like id",
+            "response_model validates the output -- if your SQLAlchemy model has extra fields they get filtered",
+            "DELETE returning 204 must return no body -- return None or use Response(status_code=204)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use separate Pydantic schemas for input (Create/Update) and output (Read). CRUD functions take a session and schema, handle DB operations, and return ORM objects. Use `model_dump(exclude_unset=True)` for PATCH updates.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, ConfigDict\n\nclass ItemCreate(BaseModel):\n    name: str\n    price: float = 0.0\n\nclass ItemRead(BaseModel):\n    id: int\n    name: str\n    price: float\n    model_config = ConfigDict(from_attributes=True)\n\n@app.post(\"/items\", response_model=ItemRead, status_code=201)\ndef create(data: ItemCreate, db: DbDep):\n    item = Item(**data.model_dump())\n    db.add(item)\n    db.commit()\n    db.refresh(item)\n    return item",
+          "code_language": "python",
+          "key_points": [
+            "Separate schemas: Create for input, Read for output",
+            "ConfigDict(from_attributes=True) enables ORM object serialization"
+          ],
+          "gotchas": [
+            "model_dump(exclude_unset=True) for PATCH -- exclude_none=True has different semantics"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does async SQLAlchemy (AsyncSession) work with FastAPI?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "sqlalchemy",
+        "asyncsession",
+        "asyncio"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Async SQLAlchemy uses `create_async_engine` and `AsyncSession` to perform non-blocking database I/O. This is beneficial for high-concurrency FastAPI apps because the event loop is not blocked during database queries.\n\n### Requirements:\n- **SQLAlchemy 2.0+** with async support\n- **An async driver**: `aiosqlite` (SQLite), `asyncpg` (PostgreSQL), `aiomysql` (MySQL)\n- **Async session factory**: `async_sessionmaker` instead of `sessionmaker`\n\n### Key differences from sync:\n- Use `await` for all session operations: `await db.execute()`, `await db.commit()`\n- Use `select()` statements instead of `db.query()` (query-style is not async-compatible)\n- Relationship loading must be explicit (lazy loading triggers sync I/O, which fails)\n- Use `AsyncSession.get()` instead of `Session.get()` with await",
+          "pseudo_code": "async_engine = create_async_engine(ASYNC_DB_URL)\nAsyncSessionLocal = async_sessionmaker(bind=async_engine)\n\nasync def get_db():\n    async with AsyncSessionLocal() as session:\n        yield session\n\n@app.get(\"/items\")\nasync def read_items(db: AsyncSession = Depends(get_db)):\n    result = await db.execute(select(Item))\n    return result.scalars().all()",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom sqlalchemy import String, select\nfrom sqlalchemy.ext.asyncio import (\n    create_async_engine, AsyncSession, async_sessionmaker\n)\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom typing import Annotated\nfrom contextlib import asynccontextmanager\n\n# Async engine (note: aiosqlite driver for SQLite)\nASYNC_DATABASE_URL = \"sqlite+aiosqlite:///./app.db\"\n\nasync_engine = create_async_engine(ASYNC_DATABASE_URL, echo=True)\nAsyncSessionLocal = async_sessionmaker(\n    async_engine, class_=AsyncSession, expire_on_commit=False\n)\n\nclass Base(DeclarativeBase): pass\n\nclass Item(Base):\n    __tablename__ = \"items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\n# Async dependency\nasync def get_db():\n    async with AsyncSessionLocal() as session:\n        yield session\n\nAsyncDbDep = Annotated[AsyncSession, Depends(get_db)]\n\n# Lifespan: create tables async\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    async with async_engine.begin() as conn:\n        await conn.run_sync(Base.metadata.create_all)\n    yield\n    await async_engine.dispose()\n\napp = FastAPI(lifespan=lifespan)\n\n@app.post(\"/items\", status_code=201)\nasync def create_item(name: str, db: AsyncDbDep):\n    item = Item(name=name)\n    db.add(item)\n    await db.commit()\n    await db.refresh(item)\n    return {\"id\": item.id, \"name\": item.name}\n\n@app.get(\"/items\")\nasync def list_items(db: AsyncDbDep):\n    result = await db.execute(select(Item))\n    items = result.scalars().all()\n    return [{\"id\": i.id, \"name\": i.name} for i in items]\n\n@app.get(\"/items/{item_id}\")\nasync def read_item(item_id: int, db: AsyncDbDep):\n    item = await db.get(Item, item_id)\n    if not item:\n        raise HTTPException(status_code=404, detail=\"Not found\")\n    return {\"id\": item.id, \"name\": item.name}",
+          "code_language": "python",
+          "key_points": [
+            "Use create_async_engine and async_sessionmaker for non-blocking DB I/O",
+            "All session operations require await: execute, commit, refresh, get",
+            "Use select() statements -- db.query() is not async-compatible",
+            "expire_on_commit=False prevents lazy loads after commit (which would fail in async)"
+          ],
+          "gotchas": [
+            "Lazy relationship loading causes errors in async -- use selectinload() or joinedload()",
+            "You need an async driver: asyncpg for PostgreSQL, aiosqlite for SQLite",
+            "run_sync() is needed for DDL operations like create_all in async context",
+            "Mixing sync and async sessions in the same app causes subtle bugs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `create_async_engine`, `async_sessionmaker`, and `AsyncSession` with `await` on all operations. Replace `db.query()` with `select()` statements since the query interface is sync-only.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker\nfrom sqlalchemy import select\n\nasync_engine = create_async_engine(\"sqlite+aiosqlite:///./app.db\")\nAsyncSessionLocal = async_sessionmaker(async_engine, expire_on_commit=False)\n\nasync def get_db():\n    async with AsyncSessionLocal() as session:\n        yield session\n\n@app.get(\"/items\")\nasync def list_items(db: AsyncDbDep):\n    result = await db.execute(select(Item))\n    return result.scalars().all()",
+          "code_language": "python",
+          "key_points": [
+            "await all session operations; use select() not query()"
+          ],
+          "gotchas": [
+            "Lazy loading fails in async -- use selectinload() or joinedload() explicitly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set up Alembic for database migrations with FastAPI?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "alembic",
+        "migrations",
+        "database",
+        "sqlalchemy"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Alembic** is the migration tool for SQLAlchemy. It tracks schema changes in version-controlled migration scripts, so you can evolve your database without dropping tables.\n\n### Setup steps:\n1. `pip install alembic` and run `alembic init alembic`\n2. Edit `alembic/env.py` to import your models and set `target_metadata`\n3. Set `sqlalchemy.url` in `alembic.ini` (or override in env.py from environment variables)\n4. Run `alembic revision --autogenerate -m \"description\"` to generate a migration\n5. Run `alembic upgrade head` to apply migrations\n\n### Autogenerate detects:\n- New tables, dropped tables\n- Added/removed columns\n- Changed column types (sometimes)\n- New indexes and constraints\n\n### Autogenerate does NOT detect:\n- Table or column renames (shows as drop + add)\n- Changes to column data\n- Custom CHECK constraints",
+          "pseudo_code": "# 1. Initialize\nalembic init alembic\n\n# 2. Edit env.py:\ntarget_metadata = Base.metadata\n\n# 3. Generate migration\nalembic revision --autogenerate -m \"add users table\"\n\n# 4. Apply\nalembic upgrade head\n\n# 5. Rollback\nalembic downgrade -1",
+          "actual_code": "# alembic/env.py (key modifications)\nimport os\nfrom logging.config import fileConfig\nfrom sqlalchemy import engine_from_config, pool\nfrom alembic import context\n\n# Import your models so Alembic can detect them\nfrom app.database import Base  # your DeclarativeBase\nimport app.models  # noqa: F401 -- ensures models are registered\n\nconfig = context.config\n\n# Override sqlalchemy.url from environment variable\ndb_url = os.environ.get(\"DATABASE_URL\", \"sqlite:///./app.db\")\nconfig.set_main_option(\"sqlalchemy.url\", db_url)\n\nfileConfig(config.config_file_name)\ntarget_metadata = Base.metadata\n\ndef run_migrations_offline() -> None:\n    \"\"\"Run migrations in 'offline' mode.\"\"\"\n    url = config.get_main_option(\"sqlalchemy.url\")\n    context.configure(\n        url=url,\n        target_metadata=target_metadata,\n        literal_binds=True,\n        dialect_opts={\"paramstyle\": \"named\"},\n    )\n    with context.begin_transaction():\n        context.run_migrations()\n\ndef run_migrations_online() -> None:\n    \"\"\"Run migrations in 'online' mode.\"\"\"\n    connectable = engine_from_config(\n        config.get_section(config.config_ini_section, {}),\n        prefix=\"sqlalchemy.\",\n        poolclass=pool.NullPool,\n    )\n    with connectable.connect() as connection:\n        context.configure(\n            connection=connection,\n            target_metadata=target_metadata,\n        )\n        with context.begin_transaction():\n            context.run_migrations()\n\nif context.is_offline_mode():\n    run_migrations_offline()\nelse:\n    run_migrations_online()\n\n# --- Example migration file (generated by autogenerate) ---\n# alembic/versions/001_add_users_table.py\n\"\"\"\nadd users table\n\nRevision ID: a1b2c3d4e5f6\nCreate Date: 2024-01-15 10:30:00.000000\n\"\"\"\nfrom alembic import op\nimport sqlalchemy as sa\n\nrevision = \"a1b2c3d4e5f6\"\ndown_revision = None\n\ndef upgrade() -> None:\n    op.create_table(\n        \"users\",\n        sa.Column(\"id\", sa.Integer(), primary_key=True),\n        sa.Column(\"username\", sa.String(50), nullable=False, unique=True),\n        sa.Column(\"email\", sa.String(255), nullable=False),\n        sa.Column(\"created_at\", sa.DateTime(), server_default=sa.func.now()),\n    )\n    op.create_index(\"ix_users_email\", \"users\", [\"email\"])\n\ndef downgrade() -> None:\n    op.drop_index(\"ix_users_email\", table_name=\"users\")\n    op.drop_table(\"users\")",
+          "code_language": "python",
+          "key_points": [
+            "alembic init creates the migration folder structure",
+            "env.py must import your Base.metadata and all model modules",
+            "autogenerate compares models to the DB and creates migration scripts",
+            "Always review autogenerated migrations -- they can miss renames and constraints"
+          ],
+          "gotchas": [
+            "Models must be imported before autogenerate runs, or Alembic will not detect them",
+            "Renames appear as drop + create -- you must manually edit the migration to use op.alter_column()",
+            "SQLite does not support ALTER TABLE for most operations -- Alembic uses batch mode as a workaround",
+            "Do not use Base.metadata.create_all() in production -- use Alembic exclusively"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Run `alembic init alembic`, point `env.py` at your `Base.metadata`, then use `alembic revision --autogenerate -m \"msg\"` to generate migrations and `alembic upgrade head` to apply them.",
+          "pseudo_code": "",
+          "actual_code": "# Terminal commands:\n# alembic init alembic\n# alembic revision --autogenerate -m \"add users table\"\n# alembic upgrade head\n# alembic downgrade -1\n\n# Key line in alembic/env.py:\nfrom app.database import Base\ntarget_metadata = Base.metadata",
+          "code_language": "python",
+          "key_points": [
+            "autogenerate compares your models to the DB schema",
+            "Always review generated migrations before applying"
+          ],
+          "gotchas": [
+            "Models must be imported in env.py or autogenerate will not detect them"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does connection pooling work with SQLAlchemy in FastAPI?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "sqlalchemy",
+        "connection-pooling",
+        "performance",
+        "database"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "SQLAlchemy's engine maintains a **connection pool** that reuses database connections instead of opening a new one for each request. This dramatically improves performance.\n\n### Pool types:\n- **QueuePool** (default for most DBs): Fixed-size pool with overflow\n- **NullPool**: No pooling -- new connection every time (useful for serverless)\n- **StaticPool**: Single connection shared by all threads (testing only)\n- **AsyncAdaptedQueuePool**: Default for async engines\n\n### Key parameters:\n- `pool_size`: Number of persistent connections (default: 5)\n- `max_overflow`: Extra connections allowed beyond pool_size (default: 10)\n- `pool_timeout`: Seconds to wait for a connection (default: 30)\n- `pool_recycle`: Seconds before a connection is recycled (prevents stale connections)\n- `pool_pre_ping`: Test connections before use (handles DB restarts)",
+          "pseudo_code": "engine = create_engine(\n    DATABASE_URL,\n    pool_size=10,\n    max_overflow=20,\n    pool_timeout=30,\n    pool_recycle=1800,\n    pool_pre_ping=True\n)",
+          "actual_code": "from sqlalchemy import create_engine, event, text\nfrom sqlalchemy.pool import QueuePool, NullPool\n\n# Production configuration with connection pooling\nengine = create_engine(\n    \"postgresql://user:pass@localhost/dbname\",\n    pool_size=10,          # 10 persistent connections\n    max_overflow=20,       # up to 20 extra under load\n    pool_timeout=30,       # wait 30s for a connection\n    pool_recycle=1800,     # recycle connections after 30 min\n    pool_pre_ping=True,    # test connection health before use\n    poolclass=QueuePool,   # explicit (this is already the default)\n)\n\n# Check pool status\npool = engine.pool\nprint(f\"Pool size: {pool.size()}\")\nprint(f\"Checked out: {pool.checkedout()}\")\nprint(f\"Overflow: {pool.overflow()}\")\n\n# Expected Output:\n# Pool size: 10\n# Checked out: 0\n# Overflow: 0\n\n# Serverless (AWS Lambda, etc.) -- disable pooling\nserverless_engine = create_engine(\n    \"postgresql://user:pass@localhost/dbname\",\n    poolclass=NullPool,  # new connection every time\n)\n\n# Testing -- single shared connection\nfrom sqlalchemy.pool import StaticPool\ntest_engine = create_engine(\n    \"sqlite:///:memory:\",\n    connect_args={\"check_same_thread\": False},\n    poolclass=StaticPool,  # one connection for all threads\n)\n\n# Event listener: log slow checkouts\n@event.listens_for(engine, \"checkout\")\ndef receive_checkout(dbapi_connection, connection_record, connection_proxy):\n    \"\"\"Called when a connection is checked out from the pool.\"\"\"\n    pass  # add timing/logging here\n\n# Dispose all connections (e.g., after fork)\n# engine.dispose()",
+          "code_language": "python",
+          "key_points": [
+            "QueuePool is the default -- it maintains pool_size connections and can grow to pool_size + max_overflow",
+            "pool_pre_ping=True prevents errors from stale/dropped connections",
+            "pool_recycle prevents connections from going stale (important for MySQL which drops idle connections)",
+            "Use NullPool for serverless and StaticPool for in-memory test databases"
+          ],
+          "gotchas": [
+            "SQLite in-memory databases default to StaticPool (single connection shared) -- file-based SQLite uses NullPool by default",
+            "pool_recycle should be less than the DB server's wait_timeout (MySQL default: 8 hours)",
+            "Connections are returned to the pool when session.close() is called -- always close sessions",
+            "After process forking (e.g., gunicorn), call engine.dispose() to avoid sharing connections across processes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SQLAlchemy's engine maintains a `QueuePool` of reusable connections. Configure `pool_size`, `max_overflow`, `pool_recycle`, and `pool_pre_ping=True` for production. Use `NullPool` for serverless.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import create_engine\n\nengine = create_engine(\n    \"postgresql://user:pass@localhost/dbname\",\n    pool_size=10,\n    max_overflow=20,\n    pool_recycle=1800,\n    pool_pre_ping=True,\n)",
+          "code_language": "python",
+          "key_points": [
+            "pool_pre_ping=True handles DB restarts gracefully"
+          ],
+          "gotchas": [
+            "pool_recycle must be less than the DB server's connection timeout"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the repository pattern and how do you implement it?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "repository-pattern",
+        "architecture",
+        "sqlalchemy",
+        "design-patterns"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **repository pattern** abstracts database access behind a clean interface, separating business logic from data persistence. Each entity gets a repository class with methods like `get`, `list`, `create`, `update`, `delete`.\n\n### Benefits:\n- **Testability**: Mock the repository instead of the database\n- **Swappability**: Replace SQLAlchemy with another ORM or even an API without changing business logic\n- **Reusability**: Same repository methods used by routes, background tasks, CLI commands\n- **Single Responsibility**: Routes handle HTTP, repositories handle data\n\n### Implementation approach:\n1. Create a base repository with generic CRUD methods\n2. Create entity-specific repositories that extend the base\n3. Inject repositories as FastAPI dependencies",
+          "pseudo_code": "class BaseRepository(Generic[T]):\n    def __init__(self, db: Session, model: type[T]):\n        self.db = db\n        self.model = model\n\n    def get(self, id: int) -> T | None: ...\n    def list(self, skip, limit) -> list[T]: ...\n    def create(self, data: dict) -> T: ...\n    def delete(self, id: int) -> bool: ...\n\nclass UserRepository(BaseRepository[User]):\n    def get_by_email(self, email: str) -> User | None: ...",
+          "actual_code": "from typing import TypeVar, Generic, Annotated\nfrom fastapi import FastAPI, Depends, HTTPException\nfrom sqlalchemy import select, String\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom sqlalchemy import create_engine\nfrom pydantic import BaseModel, ConfigDict\n\n# --- Setup ---\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    email: Mapped[str] = mapped_column(String(255), unique=True)\n\n# --- Generic base repository ---\nModelT = TypeVar(\"ModelT\", bound=Base)\n\nclass BaseRepository(Generic[ModelT]):\n    def __init__(self, db: Session, model: type[ModelT]):\n        self.db = db\n        self.model = model\n\n    def get(self, entity_id: int) -> ModelT | None:\n        return self.db.get(self.model, entity_id)\n\n    def list(self, skip: int = 0, limit: int = 100) -> list[ModelT]:\n        stmt = select(self.model).offset(skip).limit(limit)\n        return list(self.db.execute(stmt).scalars().all())\n\n    def create(self, data: dict) -> ModelT:\n        instance = self.model(**data)\n        self.db.add(instance)\n        self.db.commit()\n        self.db.refresh(instance)\n        return instance\n\n    def delete(self, entity_id: int) -> bool:\n        instance = self.get(entity_id)\n        if not instance:\n            return False\n        self.db.delete(instance)\n        self.db.commit()\n        return True\n\n# --- Entity-specific repository ---\nclass UserRepository(BaseRepository[User]):\n    def __init__(self, db: Session):\n        super().__init__(db, User)\n\n    def get_by_email(self, email: str) -> User | None:\n        stmt = select(User).where(User.email == email)\n        return self.db.execute(stmt).scalar_one_or_none()\n\n# --- Dependencies ---\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\ndef get_user_repo(db: Annotated[Session, Depends(get_db)]) -> UserRepository:\n    return UserRepository(db)\n\nUserRepoDep = Annotated[UserRepository, Depends(get_user_repo)]\n\n# --- Schemas ---\nclass UserCreate(BaseModel):\n    name: str\n    email: str\n\nclass UserRead(BaseModel):\n    id: int\n    name: str\n    email: str\n    model_config = ConfigDict(from_attributes=True)\n\n# --- Routes ---\napp = FastAPI()\n\n@app.post(\"/users\", response_model=UserRead, status_code=201)\ndef create_user(data: UserCreate, repo: UserRepoDep):\n    existing = repo.get_by_email(data.email)\n    if existing:\n        raise HTTPException(status_code=409, detail=\"Email already registered\")\n    return repo.create(data.model_dump())\n\n@app.get(\"/users/{user_id}\", response_model=UserRead)\ndef read_user(user_id: int, repo: UserRepoDep):\n    user = repo.get(user_id)\n    if not user:\n        raise HTTPException(status_code=404, detail=\"User not found\")\n    return user\n\n@app.get(\"/users\", response_model=list[UserRead])\ndef list_users(repo: UserRepoDep, skip: int = 0, limit: int = 100):\n    return repo.list(skip, limit)",
+          "code_language": "python",
+          "key_points": [
+            "A generic BaseRepository provides reusable CRUD for any model",
+            "Entity-specific repositories add domain methods like get_by_email",
+            "Repositories are injected as FastAPI dependencies via Depends()",
+            "Routes contain only HTTP logic -- all DB access goes through the repository"
+          ],
+          "gotchas": [
+            "Over-engineering: for small apps, a simple CRUD module is often enough",
+            "The repository should not know about HTTP (no HTTPException inside repositories)",
+            "Transaction boundaries become tricky when multiple repositories need to share a transaction",
+            "Generic type parameters are erased at runtime -- the model must be passed explicitly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The repository pattern wraps database operations in a class with methods like `get`, `list`, `create`. A generic base repository handles CRUD, and entity-specific repos add custom queries. Inject them as FastAPI dependencies.",
+          "pseudo_code": "",
+          "actual_code": "class UserRepository:\n    def __init__(self, db: Session):\n        self.db = db\n\n    def get(self, user_id: int) -> User | None:\n        return self.db.get(User, user_id)\n\n    def get_by_email(self, email: str) -> User | None:\n        return self.db.execute(\n            select(User).where(User.email == email)\n        ).scalar_one_or_none()\n\ndef get_user_repo(db: Annotated[Session, Depends(get_db)]):\n    return UserRepository(db)\n\n@app.get(\"/users/{user_id}\")\ndef read_user(user_id: int, repo: Annotated[UserRepository, Depends(get_user_repo)]):\n    user = repo.get(user_id)\n    if not user:\n        raise HTTPException(status_code=404)\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "Repository abstracts DB access behind a clean interface",
+            "Injected as a FastAPI dependency for testability"
+          ],
+          "gotchas": [
+            "Avoid putting HTTP concerns (HTTPException) inside the repository layer"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle database transactions in FastAPI?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "transactions",
+        "sqlalchemy",
+        "database",
+        "commit-rollback"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **transaction** groups multiple database operations into an atomic unit -- either all succeed or all are rolled back. SQLAlchemy sessions implicitly start a transaction on the first operation.\n\n### Default behavior:\n- `session.commit()` makes changes permanent\n- `session.rollback()` undoes all changes since the last commit\n- `session.close()` rolls back any uncommitted changes and returns the connection to the pool\n\n### Patterns:\n1. **Commit per operation**: Each CRUD function commits. Simple but no cross-operation atomicity\n2. **Commit in endpoint**: Endpoint calls multiple operations, then commits once\n3. **Commit in dependency**: The yield dependency auto-commits on success, auto-rolls back on exception\n4. **Nested transactions**: `session.begin_nested()` creates savepoints for partial rollback",
+          "pseudo_code": "# Pattern: commit in dependency\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n        db.commit()      # auto-commit if no exception\n    except Exception:\n        db.rollback()    # auto-rollback on error\n        raise\n    finally:\n        db.close()",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom sqlalchemy import create_engine, String, ForeignKey\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom typing import Annotated\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass Order(Base):\n    __tablename__ = \"orders\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    total: Mapped[float] = mapped_column(default=0.0)\n\nclass OrderItem(Base):\n    __tablename__ = \"order_items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    order_id: Mapped[int] = mapped_column(ForeignKey(\"orders.id\"))\n    product: Mapped[str] = mapped_column(String(100))\n    price: Mapped[float]\n\n# Pattern 1: Auto-commit dependency\ndef get_db_transactional():\n    db = SessionLocal()\n    try:\n        yield db\n        db.commit()  # commit if endpoint succeeds\n    except Exception:\n        db.rollback()  # rollback if endpoint raises\n        raise\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db_transactional)]\n\napp = FastAPI()\n\n# Pattern 2: Multiple operations in one transaction\n@app.post(\"/orders\")\ndef create_order(items: list[dict], db: DbDep):\n    order = Order()\n    db.add(order)\n    db.flush()  # gets order.id without committing\n\n    total = 0.0\n    for item_data in items:\n        order_item = OrderItem(\n            order_id=order.id,\n            product=item_data[\"product\"],\n            price=item_data[\"price\"],\n        )\n        db.add(order_item)\n        total += item_data[\"price\"]\n\n    order.total = total\n    # commit happens in the dependency after this returns\n    return {\"order_id\": order.id, \"total\": total}\n\n# Pattern 3: Savepoints for partial rollback\n@app.post(\"/orders/{order_id}/items\")\ndef add_item_to_order(order_id: int, product: str, price: float, db: DbDep):\n    order = db.get(Order, order_id)\n    if not order:\n        raise HTTPException(status_code=404, detail=\"Order not found\")\n\n    # Savepoint: if adding the item fails, only this part rolls back\n    savepoint = db.begin_nested()\n    try:\n        item = OrderItem(order_id=order_id, product=product, price=price)\n        db.add(item)\n        db.flush()\n        order.total += price\n    except Exception:\n        savepoint.rollback()\n        raise HTTPException(status_code=400, detail=\"Failed to add item\")\n\n    return {\"item_id\": item.id, \"order_total\": order.total}",
+          "code_language": "python",
+          "key_points": [
+            "SQLAlchemy sessions implicitly start a transaction on first operation",
+            "flush() sends SQL to the DB without committing -- useful for getting auto-generated IDs",
+            "begin_nested() creates a savepoint for partial rollback within a transaction",
+            "A yield dependency can auto-commit on success and auto-rollback on exception"
+          ],
+          "gotchas": [
+            "flush() is NOT a commit -- data is not visible to other sessions and will be lost on rollback",
+            "HTTPException raised by the endpoint is caught by the dependency's except block, triggering rollback",
+            "Nested transactions (savepoints) require database support -- SQLite has limited support",
+            "autoflush=True (default) can trigger unexpected SQL -- set to False for explicit control"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "SQLAlchemy sessions auto-start a transaction. Use `commit()` to persist, `rollback()` to undo, and `flush()` to send SQL without committing. A yield dependency can auto-commit/rollback based on whether the endpoint raises.",
+          "pseudo_code": "",
+          "actual_code": "def get_db_transactional():\n    db = SessionLocal()\n    try:\n        yield db\n        db.commit()\n    except Exception:\n        db.rollback()\n        raise\n    finally:\n        db.close()\n\n@app.post(\"/orders\")\ndef create_order(items: list[dict], db: DbDep):\n    order = Order()\n    db.add(order)\n    db.flush()  # get order.id without committing\n    for item in items:\n        db.add(OrderItem(order_id=order.id, **item))\n    # auto-commits via dependency",
+          "code_language": "python",
+          "key_points": [
+            "flush() gets auto-generated IDs without committing",
+            "Yield dependency auto-commits on success, rolls back on error"
+          ],
+          "gotchas": [
+            "flush() data is not visible to other sessions and is lost on rollback"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement pagination for database queries?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pagination",
+        "database",
+        "sqlalchemy",
+        "query-parameters"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pagination avoids loading entire tables into memory. The two main approaches are:\n\n### 1. Offset/Limit pagination:\n- Simple: `SELECT * FROM items OFFSET 20 LIMIT 10`\n- **Problem**: Slow for deep pages because the DB still scans skipped rows\n- Best for: Small datasets, admin panels, when users rarely go past page 5\n\n### 2. Cursor-based (keyset) pagination:\n- Uses the last seen ID/timestamp: `WHERE id > last_id LIMIT 10`\n- **Advantage**: Consistent performance regardless of page depth\n- Best for: Feeds, infinite scroll, large datasets, real-time data\n\n### FastAPI implementation:\n- Use `Query` parameters with defaults and validation\n- Return pagination metadata alongside results\n- Create a reusable Pydantic response model for paginated results",
+          "pseudo_code": "# Offset-based\n@app.get(\"/items\")\ndef list_items(skip: int = 0, limit: int = 20):\n    items = db.query(Item).offset(skip).limit(limit).all()\n    total = db.query(func.count(Item.id)).scalar()\n    return {\"items\": items, \"total\": total}\n\n# Cursor-based\n@app.get(\"/items\")\ndef list_items(after: int | None = None, limit: int = 20):\n    query = select(Item).order_by(Item.id)\n    if after:\n        query = query.where(Item.id > after)\n    items = db.execute(query.limit(limit + 1))  # fetch one extra\n    has_more = len(items) > limit",
+          "actual_code": "from fastapi import FastAPI, Depends, Query\nfrom pydantic import BaseModel, ConfigDict\nfrom sqlalchemy import create_engine, String, func, select\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom typing import Annotated, Generic, TypeVar\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass Item(Base):\n    __tablename__ = \"items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\n# --- Reusable paginated response model ---\nT = TypeVar(\"T\")\n\nclass PaginatedResponse(BaseModel, Generic[T]):\n    items: list[T]\n    total: int\n    page: int\n    page_size: int\n    total_pages: int\n\nclass ItemRead(BaseModel):\n    id: int\n    name: str\n    model_config = ConfigDict(from_attributes=True)\n\napp = FastAPI()\n\n# --- Offset-based pagination ---\n@app.get(\"/items\", response_model=PaginatedResponse[ItemRead])\ndef list_items(\n    db: DbDep,\n    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n):\n    total = db.execute(select(func.count(Item.id))).scalar_one()\n    offset = (page - 1) * page_size\n    items = db.execute(\n        select(Item).offset(offset).limit(page_size)\n    ).scalars().all()\n\n    return PaginatedResponse(\n        items=items,\n        total=total,\n        page=page,\n        page_size=page_size,\n        total_pages=(total + page_size - 1) // page_size,\n    )\n\n# --- Cursor-based pagination ---\nclass CursorResponse(BaseModel, Generic[T]):\n    items: list[T]\n    next_cursor: int | None = None\n    has_more: bool\n\n@app.get(\"/items/feed\", response_model=CursorResponse[ItemRead])\ndef list_items_cursor(\n    db: DbDep,\n    after: int | None = None,\n    limit: Annotated[int, Query(ge=1, le=100)] = 20,\n):\n    query = select(Item).order_by(Item.id)\n    if after is not None:\n        query = query.where(Item.id > after)\n\n    # Fetch one extra to check if there are more\n    results = db.execute(query.limit(limit + 1)).scalars().all()\n    has_more = len(results) > limit\n    items = results[:limit]\n\n    return CursorResponse(\n        items=items,\n        next_cursor=items[-1].id if items and has_more else None,\n        has_more=has_more,\n    )",
+          "code_language": "python",
+          "key_points": [
+            "Offset/limit is simple but slows down on deep pages",
+            "Cursor-based pagination has consistent performance regardless of depth",
+            "Fetch limit+1 rows to determine if there are more pages without a separate COUNT query",
+            "Validate page/limit with Query(ge=1, le=100) to prevent abuse"
+          ],
+          "gotchas": [
+            "Offset pagination can skip or duplicate rows if data is inserted between page requests",
+            "COUNT queries on large tables can be slow -- consider caching or approximate counts",
+            "Cursor pagination requires a unique, ordered column (usually id or created_at)",
+            "Generic Pydantic models (BaseModel with Generic[T]) work on Python 3.8+ with Pydantic v2 -- use typing_extensions if needed for older Python versions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `offset/limit` for simple pagination or cursor-based (`WHERE id > last_id`) for large datasets. Validate page parameters with `Query(ge=1, le=100)` and return metadata (total, page, has_more) alongside results.",
+          "pseudo_code": "",
+          "actual_code": "@app.get(\"/items\")\ndef list_items(\n    db: DbDep,\n    page: Annotated[int, Query(ge=1)] = 1,\n    page_size: Annotated[int, Query(ge=1, le=100)] = 20,\n):\n    total = db.execute(select(func.count(Item.id))).scalar_one()\n    offset = (page - 1) * page_size\n    items = db.execute(\n        select(Item).offset(offset).limit(page_size)\n    ).scalars().all()\n    return {\"items\": items, \"total\": total, \"page\": page}",
+          "code_language": "python",
+          "key_points": [
+            "Offset/limit is simple; cursor-based scales better"
+          ],
+          "gotchas": [
+            "Offset pagination can miss or duplicate rows during concurrent inserts"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Pydantic models alongside SQLAlchemy models?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "sqlalchemy",
+        "schemas",
+        "serialization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI apps use **two model layers**: SQLAlchemy models for the database and Pydantic models (schemas) for API validation and serialization. They serve different purposes and should be kept separate.\n\n### Why two model layers:\n- **SQLAlchemy models**: Define tables, columns, relationships, constraints. They interact with the DB\n- **Pydantic schemas**: Define what the API accepts (input) and returns (output). They validate and serialize\n\n### Common schema patterns:\n- **Create schema**: Fields for creating (no id, no timestamps)\n- **Update schema**: All fields optional (for PATCH)\n- **Read schema**: All fields including id, timestamps, computed values\n- **Base schema**: Shared fields to avoid repetition (inheritance)\n\n### Pydantic v2 changes:\n- `from_attributes=True` replaces `orm_mode = True`\n- `model_dump()` replaces `.dict()`\n- `model_dump(exclude_unset=True)` for partial updates\n- `ConfigDict` replaces `class Config`",
+          "pseudo_code": "class ItemBase(BaseModel):\n    name: str\n    price: float\n\nclass ItemCreate(ItemBase): pass\n\nclass ItemUpdate(BaseModel):\n    name: str | None = None\n    price: float | None = None\n\nclass ItemRead(ItemBase):\n    id: int\n    created_at: datetime\n    model_config = ConfigDict(from_attributes=True)",
+          "actual_code": "from datetime import datetime\nfrom typing import Optional\nfrom pydantic import BaseModel, ConfigDict, field_validator\nfrom sqlalchemy import String, func\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\n\n# --- SQLAlchemy model (database layer) ---\nclass Base(DeclarativeBase): pass\n\nclass UserDB(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    username: Mapped[str] = mapped_column(String(50), unique=True)\n    email: Mapped[str] = mapped_column(String(255))\n    hashed_password: Mapped[str] = mapped_column(String(255))\n    is_active: Mapped[bool] = mapped_column(default=True)\n    created_at: Mapped[datetime] = mapped_column(server_default=func.now())\n\n# --- Pydantic schemas (API layer) ---\nclass UserBase(BaseModel):\n    \"\"\"Shared fields between Create and Read.\"\"\"\n    username: str\n    email: str\n\nclass UserCreate(UserBase):\n    \"\"\"Fields for creating a user (includes password, excludes id).\"\"\"\n    password: str  # plain text, will be hashed before saving\n\n    @field_validator(\"password\")\n    @classmethod\n    def password_min_length(cls, v: str) -> str:\n        if len(v) < 8:\n            raise ValueError(\"Password must be at least 8 characters\")\n        return v\n\nclass UserUpdate(BaseModel):\n    \"\"\"All optional for PATCH updates.\"\"\"\n    username: str | None = None\n    email: str | None = None\n    is_active: bool | None = None\n\nclass UserRead(UserBase):\n    \"\"\"Fields returned to the client (no password).\"\"\"\n    id: int\n    is_active: bool\n    created_at: datetime\n\n    model_config = ConfigDict(from_attributes=True)\n\n# --- Usage ---\n# Creating from Pydantic to SQLAlchemy\ncreate_data = UserCreate(\n    username=\"alice\", email=\"alice@example.com\", password=\"securepass123\"\n)\nprint(create_data.model_dump())\n# pass to SQLAlchemy: UserDB(**create_data.model_dump(exclude={\"password\"}))\n\n# Reading from SQLAlchemy to Pydantic (simulated)\nclass FakeUser:\n    id = 1\n    username = \"alice\"\n    email = \"alice@example.com\"\n    is_active = True\n    created_at = datetime(2024, 1, 15)\n\nuser_read = UserRead.model_validate(FakeUser())\nprint(user_read.model_dump())\n\n# Partial update\nupdate_data = UserUpdate(email=\"newemail@example.com\")\nprint(update_data.model_dump(exclude_unset=True))  # only email\n\n# Expected Output:\n# {'username': 'alice', 'email': 'alice@example.com', 'password': 'securepass123'}\n# {'username': 'alice', 'email': 'alice@example.com', 'id': 1, 'is_active': True, 'created_at': datetime.datetime(2024, 1, 15, 0, 0)}\n# {'email': 'newemail@example.com'}",
+          "code_language": "python",
+          "key_points": [
+            "SQLAlchemy models handle the DB; Pydantic schemas handle API validation and serialization",
+            "Use schema inheritance (UserBase -> UserCreate, UserRead) to avoid field duplication",
+            "from_attributes=True (Pydantic v2) enables creating schemas from ORM objects",
+            "model_dump(exclude_unset=True) gives only the fields the client actually sent"
+          ],
+          "gotchas": [
+            "Never expose hashed_password in UserRead -- keep sensitive fields out of response schemas",
+            "model_validate() (not model_validate_json()) is used for ORM objects",
+            "exclude_unset vs exclude_none: unset means not in the request body, None means explicitly null",
+            "Pydantic v2 does not auto-convert lazy-loaded relationships -- access them before serialization"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use separate Pydantic schemas (Create, Update, Read) alongside SQLAlchemy models. `from_attributes=True` enables ORM-to-Pydantic conversion. Use `model_dump(exclude_unset=True)` for PATCH updates.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, ConfigDict\n\nclass UserCreate(BaseModel):\n    username: str\n    email: str\n    password: str\n\nclass UserRead(BaseModel):\n    id: int\n    username: str\n    email: str\n    model_config = ConfigDict(from_attributes=True)\n\n# ORM object -> Pydantic: UserRead.model_validate(db_user)\n# Pydantic -> dict: data.model_dump(exclude_unset=True)",
+          "code_language": "python",
+          "key_points": [
+            "Separate schemas for Create (input), Read (output), Update (partial)",
+            "from_attributes=True replaces the old orm_mode = True"
+          ],
+          "gotchas": [
+            "Never include sensitive fields like hashed_password in response schemas"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle database errors and rollbacks?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "error-handling",
+        "database",
+        "sqlalchemy",
+        "rollback"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Database operations can fail due to constraint violations, connection issues, or data integrity problems. Proper error handling involves catching SQLAlchemy exceptions, rolling back the transaction, and returning meaningful HTTP responses.\n\n### Common SQLAlchemy exceptions:\n- **`IntegrityError`**: Unique constraint, foreign key, or NOT NULL violation\n- **`OperationalError`**: Connection lost, table does not exist, timeout\n- **`DataError`**: Value too long, invalid type\n- **`NoResultFound`**: `scalar_one()` with no matching row\n- **`MultipleResultsFound`**: `scalar_one()` with more than one match\n\n### Strategies:\n1. **Try/except in endpoints**: Catch specific errors and raise HTTPException\n2. **Exception handlers**: Global handler for all IntegrityError occurrences\n3. **Dependency rollback**: Auto-rollback in the yield dependency",
+          "pseudo_code": "# Strategy 1: try/except in endpoint\ntry:\n    db.add(item)\n    db.commit()\nexcept IntegrityError:\n    db.rollback()\n    raise HTTPException(409, \"Duplicate entry\")\n\n# Strategy 2: global exception handler\n@app.exception_handler(IntegrityError)\ndef handle_integrity_error(request, exc):\n    return JSONResponse(status_code=409, ...)\n\n# Strategy 3: dependency auto-rollback\ndef get_db():\n    try: yield db; db.commit()\n    except: db.rollback(); raise\n    finally: db.close()",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException, Request\nfrom fastapi.responses import JSONResponse\nfrom sqlalchemy import create_engine, String\nfrom sqlalchemy.exc import IntegrityError, OperationalError\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom typing import Annotated\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    email: Mapped[str] = mapped_column(String(255), unique=True)\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\napp = FastAPI()\n\n# --- Strategy 1: Catch in endpoint ---\n@app.post(\"/users\")\ndef create_user(email: str, db: DbDep):\n    user = User(email=email)\n    db.add(user)\n    try:\n        db.commit()\n        db.refresh(user)\n    except IntegrityError:\n        db.rollback()\n        raise HTTPException(\n            status_code=409,\n            detail=f\"A user with email '{email}' already exists\",\n        )\n    return {\"id\": user.id, \"email\": user.email}\n\n# --- Strategy 2: Global exception handler ---\n@app.exception_handler(IntegrityError)\nasync def integrity_error_handler(request: Request, exc: IntegrityError):\n    return JSONResponse(\n        status_code=409,\n        content={\"detail\": \"Database integrity error: duplicate or invalid reference\"},\n    )\n\n@app.exception_handler(OperationalError)\nasync def operational_error_handler(request: Request, exc: OperationalError):\n    return JSONResponse(\n        status_code=503,\n        content={\"detail\": \"Database is temporarily unavailable\"},\n    )\n\n# --- Strategy 3: Auto-rollback dependency ---\ndef get_db_safe():\n    db = SessionLocal()\n    try:\n        yield db\n        db.commit()\n    except IntegrityError as e:\n        db.rollback()\n        # Extract useful info from the original error\n        raise HTTPException(status_code=409, detail=str(e.orig))\n    except OperationalError:\n        db.rollback()\n        raise HTTPException(status_code=503, detail=\"Database unavailable\")\n    except Exception:\n        db.rollback()\n        raise\n    finally:\n        db.close()\n\n# Demonstrating rollback behavior\nprint(\"Rollback ensures the session is clean after an error\")\nprint(\"Uncommitted changes are discarded\")\n\n# Expected Output:\n# Rollback ensures the session is clean after an error\n# Uncommitted changes are discarded",
+          "code_language": "python",
+          "key_points": [
+            "Always rollback before raising an exception -- the session is in a broken state after an error",
+            "IntegrityError covers unique violations, FK violations, and NOT NULL violations",
+            "Global exception handlers catch errors that escape the endpoint",
+            "The yield dependency pattern centralizes error handling in one place"
+          ],
+          "gotchas": [
+            "After an IntegrityError, the session MUST be rolled back before any further operations",
+            "Global exception handlers catch raw SQLAlchemy errors -- the session is not rolled back automatically",
+            "str(e.orig) gives the underlying DB error message, which may leak schema details to the client",
+            "OperationalError on connection loss may not be recoverable -- consider pool_pre_ping=True"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Catch `IntegrityError` for constraint violations and `OperationalError` for connection issues. Always call `db.rollback()` before raising an HTTPException. Use global exception handlers or yield-dependency error handling.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.exc import IntegrityError\n\n@app.post(\"/users\")\ndef create_user(email: str, db: DbDep):\n    user = User(email=email)\n    db.add(user)\n    try:\n        db.commit()\n    except IntegrityError:\n        db.rollback()\n        raise HTTPException(status_code=409, detail=\"Email already exists\")\n    return {\"id\": user.id}",
+          "code_language": "python",
+          "key_points": [
+            "IntegrityError = constraint violation; OperationalError = connection issue"
+          ],
+          "gotchas": [
+            "Session must be rolled back after any error before further DB operations"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement relationship loading (eager vs lazy)?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "sqlalchemy",
+        "relationships",
+        "eager-loading",
+        "lazy-loading",
+        "n-plus-one"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Relationship loading** determines when and how SQLAlchemy fetches related objects. The wrong strategy causes the **N+1 query problem**: 1 query to load N parents, then N queries to load each parent's children.\n\n### Loading strategies:\n1. **Lazy loading** (default): Related objects loaded on first access. Simple but causes N+1\n2. **Eager loading**: Related objects loaded in the initial query:\n   - **`joinedload()`**: Uses SQL JOIN. Good for one-to-one and many-to-one\n   - **`selectinload()`**: Uses a second SELECT with IN clause. Good for one-to-many and many-to-many\n   - **`subqueryload()`**: Uses a subquery. Similar to selectinload but different SQL\n3. **Explicit loading**: `raiseload()` raises an error on access (forces explicit loading)\n4. **No loading**: `noload()` sets the attribute to None/empty\n\n### Async note:\nLazy loading **does not work** with async SQLAlchemy because it triggers synchronous I/O. You **must** use eager loading or explicit `await session.execute()` with joined/select loads.",
+          "pseudo_code": "# N+1 problem (BAD)\nusers = db.query(User).all()  # 1 query\nfor u in users:\n    print(u.posts)  # N queries (one per user)\n\n# Eager loading (GOOD)\nusers = db.query(User).options(\n    selectinload(User.posts)  # 2 queries total\n).all()",
+          "actual_code": "from sqlalchemy import create_engine, String, ForeignKey, select\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, relationship,\n    Session, sessionmaker, joinedload, selectinload, raiseload,\n)\n\nengine = create_engine(\"sqlite:///./app.db\", echo=True,\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\nclass Author(Base):\n    __tablename__ = \"authors\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    books: Mapped[list[\"Book\"]] = relationship(back_populates=\"author\")\n\nclass Book(Base):\n    __tablename__ = \"books\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n    author_id: Mapped[int] = mapped_column(ForeignKey(\"authors.id\"))\n    author: Mapped[\"Author\"] = relationship(back_populates=\"books\")\n\nBase.metadata.create_all(engine)\n\n# Seed some data\nwith SessionLocal() as db:\n    a1 = Author(name=\"Author 1\", books=[Book(title=\"Book A\"), Book(title=\"Book B\")])\n    a2 = Author(name=\"Author 2\", books=[Book(title=\"Book C\")])\n    db.add_all([a1, a2])\n    db.commit()\n\n# --- Lazy loading (default) -- causes N+1 ---\nwith SessionLocal() as db:\n    authors = db.execute(select(Author)).scalars().all()  # 1 query\n    for author in authors:\n        print(f\"{author.name}: {[b.title for b in author.books]}\")  # N queries\n\n# --- joinedload -- single JOIN query ---\nwith SessionLocal() as db:\n    stmt = select(Author).options(joinedload(Author.books))\n    authors = db.execute(stmt).unique().scalars().all()  # 1 query with JOIN\n    for author in authors:\n        print(f\"{author.name}: {[b.title for b in author.books]}\")\n\n# --- selectinload -- 2 queries (best for collections) ---\nwith SessionLocal() as db:\n    stmt = select(Author).options(selectinload(Author.books))\n    authors = db.execute(stmt).scalars().all()  # 2 queries\n    for author in authors:\n        print(f\"{author.name}: {[b.title for b in author.books]}\")\n\n# --- raiseload -- prevents accidental lazy loading ---\nwith SessionLocal() as db:\n    stmt = select(Author).options(raiseload(Author.books))\n    author = db.execute(stmt).scalars().first()\n    # author.books  # Would raise: lazy load not permitted\n\nprint(\"Loading strategies demonstrated\")\n\n# Expected Output:\n# Author 1: ['Book A', 'Book B']\n# Author 2: ['Book C']\n# Author 1: ['Book A', 'Book B']\n# Author 2: ['Book C']\n# Author 1: ['Book A', 'Book B']\n# Author 2: ['Book C']\n# Loading strategies demonstrated",
+          "code_language": "python",
+          "key_points": [
+            "Default lazy loading causes N+1 queries -- one per related object access",
+            "joinedload() uses a JOIN (best for to-one relationships)",
+            "selectinload() uses a separate IN query (best for to-many relationships)",
+            "raiseload() prevents accidental lazy loads by raising an error"
+          ],
+          "gotchas": [
+            "joinedload() with collections requires .unique() to deduplicate results from the JOIN",
+            "Async SQLAlchemy does not support lazy loading at all -- you must eagerly load or use await",
+            "Eager loading in the relationship definition (lazy='selectin') applies globally, which may over-fetch",
+            "Nested eager loading: use selectinload(Author.books).selectinload(Book.reviews) for deep relations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Default lazy loading causes N+1 queries. Use `joinedload()` for to-one and `selectinload()` for to-many relationships. Async SQLAlchemy requires eager loading -- lazy loading raises errors.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.orm import selectinload, joinedload\n\n# Eager load books when fetching authors (2 queries instead of N+1)\nstmt = select(Author).options(selectinload(Author.books))\nauthors = db.execute(stmt).scalars().all()\n\n# JOIN load for to-one (single query)\nstmt = select(Book).options(joinedload(Book.author))\nbooks = db.execute(stmt).unique().scalars().all()",
+          "code_language": "python",
+          "key_points": [
+            "selectinload for collections, joinedload for single objects"
+          ],
+          "gotchas": [
+            "joinedload on collections requires .unique() to avoid duplicate parent rows"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set up multiple database connections?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "database",
+        "multiple-databases",
+        "sqlalchemy",
+        "dependency-injection"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Some applications need multiple databases: a primary for writes, a read replica for queries, or separate databases for different domains (e.g., users DB and analytics DB). FastAPI's dependency injection makes this clean.\n\n### Common scenarios:\n1. **Primary + read replica**: Write to primary, read from replica\n2. **Multi-tenant**: Each tenant gets their own database\n3. **Domain separation**: Different services with their own databases\n\n### Implementation:\n- Create separate engines and session factories for each database\n- Create separate dependencies for each\n- Use different `DeclarativeBase` subclasses if schemas differ\n- Inject the appropriate session via `Depends()`",
+          "pseudo_code": "primary_engine = create_engine(PRIMARY_URL)\nreplica_engine = create_engine(REPLICA_URL)\n\nPrimarySession = sessionmaker(bind=primary_engine)\nReplicaSession = sessionmaker(bind=replica_engine)\n\ndef get_primary_db(): yield PrimarySession()\ndef get_replica_db(): yield ReplicaSession()\n\n@app.post(\"/users\")\ndef create(db: Depends(get_primary_db)): ...  # writes\n\n@app.get(\"/users\")\ndef list(db: Depends(get_replica_db)): ...  # reads",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom sqlalchemy import create_engine, String, select\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom typing import Annotated\n\n# --- Primary database (writes) ---\nprimary_engine = create_engine(\n    \"sqlite:///./primary.db\",\n    connect_args={\"check_same_thread\": False},\n)\nPrimarySession = sessionmaker(bind=primary_engine)\n\n# --- Read replica (reads) ---\nreplica_engine = create_engine(\n    \"sqlite:///./replica.db\",\n    connect_args={\"check_same_thread\": False},\n)\nReplicaSession = sessionmaker(bind=replica_engine)\n\n# --- Analytics database (separate schema) ---\nanalytics_engine = create_engine(\n    \"sqlite:///./analytics.db\",\n    connect_args={\"check_same_thread\": False},\n)\nAnalyticsSession = sessionmaker(bind=analytics_engine)\n\n# Shared base for primary/replica (same schema)\nclass Base(DeclarativeBase): pass\n\n# Separate base for analytics\nclass AnalyticsBase(DeclarativeBase): pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\nclass PageView(AnalyticsBase):\n    __tablename__ = \"page_views\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    path: Mapped[str] = mapped_column(String(500))\n    count: Mapped[int] = mapped_column(default=0)\n\n# --- Dependencies ---\ndef get_primary_db():\n    db = PrimarySession()\n    try:\n        yield db\n    finally:\n        db.close()\n\ndef get_replica_db():\n    db = ReplicaSession()\n    try:\n        yield db\n    finally:\n        db.close()\n\ndef get_analytics_db():\n    db = AnalyticsSession()\n    try:\n        yield db\n    finally:\n        db.close()\n\nPrimaryDep = Annotated[Session, Depends(get_primary_db)]\nReplicaDep = Annotated[Session, Depends(get_replica_db)]\nAnalyticsDep = Annotated[Session, Depends(get_analytics_db)]\n\napp = FastAPI()\n\n# Writes go to primary\n@app.post(\"/users\")\ndef create_user(name: str, db: PrimaryDep):\n    user = User(name=name)\n    db.add(user)\n    db.commit()\n    db.refresh(user)\n    return {\"id\": user.id, \"name\": user.name}\n\n# Reads go to replica\n@app.get(\"/users\")\ndef list_users(db: ReplicaDep):\n    return db.execute(select(User)).scalars().all()\n\n# Analytics uses a separate database\n@app.get(\"/analytics/top-pages\")\ndef top_pages(db: AnalyticsDep):\n    stmt = select(PageView).order_by(PageView.count.desc()).limit(10)\n    return db.execute(stmt).scalars().all()",
+          "code_language": "python",
+          "key_points": [
+            "Create separate engines and session factories for each database",
+            "Use Annotated type aliases (PrimaryDep, ReplicaDep) for clean injection",
+            "Different databases can use different DeclarativeBase subclasses",
+            "The dependency determines which database an endpoint uses"
+          ],
+          "gotchas": [
+            "Read replicas have replication lag -- recently written data may not appear immediately",
+            "Cross-database joins are not possible with separate engines",
+            "Each engine has its own connection pool -- total connections = sum of all pool sizes",
+            "Alembic needs separate configurations (multiple alembic.ini or env.py branches) for different schemas"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create separate engines, session factories, and yield dependencies for each database. Inject the appropriate one via `Depends()`. Use `Annotated` type aliases to keep endpoint signatures clean.",
+          "pseudo_code": "",
+          "actual_code": "primary_engine = create_engine(\"postgresql://host/primary\")\nreplica_engine = create_engine(\"postgresql://host/replica\")\n\nPrimarySession = sessionmaker(bind=primary_engine)\nReplicaSession = sessionmaker(bind=replica_engine)\n\ndef get_primary_db():\n    db = PrimarySession()\n    try: yield db\n    finally: db.close()\n\ndef get_replica_db():\n    db = ReplicaSession()\n    try: yield db\n    finally: db.close()\n\nPrimaryDep = Annotated[Session, Depends(get_primary_db)]\nReplicaDep = Annotated[Session, Depends(get_replica_db)]",
+          "code_language": "python",
+          "key_points": [
+            "Separate engines and dependencies for each database",
+            "Annotated aliases keep endpoint code clean"
+          ],
+          "gotchas": [
+            "Read replicas have replication lag -- newly written data may not be immediately visible"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement soft delete patterns?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "soft-delete",
+        "database",
+        "sqlalchemy",
+        "design-patterns"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Soft delete** marks records as deleted instead of removing them from the database. This preserves data for auditing, recovery, and referential integrity.\n\n### Implementation:\n1. Add a `deleted_at` timestamp column (NULL = active, non-NULL = deleted)\n2. Filter out deleted records in all normal queries\n3. Provide endpoints to soft-delete and optionally restore\n\n### Approaches:\n- **Manual filtering**: Add `.where(Model.deleted_at.is_(None))` to every query\n- **SQLAlchemy events**: Use `@event.listens_for` to auto-filter\n- **Hybrid property**: Add an `is_deleted` property to the model\n- **Custom query class**: Override the default query to auto-exclude deleted rows\n\nThe **manual + helper method** approach is recommended because it is explicit and avoids hidden behavior.",
+          "pseudo_code": "class SoftDeleteMixin:\n    deleted_at: Mapped[Optional[datetime]]\n\n    def soft_delete(self):\n        self.deleted_at = datetime.utcnow()\n\n    @property\n    def is_deleted(self) -> bool:\n        return self.deleted_at is not None\n\n# Filter active records\nstmt = select(Item).where(Item.deleted_at.is_(None))",
+          "actual_code": "from datetime import datetime, timezone\nfrom typing import Optional, Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, Query\nfrom sqlalchemy import create_engine, String, select, event\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\n\nengine = create_engine(\"sqlite:///./app.db\",\n                       connect_args={\"check_same_thread\": False})\nSessionLocal = sessionmaker(bind=engine)\n\nclass Base(DeclarativeBase): pass\n\n# --- Soft delete mixin ---\nclass SoftDeleteMixin:\n    deleted_at: Mapped[Optional[datetime]] = mapped_column(default=None)\n\n    def soft_delete(self) -> None:\n        self.deleted_at = datetime.now(timezone.utc)\n\n    def restore(self) -> None:\n        self.deleted_at = None\n\n    @property\n    def is_deleted(self) -> bool:\n        return self.deleted_at is not None\n\n# --- Model using the mixin ---\nclass Article(SoftDeleteMixin, Base):\n    __tablename__ = \"articles\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n    body: Mapped[str] = mapped_column(String(5000))\n\nBase.metadata.create_all(engine)\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\nDbDep = Annotated[Session, Depends(get_db)]\n\napp = FastAPI()\n\n# Helper: base query that excludes soft-deleted records\ndef active_articles():\n    return select(Article).where(Article.deleted_at.is_(None))\n\n# List only active articles\n@app.get(\"/articles\")\ndef list_articles(\n    db: DbDep,\n    include_deleted: Annotated[bool, Query()] = False,\n):\n    if include_deleted:\n        stmt = select(Article)\n    else:\n        stmt = active_articles()\n    return db.execute(stmt).scalars().all()\n\n# Get a single article (only if active)\n@app.get(\"/articles/{article_id}\")\ndef get_article(article_id: int, db: DbDep):\n    article = db.get(Article, article_id)\n    if not article or article.is_deleted:\n        raise HTTPException(status_code=404, detail=\"Article not found\")\n    return article\n\n# Soft delete\n@app.delete(\"/articles/{article_id}\", status_code=204)\ndef delete_article(article_id: int, db: DbDep):\n    article = db.get(Article, article_id)\n    if not article or article.is_deleted:\n        raise HTTPException(status_code=404, detail=\"Article not found\")\n    article.soft_delete()\n    db.commit()\n\n# Restore\n@app.post(\"/articles/{article_id}/restore\")\ndef restore_article(article_id: int, db: DbDep):\n    article = db.get(Article, article_id)\n    if not article:\n        raise HTTPException(status_code=404, detail=\"Article not found\")\n    if not article.is_deleted:\n        raise HTTPException(status_code=400, detail=\"Article is not deleted\")\n    article.restore()\n    db.commit()\n    return {\"id\": article.id, \"title\": article.title, \"restored\": True}\n\n# Hard delete (admin only -- permanently removes the record)\n@app.delete(\"/admin/articles/{article_id}/purge\", status_code=204)\ndef purge_article(article_id: int, db: DbDep):\n    article = db.get(Article, article_id)\n    if not article:\n        raise HTTPException(status_code=404, detail=\"Article not found\")\n    db.delete(article)\n    db.commit()\n\n# Demonstrate\nwith SessionLocal() as db:\n    a = Article(title=\"Test\", body=\"Content\")\n    db.add(a)\n    db.commit()\n    print(f\"Active: is_deleted={a.is_deleted}\")\n    a.soft_delete()\n    db.commit()\n    print(f\"Soft deleted: is_deleted={a.is_deleted}\")\n    a.restore()\n    db.commit()\n    print(f\"Restored: is_deleted={a.is_deleted}\")\n\n# Expected Output:\n# Active: is_deleted=False\n# Soft deleted: is_deleted=True\n# Restored: is_deleted=False",
+          "code_language": "python",
+          "key_points": [
+            "Use a deleted_at timestamp (NULL = active) rather than a boolean flag for auditability",
+            "Create a mixin class with soft_delete(), restore(), and is_deleted for reuse across models",
+            "Filter with .where(Model.deleted_at.is_(None)) in all normal queries",
+            "Provide separate endpoints for soft delete, restore, and hard delete (purge)"
+          ],
+          "gotchas": [
+            "Unique constraints still apply to soft-deleted rows -- consider partial unique indexes",
+            "Foreign keys to soft-deleted rows remain valid, which can cause unexpected joins",
+            "Forgetting to filter deleted rows in even one query leaks deleted data",
+            "Soft-deleted rows accumulate over time -- schedule periodic hard-deletes or archiving"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Add a `deleted_at` column (NULL = active). Create a mixin with `soft_delete()` and `restore()` methods. Filter queries with `.where(Model.deleted_at.is_(None))` to exclude deleted records.",
+          "pseudo_code": "",
+          "actual_code": "class SoftDeleteMixin:\n    deleted_at: Mapped[Optional[datetime]] = mapped_column(default=None)\n\n    def soft_delete(self):\n        self.deleted_at = datetime.now(timezone.utc)\n\n    @property\n    def is_deleted(self) -> bool:\n        return self.deleted_at is not None\n\nclass Article(SoftDeleteMixin, Base):\n    __tablename__ = \"articles\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str] = mapped_column(String(200))\n\n# Always filter in queries\nstmt = select(Article).where(Article.deleted_at.is_(None))",
+          "code_language": "python",
+          "key_points": [
+            "deleted_at timestamp for auditability, not just a boolean"
+          ],
+          "gotchas": [
+            "Unique constraints still apply to soft-deleted rows -- use partial indexes if needed"
+          ]
+        }
+      ]
+    }
+  ]
+}

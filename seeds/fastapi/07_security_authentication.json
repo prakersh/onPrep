@@ -1,0 +1,832 @@
+{
+  "concept_slug": "security-authentication",
+  "questions": [
+    {
+      "title": "How does OAuth2PasswordBearer work in FastAPI?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "oauth2",
+        "authentication",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**OAuth2PasswordBearer** is a FastAPI security scheme class that declares a dependency expecting a Bearer token in the `Authorization` header.\n\n### How it works:\n1. You create an instance with `tokenUrl` pointing to your login endpoint\n2. It tells FastAPI's auto-docs (Swagger UI) where to send username/password to get a token\n3. When used as a dependency, it extracts the token from the `Authorization: Bearer <token>` header\n4. If no token is present, it returns a `401 Unauthorized` automatically\n5. It does **not** validate the token itself -- that is your responsibility\n\n### What `tokenUrl` does:\n- It is only used by the Swagger UI \"Authorize\" button to know which endpoint to POST credentials to\n- It does not create the endpoint -- you must define it yourself\n- It should be a relative URL path (e.g., `\"token\"` or `\"/auth/token\"`)\n\n### Integration with OpenAPI:\nFastAPI uses this to generate the correct OpenAPI security scheme, enabling the lock icon and \"Authorize\" dialog in Swagger UI.",
+          "pseudo_code": "oauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# When used as dependency:\n# 1. Reads Authorization header\n# 2. Strips \"Bearer \" prefix\n# 3. Returns raw token string\n# 4. Raises 401 if missing\n\n@app.get(\"/protected\")\ndef protected(token: str = Depends(oauth2_scheme)):\n    user = validate_and_decode(token)\n    return user",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Declare the OAuth2 scheme -- tokenUrl is for Swagger UI\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n@app.get(\"/items\")\ndef read_items(token: str = Depends(oauth2_scheme)):\n    \"\"\"Token is the raw Bearer token string.\"\"\"\n    return {\"token\": token}\n\n# --- Test it ---\nclient = TestClient(app)\n\n# Without token -> 401\nresponse = client.get(\"/items\")\nprint(response.status_code)\nprint(response.json())\n\n# With token -> 200\nresponse = client.get(\"/items\", headers={\"Authorization\": \"Bearer my-secret-token\"})\nprint(response.status_code)\nprint(response.json())\n\n# Expected Output:\n# 401\n# {'detail': 'Not authenticated'}\n# 200\n# {'token': 'my-secret-token'}",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordBearer extracts the Bearer token string from the Authorization header",
+            "tokenUrl tells Swagger UI where to send credentials -- it does not create the endpoint",
+            "Returns 401 Unauthorized automatically if no token is provided",
+            "The token is returned as a raw string -- you must validate/decode it yourself"
+          ],
+          "gotchas": [
+            "tokenUrl is relative to the app root, not an absolute URL -- use 'token' not 'http://localhost/token'",
+            "OAuth2PasswordBearer does NOT validate the token -- it only extracts it from the header",
+            "If you use auto_error=False, it returns None instead of raising 401 when the token is missing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`OAuth2PasswordBearer(tokenUrl=\"token\")` creates a dependency that extracts the Bearer token from the `Authorization` header. It returns the raw token string and raises 401 if missing. `tokenUrl` is only used by Swagger UI to know where to POST credentials.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n@app.get(\"/protected\")\ndef protected(token: str = Depends(oauth2_scheme)):\n    return {\"token\": token}  # raw Bearer token string",
+          "code_language": "python",
+          "key_points": [
+            "Extracts Bearer token from Authorization header, returns raw string",
+            "Raises 401 automatically if token is missing"
+          ],
+          "gotchas": [
+            "It does NOT validate the token -- only extracts it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement JWT token creation and validation?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "jwt",
+        "authentication",
+        "python-jose",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**JWT (JSON Web Tokens)** are the standard way to implement stateless authentication in FastAPI. You encode user data into a signed token, and validate it on each request.\n\n### Token creation:\n1. Build a payload with user data and expiration time (`exp` claim)\n2. Sign it with a secret key using an algorithm like HS256\n3. Return the encoded token string\n\n### Token validation:\n1. Decode the token using the same secret and algorithm\n2. Check if the token has expired (the `exp` claim is checked automatically)\n3. Extract user info from the payload\n4. Raise 401 if decoding fails for any reason\n\n### Libraries:\n- **python-jose**: `pip install python-jose[cryptography]` -- most commonly used with FastAPI\n- **PyJWT**: `pip install PyJWT` -- simpler alternative\n\n### Security considerations:\n- Use a strong, random `SECRET_KEY` (at least 32 bytes)\n- Keep expiration times short (15-30 minutes for access tokens)\n- Never store sensitive data in the payload (it is base64-encoded, not encrypted)\n- Use HTTPS in production to prevent token interception",
+          "pseudo_code": "# Creation:\npayload = {\"sub\": user_id, \"exp\": now + timedelta(minutes=30)}\ntoken = jwt.encode(payload, SECRET_KEY, algorithm=\"HS256\")\n\n# Validation:\ntry:\n    payload = jwt.decode(token, SECRET_KEY, algorithms=[\"HS256\"])\n    user_id = payload[\"sub\"]\nexcept JWTError:\n    raise 401 Unauthorized",
+          "actual_code": "from datetime import datetime, timedelta, timezone\nfrom jose import JWTError, jwt\n\nSECRET_KEY = \"your-secret-key-keep-it-secret\"  # Use a real secret in production\nALGORITHM = \"HS256\"\nACCESS_TOKEN_EXPIRE_MINUTES = 30\n\ndef create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:\n    \"\"\"Create a JWT access token.\"\"\"\n    to_encode = data.copy()\n    expire = datetime.now(timezone.utc) + (\n        expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)\n    )\n    to_encode.update({\"exp\": expire})\n    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)\n\ndef verify_token(token: str) -> dict:\n    \"\"\"Decode and validate a JWT token.\"\"\"\n    try:\n        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])\n        return payload\n    except JWTError as e:\n        raise ValueError(f\"Invalid token: {e}\")\n\n# --- Usage ---\ntoken = create_access_token({\"sub\": \"alice\", \"role\": \"admin\"})\nprint(f\"Token: {token[:50]}...\")\n\npayload = verify_token(token)\nprint(f\"User: {payload['sub']}\")\nprint(f\"Role: {payload['role']}\")\n\n# Expired token example\nexpired_token = create_access_token(\n    {\"sub\": \"bob\"}, expires_delta=timedelta(seconds=-1)\n)\ntry:\n    verify_token(expired_token)\nexcept ValueError as e:\n    print(f\"Error: {e}\")\n\n# Expected Output:\n# Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJz...\n# User: alice\n# Role: admin\n# Error: Invalid token: Signature has expired.",
+          "code_language": "python",
+          "key_points": [
+            "Use python-jose or PyJWT to encode/decode JWT tokens",
+            "Always include an 'exp' claim for token expiration",
+            "The 'sub' (subject) claim typically holds the username or user ID",
+            "jwt.decode() automatically rejects expired tokens"
+          ],
+          "gotchas": [
+            "algorithms parameter in jwt.decode() must be a list, not a string",
+            "JWT payloads are base64-encoded, NOT encrypted -- never store secrets in them",
+            "Use timezone-aware datetimes (timezone.utc) to avoid subtle expiration bugs",
+            "python-jose and PyJWT have slightly different APIs -- do not mix them"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `python-jose` to create JWTs with `jwt.encode({\"sub\": user, \"exp\": expiry}, SECRET, algorithm=\"HS256\")` and validate with `jwt.decode(token, SECRET, algorithms=[\"HS256\"])`. The `exp` claim auto-rejects expired tokens.",
+          "pseudo_code": "",
+          "actual_code": "from datetime import datetime, timedelta, timezone\nfrom jose import jwt, JWTError\n\nSECRET = \"my-secret\"\n\ndef create_token(username: str) -> str:\n    expire = datetime.now(timezone.utc) + timedelta(minutes=30)\n    return jwt.encode({\"sub\": username, \"exp\": expire}, SECRET, algorithm=\"HS256\")\n\ndef decode_token(token: str) -> str:\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    return payload[\"sub\"]",
+          "code_language": "python",
+          "key_points": [
+            "jwt.encode() creates tokens, jwt.decode() validates and extracts data",
+            "The 'exp' claim handles expiration automatically"
+          ],
+          "gotchas": [
+            "JWT payloads are NOT encrypted -- anyone can read them with base64 decoding"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you hash and verify passwords with passlib/bcrypt?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "passwords",
+        "bcrypt",
+        "passlib",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Never store plaintext passwords.** Use `passlib` with the `bcrypt` scheme to hash passwords before storing them and verify them during login.\n\n### How bcrypt works:\n1. **Hashing**: Takes a password and produces a fixed-length hash with a random salt baked in\n2. **Verification**: Hashes the input password with the same salt and compares results\n3. **Cost factor**: Controls how slow hashing is (higher = more secure but slower)\n\n### Setup:\n```\npip install passlib[bcrypt]\n```\n\n### passlib's CryptContext:\n- Manages hashing schemes and migration between them\n- `schemes=[\"bcrypt\"]` specifies the hashing algorithm\n- `deprecated=\"auto\"` auto-migrates old hashes when users log in\n- Handles salt generation automatically\n\n### Why bcrypt:\n- Intentionally slow (prevents brute-force attacks)\n- Built-in salt (no salt management needed)\n- Configurable work factor (adapts to faster hardware)\n- Industry standard for password hashing",
+          "pseudo_code": "pwd_context = CryptContext(schemes=[\"bcrypt\"])\n\n# Storing a password:\nhashed = pwd_context.hash(plain_password)\nstore_in_db(user, hashed)\n\n# Verifying at login:\nif pwd_context.verify(input_password, stored_hash):\n    grant_access()\nelse:\n    deny_access()",
+          "actual_code": "from passlib.context import CryptContext\n\n# Create a password context with bcrypt\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\ndef hash_password(password: str) -> str:\n    \"\"\"Hash a plaintext password.\"\"\"\n    return pwd_context.hash(password)\n\ndef verify_password(plain_password: str, hashed_password: str) -> bool:\n    \"\"\"Verify a password against its hash.\"\"\"\n    return pwd_context.verify(plain_password, hashed_password)\n\n# --- Usage ---\npassword = \"my-secret-password\"\nhashed = hash_password(password)\n\nprint(f\"Hash: {hashed[:30]}...\")\nprint(f\"Hash length: {len(hashed)}\")\n\n# Correct password\nprint(f\"Correct: {verify_password('my-secret-password', hashed)}\")\n\n# Wrong password\nprint(f\"Wrong: {verify_password('wrong-password', hashed)}\")\n\n# Same password produces different hashes (different salt each time)\nhashed2 = hash_password(password)\nprint(f\"Same hash? {hashed == hashed2}\")\nprint(f\"Both verify? {verify_password(password, hashed) and verify_password(password, hashed2)}\")\n\n# Expected Output:\n# Hash: $2b$12$...\n# Hash length: 60\n# Correct: True\n# Wrong: False\n# Same hash? False\n# Both verify? True",
+          "code_language": "python",
+          "key_points": [
+            "CryptContext(schemes=['bcrypt']) creates a reusable password hasher",
+            "pwd_context.hash() generates a salted bcrypt hash -- different each time",
+            "pwd_context.verify() compares a plaintext password against a stored hash",
+            "deprecated='auto' enables transparent migration to newer hash schemes"
+          ],
+          "gotchas": [
+            "Never compare hashes directly -- use verify() which handles salt extraction",
+            "bcrypt has a 72-byte password limit -- longer passwords are silently truncated",
+            "Install passlib with bcrypt extra: pip install passlib[bcrypt], not just passlib",
+            "Hash operations are intentionally slow (~200ms) -- do not run in tight loops"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `passlib.context.CryptContext(schemes=[\"bcrypt\"])` to hash with `.hash(password)` and verify with `.verify(plain, hashed)`. Bcrypt automatically handles salting and is intentionally slow to resist brute-force attacks.",
+          "pseudo_code": "",
+          "actual_code": "from passlib.context import CryptContext\n\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\n\nhashed = pwd_context.hash(\"my-password\")\nprint(pwd_context.verify(\"my-password\", hashed))   # True\nprint(pwd_context.verify(\"wrong\", hashed))          # False\n\n# Expected Output:\n# True\n# False",
+          "code_language": "python",
+          "key_points": [
+            "hash() creates a salted hash, verify() checks against it"
+          ],
+          "gotchas": [
+            "bcrypt silently truncates passwords longer than 72 bytes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you protect routes with authentication dependencies?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "authentication",
+        "dependencies",
+        "route-protection",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI's dependency injection system is the primary way to protect routes. You create a dependency that validates the token and returns the current user, then inject it into any endpoint that requires authentication.\n\n### Approaches:\n\n1. **Per-route dependency**: Add `Depends(get_current_user)` to individual endpoints\n2. **Router-level dependency**: Apply to all routes in an `APIRouter`\n3. **App-level dependency**: Apply to every route in the application\n\n### How it works:\n1. Request arrives with `Authorization: Bearer <token>` header\n2. `OAuth2PasswordBearer` extracts the token\n3. Your `get_current_user` dependency decodes and validates the token\n4. If valid, the user object is injected into the endpoint\n5. If invalid, a 401 is raised before the endpoint runs\n\n### Using Annotated (modern style):\nPydantic v2 and modern FastAPI prefer `Annotated[User, Depends(get_current_user)]` over the default parameter style for cleaner, reusable type hints.",
+          "pseudo_code": "# Define the dependency chain:\noauth2_scheme -> extracts token string\nget_current_user(token) -> decodes JWT, returns User\n\n# Protect a route:\n@app.get(\"/me\")\ndef me(user: Annotated[User, Depends(get_current_user)]):\n    return user\n\n# Protect all routes in a router:\nrouter = APIRouter(dependencies=[Depends(get_current_user)])",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status, APIRouter\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import JWTError, jwt\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\n\nSECRET_KEY = \"test-secret\"\nALGORITHM = \"HS256\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\nclass User(BaseModel):\n    username: str\n    role: str = \"user\"\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:\n    \"\"\"Dependency that validates JWT and returns current user.\"\"\"\n    credentials_exception = HTTPException(\n        status_code=status.HTTP_401_UNAUTHORIZED,\n        detail=\"Could not validate credentials\",\n        headers={\"WWW-Authenticate\": \"Bearer\"},\n    )\n    try:\n        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])\n        username: str = payload.get(\"sub\")\n        if username is None:\n            raise credentials_exception\n        return User(username=username, role=payload.get(\"role\", \"user\"))\n    except JWTError:\n        raise credentials_exception\n\n# Reusable type alias (modern Annotated style)\nCurrentUser = Annotated[User, Depends(get_current_user)]\n\n# --- Per-route protection ---\n@app.get(\"/me\")\ndef read_me(current_user: CurrentUser):\n    return {\"username\": current_user.username, \"role\": current_user.role}\n\n# --- Router-level protection (all routes require auth) ---\nadmin_router = APIRouter(\n    prefix=\"/admin\",\n    dependencies=[Depends(get_current_user)],\n)\n\n@admin_router.get(\"/dashboard\")\ndef admin_dashboard():\n    return {\"message\": \"Admin area\"}\n\napp.include_router(admin_router)\n\n# --- Test it ---\ndef make_token(sub: str, role: str = \"user\") -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode({\"sub\": sub, \"role\": role, \"exp\": exp}, SECRET_KEY, algorithm=ALGORITHM)\n\nclient = TestClient(app)\n\n# No token\nresp = client.get(\"/me\")\nprint(resp.status_code)\n\n# Valid token\ntoken = make_token(\"alice\", \"admin\")\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.json())\n\n# Router-level protection\nresp = client.get(\"/admin/dashboard\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.json())\n\n# Expected Output:\n# 401\n# {'username': 'alice', 'role': 'admin'}\n# {'message': 'Admin area'}",
+          "code_language": "python",
+          "key_points": [
+            "Create a get_current_user dependency that decodes JWT and returns a User",
+            "Use Annotated[User, Depends(get_current_user)] for reusable type aliases",
+            "Router-level dependencies protect all routes in that router",
+            "Always include WWW-Authenticate header in 401 responses per HTTP spec"
+          ],
+          "gotchas": [
+            "Router-level dependencies run but their return values are not injected into endpoints -- use per-route Depends if you need the user object",
+            "HTTPException in a dependency stops the entire request chain",
+            "Annotated style requires Python 3.9+ (or typing_extensions for 3.8)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a `get_current_user` dependency that uses `OAuth2PasswordBearer` to extract the token, decodes the JWT, and returns a user object. Inject it with `Depends()` on any route that needs protection. Use `Annotated[User, Depends(get_current_user)]` for clean reuse.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom jose import jwt, JWTError\n\napp = FastAPI()\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):\n    try:\n        payload = jwt.decode(token, \"secret\", algorithms=[\"HS256\"])\n        return {\"username\": payload[\"sub\"]}\n    except JWTError:\n        raise HTTPException(status_code=401, detail=\"Invalid token\")\n\n@app.get(\"/me\")\ndef me(user: Annotated[dict, Depends(get_current_user)]):\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "get_current_user dependency decodes JWT and returns user data",
+            "Annotated[type, Depends()] is the modern, reusable style"
+          ],
+          "gotchas": [
+            "Router-level dependencies run but do NOT inject their return value into endpoints"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement role-based access control (RBAC)?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "rbac",
+        "authorization",
+        "roles",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Role-Based Access Control (RBAC)** restricts endpoint access based on the user's role (e.g., admin, editor, viewer). In FastAPI, this is implemented by chaining dependencies.\n\n### Approach:\n1. Store the user's role in the JWT token (or fetch from DB)\n2. Create a dependency factory function that accepts allowed roles\n3. The factory returns a dependency that checks if the current user has the required role\n4. If not, raise a 403 Forbidden\n\n### Dependency factory pattern:\nA function that returns a function -- the outer function configures which roles are allowed, the inner function does the actual check at request time.\n\n### RBAC vs ABAC:\n- **RBAC**: Access based on roles (admin, user, editor)\n- **ABAC**: Access based on attributes (owns resource, department, time of day)\n- FastAPI supports both through flexible dependency injection",
+          "pseudo_code": "def require_role(*roles):\n    def checker(user = Depends(get_current_user)):\n        if user.role not in roles:\n            raise 403 Forbidden\n        return user\n    return checker\n\n@app.get(\"/admin\", dependencies=[Depends(require_role(\"admin\"))])\ndef admin_only(): ...",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import jwt\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\nclass User(BaseModel):\n    username: str\n    role: str\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    return User(username=payload[\"sub\"], role=payload.get(\"role\", \"viewer\"))\n\nCurrentUser = Annotated[User, Depends(get_current_user)]\n\n# --- Dependency factory for role checking ---\ndef require_role(*allowed_roles: str):\n    \"\"\"Returns a dependency that enforces role-based access.\"\"\"\n    def role_checker(current_user: CurrentUser) -> User:\n        if current_user.role not in allowed_roles:\n            raise HTTPException(\n                status_code=status.HTTP_403_FORBIDDEN,\n                detail=f\"Role '{current_user.role}' not authorized. \"\n                       f\"Required: {', '.join(allowed_roles)}\",\n            )\n        return current_user\n    return role_checker\n\n# Reusable role dependencies\nAdminUser = Annotated[User, Depends(require_role(\"admin\"))]\nEditorUser = Annotated[User, Depends(require_role(\"admin\", \"editor\"))]\n\n@app.get(\"/admin/settings\")\ndef admin_settings(user: AdminUser):\n    return {\"message\": f\"Welcome admin {user.username}\"}\n\n@app.get(\"/posts/create\")\ndef create_post(user: EditorUser):\n    return {\"message\": f\"{user.username} ({user.role}) can create posts\"}\n\n@app.get(\"/profile\")\ndef profile(user: CurrentUser):\n    return {\"message\": f\"Hello {user.username}\", \"role\": user.role}\n\n# --- Test ---\ndef make_token(username: str, role: str) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode({\"sub\": username, \"role\": role, \"exp\": exp}, SECRET, algorithm=\"HS256\")\n\nclient = TestClient(app)\n\nadmin_token = make_token(\"alice\", \"admin\")\neditor_token = make_token(\"bob\", \"editor\")\nviewer_token = make_token(\"charlie\", \"viewer\")\n\n# Admin can access admin settings\nresp = client.get(\"/admin/settings\", headers={\"Authorization\": f\"Bearer {admin_token}\"})\nprint(resp.json())\n\n# Editor cannot access admin settings\nresp = client.get(\"/admin/settings\", headers={\"Authorization\": f\"Bearer {editor_token}\"})\nprint(resp.status_code, resp.json()[\"detail\"])\n\n# Editor can create posts\nresp = client.get(\"/posts/create\", headers={\"Authorization\": f\"Bearer {editor_token}\"})\nprint(resp.json())\n\n# Expected Output:\n# {'message': 'Welcome admin alice'}\n# 403 Role 'editor' not authorized. Required: admin\n# {'message': 'bob (editor) can create posts'}",
+          "code_language": "python",
+          "key_points": [
+            "Use a dependency factory (function returning a function) to parameterize role checks",
+            "Chain dependencies: require_role depends on get_current_user automatically",
+            "Return 403 Forbidden for authenticated users lacking the required role (not 401)",
+            "Create reusable Annotated type aliases like AdminUser for clean endpoint signatures"
+          ],
+          "gotchas": [
+            "Use 403 (Forbidden) not 401 (Unauthorized) for role failures -- the user IS authenticated, just not authorized",
+            "Role stored in JWT cannot be revoked until the token expires -- consider short-lived tokens",
+            "Dependency factories must return the inner function, not call it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a dependency factory `require_role(*roles)` that returns a dependency checking if `current_user.role` is in the allowed roles. Raise 403 if not. Use `Annotated` aliases like `AdminUser = Annotated[User, Depends(require_role(\"admin\"))]` for clean reuse.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import Depends, HTTPException, status\n\ndef require_role(*allowed_roles):\n    def checker(user: CurrentUser):  # CurrentUser = Annotated[User, Depends(get_current_user)]\n        if user.role not in allowed_roles:\n            raise HTTPException(status_code=403, detail=\"Not authorized\")\n        return user\n    return checker\n\nAdminUser = Annotated[User, Depends(require_role(\"admin\"))]",
+          "code_language": "python",
+          "key_points": [
+            "Dependency factory returns a checker function parameterized with allowed roles"
+          ],
+          "gotchas": [
+            "Use 403 (Forbidden) for role failures, not 401 (Unauthorized)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement API key authentication?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "api-key",
+        "authentication",
+        "security",
+        "headers"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**API key authentication** is simpler than OAuth2/JWT and commonly used for service-to-service communication or public APIs with rate limiting.\n\n### FastAPI provides three API key security classes:\n1. **APIKeyHeader**: Key sent in a custom header (e.g., `X-API-Key`)\n2. **APIKeyQuery**: Key sent as a query parameter\n3. **APIKeyCookie**: Key sent in a cookie\n\n### How it works:\n1. Define the security scheme (where to look for the key)\n2. Create a dependency that extracts and validates the key\n3. Inject the dependency into protected routes\n\n### Best practices:\n- Use header-based keys (not query params) to avoid keys leaking in URL logs\n- Store valid API keys hashed in the database\n- Implement rate limiting per API key\n- Use `secrets.compare_digest()` for timing-safe comparison to prevent timing attacks",
+          "pseudo_code": "api_key_header = APIKeyHeader(name=\"X-API-Key\")\n\ndef validate_api_key(key = Depends(api_key_header)):\n    if key not in VALID_KEYS:\n        raise 403\n    return key\n\n@app.get(\"/data\", dependencies=[Depends(validate_api_key)])\ndef get_data(): ...",
+          "actual_code": "import secrets\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, Security, status\nfrom fastapi.security import APIKeyHeader, APIKeyQuery\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Valid API keys (in production, store hashed in a database)\nAPI_KEYS = {\n    \"sk-live-abc123\": {\"name\": \"Service A\", \"tier\": \"premium\"},\n    \"sk-live-def456\": {\"name\": \"Service B\", \"tier\": \"basic\"},\n}\n\n# Look for key in X-API-Key header\napi_key_header = APIKeyHeader(name=\"X-API-Key\", auto_error=False)\n# Fallback: look in query parameter\napi_key_query = APIKeyQuery(name=\"api_key\", auto_error=False)\n\ndef get_api_key(\n    header_key: Annotated[str | None, Security(api_key_header)],\n    query_key: Annotated[str | None, Security(api_key_query)],\n) -> str:\n    \"\"\"Accept API key from header or query param.\"\"\"\n    key = header_key or query_key\n    if not key:\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"API key required\",\n        )\n    # Timing-safe comparison against all valid keys\n    for valid_key in API_KEYS:\n        if secrets.compare_digest(key, valid_key):\n            return key\n    raise HTTPException(\n        status_code=status.HTTP_403_FORBIDDEN,\n        detail=\"Invalid API key\",\n    )\n\nApiKey = Annotated[str, Depends(get_api_key)]\n\n@app.get(\"/data\")\ndef get_data(api_key: ApiKey):\n    client_info = API_KEYS[api_key]\n    return {\"client\": client_info[\"name\"], \"tier\": client_info[\"tier\"]}\n\n# --- Test ---\nclient = TestClient(app)\n\n# No key\nprint(client.get(\"/data\").status_code)\n\n# Header key\nresp = client.get(\"/data\", headers={\"X-API-Key\": \"sk-live-abc123\"})\nprint(resp.json())\n\n# Query param key\nresp = client.get(\"/data?api_key=sk-live-def456\")\nprint(resp.json())\n\n# Invalid key\nprint(client.get(\"/data\", headers={\"X-API-Key\": \"bad-key\"}).status_code)\n\n# Expected Output:\n# 401\n# {'client': 'Service A', 'tier': 'premium'}\n# {'client': 'Service B', 'tier': 'basic'}\n# 403",
+          "code_language": "python",
+          "key_points": [
+            "APIKeyHeader, APIKeyQuery, APIKeyCookie extract keys from different locations",
+            "Use auto_error=False to check multiple sources with fallback logic",
+            "Use secrets.compare_digest() for timing-safe string comparison",
+            "Security() works like Depends() but adds the scheme to OpenAPI docs"
+          ],
+          "gotchas": [
+            "Query parameter API keys leak in server logs and browser history -- prefer headers",
+            "Without auto_error=False, a missing key raises 403 immediately, blocking fallback checks",
+            "Simple == comparison is vulnerable to timing attacks -- always use secrets.compare_digest()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `APIKeyHeader(name=\"X-API-Key\")` to extract a key from a custom header, then validate it in a dependency. Use `secrets.compare_digest()` for safe comparison. `Security()` works like `Depends()` but adds the scheme to OpenAPI docs.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException, Security\nfrom fastapi.security import APIKeyHeader\nimport secrets\n\napp = FastAPI()\napi_key_header = APIKeyHeader(name=\"X-API-Key\")\n\ndef validate_key(key: str = Security(api_key_header)):\n    if not secrets.compare_digest(key, \"sk-live-abc123\"):\n        raise HTTPException(status_code=403, detail=\"Invalid key\")\n    return key\n\n@app.get(\"/data\")\ndef data(key: str = Depends(validate_key)):\n    return {\"status\": \"authorized\"}",
+          "code_language": "python",
+          "key_points": [
+            "APIKeyHeader extracts from a named header, validates in a dependency"
+          ],
+          "gotchas": [
+            "Use secrets.compare_digest() not == to prevent timing attacks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does HTTPBearer work for Bearer token auth?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "HTTPBearer",
+        "bearer-token",
+        "authentication",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**HTTPBearer** is an alternative to `OAuth2PasswordBearer` that uses the standard HTTP Bearer authentication scheme. It returns an `HTTPAuthorizationCredentials` object instead of a raw string.\n\n### Key differences from OAuth2PasswordBearer:\n| Feature | OAuth2PasswordBearer | HTTPBearer |\n|---|---|---|\n| Returns | Raw token string | HTTPAuthorizationCredentials(scheme, credentials) |\n| OpenAPI | OAuth2 flow with tokenUrl | Generic HTTP Bearer scheme |\n| Swagger UI | Shows \"Authorize\" with username/password | Shows \"Authorize\" with token input only |\n| Use case | Full OAuth2 password flow | Simple Bearer token auth |\n\n### When to use HTTPBearer:\n- You do not have a login endpoint in the same API (external auth provider)\n- You want a simpler Swagger UI experience (just paste a token)\n- You are implementing non-OAuth2 Bearer authentication\n\n### HTTPAuthorizationCredentials:\n- `scheme`: The authentication scheme (always \"Bearer\")\n- `credentials`: The actual token string",
+          "pseudo_code": "security = HTTPBearer()\n\ndef get_user(creds: HTTPAuthorizationCredentials = Depends(security)):\n    token = creds.credentials  # The actual token\n    scheme = creds.scheme      # \"Bearer\"\n    return decode(token)\n\n@app.get(\"/me\")\ndef me(user = Depends(get_user)): ...",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# HTTPBearer security scheme\nsecurity = HTTPBearer()\n\n@app.get(\"/profile\")\ndef profile(\n    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)],\n):\n    \"\"\"credentials has .scheme and .credentials attributes.\"\"\"\n    return {\n        \"scheme\": credentials.scheme,\n        \"token\": credentials.credentials,\n        \"token_length\": len(credentials.credentials),\n    }\n\n# --- Optional: HTTPBearer with auto_error=False for custom handling ---\noptional_security = HTTPBearer(auto_error=False)\n\n@app.get(\"/public-or-private\")\ndef flexible(\n    credentials: Annotated[\n        HTTPAuthorizationCredentials | None,\n        Depends(optional_security),\n    ],\n):\n    if credentials:\n        return {\"authenticated\": True, \"token\": credentials.credentials}\n    return {\"authenticated\": False, \"message\": \"Public access\"}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Valid Bearer token\nresp = client.get(\"/profile\", headers={\"Authorization\": \"Bearer my-jwt-token\"})\nprint(resp.json())\n\n# No token -> 403\nresp = client.get(\"/profile\")\nprint(resp.status_code)\n\n# Optional endpoint with token\nresp = client.get(\"/public-or-private\", headers={\"Authorization\": \"Bearer abc\"})\nprint(resp.json())\n\n# Optional endpoint without token\nresp = client.get(\"/public-or-private\")\nprint(resp.json())\n\n# Expected Output:\n# {'scheme': 'Bearer', 'token': 'my-jwt-token', 'token_length': 12}\n# 403\n# {'authenticated': True, 'token': 'abc'}\n# {'authenticated': False, 'message': 'Public access'}",
+          "code_language": "python",
+          "key_points": [
+            "HTTPBearer returns HTTPAuthorizationCredentials with .scheme and .credentials",
+            "Use it when you do not have a login endpoint in the same API",
+            "auto_error=False makes authentication optional (returns None instead of 403)",
+            "Swagger UI shows a simple token input instead of username/password fields"
+          ],
+          "gotchas": [
+            "HTTPBearer returns 403 by default when no token is provided, not 401 like OAuth2PasswordBearer",
+            "You get an object (HTTPAuthorizationCredentials), not a raw string -- use .credentials to get the token",
+            "HTTPBearer does not support tokenUrl -- use OAuth2PasswordBearer if you need the full OAuth2 password flow"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`HTTPBearer()` is a simpler alternative to `OAuth2PasswordBearer`. It returns `HTTPAuthorizationCredentials` with `.scheme` (\"Bearer\") and `.credentials` (the token). Swagger UI shows a token-only input instead of username/password fields.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends\nfrom fastapi.security import HTTPBearer, HTTPAuthorizationCredentials\n\napp = FastAPI()\nsecurity = HTTPBearer()\n\n@app.get(\"/me\")\ndef me(creds: Annotated[HTTPAuthorizationCredentials, Depends(security)]):\n    token = creds.credentials  # The actual token\n    return {\"token\": token}",
+          "code_language": "python",
+          "key_points": [
+            "Returns HTTPAuthorizationCredentials object, not a raw string"
+          ],
+          "gotchas": [
+            "HTTPBearer raises 403 by default (not 401) when the token is missing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are OAuth2 security scopes and how do you use them?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "oauth2",
+        "scopes",
+        "authorization",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**OAuth2 scopes** provide fine-grained permission control beyond simple role checks. Instead of \"admin\" or \"user\" roles, scopes define specific permissions like `items:read`, `items:write`, `users:manage`.\n\n### How FastAPI implements scopes:\n1. Define available scopes when creating `OAuth2PasswordBearer`\n2. Include granted scopes in the JWT token\n3. Declare required scopes in `Security()` dependencies\n4. FastAPI checks scopes automatically and returns 403 if insufficient\n\n### Key components:\n- **SecurityScopes**: Injected into your dependency, contains the list of required scopes\n- **Security(dependency, scopes=[...])**: Declares which scopes a route needs\n- The scopes are hierarchical -- you can require multiple scopes on one endpoint\n\n### When to use scopes vs roles:\n- **Roles**: Simple access levels (admin, editor, viewer)\n- **Scopes**: Granular permissions, often used with third-party OAuth2 integrations (like GitHub, Google)",
+          "pseudo_code": "oauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\"items:read\": \"Read items\", \"items:write\": \"Write items\"}\n)\n\ndef get_current_user(security_scopes: SecurityScopes, token = Depends(oauth2_scheme)):\n    payload = decode(token)\n    token_scopes = payload.get(\"scopes\", [])\n    for scope in security_scopes.scopes:\n        if scope not in token_scopes:\n            raise 403\n    return user\n\n@app.get(\"/items\")\ndef read_items(user = Security(get_current_user, scopes=[\"items:read\"])): ...",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, Security, status\nfrom fastapi.security import OAuth2PasswordBearer, SecurityScopes\nfrom fastapi.testclient import TestClient\nfrom jose import jwt, JWTError\nfrom pydantic import BaseModel\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\nSECRET = \"test-secret\"\n\n# Define available scopes\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"token\",\n    scopes={\n        \"items:read\": \"Read items\",\n        \"items:write\": \"Create and update items\",\n        \"users:manage\": \"Manage user accounts\",\n    },\n)\n\nclass User(BaseModel):\n    username: str\n    scopes: list[str] = []\n\ndef get_current_user(\n    security_scopes: SecurityScopes,\n    token: Annotated[str, Depends(oauth2_scheme)],\n) -> User:\n    \"\"\"Validate token AND check required scopes.\"\"\"\n    # Build WWW-Authenticate header with required scopes\n    authenticate_value = (\n        f'Bearer scope=\"{security_scopes.scope_str}\"'\n        if security_scopes.scopes\n        else \"Bearer\"\n    )\n    credentials_exception = HTTPException(\n        status_code=status.HTTP_401_UNAUTHORIZED,\n        detail=\"Could not validate credentials\",\n        headers={\"WWW-Authenticate\": authenticate_value},\n    )\n    try:\n        payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n        username = payload.get(\"sub\")\n        token_scopes = payload.get(\"scopes\", [])\n        if username is None:\n            raise credentials_exception\n    except JWTError:\n        raise credentials_exception\n\n    user = User(username=username, scopes=token_scopes)\n\n    # Check each required scope\n    for scope in security_scopes.scopes:\n        if scope not in user.scopes:\n            raise HTTPException(\n                status_code=status.HTTP_403_FORBIDDEN,\n                detail=f\"Missing scope: {scope}\",\n                headers={\"WWW-Authenticate\": authenticate_value},\n            )\n    return user\n\n# Routes with scope requirements\n@app.get(\"/items\")\ndef read_items(\n    user: Annotated[User, Security(get_current_user, scopes=[\"items:read\"])],\n):\n    return {\"user\": user.username, \"action\": \"reading items\"}\n\n@app.post(\"/items\")\ndef create_item(\n    user: Annotated[User, Security(get_current_user, scopes=[\"items:write\"])],\n):\n    return {\"user\": user.username, \"action\": \"creating item\"}\n\n@app.get(\"/users\")\ndef manage_users(\n    user: Annotated[\n        User, Security(get_current_user, scopes=[\"users:manage\", \"items:read\"])\n    ],\n):\n    return {\"user\": user.username, \"action\": \"managing users\"}\n\n# --- Test ---\ndef make_token(username: str, scopes: list[str]) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode(\n        {\"sub\": username, \"scopes\": scopes, \"exp\": exp}, SECRET, algorithm=\"HS256\"\n    )\n\nclient = TestClient(app)\n\n# User with read-only scope\nread_token = make_token(\"alice\", [\"items:read\"])\nresp = client.get(\"/items\", headers={\"Authorization\": f\"Bearer {read_token}\"})\nprint(resp.json())\n\n# Cannot write\nresp = client.post(\"/items\", headers={\"Authorization\": f\"Bearer {read_token}\"})\nprint(resp.status_code, resp.json()[\"detail\"])\n\n# Admin with all scopes\nadmin_token = make_token(\"admin\", [\"items:read\", \"items:write\", \"users:manage\"])\nresp = client.get(\"/users\", headers={\"Authorization\": f\"Bearer {admin_token}\"})\nprint(resp.json())\n\n# Expected Output:\n# {'user': 'alice', 'action': 'reading items'}\n# 403 Missing scope: items:write\n# {'user': 'admin', 'action': 'managing users'}",
+          "code_language": "python",
+          "key_points": [
+            "Define scopes dict in OAuth2PasswordBearer to document available permissions",
+            "SecurityScopes is injected into the dependency and contains required scope list",
+            "Use Security(dep, scopes=['scope']) instead of Depends() to declare required scopes",
+            "Scopes are cumulative -- requiring ['a', 'b'] means the user needs BOTH"
+          ],
+          "gotchas": [
+            "SecurityScopes must be the first parameter of the dependency function",
+            "Scopes in JWT are just a list of strings -- there is no built-in hierarchy",
+            "The scopes dict in OAuth2PasswordBearer is for documentation only -- enforcement is your responsibility"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Define scopes in `OAuth2PasswordBearer(scopes={...})`, include granted scopes in the JWT, and use `Security(get_current_user, scopes=[\"items:read\"])` on endpoints. Your dependency receives `SecurityScopes` to check required vs granted permissions.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import Security\nfrom fastapi.security import OAuth2PasswordBearer, SecurityScopes\n\noauth2 = OAuth2PasswordBearer(tokenUrl=\"token\", scopes={\"read\": \"Read\", \"write\": \"Write\"})\n\ndef get_user(security_scopes: SecurityScopes, token: str = Depends(oauth2)):\n    user_scopes = decode_token(token)[\"scopes\"]\n    for scope in security_scopes.scopes:\n        if scope not in user_scopes:\n            raise HTTPException(status_code=403, detail=f\"Missing: {scope}\")\n    return user\n\n@app.get(\"/items\")\ndef read(user = Security(get_user, scopes=[\"read\"])): ...",
+          "code_language": "python",
+          "key_points": [
+            "Security() declares required scopes, SecurityScopes receives them in the dependency"
+          ],
+          "gotchas": [
+            "Scope enforcement is your responsibility -- FastAPI only provides the plumbing"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement token refresh functionality?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "jwt",
+        "refresh-token",
+        "authentication",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Token refresh** uses two tokens to balance security and usability:\n\n### Two-token pattern:\n1. **Access token**: Short-lived (15-30 minutes), used for API requests\n2. **Refresh token**: Long-lived (days/weeks), used only to get new access tokens\n\n### Why two tokens:\n- Access tokens are sent with every request (higher exposure risk)\n- Short-lived access tokens limit the window of compromise\n- Refresh tokens are sent rarely (only to the refresh endpoint)\n- If an access token is stolen, it expires quickly\n- Refresh tokens can be revoked server-side (stored in DB)\n\n### Flow:\n1. User logs in -> receives both access and refresh tokens\n2. Client uses access token for API calls\n3. When access token expires, client sends refresh token to `/refresh`\n4. Server validates refresh token and issues new access token\n5. Optionally issue a new refresh token too (token rotation)\n\n### Refresh token rotation:\nIssuing a new refresh token on each refresh and invalidating the old one prevents replay attacks. If a stolen refresh token is used, the real user's next refresh fails, alerting them.",
+          "pseudo_code": "# Login: issue both tokens\naccess_token = create_token(user, expires=30min, type=\"access\")\nrefresh_token = create_token(user, expires=7days, type=\"refresh\")\nstore_refresh_token_in_db(refresh_token)\nreturn {access_token, refresh_token}\n\n# Refresh: validate and rotate\ndef refresh(token):\n    payload = decode(token)\n    assert payload[\"type\"] == \"refresh\"\n    assert token exists in DB\n    revoke_old_refresh_token(token)\n    return new access_token + new refresh_token",
+          "actual_code": "from datetime import datetime, timedelta, timezone\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import jwt, JWTError\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\nALGORITHM = \"HS256\"\nACCESS_EXPIRE = timedelta(minutes=30)\nREFRESH_EXPIRE = timedelta(days=7)\n\n# In production, store valid refresh tokens in a database\nrefresh_token_store: set[str] = set()\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\nclass TokenPair(BaseModel):\n    access_token: str\n    refresh_token: str\n    token_type: str = \"bearer\"\n\ndef create_token(data: dict, expires_delta: timedelta, token_type: str) -> str:\n    payload = data.copy()\n    payload.update({\n        \"exp\": datetime.now(timezone.utc) + expires_delta,\n        \"type\": token_type,\n    })\n    return jwt.encode(payload, SECRET, algorithm=ALGORITHM)\n\ndef create_token_pair(username: str) -> TokenPair:\n    access = create_token({\"sub\": username}, ACCESS_EXPIRE, \"access\")\n    refresh = create_token({\"sub\": username}, REFRESH_EXPIRE, \"refresh\")\n    refresh_token_store.add(refresh)  # Store valid refresh token\n    return TokenPair(access_token=access, refresh_token=refresh)\n\n@app.post(\"/token\")\ndef login():\n    \"\"\"Simplified login -- returns both tokens.\"\"\"\n    return create_token_pair(\"alice\")\n\n@app.post(\"/refresh\")\ndef refresh_token(token: Annotated[str, Depends(oauth2_scheme)]):\n    \"\"\"Exchange a refresh token for a new token pair.\"\"\"\n    try:\n        payload = jwt.decode(token, SECRET, algorithms=[ALGORITHM])\n    except JWTError:\n        raise HTTPException(status_code=401, detail=\"Invalid refresh token\")\n\n    # Verify it is a refresh token\n    if payload.get(\"type\") != \"refresh\":\n        raise HTTPException(status_code=401, detail=\"Not a refresh token\")\n\n    # Verify it has not been revoked\n    if token not in refresh_token_store:\n        raise HTTPException(status_code=401, detail=\"Refresh token revoked\")\n\n    # Rotate: revoke old, issue new pair\n    refresh_token_store.discard(token)\n    username = payload[\"sub\"]\n    return create_token_pair(username)\n\n@app.post(\"/logout\")\ndef logout(token: Annotated[str, Depends(oauth2_scheme)]):\n    \"\"\"Revoke the refresh token.\"\"\"\n    refresh_token_store.discard(token)\n    return {\"message\": \"Logged out\"}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Login\nresp = client.post(\"/token\")\ntokens = resp.json()\nprint(f\"Got access + refresh tokens: {bool(tokens['access_token'])}\")\n\n# Refresh\nresp = client.post(\"/refresh\", headers={\"Authorization\": f\"Bearer {tokens['refresh_token']}\"})\nnew_tokens = resp.json()\nprint(f\"Refreshed: {bool(new_tokens['access_token'])}\")\n\n# Old refresh token is now invalid (rotation)\nresp = client.post(\"/refresh\", headers={\"Authorization\": f\"Bearer {tokens['refresh_token']}\"})\nprint(f\"Old token rejected: {resp.status_code}\")\n\n# Expected Output:\n# Got access + refresh tokens: True\n# Refreshed: True\n# Old token rejected: 401",
+          "code_language": "python",
+          "key_points": [
+            "Access tokens are short-lived (minutes), refresh tokens are long-lived (days)",
+            "The 'type' claim distinguishes access tokens from refresh tokens",
+            "Refresh token rotation: issue a new pair and revoke the old refresh token",
+            "Store valid refresh tokens server-side so they can be revoked"
+          ],
+          "gotchas": [
+            "Without server-side storage, refresh tokens cannot be revoked before expiration",
+            "Always check the 'type' claim -- do not accept a refresh token as an access token",
+            "Token rotation requires atomic revoke-and-issue to prevent race conditions",
+            "Refresh endpoint should be rate-limited to prevent abuse"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Issue short-lived access tokens and long-lived refresh tokens. The refresh endpoint validates the refresh token, revokes it, and returns a new token pair. Store valid refresh tokens server-side for revocation.",
+          "pseudo_code": "",
+          "actual_code": "from datetime import datetime, timedelta\ndef create_token_pair(username: str):\n    access = jwt.encode(\n        {\"sub\": username, \"type\": \"access\", \"exp\": now + timedelta(minutes=30)},\n        SECRET, algorithm=\"HS256\"\n    )\n    refresh = jwt.encode(\n        {\"sub\": username, \"type\": \"refresh\", \"exp\": now + timedelta(days=7)},\n        SECRET, algorithm=\"HS256\"\n    )\n    return {\"access_token\": access, \"refresh_token\": refresh}\n\n@app.post(\"/refresh\")\ndef refresh(token: str = Depends(oauth2_scheme)):\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    if payload[\"type\"] != \"refresh\":\n        raise HTTPException(status_code=401)\n    return create_token_pair(payload[\"sub\"])",
+          "code_language": "python",
+          "key_points": [
+            "Two tokens: short-lived access, long-lived refresh",
+            "Always verify the 'type' claim to prevent token misuse"
+          ],
+          "gotchas": [
+            "Without server-side storage, refresh tokens cannot be revoked early"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement the complete login flow with OAuth2PasswordRequestForm?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "oauth2",
+        "login",
+        "OAuth2PasswordRequestForm",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**OAuth2PasswordRequestForm** is a FastAPI dependency class that parses the standard OAuth2 password grant form data. The token endpoint receives `username` and `password` as form fields (not JSON).\n\n### Why form data instead of JSON:\n- The OAuth2 spec requires `application/x-www-form-urlencoded` content type\n- This is what Swagger UI's \"Authorize\" dialog sends\n- Libraries and tools expect this format for the token endpoint\n\n### Complete flow:\n1. Client sends `POST /token` with form data: `username` + `password`\n2. Server looks up user in the database\n3. Server verifies password hash\n4. Server creates and returns JWT token\n5. Client sends token in `Authorization: Bearer <token>` header on subsequent requests\n\n### OAuth2PasswordRequestForm fields:\n- `username`: Required\n- `password`: Required\n- `scope`: Optional space-separated scopes string\n- `grant_type`: Optional, should be \"password\"\n- `client_id`: Optional\n- `client_secret`: Optional",
+          "pseudo_code": "@app.post(\"/token\")\ndef login(form_data: OAuth2PasswordRequestForm = Depends()):\n    user = authenticate(form_data.username, form_data.password)\n    if not user:\n        raise 401\n    token = create_jwt(user)\n    return {\"access_token\": token, \"token_type\": \"bearer\"}",
+          "actual_code": "from typing import Annotated\nfrom datetime import datetime, timedelta, timezone\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm\nfrom fastapi.testclient import TestClient\nfrom passlib.context import CryptContext\nfrom pydantic import BaseModel\nfrom jose import jwt\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\npwd_context = CryptContext(schemes=[\"bcrypt\"], deprecated=\"auto\")\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# Simulated user database\nfake_users_db = {\n    \"alice\": {\n        \"username\": \"alice\",\n        \"hashed_password\": pwd_context.hash(\"secret123\"),\n        \"disabled\": False,\n    },\n}\n\nclass Token(BaseModel):\n    access_token: str\n    token_type: str\n\ndef authenticate_user(username: str, password: str) -> dict | None:\n    \"\"\"Look up user and verify password.\"\"\"\n    user = fake_users_db.get(username)\n    if not user:\n        return None\n    if not pwd_context.verify(password, user[\"hashed_password\"]):\n        return None\n    return user\n\n@app.post(\"/token\", response_model=Token)\ndef login(\n    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],\n):\n    \"\"\"OAuth2 token endpoint -- receives form data, not JSON.\"\"\"\n    user = authenticate_user(form_data.username, form_data.password)\n    if not user:\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Incorrect username or password\",\n            headers={\"WWW-Authenticate\": \"Bearer\"},\n        )\n    if user.get(\"disabled\"):\n        raise HTTPException(status_code=400, detail=\"Inactive user\")\n\n    access_token = jwt.encode(\n        {\n            \"sub\": user[\"username\"],\n            \"exp\": datetime.now(timezone.utc) + timedelta(minutes=30),\n        },\n        SECRET,\n        algorithm=\"HS256\",\n    )\n    return Token(access_token=access_token, token_type=\"bearer\")\n\n@app.get(\"/me\")\ndef read_me(token: Annotated[str, Depends(oauth2_scheme)]):\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    return {\"username\": payload[\"sub\"]}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Login with form data (not JSON!)\nresp = client.post(\"/token\", data={\"username\": \"alice\", \"password\": \"secret123\"})\nprint(f\"Login status: {resp.status_code}\")\ntoken = resp.json()[\"access_token\"]\n\n# Use the token\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.json())\n\n# Wrong password\nresp = client.post(\"/token\", data={\"username\": \"alice\", \"password\": \"wrong\"})\nprint(f\"Bad login: {resp.status_code}\")\n\n# Expected Output:\n# Login status: 200\n# {'username': 'alice'}\n# Bad login: 401",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordRequestForm receives form data (not JSON) per OAuth2 spec",
+            "The login endpoint must return {'access_token': ..., 'token_type': 'bearer'}",
+            "Use Annotated[OAuth2PasswordRequestForm, Depends()] for modern style",
+            "Always verify both that the user exists AND the password matches"
+          ],
+          "gotchas": [
+            "Send form data (data={...}) in tests, not JSON (json={...}) -- this is the most common mistake",
+            "Do not reveal whether the username or password was wrong -- use a generic error message",
+            "OAuth2PasswordRequestForm is a Depends class, not a Pydantic model -- use Depends() not Body()",
+            "The response MUST include 'token_type' field alongside 'access_token'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`OAuth2PasswordRequestForm` parses `username` and `password` from form data (not JSON). The token endpoint verifies credentials and returns `{\"access_token\": ..., \"token_type\": \"bearer\"}`. Use `data=` not `json=` in test clients.",
+          "pseudo_code": "",
+          "actual_code": "@app.post(\"/token\")\ndef login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):\n    user = authenticate(form_data.username, form_data.password)\n    if not user:\n        raise HTTPException(status_code=401, detail=\"Bad credentials\")\n    token = jwt.encode({\"sub\": user[\"username\"], \"exp\": ...}, SECRET)\n    return {\"access_token\": token, \"token_type\": \"bearer\"}\n\n# Test: use data=, not json=\nclient.post(\"/token\", data={\"username\": \"alice\", \"password\": \"secret\"})",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordRequestForm parses form fields, not JSON body",
+            "Response must include both access_token and token_type"
+          ],
+          "gotchas": [
+            "Use data={} not json={} when testing -- it is form data, not JSON"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you get the current user from a JWT token?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "jwt",
+        "current-user",
+        "dependency",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **get_current_user** pattern is the central authentication dependency in FastAPI applications. It combines token extraction, JWT decoding, and user lookup into a single reusable dependency.\n\n### Typical dependency chain:\n1. `OAuth2PasswordBearer` extracts raw token from Authorization header\n2. `get_current_user` decodes JWT, looks up user in DB, returns User model\n3. `get_current_active_user` (optional) checks if the user is not disabled/banned\n\n### Best practices:\n- Return a Pydantic model or ORM model, not a raw dict\n- Create a reusable `CurrentUser` type alias with `Annotated`\n- Separate \"user exists\" from \"user is active\" for clear error messages\n- Use `sub` (subject) claim for the user identifier per JWT standard\n\n### Database lookup:\nIn production, you typically decode the JWT to get the user ID, then fetch the full user from the database. This ensures you get the latest user data (role changes, bans) even during a token's lifetime.",
+          "pseudo_code": "# Dependency chain:\n# token (str) -> get_current_user -> get_current_active_user\n\ndef get_current_user(token):\n    payload = decode_jwt(token)\n    user = db.get_user(payload[\"sub\"])\n    if not user:\n        raise 401\n    return user\n\ndef get_current_active_user(user = Depends(get_current_user)):\n    if user.disabled:\n        raise 400 \"Inactive user\"\n    return user",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import jwt, JWTError\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# Simulated database\nclass UserInDB(BaseModel):\n    username: str\n    email: str\n    role: str = \"user\"\n    disabled: bool = False\n\nfake_db = {\n    \"alice\": UserInDB(username=\"alice\", email=\"alice@example.com\", role=\"admin\"),\n    \"bob\": UserInDB(username=\"bob\", email=\"bob@example.com\", disabled=True),\n}\n\ndef get_current_user(\n    token: Annotated[str, Depends(oauth2_scheme)],\n) -> UserInDB:\n    \"\"\"Decode JWT and fetch user from database.\"\"\"\n    credentials_exception = HTTPException(\n        status_code=status.HTTP_401_UNAUTHORIZED,\n        detail=\"Could not validate credentials\",\n        headers={\"WWW-Authenticate\": \"Bearer\"},\n    )\n    try:\n        payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n        username: str | None = payload.get(\"sub\")\n        if username is None:\n            raise credentials_exception\n    except JWTError:\n        raise credentials_exception\n\n    # Look up user in database\n    user = fake_db.get(username)\n    if user is None:\n        raise credentials_exception\n    return user\n\ndef get_current_active_user(\n    current_user: Annotated[UserInDB, Depends(get_current_user)],\n) -> UserInDB:\n    \"\"\"Ensure the user account is not disabled.\"\"\"\n    if current_user.disabled:\n        raise HTTPException(status_code=400, detail=\"Inactive user\")\n    return current_user\n\n# Reusable type aliases\nCurrentUser = Annotated[UserInDB, Depends(get_current_user)]\nActiveUser = Annotated[UserInDB, Depends(get_current_active_user)]\n\n@app.get(\"/me\")\ndef read_me(user: ActiveUser):\n    return {\"username\": user.username, \"email\": user.email, \"role\": user.role}\n\n# --- Test ---\ndef make_token(username: str) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode({\"sub\": username, \"exp\": exp}, SECRET, algorithm=\"HS256\")\n\nclient = TestClient(app)\n\n# Active user\ntoken = make_token(\"alice\")\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.json())\n\n# Disabled user\ntoken = make_token(\"bob\")\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.status_code, resp.json()[\"detail\"])\n\n# Non-existent user\ntoken = make_token(\"nobody\")\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.status_code)\n\n# Expected Output:\n# {'username': 'alice', 'email': 'alice@example.com', 'role': 'admin'}\n# 400 Inactive user\n# 401",
+          "code_language": "python",
+          "key_points": [
+            "Chain dependencies: token extraction -> user lookup -> active check",
+            "Always look up the user in the database to get fresh data (role, disabled status)",
+            "Create Annotated aliases (CurrentUser, ActiveUser) for clean endpoint signatures",
+            "Separate get_current_user from get_current_active_user for clear error messages"
+          ],
+          "gotchas": [
+            "A deleted user with a valid (non-expired) token can still pass JWT decoding -- always check the DB",
+            "Do not expose whether the user does not exist vs bad token -- use a generic 401 message",
+            "The get_current_active_user check runs on every request -- consider caching for high-traffic apps"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create `get_current_user` that decodes the JWT, looks up the user in the DB, and returns a User model. Chain `get_current_active_user` to check if the account is disabled. Use `Annotated` aliases for clean reuse.",
+          "pseudo_code": "",
+          "actual_code": "CurrentUser = Annotated[User, Depends(get_current_user)]\nActiveUser = Annotated[User, Depends(get_current_active_user)]\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    user = db.get(payload[\"sub\"])\n    if not user:\n        raise HTTPException(status_code=401)\n    return user\n\ndef get_current_active_user(user: CurrentUser) -> User:\n    if user.disabled:\n        raise HTTPException(status_code=400, detail=\"Inactive\")\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "Chain: token -> get_current_user -> get_current_active_user"
+          ],
+          "gotchas": [
+            "Always check the database -- a deleted user may still have a valid JWT"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle token expiration?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "jwt",
+        "token-expiration",
+        "security",
+        "error-handling"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Token expiration** is handled through the `exp` (expiration) claim in JWT tokens. The JWT library automatically rejects expired tokens during decoding.\n\n### How it works:\n1. When creating the token, set `exp` to `current_time + timedelta`\n2. When decoding, the library checks if `exp` is in the past\n3. If expired, it raises `ExpiredSignatureError` (a subclass of `JWTError`)\n\n### Best practices:\n- **Access tokens**: 15-30 minutes\n- **Refresh tokens**: 7-30 days\n- Use `timezone.utc` for all datetime operations to avoid timezone bugs\n- Return a clear error message so the client knows to refresh\n- Include `iat` (issued at) claim for audit/debugging\n\n### Client-side handling:\nThe client should catch 401 responses, check if the error indicates expiration, and automatically use the refresh token to get a new access token. If the refresh also fails, redirect to login.",
+          "pseudo_code": "# Creation with expiry:\npayload = {\"sub\": user, \"exp\": now_utc + timedelta(minutes=30), \"iat\": now_utc}\ntoken = jwt.encode(payload, secret)\n\n# Decoding catches expiration:\ntry:\n    payload = jwt.decode(token, secret, algorithms=[\"HS256\"])\nexcept ExpiredSignatureError:\n    raise 401 \"Token expired, please refresh\"\nexcept JWTError:\n    raise 401 \"Invalid token\"",
+          "actual_code": "from datetime import datetime, timedelta, timezone\nfrom jose import jwt, JWTError, ExpiredSignatureError\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom typing import Annotated\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\ndef create_access_token(username: str, expires_delta: timedelta) -> str:\n    now = datetime.now(timezone.utc)\n    payload = {\n        \"sub\": username,\n        \"exp\": now + expires_delta,\n        \"iat\": now,  # Issued at -- useful for debugging\n    }\n    return jwt.encode(payload, SECRET, algorithm=\"HS256\")\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:\n    try:\n        payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n        return {\"username\": payload[\"sub\"]}\n    except ExpiredSignatureError:\n        # Specific error for expired tokens\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Token has expired\",\n            headers={\"WWW-Authenticate\": \"Bearer error=\\\"invalid_token\\\"\"},\n        )\n    except JWTError:\n        # Generic error for all other JWT issues\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Could not validate credentials\",\n            headers={\"WWW-Authenticate\": \"Bearer\"},\n        )\n\n@app.get(\"/me\")\ndef me(user: Annotated[dict, Depends(get_current_user)]):\n    return user\n\n# --- Test ---\nclient = TestClient(app)\n\n# Valid token (1 hour)\ntoken = create_access_token(\"alice\", timedelta(hours=1))\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {token}\"})\nprint(resp.json())\n\n# Expired token (negative delta = already expired)\nexpired = create_access_token(\"alice\", timedelta(seconds=-1))\nresp = client.get(\"/me\", headers={\"Authorization\": f\"Bearer {expired}\"})\nprint(resp.status_code, resp.json()[\"detail\"])\n\n# Tampered token\nresp = client.get(\"/me\", headers={\"Authorization\": \"Bearer invalid.token.here\"})\nprint(resp.status_code, resp.json()[\"detail\"])\n\n# Expected Output:\n# {'username': 'alice'}\n# 401 Token has expired\n# 401 Could not validate credentials",
+          "code_language": "python",
+          "key_points": [
+            "The 'exp' claim is checked automatically by jwt.decode()",
+            "Catch ExpiredSignatureError separately to give specific expiry feedback",
+            "Include 'iat' (issued at) claim for debugging token lifetime issues",
+            "Use timezone-aware UTC datetimes to avoid timezone-related bugs"
+          ],
+          "gotchas": [
+            "ExpiredSignatureError is a subclass of JWTError -- catch it BEFORE the generic JWTError",
+            "Naive datetimes (without timezone) can cause tokens to expire at wrong times across timezones",
+            "There is no way to invalidate a JWT before its exp without server-side blacklisting",
+            "Clock skew between servers can cause unexpected expiration -- consider a small leeway"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set `exp` claim when creating tokens. `jwt.decode()` automatically rejects expired tokens with `ExpiredSignatureError`. Catch it separately from `JWTError` to give a specific \"token expired\" message so the client knows to refresh.",
+          "pseudo_code": "",
+          "actual_code": "from jose import jwt, ExpiredSignatureError, JWTError\n\ntry:\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\nexcept ExpiredSignatureError:\n    raise HTTPException(status_code=401, detail=\"Token expired\")\nexcept JWTError:\n    raise HTTPException(status_code=401, detail=\"Invalid token\")",
+          "code_language": "python",
+          "key_points": [
+            "exp claim is checked automatically by jwt.decode()",
+            "Catch ExpiredSignatureError before JWTError for specific error messages"
+          ],
+          "gotchas": [
+            "ExpiredSignatureError must be caught BEFORE JWTError since it is a subclass"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between OAuth2PasswordBearer and HTTPBearer?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "oauth2",
+        "HTTPBearer",
+        "comparison",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Both extract Bearer tokens from the `Authorization` header, but they differ in their OpenAPI representation and return types.\n\n### OAuth2PasswordBearer:\n- **OpenAPI type**: `oauth2` with password flow\n- **Swagger UI**: Shows \"Authorize\" with username/password fields + sends to `tokenUrl`\n- **Returns**: Raw token string (`str`)\n- **Default error**: 401 Unauthorized\n- **Use when**: Your API has its own login endpoint and you want the full OAuth2 password flow in docs\n\n### HTTPBearer:\n- **OpenAPI type**: `http` with bearer scheme\n- **Swagger UI**: Shows \"Authorize\" with a single token input field\n- **Returns**: `HTTPAuthorizationCredentials` object with `.scheme` and `.credentials`\n- **Default error**: 403 Forbidden\n- **Use when**: Token is obtained externally (third-party auth, API gateway) or you want a simpler auth dialog\n\n### Decision guide:\n| Scenario | Use |\n|---|---|\n| Full login flow in same API | OAuth2PasswordBearer |\n| External auth provider (Auth0, Firebase) | HTTPBearer |\n| Service-to-service with pre-shared tokens | HTTPBearer |\n| Need Swagger username/password dialog | OAuth2PasswordBearer |\n| Microservice behind API gateway | HTTPBearer |",
+          "pseudo_code": "# OAuth2PasswordBearer:\noauth2 = OAuth2PasswordBearer(tokenUrl=\"token\")\ndef dep(token: str = Depends(oauth2)):  # returns str\n    ...\n\n# HTTPBearer:\nbearer = HTTPBearer()\ndef dep(creds: HTTPAuthorizationCredentials = Depends(bearer)):  # returns object\n    token = creds.credentials  # extract str",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials\nfrom fastapi.testclient import TestClient\nfrom typing import Annotated\n\napp = FastAPI()\n\n# OAuth2PasswordBearer -- returns raw string\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# HTTPBearer -- returns HTTPAuthorizationCredentials\nhttp_bearer = HTTPBearer()\n\n@app.get(\"/oauth2-style\")\ndef oauth2_endpoint(token: Annotated[str, Depends(oauth2_scheme)]):\n    return {\"type\": \"OAuth2PasswordBearer\", \"value\": token, \"is_str\": isinstance(token, str)}\n\n@app.get(\"/bearer-style\")\ndef bearer_endpoint(\n    creds: Annotated[HTTPAuthorizationCredentials, Depends(http_bearer)],\n):\n    return {\n        \"type\": \"HTTPBearer\",\n        \"scheme\": creds.scheme,\n        \"credentials\": creds.credentials,\n        \"is_str\": isinstance(creds, str),\n    }\n\n# --- Test ---\nclient = TestClient(app)\nheaders = {\"Authorization\": \"Bearer my-token-123\"}\n\nresp = client.get(\"/oauth2-style\", headers=headers)\nprint(resp.json())\n\nresp = client.get(\"/bearer-style\", headers=headers)\nprint(resp.json())\n\n# Missing token behavior\nprint(\"OAuth2 missing:\", client.get(\"/oauth2-style\").status_code)  # 401\nprint(\"HTTPBearer missing:\", client.get(\"/bearer-style\").status_code)  # 403\n\n# Expected Output:\n# {'type': 'OAuth2PasswordBearer', 'value': 'my-token-123', 'is_str': True}\n# {'type': 'HTTPBearer', 'scheme': 'Bearer', 'credentials': 'my-token-123', 'is_str': False}\n# OAuth2 missing: 401\n# HTTPBearer missing: 403",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordBearer returns a raw string; HTTPBearer returns HTTPAuthorizationCredentials",
+            "OAuth2PasswordBearer shows username/password in Swagger; HTTPBearer shows a token field",
+            "OAuth2PasswordBearer defaults to 401; HTTPBearer defaults to 403 for missing tokens",
+            "Use OAuth2PasswordBearer when your API has its own login flow, HTTPBearer for external auth"
+          ],
+          "gotchas": [
+            "Mixing them up changes your Swagger UI experience significantly",
+            "HTTPBearer returning 403 instead of 401 can confuse clients expecting standard OAuth2 behavior",
+            "Both read from the same Authorization header -- they differ only in OpenAPI representation and return type"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`OAuth2PasswordBearer` returns a raw token string, shows username/password in Swagger UI, and defaults to 401. `HTTPBearer` returns `HTTPAuthorizationCredentials` (with `.credentials`), shows a token-only input, and defaults to 403. Use OAuth2PasswordBearer for login flows, HTTPBearer for external auth.",
+          "pseudo_code": "",
+          "actual_code": "# OAuth2PasswordBearer: returns str, 401 on missing, username/password in Swagger\noauth2 = OAuth2PasswordBearer(tokenUrl=\"token\")\ndef dep(token: str = Depends(oauth2)): ...  # token is a string\n\n# HTTPBearer: returns object, 403 on missing, token-only in Swagger\nbearer = HTTPBearer()\ndef dep(creds = Depends(bearer)): token = creds.credentials  # extract string",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordBearer -> str + 401 + Swagger login flow",
+            "HTTPBearer -> HTTPAuthorizationCredentials + 403 + token-only input"
+          ],
+          "gotchas": [
+            "HTTPBearer returns 403, not 401 -- this can break client-side refresh logic"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement multi-factor authentication concepts?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "mfa",
+        "totp",
+        "two-factor",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Multi-Factor Authentication (MFA)** adds a second verification step beyond username/password. The most common approach is **TOTP (Time-based One-Time Password)** using apps like Google Authenticator or Authy.\n\n### TOTP flow:\n1. **Setup**: Generate a secret key, show QR code to user, user scans with authenticator app\n2. **Login step 1**: User provides username + password, gets a partial/temporary token\n3. **Login step 2**: User provides TOTP code from their authenticator app\n4. **Validation**: Server generates the expected code from the stored secret and compares\n\n### Implementation approach:\n- Use `pyotp` library for TOTP generation and verification\n- Store the TOTP secret per user in the database (encrypted)\n- Issue a limited-scope \"mfa-pending\" token after password verification\n- Issue a full access token only after TOTP verification\n\n### Two-step login with JWT:\n1. Password verified -> issue token with `{\"mfa_verified\": false}`\n2. TOTP verified -> issue token with `{\"mfa_verified\": true}`\n3. Protected routes check for `mfa_verified: true`",
+          "pseudo_code": "# Setup MFA:\nsecret = pyotp.random_base32()\ntotp = pyotp.TOTP(secret)\nqr_url = totp.provisioning_uri(email, issuer_name=\"MyApp\")\nstore_secret(user, secret)\n\n# Login step 1 (password):\nif verify_password(password, user.hash):\n    return partial_token(user, mfa_verified=False)\n\n# Login step 2 (TOTP):\nif totp.verify(user_code):\n    return full_token(user, mfa_verified=True)\n\n# Protected route:\nif not token.mfa_verified:\n    raise 403 \"MFA required\"",
+          "actual_code": "import pyotp\nfrom datetime import datetime, timedelta, timezone\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import jwt\n\napp = FastAPI()\n\nSECRET = \"jwt-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# Simulated user DB with MFA secret\nusers_db = {\n    \"alice\": {\n        \"username\": \"alice\",\n        \"password\": \"secret123\",\n        \"mfa_secret\": pyotp.random_base32(),  # Store encrypted in real DB\n        \"mfa_enabled\": True,\n    },\n}\n\nclass MFASetupResponse(BaseModel):\n    secret: str\n    qr_uri: str\n\ndef create_token(username: str, mfa_verified: bool) -> str:\n    return jwt.encode(\n        {\n            \"sub\": username,\n            \"mfa_verified\": mfa_verified,\n            \"exp\": datetime.now(timezone.utc) + timedelta(hours=1),\n        },\n        SECRET,\n        algorithm=\"HS256\",\n    )\n\n@app.post(\"/mfa/setup\")\ndef setup_mfa(username: str):\n    \"\"\"Generate MFA secret and QR code URI.\"\"\"\n    secret = pyotp.random_base32()\n    totp = pyotp.TOTP(secret)\n    qr_uri = totp.provisioning_uri(name=username, issuer_name=\"MyApp\")\n    # In production: store secret in DB\n    return MFASetupResponse(secret=secret, qr_uri=qr_uri)\n\n@app.post(\"/login\")\ndef login(username: str, password: str):\n    \"\"\"Step 1: Password verification.\"\"\"\n    user = users_db.get(username)\n    if not user or user[\"password\"] != password:\n        raise HTTPException(status_code=401, detail=\"Invalid credentials\")\n\n    if user[\"mfa_enabled\"]:\n        # Issue partial token -- MFA still required\n        token = create_token(username, mfa_verified=False)\n        return {\"access_token\": token, \"mfa_required\": True}\n\n    # No MFA -- issue full token\n    token = create_token(username, mfa_verified=True)\n    return {\"access_token\": token, \"mfa_required\": False}\n\n@app.post(\"/mfa/verify\")\ndef verify_mfa(\n    code: str,\n    token: Annotated[str, Depends(oauth2_scheme)],\n):\n    \"\"\"Step 2: TOTP verification.\"\"\"\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    username = payload[\"sub\"]\n    user = users_db[username]\n\n    totp = pyotp.TOTP(user[\"mfa_secret\"])\n    if not totp.verify(code, valid_window=1):  # Allow 30s window\n        raise HTTPException(status_code=401, detail=\"Invalid MFA code\")\n\n    # Issue full access token\n    full_token = create_token(username, mfa_verified=True)\n    return {\"access_token\": full_token, \"mfa_verified\": True}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Step 1: Login\nresp = client.post(\"/login?username=alice&password=secret123\")\nprint(f\"MFA required: {resp.json()['mfa_required']}\")\npartial_token = resp.json()[\"access_token\"]\n\n# Step 2: Verify TOTP\nuser = users_db[\"alice\"]\ntotp = pyotp.TOTP(user[\"mfa_secret\"])\ncurrent_code = totp.now()\nresp = client.post(\n    f\"/mfa/verify?code={current_code}\",\n    headers={\"Authorization\": f\"Bearer {partial_token}\"},\n)\nprint(f\"MFA verified: {resp.json()['mfa_verified']}\")\n\n# Expected Output:\n# MFA required: True\n# MFA verified: True",
+          "code_language": "python",
+          "key_points": [
+            "Use pyotp for TOTP generation and verification",
+            "Issue a partial token (mfa_verified=false) after password, full token after TOTP",
+            "Store the TOTP secret encrypted in the database per user",
+            "valid_window parameter allows a time window to account for clock drift"
+          ],
+          "gotchas": [
+            "TOTP codes change every 30 seconds -- use valid_window to allow slight drift",
+            "The MFA secret must be stored securely (encrypted) -- if leaked, MFA is bypassed",
+            "The partial token should have limited scope or short expiry to prevent misuse",
+            "Always verify the partial token belongs to the same user requesting MFA verification"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `pyotp` for TOTP-based MFA. After password login, issue a partial token (`mfa_verified: false`). After the user submits the TOTP code from their authenticator app, verify with `totp.verify(code)` and issue a full token (`mfa_verified: true`).",
+          "pseudo_code": "",
+          "actual_code": "import pyotp\n\n# Setup: generate secret and QR URI\nsecret = pyotp.random_base32()\ntotp = pyotp.TOTP(secret)\nuri = totp.provisioning_uri(name=\"user@example.com\", issuer_name=\"MyApp\")\n\n# Verify: check the code from the authenticator app\nis_valid = totp.verify(\"123456\", valid_window=1)  # 30s tolerance",
+          "code_language": "python",
+          "key_points": [
+            "pyotp handles TOTP generation and verification",
+            "Issue partial token after password, full token after TOTP"
+          ],
+          "gotchas": [
+            "TOTP codes expire every 30 seconds -- always use valid_window for tolerance"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle CORS with authentication?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "cors",
+        "authentication",
+        "credentials",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**CORS (Cross-Origin Resource Sharing)** with authentication requires special configuration because browsers enforce strict rules when requests include credentials (cookies, Authorization headers).\n\n### Key rules when using credentials:\n1. `allow_origins` **cannot** be `[\"*\"]` -- you must list specific origins\n2. `allow_credentials` must be `True`\n3. The `Access-Control-Allow-Origin` response header must echo the exact requesting origin, not `*`\n4. Preflight (OPTIONS) requests must also return the correct CORS headers\n\n### Common setup:\n- Frontend at `http://localhost:3000` sends requests with `Authorization: Bearer ...` header\n- Backend at `http://localhost:8000` must allow that origin with credentials\n- The browser sends a preflight OPTIONS request first for non-simple requests\n\n### What breaks without proper CORS:\n- Browser blocks the response (the request is actually sent but the response is hidden)\n- JavaScript cannot read the response body or headers\n- Error in browser console: \"has been blocked by CORS policy\"",
+          "pseudo_code": "app.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],  # NOT \"*\" with credentials\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],  # Includes Authorization header\n)",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom typing import Annotated\n\napp = FastAPI()\n\n# CORS configuration for authenticated requests\napp.add_middleware(\n    CORSMiddleware,\n    # Must list specific origins when allow_credentials=True\n    allow_origins=[\n        \"http://localhost:3000\",       # React dev server\n        \"http://localhost:5173\",       # Vite dev server\n        \"https://myapp.example.com\",   # Production frontend\n    ],\n    allow_credentials=True,  # Allow cookies and Authorization headers\n    allow_methods=[\"GET\", \"POST\", \"PUT\", \"DELETE\", \"PATCH\"],\n    allow_headers=[\n        \"Authorization\",   # For Bearer tokens\n        \"Content-Type\",    # For JSON requests\n        \"X-API-Key\",       # Custom headers if needed\n    ],\n    expose_headers=[\"X-Total-Count\"],  # Headers the client can read\n    max_age=600,  # Cache preflight responses for 10 minutes\n)\n\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n@app.get(\"/api/data\")\ndef get_data(token: Annotated[str, Depends(oauth2_scheme)]):\n    return {\"data\": \"secret\", \"token_received\": True}\n\n# --- Dynamic origins (for multi-tenant apps) ---\nfrom starlette.middleware.cors import CORSMiddleware as StarletteCORS\n\ndef get_allowed_origins() -> list[str]:\n    \"\"\"Fetch allowed origins from config or database.\"\"\"\n    return [\"http://localhost:3000\", \"https://app.example.com\"]\n\n# For dynamic origins, subclass the middleware or use a custom middleware\n\n# --- Test ---\nclient = TestClient(app)\n\n# Simulate cross-origin request with credentials\nresp = client.get(\n    \"/api/data\",\n    headers={\n        \"Authorization\": \"Bearer test-token\",\n        \"Origin\": \"http://localhost:3000\",\n    },\n)\nprint(f\"Status: {resp.status_code}\")\nprint(f\"CORS header: {resp.headers.get('access-control-allow-origin')}\")\nprint(f\"Credentials: {resp.headers.get('access-control-allow-credentials')}\")\n\n# Preflight request\nresp = client.options(\n    \"/api/data\",\n    headers={\n        \"Origin\": \"http://localhost:3000\",\n        \"Access-Control-Request-Method\": \"GET\",\n        \"Access-Control-Request-Headers\": \"Authorization\",\n    },\n)\nprint(f\"Preflight status: {resp.status_code}\")\nprint(f\"Allowed headers: {resp.headers.get('access-control-allow-headers')}\")\n\n# Expected Output:\n# Status: 200\n# CORS header: http://localhost:3000\n# Credentials: true\n# Preflight status: 200\n# Allowed headers: Authorization",
+          "code_language": "python",
+          "key_points": [
+            "allow_origins cannot be ['*'] when allow_credentials is True",
+            "allow_credentials=True is required for Authorization headers and cookies",
+            "Browsers send preflight OPTIONS requests for non-simple cross-origin requests",
+            "expose_headers controls which response headers JavaScript can read"
+          ],
+          "gotchas": [
+            "Setting allow_origins=['*'] with allow_credentials=True silently fails -- the browser rejects the response",
+            "Preflight requests do not include the Authorization header -- only the actual request does",
+            "max_age caches preflight responses -- set it to avoid repeated OPTIONS requests",
+            "CORS is enforced by the browser, not the server -- curl and Postman always work"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "When using credentials (Bearer tokens, cookies), `allow_origins` must list specific origins (not `\"*\"`), and `allow_credentials` must be `True`. Browsers block responses if CORS headers do not match.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi.middleware.cors import CORSMiddleware\n\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],  # NOT \"*\"\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)",
+          "code_language": "python",
+          "key_points": [
+            "allow_origins=['*'] does NOT work with allow_credentials=True"
+          ],
+          "gotchas": [
+            "CORS is browser-enforced -- server returns headers but cannot block curl/Postman"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement API rate limiting per user?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "rate-limiting",
+        "throttling",
+        "security",
+        "dependency"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Rate limiting** prevents API abuse by restricting how many requests a user can make within a time window. In FastAPI, implement this as a dependency using in-memory storage or Redis.\n\n### Approaches:\n1. **In-memory**: Simple dict with timestamps -- works for single-server deployments\n2. **Redis**: Production-grade, works across multiple servers/workers\n3. **slowapi**: Third-party library wrapping `limits` for FastAPI\n\n### Sliding window algorithm:\n- Track request timestamps per user\n- On each request, remove timestamps older than the window\n- If remaining count exceeds limit, reject with 429 Too Many Requests\n- Return `Retry-After` header telling the client when to retry\n\n### Rate limit headers (standard):\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Requests remaining\n- `X-RateLimit-Reset`: Unix timestamp when the window resets\n- `Retry-After`: Seconds until the client should retry (on 429)",
+          "pseudo_code": "rate_limits = {}  # {user_id: [timestamp1, timestamp2, ...]}\n\ndef check_rate_limit(user, max_requests, window_seconds):\n    now = time.time()\n    timestamps = rate_limits.get(user, [])\n    # Remove old timestamps\n    timestamps = [t for t in timestamps if now - t < window_seconds]\n    if len(timestamps) >= max_requests:\n        raise 429 Too Many Requests\n    timestamps.append(now)\n    rate_limits[user] = timestamps",
+          "actual_code": "import time\nfrom collections import defaultdict\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status, Request, Response\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom jose import jwt\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\n\nSECRET = \"test-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# In-memory rate limit storage (use Redis in production)\nrate_limit_store: dict[str, list[float]] = defaultdict(list)\n\ndef rate_limit(max_requests: int = 10, window_seconds: int = 60):\n    \"\"\"Dependency factory for per-user rate limiting.\"\"\"\n    def limiter(\n        request: Request,\n        response: Response,\n        token: Annotated[str, Depends(oauth2_scheme)],\n    ):\n        # Identify user from token\n        payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n        user_id = payload[\"sub\"]\n\n        now = time.time()\n        # Clean old entries\n        timestamps = [\n            t for t in rate_limit_store[user_id]\n            if now - t < window_seconds\n        ]\n        rate_limit_store[user_id] = timestamps\n\n        # Set rate limit headers\n        remaining = max(0, max_requests - len(timestamps))\n        response.headers[\"X-RateLimit-Limit\"] = str(max_requests)\n        response.headers[\"X-RateLimit-Remaining\"] = str(remaining)\n        response.headers[\"X-RateLimit-Reset\"] = str(\n            int(now + window_seconds)\n        )\n\n        if len(timestamps) >= max_requests:\n            retry_after = int(window_seconds - (now - timestamps[0]))\n            raise HTTPException(\n                status_code=status.HTTP_429_TOO_MANY_REQUESTS,\n                detail=\"Rate limit exceeded\",\n                headers={\"Retry-After\": str(retry_after)},\n            )\n\n        timestamps.append(now)\n        rate_limit_store[user_id] = timestamps\n        return user_id\n    return limiter\n\n@app.get(\"/api/data\")\ndef get_data(\n    user_id: Annotated[str, Depends(rate_limit(max_requests=3, window_seconds=60))],\n):\n    return {\"user\": user_id, \"data\": \"here\"}\n\n# --- Test ---\ndef make_token(username: str) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode({\"sub\": username, \"exp\": exp}, SECRET, algorithm=\"HS256\")\n\nclient = TestClient(app)\nheaders = {\"Authorization\": f\"Bearer {make_token('alice')}\"}\n\n# Make 4 requests (limit is 3)\nfor i in range(4):\n    resp = client.get(\"/api/data\", headers=headers)\n    print(f\"Request {i+1}: {resp.status_code} - Remaining: {resp.headers.get('X-RateLimit-Remaining', 'N/A')}\")\n\n# Expected Output:\n# Request 1: 200 - Remaining: 2\n# Request 2: 200 - Remaining: 1\n# Request 3: 200 - Remaining: 0\n# Request 4: 429 - Remaining: N/A",
+          "code_language": "python",
+          "key_points": [
+            "Use a dependency factory to make rate limits configurable per endpoint",
+            "Sliding window: track timestamps, remove old ones, count remaining",
+            "Return standard rate limit headers (X-RateLimit-Limit, Remaining, Reset)",
+            "Use 429 Too Many Requests with Retry-After header"
+          ],
+          "gotchas": [
+            "In-memory storage does not work with multiple workers/servers -- use Redis for production",
+            "HTTPException in the rate limiter prevents response.headers from reaching the client -- set headers on the exception instead",
+            "Rate limiting by IP instead of user catches unauthenticated abuse but penalizes shared IPs (offices, VPNs)",
+            "time.time() returns float -- be careful with comparison precision"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a dependency that tracks request timestamps per user in a sliding window. If the count exceeds the limit, raise 429 with a `Retry-After` header. Use Redis for multi-server deployments.",
+          "pseudo_code": "",
+          "actual_code": "rate_limits = defaultdict(list)\n\ndef rate_limit(max_req: int = 10, window: int = 60):\n    def limiter(token: str = Depends(oauth2_scheme)):\n        user = jwt.decode(token, SECRET)[\"sub\"]\n        now = time.time()\n        timestamps = [t for t in rate_limits[user] if now - t < window]\n        if len(timestamps) >= max_req:\n            raise HTTPException(status_code=429, detail=\"Rate limit exceeded\")\n        timestamps.append(now)\n        rate_limits[user] = timestamps\n    return limiter",
+          "code_language": "python",
+          "key_points": [
+            "Sliding window: track timestamps, remove expired, count remaining"
+          ],
+          "gotchas": [
+            "In-memory storage does not work across multiple workers -- use Redis in production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you secure WebSocket connections?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "websocket",
+        "authentication",
+        "security",
+        "real-time"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**WebSocket connections** cannot use standard HTTP Authorization headers after the initial handshake, so authentication requires different approaches.\n\n### Authentication methods for WebSockets:\n\n1. **Query parameter token**: Pass token in the WebSocket URL (`ws://host/ws?token=xxx`)\n   - Simple but token appears in server logs and browser history\n\n2. **First message authentication**: Connect first, send token as the first message\n   - Cleaner but requires protocol agreement between client and server\n\n3. **Cookie-based**: If using session cookies, they are sent automatically with the WebSocket handshake\n   - Works well with browser-based clients\n\n### Why not Authorization header:\n- The browser's WebSocket API (`new WebSocket(url)`) does **not** support custom headers\n- The `Authorization` header cannot be set on WebSocket connections from browsers\n- Server-side WebSocket clients (Python, Node.js) can set headers, but browser clients cannot\n\n### Best practice:\n- Validate the token during the WebSocket handshake (before `accept()`)\n- Close the connection immediately if authentication fails\n- Periodically re-validate if using long-lived connections",
+          "pseudo_code": "# Query parameter approach:\n@app.websocket(\"/ws\")\nasync def ws(websocket, token: str = Query(...)):\n    user = validate_token(token)\n    if not user:\n        await websocket.close(code=1008)  # Policy Violation\n        return\n    await websocket.accept()\n    # ... handle messages\n\n# First message approach:\n@app.websocket(\"/ws\")\nasync def ws(websocket):\n    await websocket.accept()\n    auth_msg = await websocket.receive_text()\n    user = validate_token(auth_msg)\n    if not user:\n        await websocket.close(code=1008)\n        return",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, status\nfrom fastapi.testclient import TestClient\nfrom jose import jwt, JWTError\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\nSECRET = \"test-secret\"\n\ndef validate_ws_token(token: str) -> dict | None:\n    \"\"\"Validate JWT token for WebSocket connections.\"\"\"\n    try:\n        payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n        return {\"username\": payload[\"sub\"]}\n    except JWTError:\n        return None\n\n# --- Method 1: Query parameter token ---\n@app.websocket(\"/ws/query\")\nasync def ws_query_auth(\n    websocket: WebSocket,\n    token: Annotated[str | None, Query()] = None,\n):\n    if not token:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n    user = validate_ws_token(token)\n    if not user:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    await websocket.accept()\n    await websocket.send_json({\"message\": f\"Hello {user['username']}\"})\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_json({\"echo\": data, \"user\": user[\"username\"]})\n    except WebSocketDisconnect:\n        pass\n\n# --- Method 2: First message authentication ---\n@app.websocket(\"/ws/first-msg\")\nasync def ws_first_msg_auth(websocket: WebSocket):\n    await websocket.accept()\n\n    # First message must be the token\n    try:\n        token = await websocket.receive_text()\n    except WebSocketDisconnect:\n        return\n\n    user = validate_ws_token(token)\n    if not user:\n        await websocket.send_json({\"error\": \"Authentication failed\"})\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n\n    await websocket.send_json({\"authenticated\": True, \"user\": user[\"username\"]})\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_json({\"echo\": data})\n    except WebSocketDisconnect:\n        pass\n\n# --- Test ---\ndef make_token(username: str) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    return jwt.encode({\"sub\": username, \"exp\": exp}, SECRET, algorithm=\"HS256\")\n\nclient = TestClient(app)\ntoken = make_token(\"alice\")\n\n# Test query param auth\nwith client.websocket_connect(f\"/ws/query?token={token}\") as ws:\n    greeting = ws.receive_json()\n    print(greeting)\n    ws.send_text(\"hello\")\n    echo = ws.receive_json()\n    print(echo)\n\n# Test first message auth\nwith client.websocket_connect(\"/ws/first-msg\") as ws:\n    ws.send_text(token)\n    auth_resp = ws.receive_json()\n    print(auth_resp)\n\n# Expected Output:\n# {'message': 'Hello alice'}\n# {'echo': 'hello', 'user': 'alice'}\n# {'authenticated': True, 'user': 'alice'}",
+          "code_language": "python",
+          "key_points": [
+            "Browser WebSocket API cannot set Authorization headers -- use query params or first message",
+            "Validate token before calling websocket.accept() when possible (query param method)",
+            "Use WebSocket close code 1008 (Policy Violation) for authentication failures",
+            "Re-validate tokens periodically for long-lived WebSocket connections"
+          ],
+          "gotchas": [
+            "Query parameter tokens appear in server logs, proxy logs, and browser history",
+            "Calling websocket.close() before accept() requires no status code in some frameworks",
+            "WebSocket dependencies (Query, Header) only work during the handshake, not after accept()",
+            "Unlike HTTP, a closed WebSocket cannot return a JSON error body -- send the error before closing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "WebSocket connections from browsers cannot set Authorization headers. Use query parameter tokens (`ws://host/ws?token=xxx`) or send the token as the first WebSocket message. Validate before `accept()` when possible, and close with code 1008 on failure.",
+          "pseudo_code": "",
+          "actual_code": "@app.websocket(\"/ws\")\nasync def websocket_endpoint(\n    websocket: WebSocket,\n    token: str = Query(...),\n):\n    user = validate_token(token)\n    if not user:\n        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)\n        return\n    await websocket.accept()\n    await websocket.send_json({\"hello\": user[\"username\"]})",
+          "code_language": "python",
+          "key_points": [
+            "Use query param or first message for WebSocket auth -- browsers cannot set custom headers"
+          ],
+          "gotchas": [
+            "Tokens in query params appear in server logs -- use TLS and short-lived tokens"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement permission-based authorization?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "authorization",
+        "permissions",
+        "rbac",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Permission-based authorization** is more granular than role-based. Instead of checking if a user has a role, you check if they have specific permissions (e.g., `create_post`, `delete_user`, `view_reports`).\n\n### RBAC vs Permission-based:\n- **RBAC**: \"Is this user an admin?\" -> admin can do everything\n- **Permission-based**: \"Does this user have the `delete_user` permission?\" -> granular control\n- **Combined**: Roles grant sets of permissions; check permissions at the endpoint level\n\n### Implementation:\n1. Define permissions as an Enum or set of strings\n2. Map roles to permission sets\n3. Create a dependency factory `require_permissions(*perms)` that checks the user's permissions\n4. Permissions can come from JWT claims, database, or role-to-permission mapping\n\n### Advantages over simple RBAC:\n- Adding a new role does not require changing endpoint code\n- Permissions can be assigned individually (beyond role defaults)\n- Easier to audit (\"who can delete_user?\" vs \"what can admins do?\")",
+          "pseudo_code": "# Define permissions per role:\nROLE_PERMISSIONS = {\n    \"admin\": {\"create\", \"read\", \"update\", \"delete\", \"manage_users\"},\n    \"editor\": {\"create\", \"read\", \"update\"},\n    \"viewer\": {\"read\"},\n}\n\ndef require_permissions(*required):\n    def checker(user = Depends(get_current_user)):\n        user_perms = ROLE_PERMISSIONS[user.role]\n        missing = set(required) - user_perms\n        if missing:\n            raise 403 f\"Missing permissions: {missing}\"\n        return user\n    return checker\n\n@app.delete(\"/users/{id}\", dependencies=[Depends(require_permissions(\"delete\", \"manage_users\"))])\ndef delete_user(id): ...",
+          "actual_code": "from enum import Enum\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom jose import jwt\nfrom datetime import datetime, timedelta, timezone\n\napp = FastAPI()\nSECRET = \"test-secret\"\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"token\")\n\n# --- Permission definitions ---\nclass Permission(str, Enum):\n    READ_POSTS = \"read_posts\"\n    CREATE_POSTS = \"create_posts\"\n    DELETE_POSTS = \"delete_posts\"\n    MANAGE_USERS = \"manage_users\"\n    VIEW_REPORTS = \"view_reports\"\n\n# Role-to-permission mapping\nROLE_PERMISSIONS: dict[str, set[str]] = {\n    \"admin\": {\n        Permission.READ_POSTS, Permission.CREATE_POSTS,\n        Permission.DELETE_POSTS, Permission.MANAGE_USERS,\n        Permission.VIEW_REPORTS,\n    },\n    \"editor\": {\n        Permission.READ_POSTS, Permission.CREATE_POSTS,\n        Permission.DELETE_POSTS,\n    },\n    \"viewer\": {\n        Permission.READ_POSTS,\n    },\n}\n\nclass User(BaseModel):\n    username: str\n    role: str\n    permissions: set[str] = set()\n\ndef get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> User:\n    payload = jwt.decode(token, SECRET, algorithms=[\"HS256\"])\n    role = payload.get(\"role\", \"viewer\")\n    # Get permissions from role + any extra permissions\n    perms = ROLE_PERMISSIONS.get(role, set())\n    extra = set(payload.get(\"extra_permissions\", []))\n    return User(\n        username=payload[\"sub\"],\n        role=role,\n        permissions=perms | extra,\n    )\n\nCurrentUser = Annotated[User, Depends(get_current_user)]\n\ndef require_permissions(*required: str):\n    \"\"\"Dependency factory that checks for specific permissions.\"\"\"\n    def checker(current_user: CurrentUser) -> User:\n        missing = set(required) - current_user.permissions\n        if missing:\n            raise HTTPException(\n                status_code=status.HTTP_403_FORBIDDEN,\n                detail=f\"Missing permissions: {', '.join(sorted(missing))}\",\n            )\n        return current_user\n    return checker\n\n@app.get(\"/posts\")\ndef list_posts(\n    user: Annotated[User, Depends(require_permissions(Permission.READ_POSTS))],\n):\n    return {\"user\": user.username, \"action\": \"listing posts\"}\n\n@app.post(\"/posts\")\ndef create_post(\n    user: Annotated[User, Depends(require_permissions(Permission.CREATE_POSTS))],\n):\n    return {\"user\": user.username, \"action\": \"creating post\"}\n\n@app.delete(\"/posts/{post_id}\")\ndef delete_post(\n    post_id: int,\n    user: Annotated[\n        User,\n        Depends(require_permissions(Permission.DELETE_POSTS)),\n    ],\n):\n    return {\"user\": user.username, \"action\": f\"deleting post {post_id}\"}\n\n@app.get(\"/admin/users\")\ndef manage_users(\n    user: Annotated[User, Depends(require_permissions(Permission.MANAGE_USERS))],\n):\n    return {\"user\": user.username, \"action\": \"managing users\"}\n\n# --- Test ---\ndef make_token(username: str, role: str, extra_perms: list[str] | None = None) -> str:\n    exp = datetime.now(timezone.utc) + timedelta(hours=1)\n    payload = {\"sub\": username, \"role\": role, \"exp\": exp}\n    if extra_perms:\n        payload[\"extra_permissions\"] = extra_perms\n    return jwt.encode(payload, SECRET, algorithm=\"HS256\")\n\nclient = TestClient(app)\n\n# Viewer can read but not create\nviewer_token = make_token(\"charlie\", \"viewer\")\nresp = client.get(\"/posts\", headers={\"Authorization\": f\"Bearer {viewer_token}\"})\nprint(resp.json())\n\nresp = client.post(\"/posts\", headers={\"Authorization\": f\"Bearer {viewer_token}\"})\nprint(f\"{resp.status_code}: {resp.json()['detail']}\")\n\n# Editor can create and delete\neditor_token = make_token(\"bob\", \"editor\")\nresp = client.delete(\"/posts/42\", headers={\"Authorization\": f\"Bearer {editor_token}\"})\nprint(resp.json())\n\n# Viewer with extra permission\nsuper_viewer = make_token(\"charlie\", \"viewer\", [Permission.VIEW_REPORTS])\nprint(f\"Extra perms work: viewer + view_reports\")\n\n# Expected Output:\n# {'user': 'charlie', 'action': 'listing posts'}\n# 403: Missing permissions: create_posts\n# {'user': 'bob', 'action': 'deleting post 42'}\n# Extra perms work: viewer + view_reports",
+          "code_language": "python",
+          "key_points": [
+            "Define permissions as enums or strings, map roles to permission sets",
+            "require_permissions() factory checks if user has all required permissions",
+            "Combine role-based permissions with per-user extra permissions for flexibility",
+            "Use set operations (difference) to find missing permissions efficiently"
+          ],
+          "gotchas": [
+            "Role-to-permission mapping in code requires redeployment to change -- consider storing in DB for dynamic updates",
+            "Permissions in JWT tokens cannot be revoked until the token expires",
+            "Checking permissions on every request can be expensive if fetched from DB -- consider caching",
+            "Permission names should be consistent -- use enums to avoid typos"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Map roles to permission sets, then create a `require_permissions()` dependency factory that checks if the user has all required permissions. This is more granular than RBAC -- new roles just need a permission mapping, no endpoint changes.",
+          "pseudo_code": "",
+          "actual_code": "ROLE_PERMS = {\n    \"admin\": {\"read\", \"write\", \"delete\", \"manage_users\"},\n    \"editor\": {\"read\", \"write\"},\n    \"viewer\": {\"read\"},\n}\n\ndef require_permissions(*required):\n    def checker(user: CurrentUser):\n        user_perms = ROLE_PERMS.get(user.role, set())\n        if not set(required).issubset(user_perms):\n            raise HTTPException(status_code=403, detail=\"Insufficient permissions\")\n        return user\n    return checker",
+          "code_language": "python",
+          "key_points": [
+            "Map roles to permission sets, check with set operations"
+          ],
+          "gotchas": [
+            "Permissions stored in JWT cannot be revoked until the token expires"
+          ]
+        }
+      ]
+    }
+  ]
+}

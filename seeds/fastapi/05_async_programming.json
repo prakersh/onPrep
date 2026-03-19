@@ -1,0 +1,695 @@
+{
+  "concept_slug": "async-programming",
+  "questions": [
+    {
+      "title": "What is the difference between async def and def path operations in FastAPI?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "sync",
+        "path-operations",
+        "concurrency"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI handles `async def` and `def` path operations differently in terms of **where they run** and **how they handle concurrency**.\n\n### async def:\n- Runs directly on the **main event loop** (main thread)\n- Must use `await` for I/O operations (database, HTTP calls, file I/O)\n- Can handle thousands of concurrent requests without blocking\n- Blocking code here **freezes the entire server**\n\n### def (sync):\n- FastAPI runs it in an **external threadpool** (`anyio.to_thread.run_sync`)\n- Safe to use blocking I/O (synchronous DB drivers, `requests` library, `time.sleep`)\n- Each request gets its own thread from the pool\n- Slight overhead from thread context switching\n\n### Decision rule:\n- Use `async def` when your I/O libraries support `await` (httpx, asyncpg, aiofiles)\n- Use `def` when using blocking libraries (requests, psycopg2, SQLAlchemy sync)",
+          "pseudo_code": "# Async -- runs on event loop, must await I/O\n@app.get(\"/async\")\nasync def async_endpoint():\n    result = await async_db_query()\n    return result\n\n# Sync -- runs in threadpool, blocking is safe\n@app.get(\"/sync\")\ndef sync_endpoint():\n    result = blocking_db_query()\n    return result",
+          "actual_code": "import asyncio\nimport time\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n\n# Async endpoint -- runs on the event loop\n@app.get(\"/async-items\")\nasync def get_items_async():\n    # Simulates an async DB query\n    await asyncio.sleep(0.1)  # non-blocking sleep\n    return {\"items\": [\"widget\", \"gadget\"], \"handler\": \"async\"}\n\n\n# Sync endpoint -- FastAPI runs this in a threadpool\n@app.get(\"/sync-items\")\ndef get_items_sync():\n    # Simulates a blocking DB query\n    time.sleep(0.1)  # blocking sleep -- safe here because threadpool\n    return {\"items\": [\"widget\", \"gadget\"], \"handler\": \"sync\"}\n\n\n# DANGER: blocking inside async def freezes the event loop\n@app.get(\"/bad-async\")\nasync def bad_async_endpoint():\n    # DO NOT DO THIS -- blocks the entire event loop\n    # time.sleep(5)  # would freeze ALL async handlers for 5 seconds\n    await asyncio.sleep(0.01)  # use await instead\n    return {\"warning\": \"never block in async def\"}\n\n\n# Demonstrating the difference\nasync def demo():\n    \"\"\"Show that async enables concurrency.\"\"\"\n    async def fake_api_call(name: str, delay: float) -> str:\n        await asyncio.sleep(delay)\n        return f\"{name} done\"\n\n    # Sequential -- takes 0.3s total\n    start = time.time()\n    r1 = await fake_api_call(\"A\", 0.1)\n    r2 = await fake_api_call(\"B\", 0.1)\n    r3 = await fake_api_call(\"C\", 0.1)\n    sequential_time = time.time() - start\n\n    # Concurrent -- takes ~0.1s total\n    start = time.time()\n    r1, r2, r3 = await asyncio.gather(\n        fake_api_call(\"A\", 0.1),\n        fake_api_call(\"B\", 0.1),\n        fake_api_call(\"C\", 0.1),\n    )\n    concurrent_time = time.time() - start\n\n    print(f\"Sequential: {sequential_time:.2f}s\")\n    print(f\"Concurrent: {concurrent_time:.2f}s\")\n    print(f\"Speedup: {sequential_time / concurrent_time:.1f}x\")\n\nasyncio.run(demo())\n\n# Expected Output:\n# Sequential: 0.30s\n# Concurrent: 0.10s\n# Speedup: 3.0x",
+          "code_language": "python",
+          "key_points": [
+            "async def runs on the event loop; def runs in an external threadpool",
+            "Use async def when I/O libraries support await; use def for blocking libraries",
+            "Blocking code in async def freezes the entire server -- the most common FastAPI mistake",
+            "FastAPI's threadpool for sync functions adds slight overhead but is safe for blocking I/O"
+          ],
+          "gotchas": [
+            "time.sleep() or requests.get() inside async def blocks ALL concurrent async handlers",
+            "The threadpool for sync endpoints has a default size limit (usually 40 threads) -- can be exhausted under heavy load",
+            "Mixing sync and async in the same codebase is fine but requires understanding which runs where",
+            "async def without any await inside still runs on the event loop, not the threadpool"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`async def` runs on the event loop and must `await` all I/O. `def` runs in a threadpool where blocking is safe. Use `async def` with async libraries (httpx, asyncpg); use `def` with blocking ones (requests, psycopg2).",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nimport asyncio\n\napp = FastAPI()\n\n@app.get(\"/async\")\nasync def async_route():\n    await asyncio.sleep(0.1)  # non-blocking\n    return {\"type\": \"async\"}\n\n@app.get(\"/sync\")\ndef sync_route():\n    import time\n    time.sleep(0.1)  # blocking but safe (threadpool)\n    return {\"type\": \"sync\"}",
+          "code_language": "python",
+          "key_points": [
+            "async def = event loop; def = threadpool"
+          ],
+          "gotchas": [
+            "Blocking I/O in async def freezes the entire server"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI handle synchronous functions using a threadpool?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "threadpool",
+        "sync",
+        "concurrency",
+        "anyio"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you use a regular `def` (not `async def`) for a path operation, FastAPI **automatically** runs it in an external threadpool using `anyio.to_thread.run_sync()`. This prevents blocking operations from freezing the async event loop.\n\n### How it works:\n1. A request arrives and is handled by the ASGI event loop\n2. FastAPI detects the handler is a regular `def`\n3. FastAPI schedules it on a **threadpool** (separate OS threads)\n4. The event loop continues handling other requests while the thread runs\n5. When the thread completes, the result is returned to the event loop\n\n### Threadpool details:\n- Default pool: `anyio` uses a default thread limiter (default capacity: 40)\n- Each sync handler call occupies one thread until it returns\n- If all threads are busy, new requests wait in a queue\n- You can configure the pool size via `anyio.to_thread.current_default_thread_limiter()`",
+          "pseudo_code": "# What FastAPI does internally for sync handlers:\nasync def handle_request(request):\n    # Your sync def is run here:\n    result = await anyio.to_thread.run_sync(your_sync_function)\n    return result",
+          "actual_code": "import asyncio\nimport threading\nimport time\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n\n@app.get(\"/sync\")\ndef sync_endpoint():\n    \"\"\"Runs in threadpool -- different thread than event loop.\"\"\"\n    thread_name = threading.current_thread().name\n    time.sleep(0.1)  # blocking is safe here\n    return {\"thread\": thread_name, \"type\": \"sync\"}\n\n\n@app.get(\"/async\")\nasync def async_endpoint():\n    \"\"\"Runs on event loop -- main thread.\"\"\"\n    thread_name = threading.current_thread().name\n    await asyncio.sleep(0.1)\n    return {\"thread\": thread_name, \"type\": \"async\"}\n\n\n# Demonstrate with TestClient\nclient = TestClient(app)\n\nsync_resp = client.get(\"/sync\")\nasync_resp = client.get(\"/async\")\n\nprint(f\"Sync handler thread: {sync_resp.json()['thread']}\")\nprint(f\"Async handler thread: {async_resp.json()['thread']}\")\nprint(f\"Sync runs in different thread: {sync_resp.json()['thread'] != async_resp.json()['thread']}\")\n\n# Expected Output:\n# Sync handler thread: AnyIO worker thread\n# Async handler thread: MainThread\n# Sync runs in different thread: True",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI auto-detects def vs async def and runs sync handlers in a threadpool",
+            "The threadpool uses anyio.to_thread.run_sync() under the hood",
+            "Default thread limit is 40 concurrent threads -- configurable via anyio",
+            "This lets you safely use blocking libraries without freezing the event loop"
+          ],
+          "gotchas": [
+            "Thread pool exhaustion under load: 40 concurrent blocking handlers is the default limit",
+            "Thread-local storage works in sync handlers but not across await boundaries in async handlers",
+            "Dependencies declared as def also run in the threadpool; async def dependencies run on the loop",
+            "TestClient runs the app in a separate thread, so thread names may differ from production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI runs `def` handlers in a threadpool (via `anyio.to_thread.run_sync`) so blocking I/O does not freeze the event loop. Default capacity is ~40 threads. `async def` handlers run directly on the event loop.",
+          "pseudo_code": "",
+          "actual_code": "import threading\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/sync\")\ndef sync_handler():\n    # Runs in threadpool thread\n    return {\"thread\": threading.current_thread().name}\n\n@app.get(\"/async\")\nasync def async_handler():\n    # Runs on main event loop thread\n    return {\"thread\": threading.current_thread().name}",
+          "code_language": "python",
+          "key_points": [
+            "Sync handlers automatically run in a threadpool with ~40 thread default"
+          ],
+          "gotchas": [
+            "If all threadpool threads are busy, new sync requests queue and wait"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the event loop and how does FastAPI use it?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "event-loop",
+        "asyncio",
+        "ASGI",
+        "uvicorn"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **event loop** is the core of Python's `asyncio` framework. It runs in a single thread and manages all async operations by multiplexing I/O events.\n\n### How it works:\n1. The loop maintains a queue of **coroutines** (async functions)\n2. When a coroutine hits `await` (I/O wait), the loop suspends it and runs another\n3. When I/O completes, the loop resumes the suspended coroutine\n4. This allows thousands of concurrent operations on a single thread\n\n### FastAPI's event loop:\n- **Uvicorn** (or another ASGI server) creates and runs the event loop\n- Each incoming HTTP request becomes a coroutine on the loop\n- `async def` handlers run directly on this loop\n- `def` handlers are offloaded to a threadpool (but results return to the loop)\n- Background tasks, WebSockets, and middleware all share the same loop\n\n### Key principle:\nThe event loop is **cooperative** -- coroutines must voluntarily yield control via `await`. Any blocking operation without `await` monopolizes the entire loop.",
+          "pseudo_code": "# Conceptual event loop operation:\nwhile tasks_pending:\n    task = get_next_ready_task()\n    run_task_until_next_await(task)\n    if task.waiting_on_io:\n        register_io_callback(task)\n    if task.completed:\n        deliver_result(task)",
+          "actual_code": "import asyncio\nimport time\n\n\nasync def fetch_data(name: str, delay: float) -> dict:\n    \"\"\"Simulates an async I/O operation.\"\"\"\n    print(f\"  [{name}] Starting (will take {delay}s)\")\n    await asyncio.sleep(delay)  # yields control to event loop\n    print(f\"  [{name}] Done\")\n    return {\"source\": name, \"delay\": delay}\n\n\nasync def main():\n    # Get reference to the running event loop\n    loop = asyncio.get_running_loop()\n    print(f\"Event loop type: {type(loop).__name__}\")\n    print(f\"Loop is running: {loop.is_running()}\")\n\n    # Concurrent I/O -- event loop switches between tasks at each await\n    print(\"\\nConcurrent execution:\")\n    start = time.time()\n    results = await asyncio.gather(\n        fetch_data(\"DB\", 0.2),\n        fetch_data(\"API\", 0.15),\n        fetch_data(\"Cache\", 0.05),\n    )\n    elapsed = time.time() - start\n    print(f\"All done in {elapsed:.2f}s (not {sum(r['delay'] for r in results):.2f}s)\")\n\n    # Create tasks for more control\n    print(\"\\nUsing tasks:\")\n    task1 = asyncio.create_task(fetch_data(\"Task-1\", 0.1))\n    task2 = asyncio.create_task(fetch_data(\"Task-2\", 0.1))\n\n    # Tasks start immediately, await collects results\n    r1 = await task1\n    r2 = await task2\n    print(f\"Tasks completed: {r1['source']}, {r2['source']}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Event loop type: _UnixSelectorEventLoop\n# Loop is running: True\n# \n# Concurrent execution:\n#   [DB] Starting (will take 0.2s)\n#   [API] Starting (will take 0.15s)\n#   [Cache] Starting (will take 0.05s)\n#   [Cache] Done\n#   [API] Done\n#   [DB] Done\n# All done in 0.20s (not 0.40s)\n# \n# Using tasks:\n#   [Task-1] Starting (will take 0.1s)\n#   [Task-2] Starting (will take 0.1s)\n#   [Task-1] Done\n#   [Task-2] Done\n# Tasks completed: Task-1, Task-2",
+          "code_language": "python",
+          "key_points": [
+            "The event loop runs in a single thread and multiplexes I/O using cooperative scheduling",
+            "Coroutines yield control at each await, letting other coroutines run",
+            "Uvicorn creates the event loop; FastAPI's async handlers run on it",
+            "Blocking the event loop (no await) blocks ALL concurrent async operations"
+          ],
+          "gotchas": [
+            "There is only ONE event loop per thread -- all async operations share it",
+            "CPU-bound work on the event loop (e.g., data processing) blocks all other coroutines",
+            "asyncio.run() creates a new event loop -- you cannot call it inside an existing loop (use await instead)",
+            "In production, uvicorn manages the loop -- never call asyncio.run() in your FastAPI code"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The event loop runs in a single thread, switching between coroutines at each `await`. Uvicorn creates it; FastAPI async handlers run on it. Blocking the loop blocks all concurrent async operations.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def main():\n    loop = asyncio.get_running_loop()\n    print(f\"Loop running: {loop.is_running()}\")\n\n    results = await asyncio.gather(\n        asyncio.sleep(0.1),\n        asyncio.sleep(0.1),\n    )\n    print(\"Both completed concurrently\")\n\nasyncio.run(main())\n\n# Expected Output:\n# Loop running: True\n# Both completed concurrently",
+          "code_language": "python",
+          "key_points": [
+            "Single-threaded cooperative scheduling via await"
+          ],
+          "gotchas": [
+            "Any blocking call without await freezes the entire loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use asyncio.gather for concurrent operations?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "asyncio",
+        "gather",
+        "concurrency",
+        "parallel"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`asyncio.gather()` runs multiple coroutines **concurrently** and returns their results in the same order they were passed. This is the primary tool for parallelizing I/O operations in async FastAPI handlers.\n\n### Syntax:\n```python\nresults = await asyncio.gather(coro1(), coro2(), coro3())\n```\n\n### Key parameters:\n- `return_exceptions=False` (default): If any coroutine raises, gather raises immediately and cancels the rest\n- `return_exceptions=True`: Exceptions are returned as values in the results list instead of being raised\n\n### Use cases in FastAPI:\n- Fetching data from multiple APIs simultaneously\n- Running multiple database queries in parallel\n- Aggregating results from several microservices\n- Pre-fetching related resources concurrently",
+          "pseudo_code": "async def endpoint():\n    user, orders, notifications = await asyncio.gather(\n        fetch_user(user_id),\n        fetch_orders(user_id),\n        fetch_notifications(user_id),\n    )\n    return {\"user\": user, \"orders\": orders, \"notifications\": notifications}",
+          "actual_code": "import asyncio\nimport time\n\n\nasync def fetch_user(user_id: int) -> dict:\n    await asyncio.sleep(0.1)  # simulates DB query\n    return {\"id\": user_id, \"name\": \"Alice\"}\n\n\nasync def fetch_orders(user_id: int) -> list:\n    await asyncio.sleep(0.15)  # simulates DB query\n    return [{\"id\": 1, \"total\": 99.99}, {\"id\": 2, \"total\": 49.99}]\n\n\nasync def fetch_notifications(user_id: int) -> list:\n    await asyncio.sleep(0.05)  # simulates DB query\n    return [{\"msg\": \"Order shipped\"}]\n\n\nasync def main():\n    user_id = 42\n\n    # Sequential -- slow\n    start = time.time()\n    user = await fetch_user(user_id)\n    orders = await fetch_orders(user_id)\n    notifs = await fetch_notifications(user_id)\n    seq_time = time.time() - start\n    print(f\"Sequential: {seq_time:.2f}s\")\n\n    # Concurrent with gather -- fast\n    start = time.time()\n    user, orders, notifs = await asyncio.gather(\n        fetch_user(user_id),\n        fetch_orders(user_id),\n        fetch_notifications(user_id),\n    )\n    gather_time = time.time() - start\n    print(f\"Gather: {gather_time:.2f}s\")\n    print(f\"Speedup: {seq_time / gather_time:.1f}x\")\n    print(f\"User: {user['name']}, Orders: {len(orders)}, Notifs: {len(notifs)}\")\n\n    # return_exceptions=True -- handle partial failures\n    async def might_fail(name: str) -> str:\n        if name == \"B\":\n            raise ValueError(f\"{name} failed!\")\n        await asyncio.sleep(0.01)\n        return f\"{name} ok\"\n\n    results = await asyncio.gather(\n        might_fail(\"A\"),\n        might_fail(\"B\"),\n        might_fail(\"C\"),\n        return_exceptions=True,\n    )\n    print(\"\\nWith return_exceptions=True:\")\n    for i, r in enumerate(results):\n        if isinstance(r, Exception):\n            print(f\"  [{i}] Error: {r}\")\n        else:\n            print(f\"  [{i}] Success: {r}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Sequential: 0.30s\n# Gather: 0.15s\n# Speedup: 2.0x\n# User: Alice, Orders: 2, Notifs: 1\n# \n# With return_exceptions=True:\n#   [0] Success: A ok\n#   [1] Error: B failed!\n#   [2] Success: C ok",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.gather() runs coroutines concurrently and returns results in order",
+            "Total time equals the slowest coroutine, not the sum of all",
+            "return_exceptions=True collects errors as values instead of raising immediately",
+            "Results maintain the same order as input coroutines"
+          ],
+          "gotchas": [
+            "Without return_exceptions=True, one failure cancels all remaining coroutines",
+            "gather only helps with I/O-bound work -- CPU-bound tasks need ProcessPoolExecutor",
+            "Passing too many coroutines can overwhelm external services -- consider asyncio.Semaphore for rate limiting",
+            "gather creates all coroutines immediately -- they all start before any completes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`asyncio.gather()` runs multiple coroutines concurrently. Total time = slowest task, not sum. Use `return_exceptions=True` to collect errors instead of failing immediately.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def fetch(name: str) -> str:\n    await asyncio.sleep(0.1)\n    return f\"{name} done\"\n\nasync def main():\n    a, b, c = await asyncio.gather(\n        fetch(\"A\"), fetch(\"B\"), fetch(\"C\")\n    )\n    print(a, b, c)\n\nasyncio.run(main())\n\n# Expected Output:\n# A done B done C done",
+          "code_language": "python",
+          "key_points": [
+            "gather runs coroutines concurrently, total time = slowest task"
+          ],
+          "gotchas": [
+            "One failure cancels all others unless return_exceptions=True"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use run_in_executor?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "asyncio",
+        "run_in_executor",
+        "blocking",
+        "threadpool"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`loop.run_in_executor()` runs a **blocking function** in a separate thread (or process) pool without blocking the event loop. Use it when you need to call blocking code from inside an `async def` handler.\n\n### When to use:\n- Calling blocking libraries (requests, psycopg2, file I/O) from async handlers\n- CPU-intensive operations (image processing, data crunching) -- use ProcessPoolExecutor\n- Legacy sync code that cannot be easily converted to async\n\n### Syntax:\n```python\nloop = asyncio.get_running_loop()\nresult = await loop.run_in_executor(None, blocking_function, arg1, arg2)\n```\n- `None` uses the default ThreadPoolExecutor\n- Pass a custom executor for ProcessPoolExecutor or custom thread pools\n\n### Alternative:\n`asyncio.to_thread(func, *args)` (Python 3.9+) is a simpler wrapper for thread execution.",
+          "pseudo_code": "async def endpoint():\n    loop = asyncio.get_running_loop()\n    # Run blocking function in threadpool\n    result = await loop.run_in_executor(None, blocking_call, arg)\n    return result\n\n# Or simpler with Python 3.9+:\nasync def endpoint():\n    result = await asyncio.to_thread(blocking_call, arg)\n    return result",
+          "actual_code": "import asyncio\nimport time\nfrom concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor\n\n\ndef blocking_io_operation(url: str) -> dict:\n    \"\"\"Simulates a blocking HTTP call.\"\"\"\n    time.sleep(0.1)  # blocking!\n    return {\"url\": url, \"status\": 200}\n\n\ndef cpu_heavy_work(n: int) -> int:\n    \"\"\"Simulates CPU-bound work.\"\"\"\n    return sum(i * i for i in range(n))\n\n\nasync def main():\n    loop = asyncio.get_running_loop()\n\n    # 1. run_in_executor with default threadpool\n    start = time.time()\n    result = await loop.run_in_executor(None, blocking_io_operation, \"https://api.example.com\")\n    print(f\"Executor result: {result} in {time.time() - start:.2f}s\")\n\n    # 2. Multiple blocking calls concurrently via executor\n    start = time.time()\n    results = await asyncio.gather(\n        loop.run_in_executor(None, blocking_io_operation, \"https://api1.com\"),\n        loop.run_in_executor(None, blocking_io_operation, \"https://api2.com\"),\n        loop.run_in_executor(None, blocking_io_operation, \"https://api3.com\"),\n    )\n    print(f\"3 concurrent blocking calls: {time.time() - start:.2f}s\")\n\n    # 3. asyncio.to_thread (Python 3.9+ -- simpler syntax)\n    result = await asyncio.to_thread(blocking_io_operation, \"https://api4.com\")\n    print(f\"to_thread result: {result['url']}\")\n\n    # 4. Custom ThreadPoolExecutor with limited threads\n    with ThreadPoolExecutor(max_workers=2) as pool:\n        start = time.time()\n        results = await asyncio.gather(\n            loop.run_in_executor(pool, blocking_io_operation, \"url1\"),\n            loop.run_in_executor(pool, blocking_io_operation, \"url2\"),\n            loop.run_in_executor(pool, blocking_io_operation, \"url3\"),\n        )\n        # 3 tasks but only 2 threads, so 2 run first, then 1\n        print(f\"Custom pool (2 workers, 3 tasks): {time.time() - start:.2f}s\")\n\n    # 5. CPU-bound with ProcessPoolExecutor\n    result = await loop.run_in_executor(None, cpu_heavy_work, 100000)\n    print(f\"CPU result: {result}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Executor result: {'url': 'https://api.example.com', 'status': 200} in 0.10s\n# 3 concurrent blocking calls: 0.10s\n# to_thread result: https://api4.com\n# Custom pool (2 workers, 3 tasks): 0.20s\n# CPU result: 333328333350000",
+          "code_language": "python",
+          "key_points": [
+            "run_in_executor runs blocking code in a thread/process pool from async context",
+            "Pass None for default ThreadPoolExecutor or a custom executor instance",
+            "asyncio.to_thread() (Python 3.9+) is a simpler alternative for thread execution",
+            "Combine with asyncio.gather for concurrent blocking operations"
+          ],
+          "gotchas": [
+            "The blocking function cannot use await -- it runs in a regular thread, not the event loop",
+            "Default executor size varies by Python version -- set max_workers explicitly for predictable behavior",
+            "ProcessPoolExecutor requires picklable arguments and return values",
+            "run_in_executor adds thread/process overhead -- only use when the blocking operation justifies it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `run_in_executor()` or `asyncio.to_thread()` to run blocking code from `async def` without blocking the event loop. Pass `None` for default threadpool or a custom executor.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nimport time\n\ndef blocking_work() -> str:\n    time.sleep(0.1)\n    return \"done\"\n\nasync def main():\n    result = await asyncio.to_thread(blocking_work)\n    print(result)\n\nasyncio.run(main())\n\n# Expected Output:\n# done",
+          "code_language": "python",
+          "key_points": [
+            "to_thread and run_in_executor let you safely call blocking code from async"
+          ],
+          "gotchas": [
+            "The blocking function cannot use await -- it is a plain thread"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do async context managers work?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "context-manager",
+        "resource-management",
+        "aiofiles"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Async context managers work like regular context managers (`with`) but support `await` in their setup and teardown. They use `async with` and implement `__aenter__` and `__aexit__` (or use `@asynccontextmanager`).\n\n### Use cases in FastAPI:\n- **Database connections**: Acquire and release async DB sessions\n- **HTTP clients**: Open and close `httpx.AsyncClient`\n- **File I/O**: Read/write with `aiofiles`\n- **Locks**: `asyncio.Lock()` for shared resource protection\n- **Lifespan**: FastAPI's lifespan context manager for startup/shutdown\n\n### Two ways to create:\n1. Class with `__aenter__`/`__aexit__`\n2. `@asynccontextmanager` decorator (simpler)",
+          "pseudo_code": "# Using @asynccontextmanager\n@asynccontextmanager\nasync def get_db():\n    session = await create_session()\n    try:\n        yield session\n    finally:\n        await session.close()\n\n# Usage\nasync with get_db() as session:\n    await session.execute(...)",
+          "actual_code": "import asyncio\nfrom contextlib import asynccontextmanager\n\n\n# 1. @asynccontextmanager decorator approach\n@asynccontextmanager\nasync def managed_resource(name: str):\n    \"\"\"Simulates an async resource with setup and teardown.\"\"\"\n    print(f\"  Acquiring {name}...\")\n    await asyncio.sleep(0.01)  # simulate async setup\n    resource = {\"name\": name, \"active\": True}\n    try:\n        yield resource\n    finally:\n        print(f\"  Releasing {name}...\")\n        await asyncio.sleep(0.01)  # simulate async cleanup\n        resource[\"active\"] = False\n\n\n# 2. Class-based async context manager\nclass AsyncDBSession:\n    def __init__(self, db_url: str):\n        self.db_url = db_url\n        self.connected = False\n\n    async def __aenter__(self):\n        print(f\"  Connecting to {self.db_url}...\")\n        await asyncio.sleep(0.01)\n        self.connected = True\n        return self\n\n    async def __aexit__(self, exc_type, exc_val, exc_tb):\n        print(f\"  Disconnecting from {self.db_url}...\")\n        await asyncio.sleep(0.01)\n        self.connected = False\n        return False  # don't suppress exceptions\n\n    async def query(self, sql: str) -> list:\n        await asyncio.sleep(0.01)\n        return [{\"id\": 1, \"result\": f\"from {sql}\"}]\n\n\nasync def main():\n    # Using the decorator-based manager\n    print(\"Decorator-based:\")\n    async with managed_resource(\"cache\") as cache:\n        print(f\"  Using: {cache}\")\n    print()\n\n    # Using the class-based manager\n    print(\"Class-based:\")\n    async with AsyncDBSession(\"postgresql://localhost/db\") as db:\n        results = await db.query(\"SELECT 1\")\n        print(f\"  Query result: {results}\")\n    print()\n\n    # Multiple async context managers\n    print(\"Multiple resources:\")\n    async with managed_resource(\"db\") as db, managed_resource(\"cache\") as cache:\n        print(f\"  Both active: db={db['active']}, cache={cache['active']}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Decorator-based:\n#   Acquiring cache...\n#   Using: {'name': 'cache', 'active': True}\n#   Releasing cache...\n# \n# Class-based:\n#   Connecting to postgresql://localhost/db...\n#   Query result: [{'id': 1, 'result': 'from SELECT 1'}]\n#   Disconnecting from postgresql://localhost/db...\n# \n# Multiple resources:\n#   Acquiring db...\n#   Acquiring cache...\n#   Both active: db=True, cache=True\n#   Releasing cache...\n#   Releasing db...",
+          "code_language": "python",
+          "key_points": [
+            "async with supports await in setup and teardown for resource management",
+            "@asynccontextmanager provides a simpler yield-based syntax",
+            "Class-based approach uses __aenter__ and __aexit__ async methods",
+            "FastAPI's lifespan handler is itself an async context manager"
+          ],
+          "gotchas": [
+            "__aexit__ must return False (or None) to propagate exceptions; True suppresses them",
+            "Cleanup in the finally block runs even if the body raises an exception",
+            "Multiple async with in one statement acquires resources left-to-right, releases right-to-left",
+            "Forgetting async with (using plain with) for an async context manager raises TypeError"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`async with` handles async resource setup/teardown. Use `@asynccontextmanager` with `yield` or a class with `__aenter__`/`__aexit__`. Common for DB sessions, HTTP clients, and FastAPI lifespan.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nfrom contextlib import asynccontextmanager\n\n@asynccontextmanager\nasync def db_session():\n    print(\"open\")\n    try:\n        yield {\"connected\": True}\n    finally:\n        print(\"close\")\n\nasync def main():\n    async with db_session() as db:\n        print(f\"using: {db}\")\n\nasyncio.run(main())\n\n# Expected Output:\n# open\n# using: {'connected': True}\n# close",
+          "code_language": "python",
+          "key_points": [
+            "async with ensures cleanup even on exceptions"
+          ],
+          "gotchas": [
+            "Using plain 'with' on an async context manager raises TypeError"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you make HTTP requests asynchronously with httpx?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "httpx",
+        "async",
+        "HTTP-client",
+        "external-APIs"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`httpx` is the recommended async HTTP client for FastAPI applications. It provides both sync and async APIs and is a drop-in replacement for `requests` with full `async/await` support.\n\n### Why httpx over requests:\n- `requests` is synchronous -- blocks the event loop in `async def` handlers\n- `httpx.AsyncClient` uses `await` for non-blocking HTTP calls\n- Supports HTTP/2, connection pooling, streaming, and timeouts\n- API is nearly identical to `requests`\n\n### Best practice in FastAPI:\n- Create a **shared** `AsyncClient` instance (not per-request) for connection pooling\n- Use the **lifespan** context manager to manage client lifecycle\n- Always use `async with` or explicitly close the client",
+          "pseudo_code": "@asynccontextmanager\nasync def lifespan(app):\n    app.state.http_client = httpx.AsyncClient()\n    yield\n    await app.state.http_client.aclose()\n\n@app.get(\"/proxy\")\nasync def proxy(request: Request):\n    client = request.app.state.http_client\n    resp = await client.get(\"https://api.example.com/data\")\n    return resp.json()",
+          "actual_code": "import httpx\nimport asyncio\nimport time\n\n\nasync def main():\n    # Basic async GET request\n    async with httpx.AsyncClient() as client:\n        # Single request\n        resp = await client.get(\"https://httpbin.org/get\", params={\"q\": \"fastapi\"})\n        print(f\"Status: {resp.status_code}\")\n        print(f\"URL: {resp.url}\")\n\n    # Concurrent requests with asyncio.gather\n    async with httpx.AsyncClient(timeout=10.0) as client:\n        start = time.time()\n        responses = await asyncio.gather(\n            client.get(\"https://httpbin.org/delay/1\"),\n            client.get(\"https://httpbin.org/delay/1\"),\n            client.get(\"https://httpbin.org/delay/1\"),\n        )\n        elapsed = time.time() - start\n        print(f\"\\n3 concurrent requests in {elapsed:.1f}s (not 3s)\")\n        print(f\"Status codes: {[r.status_code for r in responses]}\")\n\n    # POST with JSON body\n    async with httpx.AsyncClient() as client:\n        resp = await client.post(\n            \"https://httpbin.org/post\",\n            json={\"name\": \"FastAPI\", \"version\": \"0.100+\"},\n            headers={\"Authorization\": \"Bearer token123\"},\n        )\n        data = resp.json()\n        print(f\"\\nPOST response keys: {list(data.keys())}\")\n\n    # Error handling\n    async with httpx.AsyncClient() as client:\n        try:\n            resp = await client.get(\"https://httpbin.org/status/404\")\n            resp.raise_for_status()\n        except httpx.HTTPStatusError as e:\n            print(f\"\\nHTTP error: {e.response.status_code}\")\n        except httpx.RequestError as e:\n            print(f\"\\nRequest error: {e}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Status: 200\n# URL: https://httpbin.org/get?q=fastapi\n# \n# 3 concurrent requests in 1.1s (not 3s)\n# Status codes: [200, 200, 200]\n# \n# POST response keys: ['args', 'data', 'files', 'form', 'headers', 'json', 'origin', 'url']\n# \n# HTTP error: 404",
+          "code_language": "python",
+          "key_points": [
+            "httpx.AsyncClient is the async replacement for requests in FastAPI applications",
+            "Always use async with to ensure the client is properly closed",
+            "Combine with asyncio.gather for concurrent HTTP requests",
+            "Share a single AsyncClient instance via lifespan for connection pooling"
+          ],
+          "gotchas": [
+            "Creating a new AsyncClient per request wastes connection pool benefits and is slow",
+            "Default timeout is 5 seconds -- set explicit timeouts for slow external APIs",
+            "resp.json() is sync (not awaited) because the response body is already downloaded",
+            "httpx.AsyncClient must be closed explicitly if not using async with -- leaked connections"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`httpx.AsyncClient` provides non-blocking HTTP calls with `await`. Use `async with` for lifecycle management. Combine with `asyncio.gather` for concurrent requests. Share one client via lifespan for connection pooling.",
+          "pseudo_code": "",
+          "actual_code": "import httpx\nimport asyncio\n\nasync def main():\n    async with httpx.AsyncClient() as client:\n        resp = await client.get(\"https://httpbin.org/get\")\n        print(f\"Status: {resp.status_code}\")\n\nasyncio.run(main())\n\n# Expected Output:\n# Status: 200",
+          "code_language": "python",
+          "key_points": [
+            "httpx.AsyncClient replaces requests for async FastAPI apps"
+          ],
+          "gotchas": [
+            "Creating a new client per request wastes connection pooling"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the performance implications of async vs sync in FastAPI?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "performance",
+        "async",
+        "sync",
+        "benchmarking"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The choice between async and sync in FastAPI has significant performance implications depending on your workload type.\n\n### I/O-bound workloads (API calls, DB queries, file I/O):\n- **async def + await**: Best performance. One thread handles thousands of concurrent requests by switching at I/O waits.\n- **def (sync in threadpool)**: Good performance, but limited by threadpool size (~40 threads). Each blocked thread is idle.\n\n### CPU-bound workloads (data processing, image manipulation):\n- **async def**: Terrible -- blocks the event loop, freezes ALL requests\n- **def (sync)**: Runs in threadpool but still limited by GIL for CPU work\n- **Best**: `run_in_executor(ProcessPoolExecutor)` for true parallelism\n\n### Memory:\n- Async coroutines: ~1KB each (lightweight)\n- Threads: ~8MB stack each (heavier)\n- This means async handles more concurrent connections with less memory\n\n### Throughput comparison (typical I/O workload):\n| Approach | Concurrent capacity |\n|---|---|\n| async def | 1000s (limited by memory) |\n| def (threadpool) | ~40 (default pool size) |\n| async def + blocking | 1 (event loop blocked) |",
+          "pseudo_code": "# Best: async with async I/O library\nasync def fast():\n    data = await async_db.fetch()  # non-blocking\n\n# Good: sync with blocking library\ndef acceptable():\n    data = sync_db.fetch()  # threadpool handles it\n\n# Terrible: blocking in async\nasync def disaster():\n    data = sync_db.fetch()  # blocks entire event loop!",
+          "actual_code": "import asyncio\nimport time\nimport threading\n\n\n# Simulate I/O-bound work\nasync def async_io(duration: float) -> str:\n    await asyncio.sleep(duration)\n    return \"done\"\n\n\ndef sync_io(duration: float) -> str:\n    time.sleep(duration)\n    return \"done\"\n\n\nasync def benchmark_async(num_requests: int, io_duration: float):\n    \"\"\"Async handles all requests concurrently.\"\"\"\n    start = time.time()\n    tasks = [async_io(io_duration) for _ in range(num_requests)]\n    await asyncio.gather(*tasks)\n    return time.time() - start\n\n\nasync def benchmark_sync_in_executor(num_requests: int, io_duration: float):\n    \"\"\"Sync I/O in threadpool -- limited by thread count.\"\"\"\n    loop = asyncio.get_running_loop()\n    start = time.time()\n    tasks = [\n        loop.run_in_executor(None, sync_io, io_duration)\n        for _ in range(num_requests)\n    ]\n    await asyncio.gather(*tasks)\n    return time.time() - start\n\n\nasync def main():\n    num_requests = 100\n    io_duration = 0.1  # 100ms per request\n\n    # Async: all 100 run concurrently\n    async_time = await benchmark_async(num_requests, io_duration)\n    print(f\"Async ({num_requests} requests): {async_time:.2f}s\")\n    print(f\"  Theoretical min: {io_duration:.2f}s\")\n\n    # Sync in executor: limited by threadpool (~40 threads)\n    sync_time = await benchmark_sync_in_executor(num_requests, io_duration)\n    print(f\"\\nSync/threadpool ({num_requests} requests): {sync_time:.2f}s\")\n    print(f\"  ~{num_requests} requests / ~40 threads = ~{num_requests // 40 + 1} batches\")\n\n    print(f\"\\nAsync speedup: {sync_time / async_time:.1f}x\")\n    print(f\"\\nCoroutine memory: ~1KB each\")\n    print(f\"Thread memory: ~8MB each\")\n    print(f\"100 coroutines: ~100KB | 100 threads: ~800MB\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Async (100 requests): 0.10s\n#   Theoretical min: 0.10s\n# \n# Sync/threadpool (100 requests): 0.30s\n#   ~100 requests / ~40 threads = ~3 batches\n# \n# Async speedup: 3.0x\n# \n# Coroutine memory: ~1KB each\n# Thread memory: ~8MB each\n# 100 coroutines: ~100KB | 100 threads: ~800MB",
+          "code_language": "python",
+          "key_points": [
+            "Async handles thousands of concurrent I/O operations on one thread; sync is limited by threadpool size",
+            "Coroutines use ~1KB memory vs ~8MB per thread -- async scales better under load",
+            "CPU-bound work blocks the event loop in async -- use ProcessPoolExecutor or sync handlers",
+            "The biggest performance disaster is blocking I/O inside async def"
+          ],
+          "gotchas": [
+            "Async is NOT faster for a single request -- it is faster for concurrent requests",
+            "Using async just to be 'modern' without async I/O libraries provides zero benefit",
+            "Python's GIL means threads do not give true CPU parallelism -- only processes do",
+            "Benchmarking async code requires concurrent load testing (ab, wrk, locust) not sequential requests"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Async excels at I/O-bound concurrency: thousands of coroutines (~1KB each) vs ~40 threads (~8MB each). For CPU-bound work, use `ProcessPoolExecutor`. The worst case: blocking I/O in `async def` which freezes everything.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nimport time\n\nasync def main():\n    # 50 concurrent async I/O tasks\n    start = time.time()\n    await asyncio.gather(*[asyncio.sleep(0.1) for _ in range(50)])\n    print(f\"50 async tasks: {time.time() - start:.2f}s\")\n\nasyncio.run(main())\n\n# Expected Output:\n# 50 async tasks: 0.10s",
+          "code_language": "python",
+          "key_points": [
+            "Async scales better for I/O-bound concurrent workloads"
+          ],
+          "gotchas": [
+            "Async gives zero benefit without async I/O libraries"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle database operations asynchronously?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "database",
+        "SQLAlchemy",
+        "asyncpg"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Async database operations in FastAPI use **async-capable database drivers** and **SQLAlchemy's async engine** to prevent blocking the event loop.\n\n### Stack:\n- **SQLAlchemy 2.0+** provides `create_async_engine` and `AsyncSession`\n- **Async drivers**: `asyncpg` (PostgreSQL), `aiosqlite` (SQLite), `aiomysql` (MySQL)\n- **Session dependency**: Use a `yield` dependency to manage session lifecycle\n\n### Pattern:\n1. Create `AsyncEngine` with `create_async_engine()`\n2. Create `async_sessionmaker` bound to the engine\n3. Use a FastAPI dependency with `yield` to provide and close sessions\n4. Use `await session.execute()` for queries\n5. Use `await session.commit()` for writes",
+          "pseudo_code": "engine = create_async_engine(\"sqlite+aiosqlite:///app.db\")\nasync_session = async_sessionmaker(engine)\n\nasync def get_db():\n    async with async_session() as session:\n        yield session\n\n@app.get(\"/users\")\nasync def list_users(db: AsyncSession = Depends(get_db)):\n    result = await db.execute(select(User))\n    return result.scalars().all()",
+          "actual_code": "from sqlalchemy.ext.asyncio import (\n    create_async_engine,\n    AsyncSession,\n    async_sessionmaker,\n)\nfrom sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column\nfrom sqlalchemy import select, String\nimport asyncio\n\n\n# 1. Define models\nclass Base(DeclarativeBase):\n    pass\n\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n    email: Mapped[str] = mapped_column(String(200), unique=True)\n\n\n# 2. Create async engine and session factory\nengine = create_async_engine(\"sqlite+aiosqlite:///async_demo.db\", echo=False)\nasync_session_factory = async_sessionmaker(engine, expire_on_commit=False)\n\n\n# 3. Dependency for FastAPI\nasync def get_db():\n    \"\"\"Yield an async session, auto-close on completion.\"\"\"\n    async with async_session_factory() as session:\n        try:\n            yield session\n            await session.commit()\n        except Exception:\n            await session.rollback()\n            raise\n\n\n# 4. Example usage (standalone demo)\nasync def main():\n    # Create tables\n    async with engine.begin() as conn:\n        await conn.run_sync(Base.metadata.create_all)\n\n    # Insert data\n    async with async_session_factory() as session:\n        session.add_all([\n            User(name=\"Alice\", email=\"alice@example.com\"),\n            User(name=\"Bob\", email=\"bob@example.com\"),\n        ])\n        await session.commit()\n\n    # Query data\n    async with async_session_factory() as session:\n        result = await session.execute(select(User).order_by(User.name))\n        users = result.scalars().all()\n        for u in users:\n            print(f\"  {u.name} ({u.email})\")\n\n    # Cleanup\n    async with engine.begin() as conn:\n        await conn.run_sync(Base.metadata.drop_all)\n    await engine.dispose()\n\n    import os\n    os.remove(\"async_demo.db\") if os.path.exists(\"async_demo.db\") else None\n\n\nasyncio.run(main())\n\n# Expected Output:\n#   Alice (alice@example.com)\n#   Bob (bob@example.com)",
+          "code_language": "python",
+          "key_points": [
+            "Use create_async_engine with async drivers (asyncpg, aiosqlite) for non-blocking DB access",
+            "async_sessionmaker creates async session factories for FastAPI dependencies",
+            "Always await session.execute(), session.commit(), and session.rollback()",
+            "Use yield dependencies to auto-close sessions and handle rollback on errors"
+          ],
+          "gotchas": [
+            "Lazy loading does not work with async sessions -- use selectinload or joinedload for relationships",
+            "run_sync() is needed for operations that do not have async equivalents (like create_all)",
+            "expire_on_commit=False is usually needed to access attributes after commit",
+            "Mixing sync and async SQLAlchemy in the same app causes confusing errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `create_async_engine` + `async_sessionmaker` + async drivers (asyncpg, aiosqlite). All session operations require `await`. Use `yield` dependencies for session lifecycle management.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker\n\nengine = create_async_engine(\"sqlite+aiosqlite:///app.db\")\nSessionLocal = async_sessionmaker(engine)\n\n# FastAPI dependency\nasync def get_db():\n    async with SessionLocal() as session:\n        yield session",
+          "code_language": "python",
+          "key_points": [
+            "create_async_engine + async drivers for non-blocking DB access"
+          ],
+          "gotchas": [
+            "Lazy loading raises errors in async -- use eager loading strategies"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What happens when you use await inside a def (non-async) function?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "await",
+        "syntax-error",
+        "common-mistakes"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Using `await` inside a regular `def` function is a **SyntaxError** in Python. The `await` keyword is only valid inside `async def` functions (coroutines).\n\n### What happens:\n```python\ndef my_function():\n    await something()  # SyntaxError: 'await' outside function\n```\n\nThis fails at **parse time**, not runtime -- the code will not even load.\n\n### Common scenarios where developers make this mistake:\n1. Forgetting to add `async` to the function definition\n2. Calling an async function from a sync context\n3. Using async libraries in sync FastAPI handlers\n\n### Solutions:\n| Problem | Solution |\n|---|---|\n| Need await in handler | Change `def` to `async def` |\n| Sync handler needs async call | Use `asyncio.run()` (outside event loop only) |\n| Sync code inside running loop | Use `run_in_executor` to run sync code, not the reverse |",
+          "pseudo_code": "# WRONG -- SyntaxError\ndef handler():\n    data = await fetch()  # SyntaxError!\n\n# RIGHT -- make it async\nasync def handler():\n    data = await fetch()  # works",
+          "actual_code": "import asyncio\n\n\n# 1. SyntaxError demonstration\n# Uncommenting this would cause a SyntaxError at import time:\n# def broken_function():\n#     await asyncio.sleep(1)  # SyntaxError: 'await' outside async function\n\nprint(\"1. 'await' in def -> SyntaxError at parse time\")\n\n\n# 2. Correct: use async def\nasync def correct_function():\n    await asyncio.sleep(0.01)\n    return \"works\"\n\nresult = asyncio.run(correct_function())\nprint(f\"2. async def with await: {result}\")\n\n\n# 3. Common mistake: forgetting to await a coroutine\nasync def fetch_data() -> str:\n    await asyncio.sleep(0.01)\n    return \"data\"\n\nasync def forgot_await():\n    result = fetch_data()  # missing await! Returns coroutine, not \"data\"\n    print(f\"3. Forgot await: {type(result).__name__} (not str!)\")\n    # Fix:\n    result = await fetch_data()\n    print(f\"   With await: {result}\")\n\nasyncio.run(forgot_await())\n\n\n# 4. Calling async from sync context (outside event loop)\ndef sync_caller():\n    # asyncio.run() works when no event loop is running\n    result = asyncio.run(fetch_data())\n    print(f\"4. asyncio.run from sync: {result}\")\n\nsync_caller()\n\n\n# 5. What FastAPI does with sync handlers\ndef sync_handler():\n    # FastAPI runs this in a threadpool\n    # You cannot use await here, but blocking I/O is safe\n    import time\n    time.sleep(0.01)\n    return \"sync result\"\n\nprint(f\"5. Sync handler returns: {sync_handler()}\")\n\n# Expected Output:\n# 1. 'await' in def -> SyntaxError at parse time\n# 2. async def with await: works\n# 3. Forgot await: coroutine (not str!)\n#    With await: data\n# 4. asyncio.run from sync: data\n# 5. Sync handler returns: sync result",
+          "code_language": "python",
+          "key_points": [
+            "await inside def is a SyntaxError -- it only works inside async def",
+            "The error occurs at parse time, not runtime -- the module will not import",
+            "Forgetting await on a coroutine returns a coroutine object instead of the result",
+            "asyncio.run() can call async from sync, but only when no event loop is already running"
+          ],
+          "gotchas": [
+            "Calling a coroutine without await gives a RuntimeWarning and returns a coroutine object, not the result",
+            "asyncio.run() inside an already-running event loop raises RuntimeError -- use await instead",
+            "In FastAPI, never call asyncio.run() inside a handler -- the event loop is already running",
+            "Some IDEs auto-complete await in sync functions without showing the error until runtime"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`await` inside a regular `def` is a `SyntaxError` -- it only works in `async def`. Common fix: add `async` to the function. Calling a coroutine without `await` returns a coroutine object, not the result.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\n# WRONG: await in def -> SyntaxError\n# def bad():\n#     await asyncio.sleep(1)  # SyntaxError!\n\n# RIGHT: use async def\nasync def good():\n    await asyncio.sleep(0.01)\n    return \"works\"\n\nprint(asyncio.run(good()))\n\n# Expected Output:\n# works",
+          "code_language": "python",
+          "key_points": [
+            "await requires async def -- SyntaxError otherwise"
+          ],
+          "gotchas": [
+            "Forgetting await on a coroutine silently returns a coroutine object, not the result"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle async generators in FastAPI?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "generators",
+        "streaming",
+        "yield"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Async generators use `async def` with `yield` to produce values asynchronously. In FastAPI, they are used for **streaming responses** and **yield dependencies**.\n\n### Two main use cases:\n1. **StreamingResponse**: Stream data to clients incrementally (large files, SSE, real-time data)\n2. **Yield dependencies**: Setup/teardown pattern for resources like DB sessions\n\n### Syntax:\n```python\nasync def my_generator():\n    yield value1\n    await some_async_operation()\n    yield value2\n```\n\n### How they differ from regular generators:\n- Use `async for` instead of `for` to iterate\n- Can `await` between yields\n- Implement `__aiter__` and `__anext__` protocols",
+          "pseudo_code": "# Streaming response\nasync def generate_data():\n    for chunk in data_source:\n        yield await process(chunk)\n\n@app.get(\"/stream\")\nasync def stream():\n    return StreamingResponse(generate_data())\n\n# Yield dependency\nasync def get_db():\n    session = AsyncSession()\n    yield session\n    await session.close()",
+          "actual_code": "import asyncio\nfrom fastapi import FastAPI, Depends\nfrom fastapi.responses import StreamingResponse\nfrom typing import AsyncGenerator, Annotated\n\napp = FastAPI()\n\n\n# 1. Basic async generator\nasync def async_counter(n: int) -> AsyncGenerator[int, None]:\n    for i in range(n):\n        await asyncio.sleep(0.01)  # simulates async work\n        yield i\n\n\n# 2. Streaming response with async generator\nasync def generate_csv_rows():\n    \"\"\"Generate CSV data row by row.\"\"\"\n    yield \"id,name,email\\n\"\n    for i in range(1, 4):\n        await asyncio.sleep(0.01)  # simulates DB fetch\n        yield f\"{i},user_{i},user_{i}@example.com\\n\"\n\n\n@app.get(\"/export-csv\")\nasync def export_csv():\n    return StreamingResponse(\n        generate_csv_rows(),\n        media_type=\"text/csv\",\n        headers={\"Content-Disposition\": \"attachment; filename=users.csv\"}\n    )\n\n\n# 3. Yield dependency (async generator for resource management)\nasync def get_db_session() -> AsyncGenerator[dict, None]:\n    \"\"\"Simulates async DB session lifecycle.\"\"\"\n    session = {\"connected\": True, \"queries\": 0}\n    try:\n        yield session  # provide session to handler\n    finally:\n        session[\"connected\"] = False  # cleanup\n\n\n@app.get(\"/users\")\nasync def list_users(db: Annotated[dict, Depends(get_db_session)]):\n    db[\"queries\"] += 1\n    return {\"users\": [\"alice\", \"bob\"], \"db_queries\": db[\"queries\"]}\n\n\n# Standalone demo\nasync def main():\n    # Iterate async generator\n    print(\"Async counter:\")\n    values = []\n    async for num in async_counter(5):\n        values.append(num)\n    print(f\"  Values: {values}\")\n\n    # Collect streaming output\n    print(\"\\nCSV stream:\")\n    async for row in generate_csv_rows():\n        print(f\"  {row}\", end=\"\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# Async counter:\n#   Values: [0, 1, 2, 3, 4]\n# \n# CSV stream:\n#   id,name,email\n#   1,user_1,user_1@example.com\n#   2,user_2,user_2@example.com\n#   3,user_3,user_3@example.com",
+          "code_language": "python",
+          "key_points": [
+            "Async generators use async def with yield and support await between yields",
+            "StreamingResponse accepts async generators for incremental data delivery",
+            "Yield dependencies use async generators for resource setup/teardown",
+            "Use async for to iterate and AsyncGenerator type hint for annotations"
+          ],
+          "gotchas": [
+            "You cannot use return with a value in an async generator -- only bare return or yield",
+            "StreamingResponse does not buffer -- ensure each yielded chunk is a complete, valid piece of data",
+            "Yield dependencies must yield exactly once -- multiple yields cause an error",
+            "async for is required -- using regular for on an async generator does not work"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Async generators (`async def` + `yield`) enable streaming responses and yield dependencies. Use `StreamingResponse(async_gen())` for incremental data. Use `async for` to iterate.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\nasync def count_async(n: int):\n    for i in range(n):\n        await asyncio.sleep(0.01)\n        yield i\n\nasync def main():\n    async for num in count_async(3):\n        print(num)\n\nasyncio.run(main())\n\n# Expected Output:\n# 0\n# 1\n# 2",
+          "code_language": "python",
+          "key_points": [
+            "async def + yield = async generator; iterate with async for"
+          ],
+          "gotchas": [
+            "Regular for loop does not work on async generators -- must use async for"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the relationship between ASGI and async in FastAPI?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "ASGI",
+        "async",
+        "uvicorn",
+        "protocol"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**ASGI** (Asynchronous Server Gateway Interface) is the protocol that connects FastAPI to an async-capable web server. It is the async successor to **WSGI** (used by Flask/Django).\n\n### WSGI vs ASGI:\n| Feature | WSGI | ASGI |\n|---|---|---|\n| Protocol | Synchronous | Asynchronous |\n| Concurrency | Thread per request | Event loop + coroutines |\n| WebSockets | Not supported | Supported |\n| HTTP/2 | Limited | Supported |\n| Frameworks | Flask, Django | FastAPI, Starlette |\n| Servers | Gunicorn, uWSGI | Uvicorn, Hypercorn, Daphne |\n\n### How it works:\n1. **Uvicorn** (ASGI server) creates the event loop and listens for connections\n2. Each request becomes an ASGI event sent to the FastAPI app\n3. FastAPI (built on **Starlette**) implements the ASGI interface\n4. The app processes the request as a coroutine on the event loop\n5. Response is sent back through the ASGI server\n\n### The ASGI interface:\nEvery ASGI app is a callable: `async def app(scope, receive, send)`\n- `scope`: Connection metadata (type, path, headers)\n- `receive`: Async callable to receive request data\n- `send`: Async callable to send response data",
+          "pseudo_code": "# ASGI app interface (what FastAPI implements internally)\nasync def asgi_app(scope, receive, send):\n    if scope['type'] == 'http':\n        body = await receive()\n        await send({'type': 'http.response.start', 'status': 200})\n        await send({'type': 'http.response.body', 'body': b'Hello'})",
+          "actual_code": "import asyncio\n\n\n# A minimal ASGI application (what FastAPI wraps)\nasync def minimal_asgi_app(scope, receive, send):\n    \"\"\"Bare ASGI app -- this is what frameworks abstract away.\"\"\"\n    if scope[\"type\"] == \"http\":\n        # Read request body\n        body = await receive()\n\n        # Send response headers\n        await send({\n            \"type\": \"http.response.start\",\n            \"status\": 200,\n            \"headers\": [\n                [b\"content-type\", b\"text/plain\"],\n            ],\n        })\n\n        # Send response body\n        await send({\n            \"type\": \"http.response.body\",\n            \"body\": b\"Hello from raw ASGI!\",\n        })\n\n\n# FastAPI abstracts all of this:\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/hello\")\nasync def hello():\n    return {\"message\": \"Hello from FastAPI!\"}\n\n# FastAPI IS an ASGI app:\nprint(f\"FastAPI is callable: {callable(app)}\")\nprint(f\"FastAPI app type: {type(app).__name__}\")\n\n# Starlette (FastAPI's base) implements the ASGI protocol\nfrom starlette.applications import Starlette\nprint(f\"FastAPI inherits from Starlette: {isinstance(app, Starlette)}\")\n\n# ASGI servers that run FastAPI:\nservers = [\n    \"uvicorn    -- production-grade, most common\",\n    \"hypercorn  -- supports HTTP/2 and HTTP/3\",\n    \"daphne     -- Django Channels' ASGI server\",\n]\nprint(\"\\nASGI servers:\")\nfor s in servers:\n    print(f\"  {s}\")\n\n# Expected Output:\n# FastAPI is callable: True\n# FastAPI app type: FastAPI\n# FastAPI inherits from Starlette: True\n# \n# ASGI servers:\n#   uvicorn    -- production-grade, most common\n#   hypercorn  -- supports HTTP/2 and HTTP/3\n#   daphne     -- Django Channels' ASGI server",
+          "code_language": "python",
+          "key_points": [
+            "ASGI is the async protocol connecting FastAPI to servers like Uvicorn",
+            "ASGI supports WebSockets and HTTP/2, which WSGI cannot",
+            "FastAPI inherits from Starlette which implements the ASGI interface",
+            "An ASGI app is an async callable: async def app(scope, receive, send)"
+          ],
+          "gotchas": [
+            "Running FastAPI with a WSGI server (like Gunicorn without uvicorn workers) loses all async benefits",
+            "Gunicorn CAN run FastAPI using uvicorn workers: gunicorn -k uvicorn.workers.UvicornWorker",
+            "ASGI middleware wraps the raw protocol -- different from FastAPI's @app.middleware which is higher-level",
+            "Not all hosting platforms support ASGI -- verify your deployment target"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ASGI is the async protocol connecting FastAPI to servers like Uvicorn. It replaces WSGI (sync) and adds WebSocket/HTTP/2 support. FastAPI inherits from Starlette which implements ASGI.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.applications import Starlette\n\napp = FastAPI()\n\n# FastAPI IS an ASGI app\nprint(f\"Callable: {callable(app)}\")\nprint(f\"Is Starlette: {isinstance(app, Starlette)}\")\n\n# Run with: uvicorn main:app\n\n# Expected Output:\n# Callable: True\n# Is Starlette: True",
+          "code_language": "python",
+          "key_points": [
+            "ASGI = async protocol; WSGI = sync protocol; FastAPI requires ASGI"
+          ],
+          "gotchas": [
+            "Gunicorn needs uvicorn workers (-k uvicorn.workers.UvicornWorker) for async support"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you run blocking code in async endpoints?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "blocking",
+        "run_in_executor",
+        "to_thread"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you must call blocking code from an `async def` endpoint, you need to offload it to a thread or process pool to prevent blocking the event loop.\n\n### Three approaches:\n\n1. **`asyncio.to_thread(func, *args)`** (Python 3.9+) -- simplest\n2. **`loop.run_in_executor(executor, func, *args)`** -- more control\n3. **Change to `def` handler** -- let FastAPI handle the threadpool automatically\n\n### Decision tree:\n- Is the handler mostly async with one blocking call? -> `asyncio.to_thread()`\n- Do you need a custom thread/process pool? -> `run_in_executor()`\n- Is the entire handler blocking? -> Just use `def` instead of `async def`",
+          "pseudo_code": "# Option 1: asyncio.to_thread (simplest)\nasync def handler():\n    result = await asyncio.to_thread(blocking_func, arg)\n    return result\n\n# Option 2: run_in_executor (custom pool)\nasync def handler():\n    loop = asyncio.get_running_loop()\n    result = await loop.run_in_executor(pool, blocking_func, arg)\n    return result\n\n# Option 3: just use def (FastAPI handles threadpool)\ndef handler():\n    result = blocking_func(arg)\n    return result",
+          "actual_code": "import asyncio\nimport time\nfrom concurrent.futures import ThreadPoolExecutor\n\n\ndef heavy_computation(n: int) -> int:\n    \"\"\"Blocking CPU work.\"\"\"\n    time.sleep(0.1)  # simulate work\n    return sum(range(n))\n\n\ndef sync_file_read(path: str) -> str:\n    \"\"\"Blocking file I/O.\"\"\"\n    time.sleep(0.05)  # simulate slow I/O\n    return f\"Contents of {path}\"\n\n\nasync def main():\n    # Approach 1: asyncio.to_thread (Python 3.9+, simplest)\n    print(\"1. asyncio.to_thread:\")\n    start = time.time()\n    results = await asyncio.gather(\n        asyncio.to_thread(heavy_computation, 1000),\n        asyncio.to_thread(heavy_computation, 1000),\n    )\n    print(f\"   Results: {results}, Time: {time.time() - start:.2f}s\")\n\n    # Approach 2: run_in_executor with custom pool\n    print(\"\\n2. run_in_executor with custom pool:\")\n    loop = asyncio.get_running_loop()\n    pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix=\"custom\")\n\n    start = time.time()\n    results = await asyncio.gather(\n        loop.run_in_executor(pool, sync_file_read, \"/file1.txt\"),\n        loop.run_in_executor(pool, sync_file_read, \"/file2.txt\"),\n        loop.run_in_executor(pool, sync_file_read, \"/file3.txt\"),\n    )\n    print(f\"   Results: {results}\")\n    print(f\"   Time: {time.time() - start:.2f}s\")\n    pool.shutdown(wait=False)\n\n    # Approach 3: functools.partial for functions with kwargs\n    print(\"\\n3. With keyword arguments (partial):\")\n    from functools import partial\n\n    def greet(name: str, greeting: str = \"Hello\") -> str:\n        time.sleep(0.01)\n        return f\"{greeting}, {name}!\"\n\n    result = await asyncio.to_thread(partial(greet, name=\"World\", greeting=\"Hi\"))\n    print(f\"   {result}\")\n\n\nasyncio.run(main())\n\n# Expected Output:\n# 1. asyncio.to_thread:\n#    Results: [499500, 499500], Time: 0.10s\n# \n# 2. run_in_executor with custom pool:\n#    Results: ['Contents of /file1.txt', 'Contents of /file2.txt', 'Contents of /file3.txt']\n#    Time: 0.05s\n# \n# 3. With keyword arguments (partial):\n#    Hi, World!",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.to_thread() is the simplest way to run blocking code from async (Python 3.9+)",
+            "run_in_executor gives control over pool type and size",
+            "Use functools.partial for blocking functions that need keyword arguments",
+            "If the entire handler is blocking, just use def -- FastAPI auto-threads it"
+          ],
+          "gotchas": [
+            "asyncio.to_thread passes only positional args -- use partial for kwargs",
+            "The blocking function runs in a different thread -- ensure thread safety for shared state",
+            "Do not pass coroutines to run_in_executor -- it expects regular functions",
+            "Thread pools have finite size -- too many concurrent blocking calls queue up"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `asyncio.to_thread(func, *args)` (Python 3.9+) or `loop.run_in_executor(None, func, arg)` to offload blocking code. Or just use `def` instead of `async def` and let FastAPI handle the threadpool.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\nimport time\n\ndef blocking_work(n: int) -> int:\n    time.sleep(0.1)\n    return n * n\n\nasync def main():\n    result = await asyncio.to_thread(blocking_work, 5)\n    print(result)\n\nasyncio.run(main())\n\n# Expected Output:\n# 25",
+          "code_language": "python",
+          "key_points": [
+            "to_thread is the simplest way; or just use def handler for full-blocking endpoints"
+          ],
+          "gotchas": [
+            "Ensure thread safety -- blocking functions run in different threads"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are common async pitfalls in FastAPI applications?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "async",
+        "pitfalls",
+        "common-mistakes",
+        "debugging"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Async programming in FastAPI introduces several common pitfalls that can cause performance degradation, bugs, or crashes.\n\n### Top pitfalls:\n\n1. **Blocking the event loop**: Using `time.sleep()`, `requests.get()`, or synchronous DB drivers in `async def`\n2. **Forgetting await**: Calling a coroutine without `await` returns a coroutine object, not the result\n3. **Creating resources per-request**: Making a new `httpx.AsyncClient` or DB engine per request instead of sharing\n4. **Fire-and-forget coroutines**: Creating tasks without awaiting them -- they may be garbage collected\n5. **Shared mutable state without locks**: Multiple coroutines modifying shared data without `asyncio.Lock`\n6. **asyncio.run inside running loop**: Calling `asyncio.run()` in a handler crashes because the loop is already running\n7. **Mixing sync/async ORMs**: Using sync SQLAlchemy session methods in async handlers",
+          "pseudo_code": "# Pitfall 1: Blocking in async\nasync def bad():\n    requests.get(url)  # BLOCKS event loop!\n\n# Pitfall 2: Forgetting await\nasync def bad():\n    result = async_func()  # coroutine object, not result!\n\n# Pitfall 3: Resource per request\nasync def bad():\n    async with httpx.AsyncClient() as c:  # new client each time!\n        ...",
+          "actual_code": "import asyncio\nimport time\n\n\n# Pitfall 1: Blocking the event loop\nasync def demo_blocking():\n    \"\"\"Shows how blocking code affects concurrent coroutines.\"\"\"\n    async def slow_handler():\n        time.sleep(0.5)  # BLOCKS the event loop!\n        return \"blocked\"\n\n    async def other_handler():\n        await asyncio.sleep(0.1)\n        return \"fast\"\n\n    start = time.time()\n    # These should be concurrent but blocking makes them sequential\n    results = await asyncio.gather(\n        slow_handler(),\n        other_handler(),\n    )\n    elapsed = time.time() - start\n    print(f\"1. Blocking pitfall: {elapsed:.2f}s (should be ~0.5s, is {elapsed:.2f}s)\")\n\n\n# Pitfall 2: Forgetting await\nasync def demo_forgot_await():\n    async def fetch_data():\n        return {\"key\": \"value\"}\n\n    # Wrong: no await\n    bad_result = fetch_data()\n    print(f\"2. Forgot await: {type(bad_result).__name__} (not dict!)\")\n\n    # Right: with await\n    good_result = await fetch_data()\n    print(f\"   With await: {type(good_result).__name__}\")\n\n\n# Pitfall 3: Shared mutable state without locks\nasync def demo_race_condition():\n    counter = {\"value\": 0}\n\n    async def increment_unsafe():\n        current = counter[\"value\"]\n        await asyncio.sleep(0.001)  # context switch happens here\n        counter[\"value\"] = current + 1\n\n    # Run 100 increments -- many will be lost due to race condition\n    counter[\"value\"] = 0\n    await asyncio.gather(*[increment_unsafe() for _ in range(100)])\n    print(f\"3. Without lock: {counter['value']} (expected 100)\")\n\n    # Fix: use asyncio.Lock\n    lock = asyncio.Lock()\n    async def increment_safe():\n        async with lock:\n            current = counter[\"value\"]\n            await asyncio.sleep(0.001)\n            counter[\"value\"] = current + 1\n\n    counter[\"value\"] = 0\n    await asyncio.gather(*[increment_safe() for _ in range(100)])\n    print(f\"   With lock: {counter['value']} (expected 100)\")\n\n\n# Pitfall 4: Fire-and-forget tasks\nasync def demo_fire_and_forget():\n    async def background_work():\n        await asyncio.sleep(0.01)\n        return \"completed\"\n\n    # Bad: task may be garbage collected\n    task = asyncio.create_task(background_work())  # noqa\n    # Good: keep a reference and await or store in a set\n    task = asyncio.create_task(background_work())\n    result = await task\n    print(f\"4. Awaited task: {result}\")\n\n\nasync def main():\n    await demo_blocking()\n    await demo_forgot_await()\n    await demo_race_condition()\n    await demo_fire_and_forget()\n\n\nasyncio.run(main())\n\n# Expected Output:\n# 1. Blocking pitfall: 0.50s (should be ~0.5s, is 0.50s)\n# 2. Forgot await: coroutine (not dict!)\n#    With await: dict\n# 3. Without lock: 1 (expected 100)\n#    With lock: 100 (expected 100)\n# 4. Awaited task: completed",
+          "code_language": "python",
+          "key_points": [
+            "Never use blocking I/O (requests, time.sleep, sync DB) inside async def",
+            "Always await coroutines -- without await you get a coroutine object, not the result",
+            "Use asyncio.Lock for shared mutable state accessed by multiple coroutines",
+            "Keep references to created tasks or they may be garbage collected"
+          ],
+          "gotchas": [
+            "Blocking the event loop is silent -- no error, just terrible performance under concurrent load",
+            "Python emits RuntimeWarning for unawaited coroutines, but it is easy to miss in logs",
+            "asyncio.Lock is NOT thread-safe -- it only protects against coroutine concurrency, not thread concurrency",
+            "Creating too many tasks with gather can overwhelm external services -- use Semaphore for rate limiting"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Top pitfalls: blocking the event loop (time.sleep/requests in async def), forgetting await (returns coroutine object), shared state without asyncio.Lock, and creating AsyncClient per request. All cause silent performance degradation.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\n# Pitfall: forgetting await\nasync def fetch():\n    return \"data\"\n\nasync def main():\n    bad = fetch()       # coroutine object, not \"data\"!\n    good = await fetch() # correct\n    print(type(bad).__name__, good)\n\nasyncio.run(main())\n\n# Expected Output:\n# coroutine data",
+          "code_language": "python",
+          "key_points": [
+            "Most async pitfalls are silent -- no errors, just degraded performance"
+          ],
+          "gotchas": [
+            "asyncio.Lock protects against coroutine races, not thread races"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement async middleware?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "async",
+        "request-processing",
+        "ASGI"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI supports two types of async middleware:\n\n### 1. HTTP middleware (decorator-based):\n- Uses `@app.middleware(\"http\")` decorator\n- Receives `request` and `call_next` callable\n- Can modify request before and response after the handler\n- Easier to write but processes the full response body in memory\n\n### 2. Pure ASGI middleware (class-based):\n- Implements the raw ASGI protocol\n- More performant, can stream responses\n- More complex to write\n- Used by built-in middleware like CORSMiddleware\n\n### Execution order:\nMiddleware executes in **reverse registration order** (last added = outermost = runs first).",
+          "pseudo_code": "# HTTP middleware\n@app.middleware(\"http\")\nasync def my_middleware(request, call_next):\n    # Before handler\n    response = await call_next(request)\n    # After handler\n    return response\n\n# ASGI middleware\nclass MyMiddleware:\n    def __init__(self, app):\n        self.app = app\n    async def __call__(self, scope, receive, send):\n        # Before\n        await self.app(scope, receive, send)\n        # After",
+          "actual_code": "import asyncio\nimport time\nfrom fastapi import FastAPI, Request\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.types import ASGIApp, Receive, Scope, Send\n\napp = FastAPI()\n\n\n# 1. Decorator-based HTTP middleware (simplest)\n@app.middleware(\"http\")\nasync def add_process_time_header(request: Request, call_next):\n    start_time = time.time()\n    response = await call_next(request)\n    process_time = time.time() - start_time\n    response.headers[\"X-Process-Time\"] = f\"{process_time:.4f}\"\n    return response\n\n\n@app.middleware(\"http\")\nasync def add_request_id(request: Request, call_next):\n    import uuid\n    request_id = str(uuid.uuid4())[:8]\n    request.state.request_id = request_id\n    response = await call_next(request)\n    response.headers[\"X-Request-ID\"] = request_id\n    return response\n\n\n# 2. Class-based middleware (extending BaseHTTPMiddleware)\nclass RateLimitMiddleware(BaseHTTPMiddleware):\n    def __init__(self, app, max_requests: int = 100):\n        super().__init__(app)\n        self.max_requests = max_requests\n        self.request_count = 0\n\n    async def dispatch(self, request: Request, call_next):\n        self.request_count += 1\n        if self.request_count > self.max_requests:\n            return JSONResponse(\n                {\"error\": \"Rate limit exceeded\"},\n                status_code=429\n            )\n        response = await call_next(request)\n        response.headers[\"X-Rate-Remaining\"] = str(\n            self.max_requests - self.request_count\n        )\n        return response\n\n\napp.add_middleware(RateLimitMiddleware, max_requests=1000)\n\n\n# 3. Pure ASGI middleware (most performant)\nclass CustomHeaderMiddleware:\n    def __init__(self, app: ASGIApp, header_value: str = \"FastAPI\"):\n        self.app = app\n        self.header_value = header_value\n\n    async def __call__(self, scope: Scope, receive: Receive, send: Send):\n        if scope[\"type\"] != \"http\":\n            await self.app(scope, receive, send)\n            return\n\n        async def send_with_header(message):\n            if message[\"type\"] == \"http.response.start\":\n                headers = list(message.get(\"headers\", []))\n                headers.append(\n                    [b\"x-powered-by\", self.header_value.encode()]\n                )\n                message[\"headers\"] = headers\n            await send(message)\n\n        await self.app(scope, receive, send_with_header)\n\n\napp.add_middleware(CustomHeaderMiddleware, header_value=\"FastAPI-Demo\")\n\n\n@app.get(\"/hello\")\nasync def hello(request: Request):\n    return {\n        \"message\": \"hello\",\n        \"request_id\": getattr(request.state, 'request_id', 'none'),\n    }\n\n\n# Test it\nclient = TestClient(app)\nresp = client.get(\"/hello\")\nprint(f\"Body: {resp.json()}\")\nprint(f\"X-Process-Time: {resp.headers.get('X-Process-Time', 'missing')}\")\nprint(f\"X-Request-ID: {resp.headers.get('X-Request-ID', 'missing')}\")\nprint(f\"X-Powered-By: {resp.headers.get('X-Powered-By', 'missing')}\")\nprint(f\"X-Rate-Remaining: {resp.headers.get('X-Rate-Remaining', 'missing')}\")\n\n# Expected Output:\n# Body: {'message': 'hello', 'request_id': '<8-char-uuid>'}\n# X-Process-Time: <float>\n# X-Request-ID: <8-char-uuid>\n# X-Powered-By: FastAPI-Demo\n# X-Rate-Remaining: 999",
+          "code_language": "python",
+          "key_points": [
+            "@app.middleware('http') is the simplest async middleware pattern",
+            "Class-based middleware extends BaseHTTPMiddleware with a dispatch method",
+            "Pure ASGI middleware is most performant but requires manual protocol handling",
+            "Middleware executes in reverse registration order -- last added runs first"
+          ],
+          "gotchas": [
+            "BaseHTTPMiddleware consumes the entire response body into memory -- bad for large streaming responses",
+            "call_next can only be called once per request -- calling it twice raises an error",
+            "request.state is the correct way to pass data between middleware and handlers",
+            "Exceptions in middleware can bypass exception handlers if not caught properly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@app.middleware('http')` creates async middleware with `request` and `call_next`. Process before/after the handler. Class-based middleware extends `BaseHTTPMiddleware`. Middleware runs in reverse registration order.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\nimport time\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def timing(request: Request, call_next):\n    start = time.time()\n    response = await call_next(request)\n    response.headers[\"X-Time\"] = f\"{time.time() - start:.4f}\"\n    return response\n\n@app.get(\"/\")\nasync def root():\n    return {\"ok\": True}",
+          "code_language": "python",
+          "key_points": [
+            "@app.middleware('http') wraps handlers with before/after logic"
+          ],
+          "gotchas": [
+            "BaseHTTPMiddleware buffers the entire response -- avoid for streaming"
+          ]
+        }
+      ]
+    }
+  ]
+}

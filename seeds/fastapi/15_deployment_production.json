@@ -1,0 +1,705 @@
+{
+  "concept_slug": "deployment-production",
+  "questions": [
+    {
+      "title": "How do you configure Uvicorn for production?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "uvicorn",
+        "production",
+        "asgi",
+        "configuration"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Uvicorn** is the recommended ASGI server for FastAPI. In development you run it with `--reload`, but production requires different settings for performance, security, and reliability.\n\n### Critical production flags:\n\n| Flag | Dev | Production |\n|------|-----|------------|\n| `--reload` | Yes | **Never** (file watchers waste CPU) |\n| `--workers` | 1 | 2-4 per CPU core |\n| `--host` | 127.0.0.1 | 0.0.0.0 (behind reverse proxy) |\n| `--port` | 8000 | 8000 (reverse proxy on 80/443) |\n| `--log-level` | debug | info or warning |\n| `--access-log` | Yes | Disable if reverse proxy logs |\n| `--proxy-headers` | No | Yes (behind Nginx/ALB) |\n| `--forwarded-allow-ips` | N/A | Reverse proxy IPs |\n\n### Worker count formula:\nA common guideline is `(2 * CPU_cores) + 1`. For I/O-bound apps (most APIs), this works well. For CPU-bound apps, keep workers equal to CPU cores.\n\n### Performance tuning:\n- `--loop uvloop`: Use uvloop for faster async I/O (Linux only)\n- `--http httptools`: Use httptools for faster HTTP parsing\n- `--limit-concurrency`: Limit max concurrent connections\n- `--timeout-keep-alive`: Default 5s, increase for long-polling\n\n### Security:\n- Always run behind a reverse proxy (Nginx, Caddy, or cloud load balancer)\n- Use `--proxy-headers` so Uvicorn trusts X-Forwarded-For headers\n- Set `--forwarded-allow-ips` to your reverse proxy's IP",
+          "pseudo_code": "# Development\nuvicorn app:app --reload --log-level debug\n\n# Production\nuvicorn app:app \\\n    --host 0.0.0.0 \\\n    --port 8000 \\\n    --workers 4 \\\n    --loop uvloop \\\n    --http httptools \\\n    --proxy-headers \\\n    --forwarded-allow-ips \"172.17.0.1\" \\\n    --log-level warning \\\n    --no-access-log",
+          "actual_code": "# --- uvicorn_config.py: Programmatic configuration ---\nimport multiprocessing\nimport uvicorn\n\ndef get_worker_count() -> int:\n    \"\"\"Calculate optimal worker count based on CPU cores.\"\"\"\n    cores = multiprocessing.cpu_count()\n    return (2 * cores) + 1\n\nif __name__ == \"__main__\":\n    uvicorn.run(\n        \"app.main:app\",\n        host=\"0.0.0.0\",\n        port=8000,\n        workers=get_worker_count(),\n        loop=\"uvloop\",\n        http=\"httptools\",\n        proxy_headers=True,\n        forwarded_allow_ips=\"*\",  # Restrict in production!\n        log_level=\"info\",\n        access_log=False,\n        timeout_keep_alive=5,\n        limit_concurrency=1000,\n        limit_max_requests=10000,  # Restart worker after N requests\n    )\n\n# --- app/main.py ---\nfrom fastapi import FastAPI\n\napp = FastAPI(\n    title=\"My API\",\n    docs_url=None,       # Disable Swagger in production\n    redoc_url=None,      # Disable ReDoc in production\n    openapi_url=None,    # Disable OpenAPI schema in production\n)\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\"}\n\n# --- Command line production examples ---\n# Basic production:\n# uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4\n\n# Optimized production (Linux):\n# uvicorn app.main:app \\\n#     --host 0.0.0.0 --port 8000 \\\n#     --workers 9 \\\n#     --loop uvloop --http httptools \\\n#     --proxy-headers \\\n#     --forwarded-allow-ips \"10.0.0.0/8\" \\\n#     --log-level warning --no-access-log \\\n#     --limit-concurrency 1000 \\\n#     --limit-max-requests 10000\n\n# With SSL (direct, no reverse proxy):\n# uvicorn app.main:app \\\n#     --host 0.0.0.0 --port 443 \\\n#     --ssl-keyfile /path/to/key.pem \\\n#     --ssl-certfile /path/to/cert.pem",
+          "code_language": "python",
+          "key_points": [
+            "Never use --reload in production -- it wastes CPU on file watching",
+            "Use --workers with (2 * CPU_cores) + 1 as a starting point",
+            "Always enable --proxy-headers when behind a reverse proxy for correct client IPs",
+            "Use uvloop and httptools on Linux for significant performance gains"
+          ],
+          "gotchas": [
+            "uvloop is not available on Windows -- Uvicorn falls back to the default asyncio loop",
+            "--forwarded-allow-ips='*' trusts all proxies -- restrict to your actual proxy IPs in production",
+            "Disabling docs_url/redoc_url/openapi_url in production prevents API schema exposure but also breaks interactive testing",
+            "--limit-max-requests restarts workers after N requests to mitigate memory leaks, but causes brief request drops during restart"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "For production, run Uvicorn with `--workers` (2*CPU+1), `--proxy-headers`, `--loop uvloop`, `--http httptools`, and `--no-access-log`. Never use `--reload`. Always run behind a reverse proxy (Nginx/Caddy).",
+          "pseudo_code": "",
+          "actual_code": "# Production command\n# uvicorn app.main:app \\\n#     --host 0.0.0.0 --port 8000 \\\n#     --workers 4 \\\n#     --loop uvloop --http httptools \\\n#     --proxy-headers \\\n#     --log-level warning --no-access-log\n\nimport uvicorn\nif __name__ == \"__main__\":\n    uvicorn.run(\n        \"app.main:app\",\n        host=\"0.0.0.0\",\n        port=8000,\n        workers=4,\n        proxy_headers=True,\n    )",
+          "code_language": "python",
+          "key_points": [
+            "Use --workers, --proxy-headers, uvloop, and httptools for production"
+          ],
+          "gotchas": [
+            "Never use --reload in production -- it enables a file watcher that consumes CPU"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Gunicorn with Uvicorn workers?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "gunicorn",
+        "uvicorn",
+        "workers",
+        "process-management"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Gunicorn** is a mature process manager that can spawn and manage multiple Uvicorn worker processes. This combination gives you Gunicorn's robust process management (graceful restarts, worker recycling, signal handling) with Uvicorn's async ASGI performance.\n\n### Why Gunicorn + Uvicorn:\n- **Gunicorn manages processes**: Restarts crashed workers, handles signals (SIGHUP for reload, SIGTERM for shutdown)\n- **Uvicorn handles async**: Each worker runs an async event loop\n- Uvicorn's built-in `--workers` flag uses `multiprocessing.Process` which lacks Gunicorn's supervision features\n\n### Configuration:\n```\ngunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4\n```\n- `-k uvicorn.workers.UvicornWorker`: Use Uvicorn as the worker class\n- `-w 4`: Number of worker processes\n- `-b 0.0.0.0:8000`: Bind address\n\n### Gunicorn config file (`gunicorn.conf.py`):\nUsing a config file is cleaner than command-line flags and can include Python logic.\n\n### When to use Gunicorn:\n- Linux/macOS production deployments\n- When you need graceful worker recycling (max_requests)\n- When you need preload_app for shared memory\n- When you need signal-based reload (SIGHUP)\n\n### When NOT to use Gunicorn:\n- Windows (Gunicorn does not support Windows)\n- Docker containers with a single worker (use Uvicorn directly)\n- Development (use `uvicorn --reload` instead)",
+          "pseudo_code": "# Command line\ngunicorn app.main:app \\\n    -k uvicorn.workers.UvicornWorker \\\n    -w 4 \\\n    -b 0.0.0.0:8000\n\n# With config file\ngunicorn app.main:app -c gunicorn.conf.py",
+          "actual_code": "# --- gunicorn.conf.py ---\nimport multiprocessing\n\n# Server socket\nbind = \"0.0.0.0:8000\"\n\n# Worker processes\nworkers = (2 * multiprocessing.cpu_count()) + 1\nworker_class = \"uvicorn.workers.UvicornWorker\"\n\n# Worker lifecycle\nmax_requests = 10000        # Restart worker after N requests (leak mitigation)\nmax_requests_jitter = 1000  # Random jitter to prevent all workers restarting at once\ntimeout = 120               # Kill worker if it does not respond in 120s\ngraceful_timeout = 30       # Wait 30s for worker to finish requests on restart\nkeepalive = 5               # Keep-alive timeout for connections\n\n# Preload application (shared memory, faster fork)\npreload_app = True\n\n# Logging\naccesslog = \"-\"          # Log to stdout\nerrorlog = \"-\"           # Log to stderr\nloglevel = \"info\"\naccess_log_format = '%(h)s %(l)s %(u)s %(t)s \"%(r)s\" %(s)s %(b)s \"%(f)s\" \"%(a)s\" %(D)s'\n\n# Process naming\nproc_name = \"fastapi-app\"\n\n# Security\nlimit_request_line = 8190\nlimit_request_fields = 100\nlimit_request_field_size = 8190\n\n# Hooks\ndef on_starting(server):\n    \"\"\"Called just before the master process is initialized.\"\"\"\n    pass\n\ndef post_fork(server, worker):\n    \"\"\"Called just after a worker has been forked.\"\"\"\n    server.log.info(f\"Worker spawned (pid: {worker.pid})\")\n\ndef pre_exec(server):\n    \"\"\"Called before a new master process is forked (on SIGHUP).\"\"\"\n    server.log.info(\"Forked child, re-executing.\")\n\ndef worker_exit(server, worker):\n    \"\"\"Called when a worker exits.\"\"\"\n    server.log.info(f\"Worker exited (pid: {worker.pid})\")\n\n\n# --- app/main.py ---\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\"}\n\n# Run:\n# gunicorn app.main:app -c gunicorn.conf.py\n\n# Graceful reload (zero downtime):\n# kill -HUP $(cat /var/run/gunicorn.pid)\n\n# Graceful shutdown:\n# kill -TERM $(cat /var/run/gunicorn.pid)",
+          "code_language": "python",
+          "key_points": [
+            "Gunicorn manages worker processes with supervision, Uvicorn handles async ASGI within each worker",
+            "Use -k uvicorn.workers.UvicornWorker to combine Gunicorn's process management with Uvicorn's async performance",
+            "max_requests with jitter recycles workers to mitigate memory leaks without simultaneous restarts",
+            "preload_app=True loads the app once in the master process, then forks -- saves memory via copy-on-write"
+          ],
+          "gotchas": [
+            "Gunicorn does not support Windows -- use Uvicorn directly with --workers on Windows",
+            "preload_app=True means all workers share the same app object at fork time -- database connections created before fork will be shared and corrupted",
+            "The timeout setting kills workers that do not respond -- set it higher than your slowest endpoint",
+            "SIGHUP to Gunicorn triggers a graceful reload, but config file changes require a full restart"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4` to run FastAPI with Gunicorn managing worker processes. Gunicorn provides supervision, graceful restarts, and worker recycling. Use a `gunicorn.conf.py` file for clean configuration.",
+          "pseudo_code": "",
+          "actual_code": "# gunicorn.conf.py\nimport multiprocessing\n\nbind = \"0.0.0.0:8000\"\nworkers = (2 * multiprocessing.cpu_count()) + 1\nworker_class = \"uvicorn.workers.UvicornWorker\"\nmax_requests = 10000\nmax_requests_jitter = 1000\ntimeout = 120\n\n# Run: gunicorn app.main:app -c gunicorn.conf.py",
+          "code_language": "python",
+          "key_points": [
+            "Gunicorn supervises workers; Uvicorn handles async ASGI in each worker"
+          ],
+          "gotchas": [
+            "Gunicorn does not work on Windows -- use Uvicorn's built-in --workers flag instead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create a Dockerfile for FastAPI (using official python:3.x-slim image)?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "docker",
+        "dockerfile",
+        "container",
+        "production",
+        "deployment"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A production Dockerfile for FastAPI should use the **official `python:3.x-slim` image** (not the deprecated `tiangolo/uvicorn-gunicorn-fastapi` image). Multi-stage builds reduce the final image size.\n\n### Why NOT tiangolo/uvicorn-gunicorn-fastapi:\n- It is **deprecated** and no longer maintained for new Python versions\n- It bundles Gunicorn config that may not match your needs\n- Official Python images are better maintained, more secure, and more flexible\n- You have full control over your process manager and configuration\n\n### Best practices:\n1. **Multi-stage build**: Install dependencies in a builder stage, copy only what is needed to the final stage\n2. **Non-root user**: Run the app as a non-root user for security\n3. **Pin Python version**: Use `python:3.12-slim`, not `python:3-slim`\n4. **Layer caching**: Copy `requirements.txt` before source code so dependency installation is cached\n5. **Health check**: Add a `HEALTHCHECK` instruction\n6. **No dev dependencies**: Only install production dependencies\n\n### Image size comparison:\n| Base Image | Size |\n|-----------|------|\n| python:3.12 | ~1GB |\n| python:3.12-slim | ~150MB |\n| python:3.12-alpine | ~50MB (but compatibility issues) |",
+          "pseudo_code": "FROM python:3.12-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY . .\nUSER nonroot\nCMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\"]",
+          "actual_code": "# --- Dockerfile (production, multi-stage) ---\n\n# Stage 1: Build dependencies\nFROM python:3.12-slim AS builder\n\nWORKDIR /app\n\n# Install build dependencies (needed for some pip packages)\nRUN apt-get update && \\\n    apt-get install -y --no-install-recommends gcc && \\\n    rm -rf /var/lib/apt/lists/*\n\n# Install Python dependencies\nCOPY requirements.txt .\nRUN pip install --no-cache-dir --prefix=/install -r requirements.txt\n\n\n# Stage 2: Production image\nFROM python:3.12-slim\n\nWORKDIR /app\n\n# Create non-root user\nRUN groupadd -r appuser && \\\n    useradd -r -g appuser -d /app -s /sbin/nologin appuser\n\n# Copy installed dependencies from builder\nCOPY --from=builder /install /usr/local\n\n# Copy application code\nCOPY ./app ./app\n\n# Set ownership\nRUN chown -R appuser:appuser /app\n\n# Switch to non-root user\nUSER appuser\n\n# Expose port\nEXPOSE 8000\n\n# Health check\nHEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \\\n    CMD python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1\n\n# Run with Gunicorn + Uvicorn workers\nCMD [\"gunicorn\", \"app.main:app\", \\\n     \"-k\", \"uvicorn.workers.UvicornWorker\", \\\n     \"-w\", \"4\", \\\n     \"-b\", \"0.0.0.0:8000\", \\\n     \"--access-logfile\", \"-\", \\\n     \"--error-logfile\", \"-\"]\n\n\n# --- requirements.txt ---\n# fastapi==0.115.0\n# uvicorn[standard]==0.30.0\n# gunicorn==22.0.0\n\n\n# --- .dockerignore ---\n# __pycache__\n# *.pyc\n# .git\n# .env\n# .venv\n# tests/\n# docker-compose*.yml\n# Dockerfile\n# README.md\n\n\n# Build and run:\n# docker build -t fastapi-app .\n# docker run -p 8000:8000 --name api fastapi-app",
+          "code_language": "python",
+          "key_points": [
+            "Use official python:3.12-slim, NOT the deprecated tiangolo/uvicorn-gunicorn-fastapi image",
+            "Multi-stage builds reduce final image size by excluding build tools",
+            "Always run as a non-root user for security",
+            "Copy requirements.txt before source code to leverage Docker layer caching"
+          ],
+          "gotchas": [
+            "Alpine-based images (python:3.12-alpine) can have compatibility issues with C extensions -- prefer slim",
+            "The HEALTHCHECK instruction only works in Docker -- Kubernetes uses its own liveness/readiness probes",
+            "If using preload_app with Gunicorn, database connections created in the master process will be shared by forked workers -- initialize connections after fork",
+            "Do not store secrets in the Docker image -- use environment variables or secret managers at runtime"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `python:3.12-slim` as the base image (never the deprecated `tiangolo/uvicorn-gunicorn-fastapi`). Use multi-stage builds, a non-root user, and copy `requirements.txt` first for layer caching. Run with Gunicorn + Uvicorn workers.",
+          "pseudo_code": "",
+          "actual_code": "# Dockerfile\nFROM python:3.12-slim\nWORKDIR /app\nRUN groupadd -r app && useradd -r -g app app\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\nCOPY ./app ./app\nUSER app\nEXPOSE 8000\nCMD [\"gunicorn\", \"app.main:app\", \"-k\", \"uvicorn.workers.UvicornWorker\", \"-w\", \"4\", \"-b\", \"0.0.0.0:8000\"]",
+          "code_language": "python",
+          "key_points": [
+            "Use official python:3.x-slim -- the tiangolo image is deprecated"
+          ],
+          "gotchas": [
+            "Alpine images can break C extensions -- prefer slim for reliable builds"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you manage environment variables and configuration?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "configuration",
+        "environment-variables",
+        "pydantic-settings",
+        "twelve-factor"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI applications should follow the **12-Factor App** methodology: store configuration in environment variables, never in code. Pydantic's `BaseSettings` (from `pydantic-settings`) is the recommended way to manage configuration.\n\n### Pydantic Settings features:\n1. **Automatic env var loading**: Field names map to environment variable names (case-insensitive)\n2. **Type validation**: Environment variables (always strings) are automatically cast to the declared type\n3. **Default values**: Provide sensible defaults for development\n4. **.env file support**: Load from `.env` files in development\n5. **Nested models**: Group related settings (database, redis, etc.)\n6. **Secret file support**: Read secrets from files (useful for Docker secrets)\n\n### Priority order (highest to lowest):\n1. Init arguments passed directly\n2. Environment variables\n3. `.env` file values\n4. Default values in the model\n\n### Best practices:\n- Use a single `Settings` class as the source of truth\n- Cache the settings instance with `@lru_cache` for performance\n- Never commit `.env` files to version control\n- Use separate `.env` files per environment (`.env.dev`, `.env.prod`)\n- Validate all settings at startup, not when first accessed",
+          "pseudo_code": "from pydantic_settings import BaseSettings\nfrom functools import lru_cache\n\nclass Settings(BaseSettings):\n    database_url: str\n    redis_url: str = \"redis://localhost\"\n    debug: bool = False\n\n    model_config = SettingsConfigDict(env_file=\".env\")\n\n@lru_cache\ndef get_settings():\n    return Settings()",
+          "actual_code": "# --- app/config.py ---\nfrom pydantic_settings import BaseSettings, SettingsConfigDict\nfrom pydantic import Field, field_validator\nfrom functools import lru_cache\n\n\nclass DatabaseSettings(BaseSettings):\n    \"\"\"Nested settings for database configuration.\"\"\"\n    url: str = \"sqlite:///./app.db\"\n    pool_size: int = 5\n    max_overflow: int = 10\n    echo: bool = False\n\n    model_config = SettingsConfigDict(env_prefix=\"DB_\")\n\n\nclass Settings(BaseSettings):\n    \"\"\"Main application settings.\n\n    Environment variables override defaults.\n    Example: APP_NAME=MyAPI sets app_name.\n    \"\"\"\n    # App\n    app_name: str = \"FastAPI App\"\n    debug: bool = False\n    environment: str = \"development\"  # development, staging, production\n    secret_key: str = \"change-me-in-production\"\n    allowed_origins: list[str] = [\"http://localhost:3000\"]\n\n    # Server\n    host: str = \"0.0.0.0\"\n    port: int = 8000\n    workers: int = 1\n\n    # Database\n    database_url: str = \"sqlite:///./app.db\"\n    db_pool_size: int = 5\n\n    # Redis\n    redis_url: str = \"redis://localhost:6379/0\"\n\n    # External services\n    smtp_host: str = \"localhost\"\n    smtp_port: int = 587\n    api_key: str = \"\"\n\n    @field_validator(\"environment\")\n    @classmethod\n    def validate_environment(cls, v: str) -> str:\n        allowed = {\"development\", \"staging\", \"production\"}\n        if v not in allowed:\n            raise ValueError(f\"environment must be one of {allowed}\")\n        return v\n\n    model_config = SettingsConfigDict(\n        env_file=\".env\",\n        env_file_encoding=\"utf-8\",\n        case_sensitive=False,\n        extra=\"ignore\",  # Ignore unknown env vars\n    )\n\n\n@lru_cache\ndef get_settings() -> Settings:\n    \"\"\"Cached settings instance. Created once, reused everywhere.\"\"\"\n    return Settings()\n\n\n# --- app/main.py ---\nfrom fastapi import FastAPI, Depends\nfrom typing import Annotated\n\n# Validate settings at import time (fail fast)\nsettings = get_settings()\n\napp = FastAPI(\n    title=settings.app_name,\n    debug=settings.debug,\n)\n\n\n@app.get(\"/config\")\nasync def show_config(\n    settings: Annotated[Settings, Depends(get_settings)],\n):\n    \"\"\"Inject settings via dependency for testability.\"\"\"\n    return {\n        \"app_name\": settings.app_name,\n        \"environment\": settings.environment,\n        \"debug\": settings.debug,\n        # Never expose secrets!\n    }\n\n\n# --- .env (do NOT commit to git) ---\n# APP_NAME=My Production API\n# DEBUG=false\n# ENVIRONMENT=production\n# SECRET_KEY=super-secret-key-here\n# DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/mydb\n# REDIS_URL=redis://redis:6379/0\n# ALLOWED_ORIGINS=[\"https://myapp.com\",\"https://www.myapp.com\"]\n\n\n# --- Testing: override settings ---\n# def get_test_settings():\n#     return Settings(database_url=\"sqlite:///test.db\", debug=True)\n# app.dependency_overrides[get_settings] = get_test_settings",
+          "code_language": "python",
+          "key_points": [
+            "Use pydantic-settings BaseSettings to load and validate configuration from environment variables",
+            "Cache the Settings instance with @lru_cache -- it is created once and reused",
+            "Inject settings via Depends(get_settings) for testability -- override in tests with dependency_overrides",
+            "Never commit .env files or secrets to version control"
+          ],
+          "gotchas": [
+            "pydantic-settings is a separate package -- install with pip install pydantic-settings",
+            "@lru_cache means changes to environment variables after startup are not reflected -- restart the app to pick up changes",
+            "list[str] fields in environment variables must be valid JSON: ALLOWED_ORIGINS=[\"http://localhost\"]",
+            "env_prefix applies to all fields in a nested model -- DB_URL, DB_POOL_SIZE, etc."
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `pydantic-settings` `BaseSettings` to load configuration from environment variables with type validation. Cache with `@lru_cache`, inject via `Depends(get_settings)` for testability, and use `.env` files for development.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic_settings import BaseSettings, SettingsConfigDict\nfrom functools import lru_cache\n\nclass Settings(BaseSettings):\n    database_url: str = \"sqlite:///app.db\"\n    debug: bool = False\n    secret_key: str = \"change-me\"\n\n    model_config = SettingsConfigDict(env_file=\".env\")\n\n@lru_cache\ndef get_settings():\n    return Settings()",
+          "code_language": "python",
+          "key_points": [
+            "BaseSettings auto-loads env vars with type validation; @lru_cache avoids re-reading"
+          ],
+          "gotchas": [
+            "pydantic-settings is a separate pip install -- it is not included with pydantic"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement structured logging for FastAPI?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "logging",
+        "structured-logging",
+        "json-logging",
+        "observability"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Structured logging** outputs log entries as JSON objects instead of unstructured text. This makes logs machine-parseable, searchable, and compatible with log aggregation tools (ELK, Datadog, CloudWatch).\n\n### Why structured logging:\n- **Searchable**: Query by field (`request_id`, `user_id`, `status_code`)\n- **Parseable**: Log aggregators can index JSON fields automatically\n- **Consistent**: Every log entry has the same format\n- **Contextual**: Attach request context (correlation ID, user, endpoint)\n\n### Popular libraries:\n- **structlog**: The most Pythonic structured logger, works great with FastAPI\n- **python-json-logger**: Adds JSON formatting to stdlib logging\n- **loguru**: Popular alternative with nice defaults\n\n### Key patterns:\n1. **Request ID middleware**: Generate or extract a request ID for every request\n2. **Context binding**: Attach request-specific data to all log entries\n3. **Correlation IDs**: Trace a request across multiple services\n4. **Log levels**: Use appropriate levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)\n\n### Integration with Uvicorn:\nUvicorn has its own loggers (`uvicorn.error`, `uvicorn.access`). You can configure them to use the same structured format for consistency.",
+          "pseudo_code": "import structlog\n\nlogger = structlog.get_logger()\n\n@app.middleware(\"http\")\nasync def log_middleware(request, call_next):\n    logger.info(\"request_started\", path=request.url.path)\n    response = await call_next(request)\n    logger.info(\"request_completed\", status=response.status_code)\n    return response",
+          "actual_code": "# --- app/logging_config.py ---\nimport structlog\nimport logging\nimport sys\nimport uuid\nfrom fastapi import FastAPI, Request, Response\nfrom starlette.middleware.base import BaseHTTPMiddleware\nimport time\n\n\ndef setup_logging(json_output: bool = True, log_level: str = \"INFO\"):\n    \"\"\"Configure structured logging with structlog.\"\"\"\n    shared_processors = [\n        structlog.contextvars.merge_contextvars,\n        structlog.stdlib.add_logger_name,\n        structlog.stdlib.add_log_level,\n        structlog.processors.TimeStamper(fmt=\"iso\"),\n        structlog.processors.StackInfoRenderer(),\n    ]\n\n    if json_output:\n        # JSON output for production\n        renderer = structlog.processors.JSONRenderer()\n    else:\n        # Human-readable for development\n        renderer = structlog.dev.ConsoleRenderer()\n\n    structlog.configure(\n        processors=[\n            *shared_processors,\n            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,\n        ],\n        logger_factory=structlog.stdlib.LoggerFactory(),\n        wrapper_class=structlog.stdlib.BoundLogger,\n        cache_logger_on_first_use=True,\n    )\n\n    formatter = structlog.stdlib.ProcessorFormatter(\n        processors=[\n            structlog.stdlib.ProcessorFormatter.remove_processors_meta,\n            renderer,\n        ],\n    )\n\n    handler = logging.StreamHandler(sys.stdout)\n    handler.setFormatter(formatter)\n\n    root_logger = logging.getLogger()\n    root_logger.handlers = [handler]\n    root_logger.setLevel(log_level)\n\n    # Quiet noisy loggers\n    logging.getLogger(\"uvicorn.access\").setLevel(logging.WARNING)\n\n\n# --- Request logging middleware ---\nclass RequestLoggingMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request: Request, call_next):\n        # Generate or extract request ID\n        request_id = request.headers.get(\n            \"X-Request-ID\", str(uuid.uuid4())\n        )\n\n        # Bind context for all logs in this request\n        structlog.contextvars.clear_contextvars()\n        structlog.contextvars.bind_contextvars(\n            request_id=request_id,\n            method=request.method,\n            path=request.url.path,\n            client_ip=request.client.host if request.client else \"unknown\",\n        )\n\n        logger = structlog.get_logger()\n        start_time = time.perf_counter()\n\n        logger.info(\"request_started\")\n\n        try:\n            response = await call_next(request)\n            duration_ms = (time.perf_counter() - start_time) * 1000\n\n            logger.info(\n                \"request_completed\",\n                status_code=response.status_code,\n                duration_ms=round(duration_ms, 2),\n            )\n\n            # Add request ID to response headers\n            response.headers[\"X-Request-ID\"] = request_id\n            return response\n\n        except Exception as e:\n            duration_ms = (time.perf_counter() - start_time) * 1000\n            logger.error(\n                \"request_failed\",\n                error=str(e),\n                error_type=type(e).__name__,\n                duration_ms=round(duration_ms, 2),\n            )\n            raise\n\n\n# --- app/main.py ---\napp = FastAPI()\n\n# Initialize structured logging\nsetup_logging(json_output=True, log_level=\"INFO\")\n\n# Add middleware\napp.add_middleware(RequestLoggingMiddleware)\n\nlogger = structlog.get_logger()\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int):\n    logger.info(\"fetching_user\", user_id=user_id)\n    return {\"user_id\": user_id, \"name\": \"Alice\"}\n\n# Example JSON log output:\n# {\"request_id\": \"abc-123\", \"method\": \"GET\", \"path\": \"/users/42\",\n#  \"event\": \"request_completed\", \"status_code\": 200, \"duration_ms\": 1.23,\n#  \"timestamp\": \"2025-01-15T10:30:00Z\", \"level\": \"info\"}",
+          "code_language": "python",
+          "key_points": [
+            "Structured logging outputs JSON for machine-parseable, searchable log entries",
+            "Use structlog with contextvars to bind request-specific data (request_id, path, method) to all logs",
+            "Middleware generates correlation IDs and logs request duration and status code",
+            "Pass the request ID in the X-Request-ID response header for end-to-end tracing"
+          ],
+          "gotchas": [
+            "structlog.contextvars requires Python 3.7+ and must be cleared between requests to prevent context leakage",
+            "Uvicorn's access logger must be configured separately or silenced to avoid duplicate log entries",
+            "JSON logging increases log volume -- configure log levels carefully in production",
+            "Logging inside async generators (StreamingResponse) may not have the request context since the response is already streaming"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `structlog` with `contextvars` to output JSON log entries with request-specific context (request_id, path, duration). Add a middleware that binds context, logs request start/end, and passes correlation IDs via X-Request-ID headers.",
+          "pseudo_code": "",
+          "actual_code": "import structlog\nfrom fastapi import FastAPI, Request\nfrom starlette.middleware.base import BaseHTTPMiddleware\nimport uuid, time\n\nlogger = structlog.get_logger()\n\nclass LogMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request: Request, call_next):\n        structlog.contextvars.bind_contextvars(\n            request_id=str(uuid.uuid4()),\n            path=request.url.path,\n        )\n        start = time.perf_counter()\n        response = await call_next(request)\n        logger.info(\"request\", status=response.status_code,\n                     duration_ms=round((time.perf_counter()-start)*1000, 2))\n        return response\n\napp = FastAPI()\napp.add_middleware(LogMiddleware)",
+          "code_language": "python",
+          "key_points": [
+            "structlog + contextvars produces JSON logs with per-request context"
+          ],
+          "gotchas": [
+            "Clear contextvars between requests to prevent context from leaking across requests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement health check endpoints?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "health-check",
+        "readiness",
+        "liveness",
+        "kubernetes",
+        "monitoring"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Health check endpoints let load balancers, orchestrators (Kubernetes), and monitoring tools determine if your application is running and ready to serve traffic.\n\n### Types of health checks:\n\n1. **Liveness check** (`/health/live`): Is the process alive and not deadlocked?\n   - Should be fast and lightweight (no external dependencies)\n   - If it fails, the orchestrator restarts the container\n   - Should always return 200 unless the app is truly broken\n\n2. **Readiness check** (`/health/ready`): Can the app serve traffic?\n   - Checks external dependencies (database, Redis, external APIs)\n   - If it fails, the load balancer stops sending traffic but does not restart\n   - Returns 503 if any critical dependency is down\n\n3. **Startup check** (`/health/startup`): Has the app finished initializing?\n   - Used during slow startups (loading ML models, warming caches)\n   - Prevents liveness probes from killing the app during initialization\n\n### Kubernetes probe mapping:\n```yaml\nlivenessProbe:\n  httpGet: { path: /health/live, port: 8000 }\nreadinessProbe:\n  httpGet: { path: /health/ready, port: 8000 }\nstartupProbe:\n  httpGet: { path: /health/startup, port: 8000 }\n```\n\n### Best practices:\n- Liveness checks should NOT check external dependencies\n- Readiness checks should have reasonable timeouts\n- Include dependency status in the response body for debugging\n- Use appropriate HTTP status codes (200 OK, 503 Service Unavailable)",
+          "pseudo_code": "@app.get(\"/health/live\")\nasync def liveness():\n    return {\"status\": \"alive\"}\n\n@app.get(\"/health/ready\")\nasync def readiness():\n    db_ok = await check_db()\n    redis_ok = await check_redis()\n    if not all([db_ok, redis_ok]):\n        raise HTTPException(503)\n    return {\"status\": \"ready\"}",
+          "actual_code": "from fastapi import FastAPI, Response\nfrom contextlib import asynccontextmanager\nfrom datetime import datetime, timezone\nimport asyncio\nimport logging\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n# Track startup state\napp_ready = False\n\n\n# --- Dependency health checkers ---\nasync def check_database() -> dict:\n    \"\"\"Check database connectivity.\"\"\"\n    try:\n        # Replace with real DB check: await db.execute(\"SELECT 1\")\n        await asyncio.sleep(0.01)  # Simulated\n        return {\"database\": {\"status\": \"up\", \"latency_ms\": 10}}\n    except Exception as e:\n        return {\"database\": {\"status\": \"down\", \"error\": str(e)}}\n\nasync def check_redis() -> dict:\n    \"\"\"Check Redis connectivity.\"\"\"\n    try:\n        # Replace with real check: await redis.ping()\n        await asyncio.sleep(0.01)  # Simulated\n        return {\"redis\": {\"status\": \"up\", \"latency_ms\": 5}}\n    except Exception as e:\n        return {\"redis\": {\"status\": \"down\", \"error\": str(e)}}\n\nasync def check_external_api() -> dict:\n    \"\"\"Check external API availability.\"\"\"\n    try:\n        await asyncio.sleep(0.01)\n        return {\"external_api\": {\"status\": \"up\"}}\n    except Exception as e:\n        return {\"external_api\": {\"status\": \"down\", \"error\": str(e)}}\n\n\n# --- Liveness: Is the process alive? ---\n@app.get(\"/health/live\")\nasync def liveness():\n    \"\"\"Lightweight check. No external dependencies.\n    If this fails, the container should be restarted.\"\"\"\n    return {\n        \"status\": \"alive\",\n        \"timestamp\": datetime.now(timezone.utc).isoformat(),\n    }\n\n\n# --- Readiness: Can we serve traffic? ---\n@app.get(\"/health/ready\")\nasync def readiness(response: Response):\n    \"\"\"Checks all critical dependencies.\n    If this fails, traffic should be routed elsewhere.\"\"\"\n    checks = await asyncio.gather(\n        check_database(),\n        check_redis(),\n    )\n\n    dependencies = {}\n    for check in checks:\n        dependencies.update(check)\n\n    all_healthy = all(\n        dep[\"status\"] == \"up\"\n        for dep in dependencies.values()\n    )\n\n    if not all_healthy:\n        response.status_code = 503\n\n    return {\n        \"status\": \"ready\" if all_healthy else \"not_ready\",\n        \"dependencies\": dependencies,\n        \"timestamp\": datetime.now(timezone.utc).isoformat(),\n    }\n\n\n# --- Startup: Has initialization completed? ---\n@app.get(\"/health/startup\")\nasync def startup_check(response: Response):\n    \"\"\"Returns 503 until the app has fully started.\"\"\"\n    if not app_ready:\n        response.status_code = 503\n        return {\"status\": \"starting\"}\n    return {\"status\": \"started\"}\n\n\n# --- Combined health endpoint ---\n@app.get(\"/health\")\nasync def combined_health(response: Response):\n    \"\"\"Single endpoint with all health information.\"\"\"\n    checks = await asyncio.gather(\n        check_database(),\n        check_redis(),\n        check_external_api(),\n    )\n    dependencies = {}\n    for check in checks:\n        dependencies.update(check)\n\n    all_healthy = all(\n        dep[\"status\"] == \"up\" for dep in dependencies.values()\n    )\n\n    if not all_healthy:\n        response.status_code = 503\n\n    return {\n        \"status\": \"healthy\" if all_healthy else \"degraded\",\n        \"version\": \"1.2.3\",\n        \"dependencies\": dependencies,\n    }\n\n\n# --- Lifespan: mark app as ready after init ---\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    global app_ready\n    # Initialization (load models, warm caches, etc.)\n    logger.info(\"Initializing...\")\n    await asyncio.sleep(0.1)  # Simulate slow startup\n    app_ready = True\n    logger.info(\"App is ready\")\n    yield\n    app_ready = False\n\n# Pass lifespan to FastAPI constructor instead:\n# app = FastAPI(lifespan=lifespan)",
+          "code_language": "python",
+          "key_points": [
+            "Liveness checks should be fast and check only the process itself, not external dependencies",
+            "Readiness checks verify all critical dependencies (DB, Redis) and return 503 if any are down",
+            "Run dependency checks concurrently with asyncio.gather() to minimize total check time",
+            "Kubernetes uses separate probes for liveness, readiness, and startup"
+          ],
+          "gotchas": [
+            "Liveness probes that check databases can cause cascading restarts if the DB is temporarily slow",
+            "Health checks bypass authentication -- ensure they do not expose sensitive information",
+            "Set reasonable timeouts on health checks -- a hanging check can block the load balancer",
+            "A global app_ready flag with multiple workers requires each worker to set it independently"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement `/health/live` (process alive, no dependencies), `/health/ready` (all dependencies OK), and `/health/startup` (initialization complete). Return 200 for healthy and 503 for unhealthy. Run dependency checks concurrently with `asyncio.gather()`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Response\nimport asyncio\n\napp = FastAPI()\n\n@app.get(\"/health/live\")\nasync def live():\n    return {\"status\": \"alive\"}\n\n@app.get(\"/health/ready\")\nasync def ready(response: Response):\n    db_ok = await check_db()  # Returns True/False\n    if not db_ok:\n        response.status_code = 503\n    return {\"status\": \"ready\" if db_ok else \"not_ready\"}",
+          "code_language": "python",
+          "key_points": [
+            "Liveness = process alive; Readiness = dependencies OK; use 503 for unhealthy"
+          ],
+          "gotchas": [
+            "Never check external dependencies in liveness probes -- it causes cascading restarts"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set up a reverse proxy (Nginx) for FastAPI?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "nginx",
+        "reverse-proxy",
+        "production",
+        "ssl",
+        "websocket"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **reverse proxy** sits between clients and your FastAPI server, handling TLS termination, load balancing, static files, rate limiting, and request buffering. Nginx is the most common choice.\n\n### Why use a reverse proxy:\n1. **TLS termination**: Nginx handles HTTPS; FastAPI receives plain HTTP\n2. **Static files**: Serve CSS/JS/images directly from Nginx (much faster)\n3. **Load balancing**: Distribute traffic across multiple FastAPI workers\n4. **Buffering**: Buffer slow client uploads before sending to FastAPI\n5. **Rate limiting**: Protect against abuse at the proxy level\n6. **Security**: Hide internal server details, add security headers\n\n### Key Nginx directives for FastAPI:\n- `proxy_pass`: Forward requests to FastAPI\n- `proxy_set_header`: Forward client IP, host, and protocol\n- `proxy_http_version 1.1`: Required for WebSocket support\n- `proxy_buffering off`: Required for SSE/streaming\n\n### WebSocket proxying:\nWebSocket connections require special Nginx configuration: `Upgrade` and `Connection` headers must be passed through.\n\n### Common gotcha:\nWithout `proxy_set_header X-Forwarded-For`, FastAPI sees Nginx's IP (127.0.0.1) instead of the real client IP. Enable `--proxy-headers` in Uvicorn.",
+          "pseudo_code": "# Nginx config structure\nhttp {\n    upstream fastapi {\n        server 127.0.0.1:8000;\n    }\n    server {\n        listen 443 ssl;\n        location / {\n            proxy_pass http://fastapi;\n        }\n        location /ws {\n            proxy_pass http://fastapi;\n            # WebSocket headers\n        }\n    }\n}",
+          "actual_code": "# --- /etc/nginx/sites-available/fastapi ---\n\nupstream fastapi_backend {\n    # Multiple servers for load balancing\n    server 127.0.0.1:8000;\n    # server 127.0.0.1:8001;  # Add more for horizontal scaling\n    # keepalive 32;  # Connection pooling to backend\n}\n\nserver {\n    listen 80;\n    server_name api.example.com;\n    # Redirect HTTP to HTTPS\n    return 301 https://$server_name$request_uri;\n}\n\nserver {\n    listen 443 ssl http2;\n    server_name api.example.com;\n\n    # --- TLS ---\n    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_ciphers HIGH:!aNULL:!MD5;\n\n    # --- Security headers ---\n    add_header X-Frame-Options DENY;\n    add_header X-Content-Type-Options nosniff;\n    add_header X-XSS-Protection \"1; mode=block\";\n    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\";\n\n    # --- Logging ---\n    access_log /var/log/nginx/fastapi_access.log;\n    error_log /var/log/nginx/fastapi_error.log;\n\n    # --- Rate limiting ---\n    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;\n\n    # --- API endpoints ---\n    location / {\n        limit_req zone=api burst=20 nodelay;\n\n        proxy_pass http://fastapi_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n\n        # Timeouts\n        proxy_connect_timeout 10s;\n        proxy_read_timeout 60s;\n        proxy_send_timeout 60s;\n    }\n\n    # --- WebSocket endpoints ---\n    location /ws {\n        proxy_pass http://fastapi_backend;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n\n        # WebSocket timeout (close idle connections after 1 hour)\n        proxy_read_timeout 3600s;\n        proxy_send_timeout 3600s;\n    }\n\n    # --- Server-Sent Events ---\n    location /events {\n        proxy_pass http://fastapi_backend;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n\n        # Disable buffering for SSE\n        proxy_buffering off;\n        proxy_cache off;\n        proxy_set_header Connection '';\n        proxy_http_version 1.1;\n        chunked_transfer_encoding off;\n    }\n\n    # --- Static files (served directly by Nginx) ---\n    location /static {\n        alias /var/www/app/static;\n        expires 30d;\n        add_header Cache-Control \"public, immutable\";\n    }\n\n    # --- Client max body size ---\n    client_max_body_size 10M;\n}\n\n# Test config: nginx -t\n# Reload: nginx -s reload",
+          "code_language": "python",
+          "key_points": [
+            "Nginx handles TLS, static files, rate limiting, and load balancing -- FastAPI only handles API logic",
+            "proxy_set_header X-Forwarded-For passes the real client IP to FastAPI (requires --proxy-headers in Uvicorn)",
+            "WebSocket proxying requires proxy_http_version 1.1 and Upgrade/Connection headers",
+            "Disable proxy_buffering for SSE/streaming endpoints to prevent Nginx from buffering the entire response"
+          ],
+          "gotchas": [
+            "Without proxy_set_header Host, FastAPI cannot generate correct URLs in responses",
+            "The default proxy_read_timeout is 60s -- WebSocket connections will be closed after 60s of inactivity unless increased",
+            "client_max_body_size must be set in Nginx AND in FastAPI if you have file upload limits",
+            "HTTP/2 between Nginx and upstream is not supported -- only client-facing connections use HTTP/2"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Nginx acts as a reverse proxy: handles TLS, forwards requests to FastAPI with `proxy_pass`, passes real client IPs with `X-Forwarded-For`, and requires special config for WebSocket (`proxy_http_version 1.1` + Upgrade headers) and SSE (`proxy_buffering off`).",
+          "pseudo_code": "",
+          "actual_code": "# /etc/nginx/sites-available/fastapi\nserver {\n    listen 443 ssl;\n    server_name api.example.com;\n\n    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;\n\n    location / {\n        proxy_pass http://127.0.0.1:8000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n\n    location /ws {\n        proxy_pass http://127.0.0.1:8000;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n    }\n}",
+          "code_language": "python",
+          "key_points": [
+            "Forward X-Forwarded-For for real client IPs; special headers for WebSocket"
+          ],
+          "gotchas": [
+            "Default proxy_read_timeout of 60s kills idle WebSocket connections -- increase for long-lived connections"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you scale FastAPI applications horizontally?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "scaling",
+        "horizontal-scaling",
+        "load-balancing",
+        "stateless",
+        "architecture"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Horizontal scaling** means adding more server instances to handle increased load, as opposed to vertical scaling (adding more CPU/RAM to one server). FastAPI scales horizontally well because it is naturally stateless.\n\n### Prerequisites for horizontal scaling:\n\n1. **Stateless application**: No in-memory state shared between requests\n   - Sessions: Use external stores (Redis, database)\n   - File uploads: Use object storage (S3, MinIO)\n   - Caches: Use distributed caches (Redis, Memcached)\n   - WebSocket connections: Use Redis Pub/Sub for cross-instance messaging\n\n2. **External data stores**: Database, Redis, and file storage are separate services\n\n3. **Load balancer**: Distribute traffic across instances\n   - Nginx, HAProxy, AWS ALB, or Kubernetes Ingress\n\n### Scaling strategies:\n\n| Strategy | Description |\n|----------|------------|\n| Multiple workers | Uvicorn `--workers 4` or Gunicorn |\n| Multiple containers | Docker replicas behind a load balancer |\n| Kubernetes | HPA (Horizontal Pod Autoscaler) based on CPU/memory/custom metrics |\n| Serverless | AWS Lambda with Mangum adapter |\n\n### What breaks when you scale:\n- In-memory caches (use Redis)\n- File-based sessions (use Redis/DB)\n- WebSocket connection managers (use Redis Pub/Sub)\n- Scheduled tasks (use distributed locks)\n- Database connection exhaustion (use connection pooling with PgBouncer)",
+          "pseudo_code": "# Docker Compose scaling\n# docker compose up --scale api=4\n\n# Kubernetes HPA\napiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nspec:\n  minReplicas: 2\n  maxReplicas: 10\n  metrics:\n  - type: Resource\n    resource:\n      name: cpu\n      target:\n        averageUtilization: 70",
+          "actual_code": "# --- Stateless FastAPI app ready for horizontal scaling ---\nfrom fastapi import FastAPI, Depends, Request\nfrom contextlib import asynccontextmanager\nfrom typing import Annotated\nimport redis.asyncio as aioredis\nimport json\nimport os\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Each instance connects to the SAME external Redis\n    app.state.redis = aioredis.from_url(\n        os.getenv(\"REDIS_URL\", \"redis://redis:6379\"),\n    )\n    yield\n    await app.state.redis.close()\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n# --- Session stored in Redis (not in-memory) ---\nasync def get_redis(request: Request) -> aioredis.Redis:\n    return request.app.state.redis\n\n\n@app.post(\"/sessions\")\nasync def create_session(\n    redis: Annotated[aioredis.Redis, Depends(get_redis)],\n):\n    import uuid\n    session_id = str(uuid.uuid4())\n    await redis.setex(\n        f\"session:{session_id}\",\n        3600,  # 1 hour TTL\n        json.dumps({\"user_id\": 42, \"role\": \"admin\"}),\n    )\n    return {\"session_id\": session_id}\n\n\n@app.get(\"/sessions/{session_id}\")\nasync def get_session(\n    session_id: str,\n    redis: Annotated[aioredis.Redis, Depends(get_redis)],\n):\n    data = await redis.get(f\"session:{session_id}\")\n    if not data:\n        from fastapi import HTTPException\n        raise HTTPException(404, \"Session not found\")\n    return json.loads(data)\n\n\n# --- Distributed rate limiting ---\n@app.get(\"/api/data\")\nasync def get_data(\n    request: Request,\n    redis: Annotated[aioredis.Redis, Depends(get_redis)],\n):\n    client_ip = request.client.host\n    key = f\"rate:{client_ip}\"\n    count = await redis.incr(key)\n    if count == 1:\n        await redis.expire(key, 60)  # 60-second window\n    if count > 100:\n        from fastapi import HTTPException\n        raise HTTPException(429, \"Rate limit exceeded\")\n    return {\"data\": \"value\", \"requests_remaining\": 100 - count}\n\n\n# --- Docker Compose for horizontal scaling ---\n# docker-compose.yml:\n# services:\n#   api:\n#     build: .\n#     deploy:\n#       replicas: 4\n#     environment:\n#       - REDIS_URL=redis://redis:6379\n#   redis:\n#     image: redis:7-alpine\n#   nginx:\n#     image: nginx:alpine\n#     ports: [\"80:80\"]\n#     depends_on: [api]\n\n# Scale dynamically:\n# docker compose up --scale api=8",
+          "code_language": "python",
+          "key_points": [
+            "Stateless design is the prerequisite -- move all shared state to external stores (Redis, database, S3)",
+            "Each instance connects to the same Redis/database -- no in-memory state between requests",
+            "Use distributed rate limiting (Redis INCR) instead of in-process counters",
+            "Docker Compose replicas or Kubernetes HPA handle scaling the number of instances"
+          ],
+          "gotchas": [
+            "In-memory caches, WebSocket managers, and scheduled tasks break when scaling -- move them to Redis",
+            "Database connection pools are per-instance -- 4 instances with pool_size=20 means 80 connections total, which may exceed your DB limit",
+            "Distributed locks (Redis SETNX) are needed to prevent duplicate scheduled task execution",
+            "Sticky sessions (session affinity) solve some problems but prevent even load distribution"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Make your app stateless: move sessions, caches, and shared state to Redis or a database. Then scale by adding instances behind a load balancer (Docker Compose `replicas`, Kubernetes HPA). Each instance connects to the same external data stores.",
+          "pseudo_code": "",
+          "actual_code": "# Stateless: session in Redis, not in memory\nimport redis.asyncio as aioredis\n\n@app.post(\"/sessions\")\nasync def create_session(redis=Depends(get_redis)):\n    session_id = str(uuid.uuid4())\n    await redis.setex(f\"session:{session_id}\", 3600, data)\n    return {\"session_id\": session_id}\n\n# Scale: docker compose up --scale api=4",
+          "code_language": "python",
+          "key_points": [
+            "Stateless + external stores = horizontally scalable"
+          ],
+          "gotchas": [
+            "Database connection pools multiply with instances -- 4 instances x 20 pool = 80 connections"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle graceful shutdown?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "graceful-shutdown",
+        "signals",
+        "lifespan",
+        "production"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Graceful shutdown** means the server stops accepting new requests but finishes processing in-flight requests before exiting. This prevents dropped connections and data corruption.\n\n### How it works in Uvicorn/FastAPI:\n1. Server receives SIGTERM (or SIGINT)\n2. Uvicorn stops accepting new connections\n3. In-flight requests are given time to complete (configurable timeout)\n4. The lifespan shutdown code runs (after `yield` in the lifespan context manager)\n5. Worker exits\n\n### Key settings:\n- **Uvicorn**: `--timeout-graceful-shutdown 30` (default: None, waits forever)\n- **Gunicorn**: `graceful_timeout = 30` (default: 30 seconds)\n- **Kubernetes**: `terminationGracePeriodSeconds: 30` (default: 30 seconds)\n\n### What to clean up during shutdown:\n- Close database connection pools\n- Flush pending writes (logs, metrics)\n- Cancel background asyncio tasks\n- Close HTTP client sessions\n- Deregister from service discovery\n\n### Signal handling:\nUvicorn handles SIGTERM and SIGINT automatically. Do not override signal handlers -- use the lifespan context manager instead.",
+          "pseudo_code": "@asynccontextmanager\nasync def lifespan(app):\n    # Startup\n    db = await create_pool()\n    bg_task = asyncio.create_task(periodic_job())\n    yield\n    # Shutdown (graceful)\n    bg_task.cancel()\n    await bg_task  # Wait for cancellation\n    await db.close()\n    await flush_metrics()",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nimport asyncio\nimport logging\nimport signal\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\n\nclass ResourceManager:\n    \"\"\"Manages shared resources with proper cleanup.\"\"\"\n\n    def __init__(self):\n        self.db_pool = None\n        self.http_client = None\n        self.background_tasks: list[asyncio.Task] = []\n\n    async def startup(self):\n        logger.info(\"Starting up resources...\")\n        # Simulated resource creation\n        self.db_pool = \"connected\"\n        logger.info(\"Database pool created\")\n\n        import httpx\n        self.http_client = httpx.AsyncClient()\n        logger.info(\"HTTP client created\")\n\n        # Start background task\n        task = asyncio.create_task(self._periodic_cleanup())\n        self.background_tasks.append(task)\n        logger.info(\"Background tasks started\")\n\n    async def shutdown(self):\n        logger.info(\"Shutting down gracefully...\")\n\n        # 1. Cancel background tasks\n        for task in self.background_tasks:\n            task.cancel()\n        # Wait for all tasks to finish cancellation\n        await asyncio.gather(\n            *self.background_tasks,\n            return_exceptions=True,\n        )\n        logger.info(\"Background tasks cancelled\")\n\n        # 2. Close HTTP client\n        if self.http_client:\n            await self.http_client.aclose()\n            logger.info(\"HTTP client closed\")\n\n        # 3. Close database pool (last, since other cleanup may need it)\n        if self.db_pool:\n            # await self.db_pool.close()\n            self.db_pool = None\n            logger.info(\"Database pool closed\")\n\n        logger.info(\"Graceful shutdown complete\")\n\n    async def _periodic_cleanup(self):\n        try:\n            while True:\n                logger.info(\"Running periodic cleanup\")\n                await asyncio.sleep(300)  # Every 5 minutes\n        except asyncio.CancelledError:\n            logger.info(\"Periodic cleanup cancelled gracefully\")\n            # Perform final cleanup\n            raise  # Re-raise to complete cancellation\n\n\nresources = ResourceManager()\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    await resources.startup()\n    yield\n    # Everything after yield runs during graceful shutdown\n    await resources.shutdown()\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\", \"db\": resources.db_pool is not None}\n\n\n@app.get(\"/slow\")\nasync def slow_endpoint():\n    \"\"\"Simulates a slow request -- tests graceful shutdown behavior.\"\"\"\n    logger.info(\"Slow request started\")\n    await asyncio.sleep(10)\n    logger.info(\"Slow request completed\")\n    return {\"status\": \"done\"}\n\n\n# --- Running with graceful shutdown ---\n# Uvicorn:\n# uvicorn app:app --timeout-graceful-shutdown 30\n\n# Gunicorn:\n# gunicorn app:app -k uvicorn.workers.UvicornWorker --graceful-timeout 30\n\n# Docker (sends SIGTERM, then SIGKILL after stop_grace_period):\n# docker stop --time 30 container_name\n\n# Kubernetes:\n# terminationGracePeriodSeconds: 30\n# lifecycle:\n#   preStop:\n#     exec:\n#       command: [\"/bin/sh\", \"-c\", \"sleep 5\"]  # Wait for LB to drain",
+          "code_language": "python",
+          "key_points": [
+            "Graceful shutdown finishes in-flight requests before exiting -- use the lifespan context manager for cleanup",
+            "Cancel asyncio tasks, close HTTP clients, and close database pools during shutdown (in that order)",
+            "Configure --timeout-graceful-shutdown in Uvicorn or graceful_timeout in Gunicorn",
+            "Background tasks must handle CancelledError to perform their own cleanup"
+          ],
+          "gotchas": [
+            "Kubernetes sends SIGTERM then SIGKILL after terminationGracePeriodSeconds -- make sure your cleanup fits within this window",
+            "A preStop hook with a small sleep (5s) gives the load balancer time to stop routing traffic before the app starts shutting down",
+            "asyncio.gather with return_exceptions=True prevents one failed task from blocking the others",
+            "Uvicorn's default graceful timeout is None (wait forever) -- always set an explicit timeout in production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Graceful shutdown finishes in-flight requests, then runs the code after `yield` in lifespan. Cancel background tasks, close clients, and close DB pools. Configure `--timeout-graceful-shutdown` in Uvicorn. In Kubernetes, add a `preStop` sleep to let the load balancer drain.",
+          "pseudo_code": "",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI\nimport asyncio\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    task = asyncio.create_task(background_job())\n    yield\n    # Shutdown\n    task.cancel()\n    await asyncio.gather(task, return_exceptions=True)\n    # await db.close()\n    # await http_client.aclose()\n\napp = FastAPI(lifespan=lifespan)\n\n# uvicorn app:app --timeout-graceful-shutdown 30",
+          "code_language": "python",
+          "key_points": [
+            "Lifespan code after yield runs during shutdown -- cancel tasks and close connections"
+          ],
+          "gotchas": [
+            "Set an explicit graceful timeout -- the default is unlimited, which can delay deployments"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement CI/CD for FastAPI applications?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "ci-cd",
+        "github-actions",
+        "testing",
+        "deployment",
+        "automation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "CI/CD automates testing, building, and deploying your FastAPI application. A typical pipeline includes linting, testing, building a Docker image, and deploying to production.\n\n### Pipeline stages:\n\n1. **Lint**: Check code style (ruff, mypy)\n2. **Test**: Run pytest with coverage\n3. **Build**: Build Docker image\n4. **Push**: Push image to a container registry\n5. **Deploy**: Update the production service\n\n### CI best practices for FastAPI:\n- Run tests with a real database (SQLite for unit tests, PostgreSQL for integration)\n- Use service containers for Redis, PostgreSQL in CI\n- Cache pip dependencies between runs\n- Run security scanning (Snyk, Trivy) on Docker images\n- Use matrix testing for multiple Python versions\n\n### Deployment strategies:\n- **Rolling update**: Replace instances one at a time (Kubernetes default)\n- **Blue/green**: Run old and new versions simultaneously, switch traffic\n- **Canary**: Send a small percentage of traffic to the new version first\n\n### GitHub Actions is the most common CI/CD for open-source Python projects.",
+          "pseudo_code": "# Pipeline stages:\n# 1. Lint (ruff, mypy)\n# 2. Test (pytest --cov)\n# 3. Build Docker image\n# 4. Push to registry\n# 5. Deploy (kubectl, docker compose)",
+          "actual_code": "# --- .github/workflows/ci.yml ---\nname: CI/CD\n\non:\n  push:\n    branches: [main]\n  pull_request:\n    branches: [main]\n\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.12\"\n      - name: Install dependencies\n        run: pip install ruff mypy\n      - name: Lint with ruff\n        run: ruff check .\n      - name: Type check\n        run: mypy app/ --ignore-missing-imports\n\n  test:\n    runs-on: ubuntu-latest\n    services:\n      postgres:\n        image: postgres:16\n        env:\n          POSTGRES_PASSWORD: test\n          POSTGRES_DB: testdb\n        ports: [\"5432:5432\"]\n        options: >-\n          --health-cmd pg_isready\n          --health-interval 10s\n          --health-timeout 5s\n          --health-retries 5\n      redis:\n        image: redis:7-alpine\n        ports: [\"6379:6379\"]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: \"3.12\"\n      - name: Cache pip\n        uses: actions/cache@v4\n        with:\n          path: ~/.cache/pip\n          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}\n      - name: Install dependencies\n        run: pip install -r requirements.txt -r requirements-test.txt\n      - name: Run tests\n        env:\n          DATABASE_URL: postgresql://postgres:test@localhost:5432/testdb\n          REDIS_URL: redis://localhost:6379/0\n        run: pytest --cov=app --cov-report=xml -v\n      - name: Upload coverage\n        uses: codecov/codecov-action@v4\n        with:\n          file: coverage.xml\n\n  build-and-push:\n    needs: [lint, test]\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Log in to Docker Hub\n        uses: docker/login-action@v3\n        with:\n          username: ${{ secrets.DOCKER_USERNAME }}\n          password: ${{ secrets.DOCKER_PASSWORD }}\n      - name: Build and push\n        uses: docker/build-push-action@v5\n        with:\n          push: true\n          tags: |\n            myuser/fastapi-app:latest\n            myuser/fastapi-app:${{ github.sha }}\n\n  deploy:\n    needs: [build-and-push]\n    runs-on: ubuntu-latest\n    steps:\n      - name: Deploy to production\n        run: |\n          # Option 1: SSH and docker compose pull\n          # ssh deploy@server 'cd /app && docker compose pull && docker compose up -d'\n\n          # Option 2: Kubernetes\n          # kubectl set image deployment/api api=myuser/fastapi-app:${{ github.sha }}\n\n          echo \"Deploy step - configure for your infrastructure\"",
+          "code_language": "python",
+          "key_points": [
+            "Run lint (ruff), type check (mypy), and tests (pytest --cov) in separate parallel jobs",
+            "Use GitHub Actions service containers for PostgreSQL and Redis in integration tests",
+            "Cache pip dependencies to speed up CI runs",
+            "Tag Docker images with both latest and the commit SHA for traceability"
+          ],
+          "gotchas": [
+            "Service containers in GitHub Actions only work on ubuntu runners, not on macos or windows",
+            "Secrets (DOCKER_PASSWORD, deploy keys) must be configured in GitHub repository settings, not in the workflow file",
+            "The deploy step needs appropriate credentials and network access to your production environment",
+            "Running all tests on every PR can be slow -- use path filters to skip CI for docs-only changes"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use GitHub Actions with separate jobs for lint (ruff), test (pytest with service containers for PostgreSQL/Redis), build (Docker), and deploy. Cache pip dependencies, tag images with commit SHA, and only deploy from the main branch.",
+          "pseudo_code": "",
+          "actual_code": "# .github/workflows/ci.yml\nname: CI\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    services:\n      postgres:\n        image: postgres:16\n        env: { POSTGRES_PASSWORD: test }\n        ports: [\"5432:5432\"]\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with: { python-version: \"3.12\" }\n      - run: pip install -r requirements.txt && pytest --cov=app -v",
+          "code_language": "python",
+          "key_points": [
+            "Separate jobs for lint, test, build, deploy with service containers for dependencies"
+          ],
+          "gotchas": [
+            "Service containers only work on ubuntu runners in GitHub Actions"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you monitor FastAPI applications in production?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "monitoring",
+        "prometheus",
+        "metrics",
+        "observability",
+        "opentelemetry"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Production monitoring for FastAPI covers three pillars of observability: **metrics**, **logs**, and **traces**.\n\n### 1. Metrics (Prometheus):\nNumeric measurements over time -- request rate, latency, error rate, resource usage.\n- Use `prometheus-fastapi-instrumentator` for automatic metric collection\n- Expose a `/metrics` endpoint for Prometheus to scrape\n- Key metrics: request count, request duration, in-flight requests, error rate\n\n### 2. Logs (structured):\nEvent records with context -- use structlog or python-json-logger.\n- Already covered in the structured logging question\n\n### 3. Traces (OpenTelemetry):\nEnd-to-end request flow across services.\n- Use `opentelemetry-instrumentation-fastapi` for automatic tracing\n- Export to Jaeger, Zipkin, or cloud providers\n\n### The RED method (recommended for APIs):\n- **R**ate: Requests per second\n- **E**rrors: Error rate (4xx, 5xx)\n- **D**uration: Request latency (p50, p95, p99)\n\n### Common alerting rules:\n- Error rate > 5% for 5 minutes\n- p99 latency > 2 seconds\n- Health check returning 503\n- High CPU/memory usage",
+          "pseudo_code": "# Prometheus metrics\nfrom prometheus_fastapi_instrumentator import Instrumentator\n\nInstrumentator().instrument(app).expose(app, \"/metrics\")\n\n# Custom metric\nfrom prometheus_client import Counter\norders = Counter(\"orders_total\", \"Total orders\")\n\n@app.post(\"/orders\")\nasync def create_order():\n    orders.inc()\n    return {\"ok\": True}",
+          "actual_code": "# --- Prometheus metrics ---\nfrom fastapi import FastAPI, Request, Response\nfrom prometheus_client import (\n    Counter, Histogram, Gauge,\n    generate_latest, CONTENT_TYPE_LATEST,\n)\nimport time\n\napp = FastAPI()\n\n# Define metrics\nREQUEST_COUNT = Counter(\n    \"http_requests_total\",\n    \"Total HTTP requests\",\n    [\"method\", \"endpoint\", \"status\"],\n)\nREQUEST_DURATION = Histogram(\n    \"http_request_duration_seconds\",\n    \"HTTP request duration\",\n    [\"method\", \"endpoint\"],\n    buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],\n)\nIN_FLIGHT = Gauge(\n    \"http_requests_in_flight\",\n    \"Currently processing requests\",\n)\n\n\n# --- Metrics middleware ---\n@app.middleware(\"http\")\nasync def metrics_middleware(request: Request, call_next):\n    if request.url.path == \"/metrics\":\n        return await call_next(request)\n\n    method = request.method\n    endpoint = request.url.path\n\n    IN_FLIGHT.inc()\n    start = time.perf_counter()\n\n    try:\n        response = await call_next(request)\n        REQUEST_COUNT.labels(\n            method=method,\n            endpoint=endpoint,\n            status=response.status_code,\n        ).inc()\n        return response\n    except Exception as e:\n        REQUEST_COUNT.labels(\n            method=method,\n            endpoint=endpoint,\n            status=500,\n        ).inc()\n        raise\n    finally:\n        duration = time.perf_counter() - start\n        REQUEST_DURATION.labels(\n            method=method,\n            endpoint=endpoint,\n        ).observe(duration)\n        IN_FLIGHT.dec()\n\n\n# --- Metrics endpoint for Prometheus to scrape ---\n@app.get(\"/metrics\")\nasync def metrics():\n    return Response(\n        content=generate_latest(),\n        media_type=CONTENT_TYPE_LATEST,\n    )\n\n\n# --- Custom business metrics ---\nORDERS_CREATED = Counter(\n    \"orders_created_total\",\n    \"Total orders created\",\n    [\"product_type\"],\n)\n\n@app.post(\"/orders\")\nasync def create_order():\n    ORDERS_CREATED.labels(product_type=\"digital\").inc()\n    return {\"status\": \"created\"}\n\n\n# --- OpenTelemetry tracing (optional) ---\n# pip install opentelemetry-instrumentation-fastapi opentelemetry-exporter-otlp\n#\n# from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor\n# from opentelemetry import trace\n# from opentelemetry.sdk.trace import TracerProvider\n# from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter\n# from opentelemetry.sdk.trace.export import BatchSpanProcessor\n#\n# provider = TracerProvider()\n# provider.add_span_processor(\n#     BatchSpanProcessor(OTLPSpanExporter(endpoint=\"http://jaeger:4317\"))\n# )\n# trace.set_tracer_provider(provider)\n# FastAPIInstrumentor.instrument_app(app)\n\n\n# --- Prometheus scrape config (prometheus.yml) ---\n# scrape_configs:\n#   - job_name: fastapi\n#     scrape_interval: 15s\n#     static_configs:\n#       - targets: [\"fastapi:8000\"]\n\n\n@app.get(\"/health\")\nasync def health():\n    return {\"status\": \"ok\"}",
+          "code_language": "python",
+          "key_points": [
+            "Use Counter for request counts, Histogram for latency distribution, Gauge for in-flight requests",
+            "Expose a /metrics endpoint for Prometheus to scrape at regular intervals",
+            "The RED method (Rate, Errors, Duration) covers the most important API metrics",
+            "OpenTelemetry provides distributed tracing across multiple services"
+          ],
+          "gotchas": [
+            "High-cardinality labels (e.g., user_id, request_id) in Prometheus metrics cause memory explosion",
+            "Histogram buckets must be chosen carefully -- the default may not match your API's latency profile",
+            "The /metrics endpoint should not require authentication, but should be restricted to internal networks",
+            "Middleware-based metrics do not capture errors in middleware itself -- add error handling around the middleware"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use Prometheus metrics (Counter, Histogram, Gauge) with a `/metrics` endpoint and a middleware that tracks request count, duration, and in-flight requests. Add OpenTelemetry for distributed tracing. Follow the RED method: Rate, Errors, Duration.",
+          "pseudo_code": "",
+          "actual_code": "from prometheus_client import Counter, Histogram, generate_latest\nfrom fastapi import FastAPI, Response\n\napp = FastAPI()\n\nREQUESTS = Counter(\"http_requests_total\", \"Total requests\", [\"method\", \"status\"])\nDURATION = Histogram(\"http_request_duration_seconds\", \"Request duration\")\n\n@app.middleware(\"http\")\nasync def track(request, call_next):\n    import time\n    start = time.perf_counter()\n    response = await call_next(request)\n    DURATION.observe(time.perf_counter() - start)\n    REQUESTS.labels(request.method, response.status_code).inc()\n    return response\n\n@app.get(\"/metrics\")\nasync def metrics():\n    return Response(generate_latest(), media_type=\"text/plain\")",
+          "code_language": "python",
+          "key_points": [
+            "Counter for totals, Histogram for latency, /metrics endpoint for Prometheus"
+          ],
+          "gotchas": [
+            "Avoid high-cardinality labels (user_id, URL with IDs) -- they explode Prometheus memory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle database migrations in production?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "alembic",
+        "database",
+        "migrations",
+        "sqlalchemy",
+        "production"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Alembic** is the standard migration tool for SQLAlchemy-based FastAPI applications. It tracks schema changes as versioned migration scripts that can be applied and rolled back.\n\n### Setup:\n1. `pip install alembic`\n2. `alembic init migrations` -- creates the migration directory\n3. Configure `alembic.ini` and `env.py` with your database URL\n4. `alembic revision --autogenerate -m \"description\"` -- generate a migration\n5. `alembic upgrade head` -- apply all migrations\n\n### Production workflow:\n1. Developer creates a migration locally\n2. Migration is code-reviewed and merged\n3. CI runs migrations against a test database\n4. Deployment runs `alembic upgrade head` before starting the app\n\n### Running migrations in Docker:\nUse an entrypoint script or init container that runs migrations before the app starts.\n\n### Key principles:\n- **Never edit models without a migration** -- the database schema must match the code\n- **Never autogenerate blindly** -- review every generated migration\n- **Test rollbacks** -- every `upgrade()` should have a working `downgrade()`\n- **Avoid destructive migrations in production** -- rename, then deprecate, then drop\n\n### Safe migration patterns:\n- Add column with default: Safe (no lock)\n- Add index concurrently: Safe (use `op.create_index(..., postgresql_concurrently=True)`)\n- Drop column: Dangerous (remove code references first, deploy, then drop)\n- Rename column: Dangerous (add new, copy data, drop old)",
+          "pseudo_code": "# Generate migration\nalembic revision --autogenerate -m \"add users table\"\n\n# Apply migrations\nalembic upgrade head\n\n# Rollback\nalembic downgrade -1\n\n# Docker entrypoint\nalembic upgrade head && uvicorn app:app",
+          "actual_code": "# --- migrations/env.py (key parts) ---\nfrom alembic import context\nfrom sqlalchemy import engine_from_config, pool\nfrom app.models import Base  # Import your SQLAlchemy models\nfrom app.config import get_settings\n\nsettings = get_settings()\nconfig = context.config\n\n# Use the app's database URL\nconfig.set_main_option(\"sqlalchemy.url\", settings.database_url)\n\ntarget_metadata = Base.metadata\n\n\ndef run_migrations_online():\n    connectable = engine_from_config(\n        config.get_section(config.config_ini_section),\n        prefix=\"sqlalchemy.\",\n        poolclass=pool.NullPool,\n    )\n    with connectable.connect() as connection:\n        context.configure(\n            connection=connection,\n            target_metadata=target_metadata,\n            compare_type=True,  # Detect column type changes\n        )\n        with context.begin_transaction():\n            context.run_migrations()\n\n\n# --- Example migration file ---\n# migrations/versions/001_add_users.py\n\"\"\"Add users table\n\nRevision ID: 001abc\nCreate Date: 2025-01-15\n\"\"\"\nfrom alembic import op\nimport sqlalchemy as sa\n\nrevision = \"001abc\"\ndown_revision = None\n\n\ndef upgrade():\n    op.create_table(\n        \"users\",\n        sa.Column(\"id\", sa.Integer, primary_key=True),\n        sa.Column(\"email\", sa.String(255), nullable=False, unique=True),\n        sa.Column(\"name\", sa.String(255), nullable=False),\n        sa.Column(\n            \"created_at\",\n            sa.DateTime(timezone=True),\n            server_default=sa.func.now(),\n        ),\n    )\n    op.create_index(\"ix_users_email\", \"users\", [\"email\"])\n\n\ndef downgrade():\n    op.drop_index(\"ix_users_email\", \"users\")\n    op.drop_table(\"users\")\n\n\n# --- Safe column addition (no lock on large tables) ---\n# migrations/versions/002_add_phone.py\ndef upgrade():\n    op.add_column(\n        \"users\",\n        sa.Column(\"phone\", sa.String(20), nullable=True),  # nullable=True is safe\n    )\n\ndef downgrade():\n    op.drop_column(\"users\", \"phone\")\n\n\n# --- Docker entrypoint script (entrypoint.sh) ---\n# #!/bin/bash\n# set -e\n#\n# echo \"Running database migrations...\"\n# alembic upgrade head\n#\n# echo \"Starting application...\"\n# exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 4 -b 0.0.0.0:8000\n\n\n# --- Dockerfile CMD ---\n# COPY entrypoint.sh /entrypoint.sh\n# RUN chmod +x /entrypoint.sh\n# ENTRYPOINT [\"/entrypoint.sh\"]\n\n\n# --- Testing migrations in CI ---\n# pytest test that verifies migrations work:\nimport subprocess\n\ndef test_migrations_up_and_down():\n    \"\"\"Verify all migrations can be applied and rolled back.\"\"\"\n    # Apply all migrations\n    result = subprocess.run(\n        [\"alembic\", \"upgrade\", \"head\"],\n        capture_output=True, text=True,\n    )\n    assert result.returncode == 0, result.stderr\n\n    # Roll back all migrations\n    result = subprocess.run(\n        [\"alembic\", \"downgrade\", \"base\"],\n        capture_output=True, text=True,\n    )\n    assert result.returncode == 0, result.stderr",
+          "code_language": "python",
+          "key_points": [
+            "Alembic tracks schema changes as versioned migration scripts with upgrade() and downgrade()",
+            "Run alembic upgrade head before starting the app -- use a Docker entrypoint script",
+            "Always review autogenerated migrations -- they can miss renames and produce destructive drops",
+            "Add columns as nullable=True first, then backfill, then set NOT NULL in a separate migration"
+          ],
+          "gotchas": [
+            "Autogenerate does not detect renamed columns -- it generates a drop + add, which loses data",
+            "Running migrations during deployment with multiple replicas can cause race conditions -- use a database advisory lock or run migrations in a separate init container",
+            "compare_type=True is needed to detect column type changes, but can produce false positives",
+            "Rolling back migrations in production is risky -- if upgrade() added data, downgrade() may not cleanly undo it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use Alembic for database migrations. Generate with `alembic revision --autogenerate`, apply with `alembic upgrade head`. Run migrations in a Docker entrypoint before starting the app. Always review autogenerated scripts and test rollbacks.",
+          "pseudo_code": "",
+          "actual_code": "# Generate migration\n# alembic revision --autogenerate -m \"add users table\"\n\n# Apply\n# alembic upgrade head\n\n# Docker entrypoint.sh\n#!/bin/bash\nset -e\nalembic upgrade head\nexec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8000",
+          "code_language": "python",
+          "key_points": [
+            "Alembic manages versioned migrations; run upgrade head before starting the app"
+          ],
+          "gotchas": [
+            "Autogenerate detects renames as drop+add -- always review generated migrations to avoid data loss"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement HTTPS/TLS for FastAPI?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "https",
+        "tls",
+        "ssl",
+        "security",
+        "letsencrypt"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "HTTPS encrypts traffic between the client and server. In production, TLS is typically terminated at the reverse proxy (Nginx, Caddy) or load balancer, not in the application itself.\n\n### Three approaches:\n\n1. **Reverse proxy termination (recommended)**: Nginx or Caddy handles TLS. FastAPI receives plain HTTP on an internal network. This is the most common and performant approach.\n\n2. **Uvicorn direct TLS**: Uvicorn can serve HTTPS directly using `--ssl-keyfile` and `--ssl-certfile`. Useful for simple deployments without a reverse proxy.\n\n3. **Cloud load balancer**: AWS ALB, GCP Load Balancer, or Cloudflare terminate TLS. Your app never sees HTTPS.\n\n### Let's Encrypt (free certificates):\n- Use `certbot` to obtain and auto-renew certificates\n- Caddy has built-in automatic HTTPS with Let's Encrypt\n- Nginx requires certbot plugin or manual setup\n\n### HTTPS redirect:\nForce all HTTP traffic to HTTPS using Starlette's `HTTPSRedirectMiddleware` or Nginx's `return 301`.\n\n### HSTS (HTTP Strict Transport Security):\nTells browsers to always use HTTPS for your domain. Set the `Strict-Transport-Security` header.\n\n### Certificate types:\n- **Let's Encrypt**: Free, auto-renewable, widely trusted\n- **Self-signed**: For development/testing only\n- **Commercial**: For extended validation (EV) certificates",
+          "pseudo_code": "# Option 1: Nginx terminates TLS\n# Nginx: listen 443 ssl;\n# FastAPI: listen 8000 (plain HTTP)\n\n# Option 2: Uvicorn direct TLS\nuvicorn app:app --ssl-keyfile key.pem --ssl-certfile cert.pem\n\n# Option 3: HTTPS redirect middleware\napp.add_middleware(HTTPSRedirectMiddleware)",
+          "actual_code": "# --- Option 1: HTTPS redirect middleware ---\nfrom fastapi import FastAPI\nfrom starlette.middleware.httpsredirect import HTTPSRedirectMiddleware\nfrom starlette.middleware.trustedhost import TrustedHostMiddleware\n\napp = FastAPI()\n\n# Redirect HTTP to HTTPS\n# Only enable when TLS is actually configured!\n# app.add_middleware(HTTPSRedirectMiddleware)\n\n# Prevent host header attacks\napp.add_middleware(\n    TrustedHostMiddleware,\n    allowed_hosts=[\"api.example.com\", \"*.example.com\"],\n)\n\n\n@app.get(\"/\")\nasync def root():\n    return {\"message\": \"Secure endpoint\"}\n\n\n# --- Option 2: Uvicorn with TLS ---\n# Generate self-signed cert for testing:\n# openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem \\\n#     -days 365 -nodes -subj '/CN=localhost'\n#\n# Run Uvicorn with TLS:\n# uvicorn app.main:app \\\n#     --host 0.0.0.0 --port 443 \\\n#     --ssl-keyfile ./key.pem \\\n#     --ssl-certfile ./cert.pem\n\n\n# --- Option 3: Let's Encrypt with certbot ---\n# Install certbot:\n# apt install certbot python3-certbot-nginx\n#\n# Obtain certificate:\n# certbot --nginx -d api.example.com\n#\n# Auto-renewal (crontab):\n# 0 0 * * 0 certbot renew --quiet\n\n\n# --- Option 4: Caddy (automatic HTTPS) ---\n# Caddyfile:\n# api.example.com {\n#     reverse_proxy localhost:8000\n# }\n# That's it! Caddy automatically obtains and renews Let's Encrypt certs.\n\n\n# --- Nginx with Let's Encrypt ---\n# /etc/nginx/sites-available/fastapi\nNGINX_CONFIG = \"\"\"\nserver {\n    listen 80;\n    server_name api.example.com;\n    return 301 https://$server_name$request_uri;\n}\n\nserver {\n    listen 443 ssl http2;\n    server_name api.example.com;\n\n    ssl_certificate /etc/letsencrypt/live/api.example.com/fullchain.pem;\n    ssl_certificate_key /etc/letsencrypt/live/api.example.com/privkey.pem;\n\n    ssl_protocols TLSv1.2 TLSv1.3;\n    ssl_prefer_server_ciphers on;\n    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;\n\n    # HSTS\n    add_header Strict-Transport-Security \"max-age=63072000; includeSubDomains; preload\";\n\n    location / {\n        proxy_pass http://127.0.0.1:8000;\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n    }\n}\n\"\"\"\n\n\n# --- Security headers middleware ---\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom fastapi import Request\n\nclass SecurityHeadersMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n        response.headers[\"Strict-Transport-Security\"] = (\n            \"max-age=63072000; includeSubDomains\"\n        )\n        response.headers[\"X-Content-Type-Options\"] = \"nosniff\"\n        response.headers[\"X-Frame-Options\"] = \"DENY\"\n        return response\n\napp.add_middleware(SecurityHeadersMiddleware)",
+          "code_language": "python",
+          "key_points": [
+            "Terminate TLS at the reverse proxy (Nginx, Caddy) or load balancer -- not in FastAPI directly",
+            "Caddy provides the simplest HTTPS setup with automatic Let's Encrypt certificates",
+            "Use HTTPSRedirectMiddleware to force HTTPS and TrustedHostMiddleware to prevent host header attacks",
+            "Set HSTS headers to tell browsers to always use HTTPS for your domain"
+          ],
+          "gotchas": [
+            "Enabling HTTPSRedirectMiddleware without TLS configured creates an infinite redirect loop",
+            "Self-signed certificates trigger browser warnings -- only use for development and testing",
+            "Let's Encrypt certificates expire every 90 days -- always configure auto-renewal",
+            "HSTS with preload is irreversible for the max-age duration -- start with a short max-age and increase gradually"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Terminate TLS at the reverse proxy (Nginx + Let's Encrypt or Caddy's auto-HTTPS) rather than in FastAPI. Use `HTTPSRedirectMiddleware` to force HTTPS and add HSTS headers. For simple setups, Uvicorn supports `--ssl-keyfile` and `--ssl-certfile` directly.",
+          "pseudo_code": "",
+          "actual_code": "# Caddy (easiest -- automatic HTTPS):\n# api.example.com {\n#     reverse_proxy localhost:8000\n# }\n\n# Uvicorn direct TLS:\n# uvicorn app:app --ssl-keyfile key.pem --ssl-certfile cert.pem\n\n# FastAPI middleware:\nfrom starlette.middleware.httpsredirect import HTTPSRedirectMiddleware\napp.add_middleware(HTTPSRedirectMiddleware)  # Only with TLS configured!",
+          "code_language": "python",
+          "key_points": [
+            "TLS at the proxy is standard; Caddy provides the easiest automatic HTTPS"
+          ],
+          "gotchas": [
+            "HTTPSRedirectMiddleware without TLS causes infinite redirects"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Docker Compose for FastAPI with dependencies?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "docker-compose",
+        "docker",
+        "postgresql",
+        "redis",
+        "nginx"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Docker Compose orchestrates your FastAPI application along with its dependencies (database, Redis, reverse proxy) as a multi-container setup. It is ideal for local development and simple production deployments.\n\n### Typical service stack:\n1. **api**: FastAPI application (built from Dockerfile)\n2. **db**: PostgreSQL database\n3. **redis**: Redis for caching/sessions\n4. **nginx**: Reverse proxy for TLS and static files\n\n### Key Docker Compose features:\n- **depends_on with condition**: Wait for dependencies to be healthy before starting the app\n- **volumes**: Persist database data across container restarts\n- **networks**: Isolate services on an internal network\n- **environment/env_file**: Inject configuration without hardcoding\n- **deploy.replicas**: Run multiple API instances\n\n### Health check integration:\n`depends_on` with `condition: service_healthy` ensures the API does not start until PostgreSQL is ready to accept connections.\n\n### Production vs development:\n- Development: Use `docker compose watch` for live reload\n- Production: Use `docker compose -f docker-compose.yml -f docker-compose.prod.yml up`",
+          "pseudo_code": "services:\n  api:\n    build: .\n    depends_on:\n      db: { condition: service_healthy }\n      redis: { condition: service_healthy }\n  db:\n    image: postgres:16\n    healthcheck: pg_isready\n  redis:\n    image: redis:7\n  nginx:\n    image: nginx\n    ports: [\"80:80\", \"443:443\"]",
+          "actual_code": "# --- docker-compose.yml ---\nversion: \"3.9\"  # Optional in modern Docker Compose\n\nservices:\n  # --- FastAPI application ---\n  api:\n    build:\n      context: .\n      dockerfile: Dockerfile\n    environment:\n      - DATABASE_URL=postgresql+asyncpg://app:secret@db:5432/appdb\n      - REDIS_URL=redis://redis:6379/0\n      - ENVIRONMENT=production\n    depends_on:\n      db:\n        condition: service_healthy\n      redis:\n        condition: service_healthy\n    deploy:\n      replicas: 2  # Swarm only; use --scale for regular compose  # Run 2 instances\n      restart_policy:\n        condition: on-failure\n        delay: 5s\n        max_attempts: 3\n    healthcheck:\n      test: [\"CMD\", \"python\", \"-c\",\n             \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"]\n      interval: 30s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    networks:\n      - internal\n\n  # --- PostgreSQL ---\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: app\n      POSTGRES_PASSWORD: secret\n      POSTGRES_DB: appdb\n    volumes:\n      - postgres_data:/var/lib/postgresql/data\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U app -d appdb\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n    networks:\n      - internal\n\n  # --- Redis ---\n  redis:\n    image: redis:7-alpine\n    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru\n    volumes:\n      - redis_data:/data\n    healthcheck:\n      test: [\"CMD\", \"redis-cli\", \"ping\"]\n      interval: 10s\n      timeout: 5s\n      retries: 5\n    networks:\n      - internal\n\n  # --- Nginx reverse proxy ---\n  nginx:\n    image: nginx:alpine\n    ports:\n      - \"80:80\"\n      - \"443:443\"\n    volumes:\n      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro\n      - ./nginx/certs:/etc/nginx/certs:ro\n    depends_on:\n      api:\n        condition: service_healthy\n    networks:\n      - internal\n\nvolumes:\n  postgres_data:\n  redis_data:\n\nnetworks:\n  internal:\n    driver: bridge\n\n\n# --- Commands ---\n# Start all services:\n# docker compose up -d\n\n# Scale API instances:\n# docker compose up -d --scale api=4\n\n# View logs:\n# docker compose logs -f api\n\n# Run migrations:\n# docker compose exec api alembic upgrade head\n\n# Stop and remove:\n# docker compose down\n\n# Stop and remove INCLUDING volumes (destroys data!):\n# docker compose down -v",
+          "code_language": "python",
+          "key_points": [
+            "Use depends_on with condition: service_healthy to ensure the DB is ready before the API starts",
+            "Persist database and Redis data with named volumes to survive container restarts",
+            "Use deploy.replicas to run multiple API instances behind the Nginx reverse proxy",
+            "Health checks on all services enable proper dependency ordering and monitoring"
+          ],
+          "gotchas": [
+            "depends_on only controls startup order -- it does not retry if the API fails to connect on first attempt",
+            "docker compose down -v destroys all named volumes including database data -- use with extreme caution",
+            "Container-to-container networking uses service names as hostnames (db, redis) -- not localhost",
+            "Secrets in environment variables are visible in docker inspect -- use Docker secrets for production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Docker Compose runs FastAPI with PostgreSQL, Redis, and Nginx together. Use `depends_on` with `condition: service_healthy` for startup ordering, named volumes for data persistence, and `deploy.replicas` for scaling.",
+          "pseudo_code": "",
+          "actual_code": "# docker-compose.yml\nservices:\n  api:\n    build: .\n    environment:\n      - DATABASE_URL=postgresql+asyncpg://app:secret@db:5432/appdb\n    depends_on:\n      db: { condition: service_healthy }\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: app\n      POSTGRES_PASSWORD: secret\n      POSTGRES_DB: appdb\n    volumes: [postgres_data:/var/lib/postgresql/data]\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U app\"]\n      interval: 10s\nvolumes:\n  postgres_data:",
+          "code_language": "python",
+          "key_points": [
+            "depends_on + healthcheck ensures the DB is ready; named volumes persist data"
+          ],
+          "gotchas": [
+            "docker compose down -v deletes all volumes including database data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement zero-downtime deployments?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "zero-downtime",
+        "deployment",
+        "rolling-update",
+        "blue-green",
+        "kubernetes"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Zero-downtime deployment** means updating your application without any period where requests are dropped or users see errors. This requires careful coordination between the load balancer, application instances, and database migrations.\n\n### Strategies:\n\n1. **Rolling update**: Replace instances one at a time. While one instance is restarting, others continue serving traffic.\n   - Kubernetes default strategy\n   - Docker Compose with multiple replicas\n   - Gunicorn's `kill -HUP` for graceful reload\n\n2. **Blue/green deployment**: Run two identical environments. Route traffic from the old (blue) to the new (green) after verification.\n   - Zero risk: instant rollback by switching back to blue\n   - Requires 2x resources during deployment\n\n3. **Canary deployment**: Route a small percentage (e.g., 5%) of traffic to the new version. Gradually increase if metrics look good.\n   - Reduces blast radius of bad deployments\n   - Requires traffic routing capabilities (Istio, AWS ALB)\n\n### Prerequisites:\n1. **Health checks**: Load balancer only routes to healthy instances\n2. **Graceful shutdown**: Finish in-flight requests before stopping\n3. **Backward-compatible migrations**: New code must work with both old and new schemas\n4. **Readiness probes**: New instances report ready only after full initialization\n5. **Connection draining**: Load balancer stops sending new requests to instances being shut down\n\n### Database migration safety:\n- Add columns as nullable first\n- Deploy code that works with both old and new schema\n- Run migration\n- Deploy code that uses the new column\n- This is called the **expand-contract** pattern",
+          "pseudo_code": "# Rolling update (Kubernetes)\nspec:\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 1\n      maxUnavailable: 0  # Always keep all replicas available\n\n# Blue/green (Nginx)\n# Step 1: Deploy green on port 8001\n# Step 2: Test green directly\n# Step 3: Update Nginx upstream to 8001\n# Step 4: Reload Nginx: nginx -s reload",
+          "actual_code": "# --- Kubernetes rolling update manifest ---\n# k8s/deployment.yaml\nKUBERNETES_MANIFEST = \"\"\"\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: fastapi-app\nspec:\n  replicas: 3\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 1        # Add 1 new pod before removing old\n      maxUnavailable: 0  # Never reduce below desired count\n  selector:\n    matchLabels:\n      app: fastapi\n  template:\n    metadata:\n      labels:\n        app: fastapi\n    spec:\n      terminationGracePeriodSeconds: 30\n      containers:\n      - name: api\n        image: myregistry/fastapi-app:v2\n        ports:\n        - containerPort: 8000\n        readinessProbe:\n          httpGet:\n            path: /health/ready\n            port: 8000\n          initialDelaySeconds: 5\n          periodSeconds: 10\n        livenessProbe:\n          httpGet:\n            path: /health/live\n            port: 8000\n          initialDelaySeconds: 15\n          periodSeconds: 20\n        lifecycle:\n          preStop:\n            exec:\n              command: [\"/bin/sh\", \"-c\", \"sleep 5\"]\n\"\"\"\n\n\n# --- Blue/green with Docker Compose + Nginx ---\n# deploy.sh\nDEPLOY_SCRIPT = \"\"\"\n#!/bin/bash\nset -e\n\nCURRENT=$(docker compose ps --format json | python3 -c \"\nimport json, sys\nfor line in sys.stdin:\n    svc = json.loads(line)\n    if 'api-blue' in svc.get('Name', ''):\n        print('blue')\n        break\nelse:\n    print('green')\n\")\n\nif [ \"$CURRENT\" = \"blue\" ]; then\n    NEW=green\n    NEW_PORT=8001\nelse\n    NEW=blue\n    NEW_PORT=8000\nfi\n\necho \"Current: $CURRENT, Deploying: $NEW\"\n\n# Step 1: Start new version\ndocker compose up -d api-$NEW\n\n# Step 2: Wait for health check\necho \"Waiting for $NEW to be healthy...\"\nfor i in $(seq 1 30); do\n    if curl -sf http://localhost:$NEW_PORT/health/ready > /dev/null; then\n        echo \"$NEW is healthy!\"\n        break\n    fi\n    sleep 1\ndone\n\n# Step 3: Switch Nginx to new version\ncat > /etc/nginx/conf.d/upstream.conf << EOF\nupstream api {\n    server 127.0.0.1:$NEW_PORT;\n}\nEOF\nnginx -s reload\n\n# Step 4: Stop old version (after draining)\nsleep 10  # Allow in-flight requests to complete\ndocker compose stop api-$CURRENT\n\necho \"Deployment complete: $NEW is live\"\n\"\"\"\n\n\n# --- FastAPI app with proper shutdown support ---\nfrom contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Response\nimport asyncio\nimport logging\n\nlogger = logging.getLogger(__name__)\n\napp_ready = False\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    global app_ready\n    # Startup: initialize resources\n    logger.info(\"Starting application...\")\n    # await db.connect()\n    # await cache.connect()\n    app_ready = True\n    logger.info(\"Application ready\")\n\n    yield\n\n    # Shutdown: graceful cleanup\n    app_ready = False\n    logger.info(\"Draining connections...\")\n    await asyncio.sleep(2)  # Allow health checks to detect shutdown\n    # await cache.close()\n    # await db.close()\n    logger.info(\"Shutdown complete\")\n\napp = FastAPI(lifespan=lifespan)\n\n@app.get(\"/health/ready\")\nasync def readiness(response: Response):\n    \"\"\"Returns 503 during startup and shutdown for proper traffic draining.\"\"\"\n    if not app_ready:\n        response.status_code = 503\n        return {\"status\": \"not_ready\"}\n    return {\"status\": \"ready\"}\n\n@app.get(\"/health/live\")\nasync def liveness():\n    return {\"status\": \"alive\"}",
+          "code_language": "python",
+          "key_points": [
+            "Rolling updates replace instances one at a time -- maxUnavailable: 0 ensures no capacity loss",
+            "Readiness probes prevent traffic from reaching instances that are still starting or shutting down",
+            "The preStop lifecycle hook (sleep 5) gives the load balancer time to stop routing before the app shuts down",
+            "Blue/green provides instant rollback by switching back to the previous environment"
+          ],
+          "gotchas": [
+            "Database migrations must be backward-compatible -- both old and new code versions run simultaneously during rolling updates",
+            "Without a preStop hook, Kubernetes may send traffic to a pod that is already shutting down (race condition with endpoint removal)",
+            "Blue/green requires 2x resources during deployment -- cost considerations for large services",
+            "Canary deployments need traffic splitting capabilities (Istio, Linkerd, or AWS ALB weighted target groups)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use rolling updates (Kubernetes `maxUnavailable: 0`) or blue/green deployments with health checks. Readiness probes prevent traffic to starting/stopping instances. A `preStop` sleep gives the load balancer time to drain. Database migrations must be backward-compatible.",
+          "pseudo_code": "",
+          "actual_code": "# Kubernetes rolling update\nspec:\n  strategy:\n    type: RollingUpdate\n    rollingUpdate:\n      maxSurge: 1\n      maxUnavailable: 0\n  template:\n    spec:\n      containers:\n      - name: api\n        readinessProbe:\n          httpGet: { path: /health/ready, port: 8000 }\n        lifecycle:\n          preStop:\n            exec:\n              command: [\"/bin/sh\", \"-c\", \"sleep 5\"]",
+          "code_language": "python",
+          "key_points": [
+            "maxUnavailable: 0 + readiness probes + preStop hook = zero-downtime rolling updates"
+          ],
+          "gotchas": [
+            "Database migrations must work with both old and new code versions running simultaneously"
+          ]
+        }
+      ]
+    }
+  ]
+}

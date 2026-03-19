@@ -1,0 +1,829 @@
+{
+  "concept_slug": "pydantic-validation",
+  "questions": [
+    {
+      "title": "How do you create Pydantic models for request validation?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "validation",
+        "BaseModel"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic models are Python classes that inherit from `BaseModel` and use type annotations to define fields. FastAPI uses these models to **automatically validate** request bodies, serialize responses, and generate OpenAPI schemas.\n\n### How it works:\n1. Define a class inheriting from `BaseModel`\n2. Declare fields with type annotations\n3. Use the model as a parameter type in your path operation\n4. FastAPI validates incoming JSON against the model and returns 422 if invalid\n\n### Key features:\n- **Automatic type coercion**: Pydantic will try to convert compatible types (e.g., `\"42\"` to `42` for an `int` field)\n- **Nested models**: Models can reference other models\n- **Default values**: Fields with defaults become optional in the request\n- **Validation errors**: Automatically returns detailed 422 errors listing every invalid field",
+          "pseudo_code": "class ItemCreate(BaseModel):\n    name: str\n    price: float\n    quantity: int = 0  # optional with default\n\n@app.post(\"/items\")\ndef create_item(item: ItemCreate):\n    # item is already validated\n    return item",
+          "actual_code": "from pydantic import BaseModel\nfrom typing import Optional\n\n\nclass Address(BaseModel):\n    street: str\n    city: str\n    zip_code: str\n\n\nclass UserCreate(BaseModel):\n    username: str\n    email: str\n    age: int\n    bio: Optional[str] = None  # optional field\n    address: Address            # nested model\n\n\n# Successful validation\ndata = {\n    \"username\": \"alice\",\n    \"email\": \"alice@example.com\",\n    \"age\": 30,\n    \"address\": {\"street\": \"123 Main St\", \"city\": \"Portland\", \"zip_code\": \"97201\"}\n}\nuser = UserCreate(**data)\nprint(user.username)\nprint(user.age)\nprint(user.address.city)\nprint(user.bio)\n\n# Type coercion -- string \"25\" becomes int 25\nuser2 = UserCreate(\n    username=\"bob\", email=\"bob@example.com\", age=\"25\",\n    address={\"street\": \"1 Elm\", \"city\": \"Salem\", \"zip_code\": \"97301\"}\n)\nprint(user2.age, type(user2.age))\n\n# Validation error\ntry:\n    bad = UserCreate(username=\"x\", email=\"x@x.com\", age=\"not_a_number\",\n                     address={\"street\": \"1\", \"city\": \"X\", \"zip_code\": \"0\"})\nexcept Exception as e:\n    print(f\"Validation error: {e.error_count()} error(s)\")\n\n# Expected Output:\n# alice\n# 30\n# Portland\n# None\n# 25 <class 'int'>\n# Validation error: 1 error(s)",
+          "code_language": "python",
+          "key_points": [
+            "Inherit from BaseModel and use type annotations for automatic validation",
+            "Fields without defaults are required; fields with defaults are optional",
+            "Pydantic v2 performs strict or lax type coercion depending on mode",
+            "FastAPI returns 422 Unprocessable Entity with detailed error info on validation failure"
+          ],
+          "gotchas": [
+            "Pydantic v2 does type coercion by default in lax mode -- '42' becomes 42 for int fields which can hide bugs",
+            "Optional[str] = None is not the same as str | None without a default -- the latter is still required",
+            "Model fields are immutable by default in Pydantic v2 unless you set model_config = ConfigDict(frozen=False)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Inherit from `BaseModel`, add type-annotated fields. FastAPI auto-validates JSON request bodies against the model and returns 422 on failure. Fields with defaults are optional; without defaults are required.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom typing import Optional\n\nclass UserCreate(BaseModel):\n    username: str\n    email: str\n    age: int\n    bio: Optional[str] = None\n\nuser = UserCreate(username=\"alice\", email=\"a@b.com\", age=30)\nprint(user.username, user.age)\n\n# Expected Output:\n# alice 30",
+          "code_language": "python",
+          "key_points": [
+            "BaseModel + type annotations = automatic validation",
+            "FastAPI returns 422 with detailed errors on invalid input"
+          ],
+          "gotchas": [
+            "Pydantic v2 coerces compatible types by default -- '42' silently becomes 42"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Field() work for adding constraints like min, max, regex, and more?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "Field",
+        "constraints",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`Field()` from Pydantic provides fine-grained control over individual model fields. It supports numeric constraints, string patterns, metadata for docs, and more.\n\n### Numeric constraints:\n- `gt`, `ge`, `lt`, `le` -- greater/less than (or equal)\n- `multiple_of` -- value must be a multiple\n\n### String constraints:\n- `min_length`, `max_length` -- length bounds\n- `pattern` -- regex the string must match\n\n### General:\n- `default` -- default value\n- `alias` -- accept a different key name in input\n- `title`, `description` -- OpenAPI documentation\n- `examples` -- example values for docs\n- `exclude` -- exclude from serialization\n- `json_schema_extra` -- extra info for generated JSON Schema",
+          "pseudo_code": "class Product(BaseModel):\n    name: str = Field(min_length=1, max_length=100)\n    price: float = Field(gt=0, description=\"Must be positive\")\n    sku: str = Field(pattern=r'^[A-Z]{3}-\\d{4}$')",
+          "actual_code": "from pydantic import BaseModel, Field, ValidationError\n\n\nclass Product(BaseModel):\n    name: str = Field(\n        min_length=1,\n        max_length=100,\n        title=\"Product Name\",\n        description=\"Human-readable product name\"\n    )\n    price: float = Field(\n        gt=0,\n        le=999999.99,\n        description=\"Price must be positive\"\n    )\n    quantity: int = Field(\n        default=0,\n        ge=0,\n        description=\"Non-negative stock count\"\n    )\n    sku: str = Field(\n        pattern=r'^[A-Z]{3}-\\d{4}$',\n        description=\"Format: ABC-1234\"\n    )\n    discount: float = Field(\n        default=0.0,\n        ge=0,\n        le=1.0,\n        description=\"Discount as fraction 0.0-1.0\"\n    )\n\n\n# Valid product\np = Product(name=\"Widget\", price=29.99, sku=\"WDG-0001\")\nprint(f\"{p.name}: ${p.price}, SKU={p.sku}, qty={p.quantity}\")\n\n# Field with alias\nclass ExternalData(BaseModel):\n    user_name: str = Field(alias=\"userName\")\n    created_at: str = Field(alias=\"createdAt\")\n\nexternal = ExternalData(userName=\"alice\", createdAt=\"2024-01-01\")\nprint(f\"{external.user_name} joined {external.created_at}\")\n\n# Validation errors from constraints\ntry:\n    Product(name=\"\", price=-5, sku=\"bad\", quantity=-1)\nexcept ValidationError as e:\n    for err in e.errors():\n        print(f\"  {err['loc'][0]}: {err['type']}\")\n\n# Expected Output:\n# Widget: $29.99, SKU=WDG-0001, qty=0\n# alice joined 2024-01-01\n#   name: string_too_short\n#   price: greater_than\n#   quantity: greater_than_equal\n#   sku: string_pattern_mismatch",
+          "code_language": "python",
+          "key_points": [
+            "Field() adds numeric constraints (gt, ge, lt, le), string constraints (min_length, max_length, pattern), and metadata",
+            "alias lets you accept different key names from external APIs while using Pythonic names internally",
+            "Constraints generate corresponding JSON Schema rules in the OpenAPI docs automatically",
+            "Use examples parameter for OpenAPI doc examples"
+          ],
+          "gotchas": [
+            "pattern uses Python regex syntax and must match the entire string (anchored automatically in JSON Schema)",
+            "alias fields require the alias name in input by default -- use model_config populate_by_name=True to accept both",
+            "gt means strictly greater than (not equal); ge means greater than or equal"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Field()` adds constraints to model fields: `gt`/`ge`/`lt`/`le` for numbers, `min_length`/`max_length`/`pattern` for strings, plus `alias`, `default`, and OpenAPI metadata like `title` and `description`.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, Field\n\nclass Product(BaseModel):\n    name: str = Field(min_length=1, max_length=100)\n    price: float = Field(gt=0)\n    sku: str = Field(pattern=r'^[A-Z]{3}-\\d{4}$')\n\np = Product(name=\"Widget\", price=9.99, sku=\"WDG-0001\")\nprint(p.name, p.price)\n\n# Expected Output:\n# Widget 9.99",
+          "code_language": "python",
+          "key_points": [
+            "Field() constrains values and adds OpenAPI metadata"
+          ],
+          "gotchas": [
+            "alias fields only accept the alias key by default, not the Python attribute name"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do field_validator decorators work in Pydantic v2?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "field_validator",
+        "validation",
+        "pydantic-v2"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`field_validator` is the Pydantic v2 replacement for the v1 `@validator` decorator. It validates individual fields with custom logic.\n\n### Key differences from v1:\n- Decorated with `@field_validator('field_name')` instead of `@validator('field_name')`\n- The first argument is `cls` (it's a classmethod), second is the **value**\n- In v1, you got `values` dict of previously validated fields; in v2 you use `model_validator` for cross-field access\n- `mode='before'` runs before Pydantic's own parsing; `mode='after'` (default) runs after\n\n### Modes:\n- **after** (default): Receives the already-parsed and typed value\n- **before**: Receives raw input before type coercion -- useful for transforming input\n- **wrap**: Receives the value and a handler, giving full control over the validation pipeline",
+          "pseudo_code": "@field_validator('field_name', mode='before')\n@classmethod\ndef validate_field(cls, value):\n    # transform or validate value\n    return transformed_value",
+          "actual_code": "from pydantic import BaseModel, field_validator, ValidationError\n\n\nclass User(BaseModel):\n    username: str\n    email: str\n    age: int\n\n    @field_validator('username')\n    @classmethod\n    def username_must_be_alphanumeric(cls, v: str) -> str:\n        if not v.isalnum():\n            raise ValueError('must be alphanumeric')\n        return v.lower()  # normalize to lowercase\n\n    @field_validator('email')\n    @classmethod\n    def email_must_contain_at(cls, v: str) -> str:\n        if '@' not in v:\n            raise ValueError('must contain @')\n        return v.lower()\n\n    @field_validator('age')\n    @classmethod\n    def age_must_be_reasonable(cls, v: int) -> int:\n        if not 0 < v < 150:\n            raise ValueError('must be between 1 and 149')\n        return v\n\n\n# Valid input -- note username gets lowercased\nuser = User(username=\"Alice123\", email=\"ALICE@Example.com\", age=30)\nprint(f\"{user.username}, {user.email}, {user.age}\")\n\n# mode='before' -- runs before type coercion\nclass FlexibleInput(BaseModel):\n    tags: list[str]\n\n    @field_validator('tags', mode='before')\n    @classmethod\n    def split_string_tags(cls, v):\n        \"\"\"Accept comma-separated string or list.\"\"\"\n        if isinstance(v, str):\n            return [t.strip() for t in v.split(',')]\n        return v\n\nfrom_list = FlexibleInput(tags=[\"python\", \"fastapi\"])\nfrom_string = FlexibleInput(tags=\"python, fastapi, pydantic\")\nprint(from_list.tags)\nprint(from_string.tags)\n\n# Validate multiple fields with one validator\nclass Config(BaseModel):\n    host: str\n    backup_host: str\n\n    @field_validator('host', 'backup_host')\n    @classmethod\n    def must_be_valid_host(cls, v: str) -> str:\n        if not v.replace('.', '').replace('-', '').isalnum():\n            raise ValueError('invalid hostname characters')\n        return v.lower()\n\nc = Config(host=\"My-Server.Local\", backup_host=\"Backup-01.Local\")\nprint(c.host, c.backup_host)\n\n# Expected Output:\n# alice123, alice@example.com, 30\n# ['python', 'fastapi']\n# ['python', 'fastapi', 'pydantic']\n# my-server.local backup-01.local",
+          "code_language": "python",
+          "key_points": [
+            "field_validator replaces @validator from Pydantic v1",
+            "Must be decorated with both @field_validator and @classmethod",
+            "mode='before' runs before type parsing; mode='after' (default) runs after",
+            "Can validate multiple fields by passing multiple field names to the decorator"
+          ],
+          "gotchas": [
+            "Forgetting @classmethod causes a confusing error in Pydantic v2",
+            "In 'after' mode, the value is already coerced -- raising ValueError for type issues is too late",
+            "field_validator cannot access other fields -- use model_validator for cross-field logic",
+            "Return the value from the validator -- forgetting to return silently sets the field to None"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@field_validator('field_name')` with `@classmethod` validates individual fields. Use `mode='before'` for raw input transformation or `mode='after'` (default) for typed value validation. Replaces `@validator` from Pydantic v1.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, field_validator\n\nclass User(BaseModel):\n    username: str\n\n    @field_validator('username')\n    @classmethod\n    def must_be_alpha(cls, v: str) -> str:\n        if not v.isalnum():\n            raise ValueError('must be alphanumeric')\n        return v.lower()\n\nprint(User(username=\"Alice\").username)\n\n# Expected Output:\n# alice",
+          "code_language": "python",
+          "key_points": [
+            "Use @field_validator + @classmethod for per-field custom validation"
+          ],
+          "gotchas": [
+            "Always return the value -- forgetting to return sets the field to None"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do model_validator decorators work for cross-field validation?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "model_validator",
+        "cross-field",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`model_validator` validates the **entire model** after (or before) all individual fields are validated. This is essential for validation rules that depend on multiple fields.\n\n### Modes:\n- **mode='after'** (default): Receives the fully constructed model instance. You can access all fields via `self`.\n- **mode='before'**: Receives the raw input data (usually a dict). Useful for transforming the input shape before field-level validation.\n- **mode='wrap'**: Receives data and a handler for full pipeline control.\n\n### v1 vs v2:\n- v1 used `@root_validator(pre=True/False)`\n- v2 uses `@model_validator(mode='before'/'after')`",
+          "pseudo_code": "@model_validator(mode='after')\ndef validate_model(self) -> Self:\n    if self.field_a > self.field_b:\n        raise ValueError('field_a must be <= field_b')\n    return self",
+          "actual_code": "from pydantic import BaseModel, model_validator, ValidationError\nfrom typing import Self\n\n\nclass DateRange(BaseModel):\n    start_date: str\n    end_date: str\n\n    @model_validator(mode='after')\n    def end_after_start(self) -> Self:\n        if self.end_date <= self.start_date:\n            raise ValueError('end_date must be after start_date')\n        return self\n\n\nvalid = DateRange(start_date=\"2024-01-01\", end_date=\"2024-12-31\")\nprint(f\"{valid.start_date} to {valid.end_date}\")\n\ntry:\n    DateRange(start_date=\"2024-12-31\", end_date=\"2024-01-01\")\nexcept ValidationError as e:\n    print(f\"Error: {e.errors()[0]['msg']}\")\n\n\n# mode='before' -- transform raw input\nclass PasswordForm(BaseModel):\n    password: str\n    confirm_password: str\n\n    @model_validator(mode='before')\n    @classmethod\n    def check_passwords_match(cls, data: dict) -> dict:\n        if isinstance(data, dict):\n            pw = data.get('password', '')\n            cpw = data.get('confirm_password', '')\n            if pw and cpw and pw != cpw:\n                raise ValueError('passwords do not match')\n        return data\n\nform = PasswordForm(password=\"secret123\", confirm_password=\"secret123\")\nprint(f\"Password set: {len(form.password)} chars\")\n\ntry:\n    PasswordForm(password=\"abc\", confirm_password=\"xyz\")\nexcept ValidationError as e:\n    print(f\"Error: {e.errors()[0]['msg']}\")\n\n\n# Practical example: shipping cost depends on weight and destination\nclass ShippingOrder(BaseModel):\n    weight_kg: float\n    destination: str\n    shipping_cost: float\n\n    @model_validator(mode='after')\n    def validate_shipping_cost(self) -> Self:\n        min_cost = self.weight_kg * 2.0\n        if self.destination == 'international':\n            min_cost *= 3\n        if self.shipping_cost < min_cost:\n            raise ValueError(\n                f'shipping_cost must be >= {min_cost} for '\n                f'{self.weight_kg}kg {self.destination}'\n            )\n        return self\n\norder = ShippingOrder(weight_kg=5.0, destination=\"domestic\", shipping_cost=15.0)\nprint(f\"Order: {order.weight_kg}kg, ${order.shipping_cost}\")\n\n# Expected Output:\n# 2024-01-01 to 2024-12-31\n# Error: Value error, end_date must be after start_date\n# Password set: 9 chars\n# Error: Value error, passwords do not match\n# Order: 5.0kg, $15.0",
+          "code_language": "python",
+          "key_points": [
+            "model_validator(mode='after') receives the fully constructed model instance via self",
+            "model_validator(mode='before') receives raw input dict and must be a @classmethod",
+            "Replaces @root_validator from Pydantic v1",
+            "Return self (after mode) or data (before mode) -- forgetting causes validation to fail"
+          ],
+          "gotchas": [
+            "mode='after' is NOT a classmethod -- it receives self; mode='before' IS a classmethod",
+            "In 'before' mode, the data might not be a dict (e.g., if another model is passed), so check isinstance",
+            "model_validator runs after all field_validators in 'after' mode",
+            "Must return Self from 'after' mode or the dict from 'before' mode"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@model_validator(mode='after')` validates the whole model after all fields are set, accessing fields via `self`. Use `mode='before'` with `@classmethod` for raw input transformation. Replaces `@root_validator` from v1.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, model_validator\nfrom typing import Self\n\nclass DateRange(BaseModel):\n    start: str\n    end: str\n\n    @model_validator(mode='after')\n    def end_after_start(self) -> Self:\n        if self.end <= self.start:\n            raise ValueError('end must be after start')\n        return self\n\nr = DateRange(start=\"2024-01-01\", end=\"2024-12-31\")\nprint(r.start, r.end)\n\n# Expected Output:\n# 2024-01-01 2024-12-31",
+          "code_language": "python",
+          "key_points": [
+            "model_validator validates cross-field logic on the whole model"
+          ],
+          "gotchas": [
+            "mode='after' uses self (not classmethod); mode='before' uses cls + @classmethod"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle nested Pydantic models?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "nested-models",
+        "composition",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic supports **nested models** where a field's type is another `BaseModel`. This allows you to validate complex, deeply structured JSON in a type-safe way.\n\n### How it works:\n- Define separate models for each logical unit\n- Use one model as a field type in another\n- Pydantic recursively validates the entire structure\n- Lists of models: `list[ChildModel]`\n- Optional nested: `Optional[ChildModel] = None`\n\n### Benefits:\n- **Reusability**: Same model used in multiple parent models\n- **Separation of concerns**: Each model handles its own validation\n- **Automatic recursion**: Nested dicts are automatically parsed into nested model instances\n- **OpenAPI generation**: FastAPI generates nested JSON Schema automatically",
+          "pseudo_code": "class Address(BaseModel):\n    city: str\n    zip_code: str\n\nclass User(BaseModel):\n    name: str\n    address: Address             # nested model\n    tags: list[Tag]              # list of nested models\n    backup: Optional[Address]    # optional nested",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom typing import Optional\n\n\nclass Address(BaseModel):\n    street: str\n    city: str\n    state: str = Field(min_length=2, max_length=2)\n    zip_code: str = Field(pattern=r'^\\d{5}$')\n\n\nclass ContactInfo(BaseModel):\n    email: str\n    phone: Optional[str] = None\n\n\nclass OrderItem(BaseModel):\n    product_name: str\n    quantity: int = Field(gt=0)\n    unit_price: float = Field(gt=0)\n\n\nclass Order(BaseModel):\n    order_id: str\n    customer_name: str\n    contact: ContactInfo\n    shipping_address: Address\n    billing_address: Optional[Address] = None  # optional nested\n    items: list[OrderItem] = Field(min_length=1)  # must have at least 1 item\n\n\n# Pydantic parses nested dicts into model instances automatically\ndata = {\n    \"order_id\": \"ORD-001\",\n    \"customer_name\": \"Alice\",\n    \"contact\": {\"email\": \"alice@example.com\", \"phone\": \"555-0100\"},\n    \"shipping_address\": {\n        \"street\": \"123 Main St\", \"city\": \"Portland\",\n        \"state\": \"OR\", \"zip_code\": \"97201\"\n    },\n    \"items\": [\n        {\"product_name\": \"Widget\", \"quantity\": 2, \"unit_price\": 9.99},\n        {\"product_name\": \"Gadget\", \"quantity\": 1, \"unit_price\": 24.99}\n    ]\n}\n\norder = Order(**data)\nprint(f\"Order {order.order_id} for {order.customer_name}\")\nprint(f\"Ship to: {order.shipping_address.city}, {order.shipping_address.state}\")\nprint(f\"Contact: {order.contact.email}\")\nprint(f\"Items: {len(order.items)}\")\nfor item in order.items:\n    print(f\"  - {item.product_name}: {item.quantity} x ${item.unit_price}\")\nprint(f\"Billing address: {order.billing_address}\")\n\n# Expected Output:\n# Order ORD-001 for Alice\n# Ship to: Portland, OR\n# Contact: alice@example.com\n# Items: 2\n#   - Widget: 2 x $9.99\n#   - Gadget: 1 x $24.99\n# Billing address: None",
+          "code_language": "python",
+          "key_points": [
+            "Use another BaseModel as a field type for nested validation",
+            "Pydantic recursively validates nested dicts into model instances",
+            "list[Model] validates a list of nested models with individual element validation",
+            "Optional[Model] = None makes nested models optional"
+          ],
+          "gotchas": [
+            "Validation errors for nested models show dot-notation paths like 'address.zip_code'",
+            "Passing a model instance vs a dict both work, but model instances skip re-validation in v2 by default",
+            "Deeply nested models can make 422 error responses hard to read for API consumers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use a `BaseModel` as a field type to nest models. Pydantic recursively validates nested dicts. Use `list[Model]` for lists and `Optional[Model] = None` for optional nested objects.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\n\nclass Address(BaseModel):\n    city: str\n    zip_code: str\n\nclass User(BaseModel):\n    name: str\n    address: Address\n\nuser = User(name=\"Alice\", address={\"city\": \"Portland\", \"zip_code\": \"97201\"})\nprint(user.address.city)\n\n# Expected Output:\n# Portland",
+          "code_language": "python",
+          "key_points": [
+            "Nested dicts are automatically parsed into nested model instances"
+          ],
+          "gotchas": [
+            "Nested validation errors use dot-notation paths like 'address.zip_code'"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between Optional fields and required fields?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "Optional",
+        "required-fields",
+        "types"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Pydantic v2, whether a field is **required** or **optional** depends on whether it has a **default value**, not just its type annotation.\n\n### Rules:\n| Declaration | Required? | Accepts None? |\n|---|---|---|\n| `name: str` | Yes | No |\n| `name: str = \"default\"` | No | No |\n| `name: Optional[str]` (or `str \\| None`) | Yes | Yes |\n| `name: Optional[str] = None` | No | Yes |\n\n### Key distinction:\n- **Required** = must be provided in the input\n- **Optional** = can be omitted (uses default)\n- **Nullable** = can be explicitly set to `None`\n\nThese are independent concepts! A field can be required AND nullable (`str | None` without a default).",
+          "pseudo_code": "class Example(BaseModel):\n    required: str                       # must provide, can't be None\n    with_default: str = \"hi\"            # can omit, uses default\n    nullable_required: str | None       # must provide, can be None\n    nullable_optional: str | None = None  # can omit, defaults to None",
+          "actual_code": "from pydantic import BaseModel, ValidationError\nfrom typing import Optional\n\n\nclass UserProfile(BaseModel):\n    # Required, not nullable\n    username: str\n\n    # Optional (has default), not nullable\n    role: str = \"viewer\"\n\n    # Required AND nullable -- must be in payload but can be None\n    middle_name: str | None\n\n    # Optional AND nullable -- can be omitted, defaults to None\n    bio: Optional[str] = None\n\n\n# All fields provided\nu1 = UserProfile(\n    username=\"alice\", middle_name=\"Marie\", bio=\"Developer\"\n)\nprint(f\"{u1.username}, role={u1.role}, middle={u1.middle_name}, bio={u1.bio}\")\n\n# Omitting optional fields\nu2 = UserProfile(username=\"bob\", middle_name=None)\nprint(f\"{u2.username}, role={u2.role}, middle={u2.middle_name}, bio={u2.bio}\")\n\n# middle_name is required even though it's nullable\ntry:\n    UserProfile(username=\"charlie\")\nexcept ValidationError as e:\n    print(f\"Missing required field: {e.errors()[0]['loc']}\")\n\n# username cannot be None\ntry:\n    UserProfile(username=None, middle_name=None)\nexcept ValidationError as e:\n    print(f\"Not nullable: {e.errors()[0]['loc']}: {e.errors()[0]['type']}\")\n\n# Expected Output:\n# alice, role=viewer, middle=Marie, bio=Developer\n# bob, role=viewer, middle=None, bio=None\n# Missing required field: ('middle_name',)\n# Not nullable: ('username',): string_type",
+          "code_language": "python",
+          "key_points": [
+            "Required vs optional depends on having a default value, not the type",
+            "str | None without a default is REQUIRED but NULLABLE",
+            "Optional[str] = None is both optional and nullable",
+            "Pydantic v2 distinguishes 'missing' from 'null' in validation errors"
+          ],
+          "gotchas": [
+            "Optional[str] WITHOUT a default is still required in Pydantic v2 -- this surprises many developers",
+            "In FastAPI, omitted optional fields are not included in the request JSON, but fields set to null explicitly are",
+            "Using str | None syntax requires Python 3.10+ in annotations (or from __future__ import annotations)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "A field is required if it has no default value. `Optional[str]` (= `str | None`) without a default is required but nullable. Add `= None` to make it truly optional. Required vs nullable are independent concepts.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\n\nclass User(BaseModel):\n    name: str                        # required, not nullable\n    bio: str | None = None           # optional and nullable\n    middle: str | None               # required but nullable\n\nu = User(name=\"Alice\", middle=None)\nprint(u.name, u.middle, u.bio)\n\n# Expected Output:\n# Alice None None",
+          "code_language": "python",
+          "key_points": [
+            "Default value controls required vs optional; type controls nullable"
+          ],
+          "gotchas": [
+            "Optional[str] without a default is required -- the name 'Optional' is misleading"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does model_dump() work and what replaced .dict()?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "model_dump",
+        "serialization",
+        "pydantic-v2"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`model_dump()` is the Pydantic v2 replacement for `.dict()`. It converts a model instance to a Python dictionary with several powerful filtering options.\n\n### Key parameters:\n- `include` / `exclude` -- set of field names to include or exclude\n- `exclude_unset` -- omit fields not explicitly set (useful for PATCH operations)\n- `exclude_defaults` -- omit fields that equal their default value\n- `exclude_none` -- omit fields that are None\n- `by_alias` -- use alias names as keys instead of Python attribute names\n- `mode` -- `'python'` (default) returns Python objects; `'json'` returns JSON-compatible types\n\n### Migration from v1:\n- `.dict()` -> `model_dump()`\n- `.json()` -> `model_dump_json()`\n- `.parse_obj()` -> `model_validate()`\n- `.parse_raw()` -> `model_validate_json()`",
+          "pseudo_code": "instance = MyModel(field_a=\"x\", field_b=None)\n\ninstance.model_dump()                    # all fields as dict\ninstance.model_dump(exclude_none=True)   # skip None fields\ninstance.model_dump(exclude_unset=True)  # skip fields not explicitly set\ninstance.model_dump(include={'field_a'}) # only specified fields",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom typing import Optional\n\n\nclass UserUpdate(BaseModel):\n    username: Optional[str] = None\n    email: Optional[str] = None\n    bio: Optional[str] = None\n    role: str = \"viewer\"\n\n\n# Only set some fields (simulating a PATCH request)\nupdate = UserUpdate(email=\"new@example.com\")\n\nprint(\"Full dump:\")\nprint(update.model_dump())\n\nprint(\"\\nexclude_unset (only explicitly set fields):\")\nprint(update.model_dump(exclude_unset=True))\n\nprint(\"\\nexclude_none:\")\nprint(update.model_dump(exclude_none=True))\n\nprint(\"\\nexclude_defaults:\")\nprint(update.model_dump(exclude_defaults=True))\n\n# include/exclude specific fields\nclass Product(BaseModel):\n    name: str\n    price: float\n    internal_sku: str\n    secret_cost: float\n\np = Product(name=\"Widget\", price=9.99, internal_sku=\"W001\", secret_cost=3.50)\n\nprint(\"\\nExclude internal fields:\")\nprint(p.model_dump(exclude={'internal_sku', 'secret_cost'}))\n\nprint(\"\\nInclude only public fields:\")\nprint(p.model_dump(include={'name', 'price'}))\n\n# by_alias\nclass APIResponse(BaseModel):\n    user_name: str = Field(alias=\"userName\")\n    created_at: str = Field(alias=\"createdAt\")\n\n    model_config = {\"populate_by_name\": True}\n\nresp = APIResponse(user_name=\"alice\", created_at=\"2024-01-01\")\nprint(\"\\nBy Python name:\", resp.model_dump())\nprint(\"By alias:\", resp.model_dump(by_alias=True))\n\n# Expected Output:\n# Full dump:\n# {'username': None, 'email': 'new@example.com', 'bio': None, 'role': 'viewer'}\n# \n# exclude_unset (only explicitly set fields):\n# {'email': 'new@example.com'}\n# \n# exclude_none:\n# {'email': 'new@example.com', 'role': 'viewer'}\n# \n# exclude_defaults:\n# {'email': 'new@example.com'}\n# \n# Exclude internal fields:\n# {'name': 'Widget', 'price': 9.99}\n# \n# Include only public fields:\n# {'name': 'Widget', 'price': 9.99}\n# \n# By Python name: {'user_name': 'alice', 'created_at': '2024-01-01'}\n# By alias: {'userName': 'alice', 'createdAt': '2024-01-01'}",
+          "code_language": "python",
+          "key_points": [
+            "model_dump() replaces .dict() in Pydantic v2",
+            "exclude_unset=True is essential for PATCH operations -- only updates explicitly provided fields",
+            "include/exclude filter which fields appear in the output dict",
+            "by_alias=True uses Field alias names as dict keys"
+          ],
+          "gotchas": [
+            ".dict() still works in Pydantic v2 but emits a deprecation warning",
+            "exclude_unset vs exclude_none: a field explicitly set to None is 'set' but None",
+            "include and exclude cannot both be used on the same field -- include takes priority",
+            "Nested models are also converted to dicts recursively by default"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`model_dump()` replaces `.dict()` in Pydantic v2. Key params: `exclude_unset=True` for PATCH updates, `exclude_none=True`, `include`/`exclude` sets, and `by_alias=True` for alias keys.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom typing import Optional\n\nclass UserUpdate(BaseModel):\n    name: Optional[str] = None\n    email: Optional[str] = None\n\nupdate = UserUpdate(email=\"new@test.com\")\nprint(update.model_dump(exclude_unset=True))\n\n# Expected Output:\n# {'email': 'new@test.com'}",
+          "code_language": "python",
+          "key_points": [
+            "model_dump(exclude_unset=True) is essential for PATCH operations"
+          ],
+          "gotchas": [
+            "exclude_unset and exclude_none behave differently -- explicitly set None is 'set'"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the key Pydantic v2 migration changes from v1?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "pydantic-v2",
+        "migration",
+        "breaking-changes"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic v2 is a ground-up rewrite with a Rust-powered core (`pydantic-core`) that brings 5-50x performance improvements but introduces significant API changes.\n\n### Major renames:\n| v1 | v2 |\n|---|---|\n| `.dict()` | `model_dump()` |\n| `.json()` | `model_dump_json()` |\n| `.parse_obj(data)` | `model_validate(data)` |\n| `.parse_raw(json_str)` | `model_validate_json(json_str)` |\n| `.schema()` | `model_json_schema()` |\n| `.copy(update={})` | `model_copy(update={})` |\n| `@validator` | `@field_validator` |\n| `@root_validator` | `@model_validator` |\n| `class Config:` | `model_config = ConfigDict(...)` |\n| `Config.orm_mode = True` | `model_config = ConfigDict(from_attributes=True)` |\n| `Field(regex=...)` | `Field(pattern=...)` |\n\n### Behavioral changes:\n- **Strict mode**: Optional strict validation (no type coercion)\n- **Validators**: `@field_validator` requires `@classmethod`; `@model_validator(mode='after')` uses `self` not `cls, values`\n- **Generic models**: Better support with standard Python generics\n- **Performance**: 5-50x faster due to Rust core\n- **Error messages**: More structured, machine-readable error format",
+          "pseudo_code": "# v1 style (deprecated):\nclass Model(BaseModel):\n    class Config:\n        orm_mode = True\n    @validator('field')\n    def check(cls, v): ...\n\n# v2 style:\nclass Model(BaseModel):\n    model_config = ConfigDict(from_attributes=True)\n    @field_validator('field')\n    @classmethod\n    def check(cls, v): ...",
+          "actual_code": "from pydantic import BaseModel, ConfigDict, field_validator, model_validator\nfrom typing import Self\n\n\n# Pydantic v2 model with all modern patterns\nclass User(BaseModel):\n    # model_config replaces class Config\n    model_config = ConfigDict(\n        from_attributes=True,     # was orm_mode\n        populate_by_name=True,    # was allow_population_by_field_name\n        str_strip_whitespace=True,\n        strict=False,             # allow type coercion (default)\n    )\n\n    username: str\n    email: str\n    age: int\n\n    # field_validator replaces @validator\n    @field_validator('email')\n    @classmethod\n    def validate_email(cls, v: str) -> str:\n        if '@' not in v:\n            raise ValueError('invalid email')\n        return v.lower()\n\n    # model_validator replaces @root_validator\n    @model_validator(mode='after')\n    def check_username_not_email(self) -> Self:\n        if '@' in self.username:\n            raise ValueError('username cannot be an email')\n        return self\n\n\nuser = User(username=\"alice\", email=\"ALICE@test.com\", age=30)\n\n# model_dump() replaces .dict()\nprint(\"model_dump:\", user.model_dump())\n\n# model_dump_json() replaces .json()\nprint(\"model_dump_json:\", user.model_dump_json())\n\n# model_validate() replaces .parse_obj()\nuser2 = User.model_validate({\"username\": \"bob\", \"email\": \"bob@x.com\", \"age\": 25})\nprint(\"model_validate:\", user2.username)\n\n# model_json_schema() replaces .schema()\nschema = User.model_json_schema()\nprint(\"Schema title:\", schema['title'])\nprint(\"Required fields:\", schema['required'])\n\n# model_copy() replaces .copy()\nuser3 = user.model_copy(update={\"username\": \"alice_v2\"})\nprint(\"model_copy:\", user3.username, user3.email)\n\n# from_attributes (was orm_mode) -- works with any object with attributes\nclass FakeORM:\n    username = \"from_orm\"\n    email = \"orm@test.com\"\n    age = 40\n\nuser4 = User.model_validate(FakeORM())\nprint(\"from_attributes:\", user4.username)\n\n# Expected Output:\n# model_dump: {'username': 'alice', 'email': 'alice@test.com', 'age': 30}\n# model_dump_json: {\"username\":\"alice\",\"email\":\"alice@test.com\",\"age\":30}\n# model_validate: bob\n# Schema title: User\n# Required fields: ['username', 'email', 'age']\n# model_copy: alice_v2 alice@test.com\n# from_attributes: from_orm",
+          "code_language": "python",
+          "key_points": [
+            "All method names changed: .dict() -> model_dump(), .json() -> model_dump_json(), etc.",
+            "class Config replaced by model_config = ConfigDict(...)",
+            "@validator -> @field_validator (must add @classmethod); @root_validator -> @model_validator",
+            "Rust core gives 5-50x performance improvement"
+          ],
+          "gotchas": [
+            "v1 methods still exist but emit DeprecationWarning -- code will break in v3",
+            "orm_mode renamed to from_attributes in ConfigDict",
+            "field_validator requires @classmethod decorator which v1's @validator did not",
+            "model_validator(mode='after') uses self, not (cls, values) like root_validator(pre=False)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic v2 renames all APIs: `.dict()` -> `model_dump()`, `@validator` -> `@field_validator` + `@classmethod`, `class Config` -> `model_config = ConfigDict(...)`, `orm_mode` -> `from_attributes`. Built on Rust for 5-50x speed.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, ConfigDict, field_validator\n\nclass User(BaseModel):\n    model_config = ConfigDict(from_attributes=True)\n    name: str\n\n    @field_validator('name')\n    @classmethod\n    def lowercase(cls, v: str) -> str:\n        return v.lower()\n\nu = User(name=\"ALICE\")\nprint(u.model_dump())\n\n# Expected Output:\n# {'name': 'alice'}",
+          "code_language": "python",
+          "key_points": [
+            "All v1 methods renamed with model_ prefix; class Config replaced by model_config dict"
+          ],
+          "gotchas": [
+            "field_validator now requires @classmethod -- forgetting it causes an error in v2"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use model_config instead of class Config?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "model_config",
+        "ConfigDict",
+        "pydantic-v2"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In Pydantic v2, the inner `class Config` is replaced by a `model_config` class variable set to a `ConfigDict(...)` call. This provides better IDE support, type checking, and is the only way to configure models going forward.\n\n### Common settings:\n- `strict` -- Disable type coercion (default `False`)\n- `from_attributes` -- Read data from object attributes like ORM objects (was `orm_mode`)\n- `populate_by_name` -- Accept both Python name and alias (was `allow_population_by_field_name`)\n- `str_strip_whitespace` -- Strip whitespace from strings\n- `str_to_lower` / `str_to_upper` -- Case normalization\n- `frozen` -- Make instances immutable (was `allow_mutation = False`)\n- `extra` -- `'forbid'`, `'allow'`, or `'ignore'` extra fields\n- `json_schema_extra` -- Add extra info to generated JSON Schema\n- `use_enum_values` -- Store enum value instead of enum member\n- `validate_default` -- Run validators on default values too",
+          "pseudo_code": "# v1 (deprecated):\nclass Model(BaseModel):\n    class Config:\n        orm_mode = True\n        allow_mutation = False\n\n# v2 (current):\nclass Model(BaseModel):\n    model_config = ConfigDict(\n        from_attributes=True,\n        frozen=True,\n    )",
+          "actual_code": "from pydantic import BaseModel, ConfigDict, Field\n\n\n# Strict mode -- no type coercion\nclass StrictUser(BaseModel):\n    model_config = ConfigDict(strict=True)\n    name: str\n    age: int\n\ntry:\n    StrictUser(name=\"alice\", age=\"30\")  # string won't coerce to int\nexcept Exception as e:\n    print(f\"Strict mode: {e.errors()[0]['type']}\")\n\n\n# Frozen model (immutable)\nclass ImmutablePoint(BaseModel):\n    model_config = ConfigDict(frozen=True)\n    x: float\n    y: float\n\npoint = ImmutablePoint(x=1.0, y=2.0)\ntry:\n    point.x = 5.0\nexcept Exception as e:\n    print(f\"Frozen: {type(e).__name__}\")\n\n\n# Extra fields handling\nclass StrictSchema(BaseModel):\n    model_config = ConfigDict(extra='forbid')\n    name: str\n\ntry:\n    StrictSchema(name=\"alice\", unknown_field=\"oops\")\nexcept Exception as e:\n    print(f\"Extra forbid: {e.errors()[0]['type']}\")\n\n\n# String preprocessing\nclass CleanInput(BaseModel):\n    model_config = ConfigDict(\n        str_strip_whitespace=True,\n        str_to_lower=True,\n    )\n    username: str\n    email: str\n\nclean = CleanInput(username=\"  ALICE  \", email=\"  ALICE@Test.Com  \")\nprint(f\"Cleaned: '{clean.username}', '{clean.email}'\")\n\n\n# from_attributes (ORM mode)\nclass UserOut(BaseModel):\n    model_config = ConfigDict(from_attributes=True)\n    id: int\n    name: str\n\nclass FakeDBRow:\n    def __init__(self, id, name):\n        self.id = id\n        self.name = name\n\nrow = FakeDBRow(id=1, name=\"alice\")\nuser = UserOut.model_validate(row)\nprint(f\"From ORM: id={user.id}, name={user.name}\")\n\n\n# json_schema_extra for OpenAPI docs\nclass Item(BaseModel):\n    model_config = ConfigDict(\n        json_schema_extra={\n            \"examples\": [\n                {\"name\": \"Widget\", \"price\": 9.99}\n            ]\n        }\n    )\n    name: str\n    price: float\n\nschema = Item.model_json_schema()\nprint(f\"Schema examples: {schema.get('examples')}\")\n\n# Expected Output:\n# Strict mode: int_type\n# Frozen: ValidationError\n# Extra forbid: extra_forbidden\n# Cleaned: 'alice', 'alice@test.com'\n# From ORM: id=1, name=alice\n# Schema examples: [{'name': 'Widget', 'price': 9.99}]",
+          "code_language": "python",
+          "key_points": [
+            "model_config = ConfigDict(...) replaces class Config in Pydantic v2",
+            "ConfigDict is a TypedDict providing full IDE autocomplete and type checking",
+            "from_attributes=True replaces orm_mode=True for ORM object reading",
+            "extra='forbid' rejects unknown fields -- important for strict API contracts"
+          ],
+          "gotchas": [
+            "class Config still works in v2 but will be removed in v3",
+            "frozen=True replaces allow_mutation=False and uses a different error type (ValidationError not TypeError)",
+            "str_strip_whitespace and str_to_lower apply to ALL string fields -- use field_validator for selective processing",
+            "populate_by_name must be True to accept both alias and Python field name"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`model_config = ConfigDict(...)` replaces `class Config`. Common settings: `from_attributes=True` (ORM mode), `frozen=True` (immutable), `extra='forbid'` (reject unknown fields), `str_strip_whitespace=True`.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, ConfigDict\n\nclass User(BaseModel):\n    model_config = ConfigDict(\n        from_attributes=True,\n        extra='forbid',\n        str_strip_whitespace=True,\n    )\n    name: str\n    email: str\n\nuser = User(name=\"  Alice  \", email=\"  a@b.com  \")\nprint(user.name, user.email)\n\n# Expected Output:\n# Alice a@b.com",
+          "code_language": "python",
+          "key_points": [
+            "ConfigDict provides typed, IDE-friendly configuration replacing class Config"
+          ],
+          "gotchas": [
+            "str_strip_whitespace applies to ALL string fields, not selectively"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use BaseSettings for configuration management?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "BaseSettings",
+        "configuration",
+        "environment-variables"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`BaseSettings` from `pydantic-settings` (separate package in v2) reads configuration from environment variables, `.env` files, and other sources, with full Pydantic validation.\n\n### How it works:\n1. Define a class inheriting from `BaseSettings`\n2. Each field is read from an environment variable (case-insensitive by default)\n3. Sources are checked in priority order: init kwargs > env vars > .env file > defaults\n4. All Pydantic validation applies (types, constraints, validators)\n\n### Installation:\n```\npip install pydantic-settings\n```\n\n### Key features:\n- `env_prefix` -- prefix all env var names (e.g., `APP_` prefix means `APP_DATABASE_URL`)\n- `env_file` -- read from `.env` file\n- `env_nested_delimiter` -- parse nested objects from env vars\n- Secrets directory support for Docker/Kubernetes secrets",
+          "pseudo_code": "class Settings(BaseSettings):\n    model_config = SettingsConfigDict(\n        env_prefix='APP_',\n        env_file='.env',\n    )\n    database_url: str\n    debug: bool = False\n\nsettings = Settings()  # reads from env vars",
+          "actual_code": "from pydantic_settings import BaseSettings, SettingsConfigDict\nfrom pydantic import Field\nimport os\n\n\n# Simulate environment variables\nos.environ['APP_DATABASE_URL'] = 'postgresql://localhost/mydb'\nos.environ['APP_SECRET_KEY'] = 'super-secret-key-123'\nos.environ['APP_DEBUG'] = 'true'\nos.environ['APP_MAX_CONNECTIONS'] = '50'\n\n\nclass Settings(BaseSettings):\n    model_config = SettingsConfigDict(\n        env_prefix='APP_',       # all vars prefixed with APP_\n        env_file='.env',         # also read from .env file\n        env_file_encoding='utf-8',\n        case_sensitive=False,    # APP_DEBUG and app_debug both work\n    )\n\n    database_url: str\n    secret_key: str\n    debug: bool = False\n    max_connections: int = Field(default=10, ge=1, le=1000)\n    app_name: str = \"MyApp\"\n\n\nsettings = Settings()\nprint(f\"DB: {settings.database_url}\")\nprint(f\"Debug: {settings.debug}\")\nprint(f\"Max connections: {settings.max_connections}\")\nprint(f\"App: {settings.app_name}\")\n\n# Use as FastAPI dependency\n# from functools import lru_cache\n# @lru_cache\n# def get_settings():\n#     return Settings()\n#\n# @app.get(\"/info\")\n# def info(settings: Annotated[Settings, Depends(get_settings)]):\n#     return {\"app\": settings.app_name, \"debug\": settings.debug}\n\n# Cleanup\nfor key in ['APP_DATABASE_URL', 'APP_SECRET_KEY', 'APP_DEBUG', 'APP_MAX_CONNECTIONS']:\n    os.environ.pop(key, None)\n\n# Expected Output:\n# DB: postgresql://localhost/mydb\n# Debug: True\n# Max connections: 50\n# App: MyApp",
+          "code_language": "python",
+          "key_points": [
+            "BaseSettings lives in pydantic-settings package (separate install in v2)",
+            "Fields are read from env vars, .env files, or defaults with full validation",
+            "env_prefix adds a prefix to all env var names for namespacing",
+            "Use @lru_cache or functools.cache on the settings factory to avoid re-reading env on every request"
+          ],
+          "gotchas": [
+            "pydantic-settings is a separate package in v2 -- pip install pydantic-settings",
+            "SettingsConfigDict (not ConfigDict) is used for BaseSettings configuration",
+            "Priority order: init args > env vars > .env file > defaults -- env vars override .env file",
+            "env_prefix is case-insensitive by default so APP_DB_URL and app_db_url both match"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`BaseSettings` from `pydantic-settings` reads config from env vars and `.env` files with validation. Use `env_prefix` for namespacing. Cache with `@lru_cache` in FastAPI.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic_settings import BaseSettings, SettingsConfigDict\nimport os\n\nos.environ['APP_DB'] = 'sqlite:///app.db'\n\nclass Settings(BaseSettings):\n    model_config = SettingsConfigDict(env_prefix='APP_')\n    db: str\n    debug: bool = False\n\ns = Settings()\nprint(s.db, s.debug)\nos.environ.pop('APP_DB')\n\n# Expected Output:\n# sqlite:///app.db False",
+          "code_language": "python",
+          "key_points": [
+            "Separate package: pip install pydantic-settings"
+          ],
+          "gotchas": [
+            "Env vars override .env file values -- priority matters"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do discriminated unions work in Pydantic?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "discriminated-unions",
+        "polymorphism",
+        "tagged-unions"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Discriminated unions** (tagged unions) let Pydantic efficiently pick the right model from a `Union` type based on a **discriminator field** -- a field whose literal value identifies the variant.\n\n### Why use them:\n- Without a discriminator, Pydantic tries each union member in order until one validates -- slow and ambiguous\n- With a discriminator, Pydantic checks the tag field first and directly validates against the correct model -- O(1) lookup\n\n### How to define:\n1. Each model in the union has a `Literal` field with a unique value\n2. Use `Discriminator('field_name')` or `Field(discriminator='field_name')` to tell Pydantic which field is the tag\n\n### Use cases:\n- **Notifications**: email vs SMS vs push with different fields\n- **Payments**: credit card vs bank transfer vs PayPal\n- **Events**: different event types in a stream",
+          "pseudo_code": "class Email(BaseModel):\n    type: Literal['email']\n    address: str\n\nclass SMS(BaseModel):\n    type: Literal['sms']\n    phone: str\n\nclass Parent(BaseModel):\n    notification: Email | SMS = Field(discriminator='type')",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom typing import Literal, Union, Annotated\nfrom pydantic import Discriminator\n\n\n# Define variants with Literal discriminator field\nclass CreditCardPayment(BaseModel):\n    method: Literal['credit_card']\n    card_number: str\n    expiry: str\n    cvv: str\n\n\nclass BankTransferPayment(BaseModel):\n    method: Literal['bank_transfer']\n    account_number: str\n    routing_number: str\n\n\nclass PayPalPayment(BaseModel):\n    method: Literal['paypal']\n    paypal_email: str\n\n\n# Using Field(discriminator=...) in a parent model\nPaymentUnion = Union[CreditCardPayment, BankTransferPayment, PayPalPayment]\n\nclass Order(BaseModel):\n    order_id: str\n    amount: float\n    payment: PaymentUnion = Field(discriminator='method')\n\n\n# Pydantic checks 'method' field to pick the right model\ncc_order = Order(\n    order_id=\"O-001\", amount=99.99,\n    payment={\"method\": \"credit_card\", \"card_number\": \"4111\", \"expiry\": \"12/25\", \"cvv\": \"123\"}\n)\nprint(f\"Order {cc_order.order_id}: {type(cc_order.payment).__name__}\")\n\npp_order = Order(\n    order_id=\"O-002\", amount=49.99,\n    payment={\"method\": \"paypal\", \"paypal_email\": \"alice@paypal.com\"}\n)\nprint(f\"Order {pp_order.order_id}: {type(pp_order.payment).__name__}\")\n\n# Using Annotated + Discriminator for standalone union types\nNotification = Annotated[\n    Union[CreditCardPayment, BankTransferPayment, PayPalPayment],\n    Discriminator('method')\n]\n\n# Validation error with unknown discriminator value\nfrom pydantic import ValidationError\ntry:\n    Order(order_id=\"O-003\", amount=10.0,\n          payment={\"method\": \"bitcoin\", \"wallet\": \"abc\"})\nexcept ValidationError as e:\n    print(f\"Error: {e.errors()[0]['type']}\")\n\n# Expected Output:\n# Order O-001: CreditCardPayment\n# Order O-002: PayPalPayment\n# Error: union_tag_invalid",
+          "code_language": "python",
+          "key_points": [
+            "Each variant has a Literal field whose value uniquely identifies it",
+            "Field(discriminator='field_name') enables O(1) model selection instead of try-each",
+            "Pydantic generates proper oneOf JSON Schema with discriminator mapping for OpenAPI",
+            "Can also use Annotated[Union[...], Discriminator('field')] for standalone types"
+          ],
+          "gotchas": [
+            "All union members must have the discriminator field with a Literal type",
+            "Discriminator field values must be unique across all variants",
+            "Without a discriminator, Pydantic validates against each member in order -- first match wins which may be wrong",
+            "The discriminator field must be required (no default) on each variant"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Discriminated unions use a `Literal` field as a tag to pick the right model from a `Union`. Use `Field(discriminator='field_name')` for O(1) model selection instead of trial-and-error matching.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom typing import Literal, Union\n\nclass Cat(BaseModel):\n    pet_type: Literal['cat']\n    meow_volume: int\n\nclass Dog(BaseModel):\n    pet_type: Literal['dog']\n    bark_volume: int\n\nclass Owner(BaseModel):\n    pet: Union[Cat, Dog] = Field(discriminator='pet_type')\n\no = Owner(pet={\"pet_type\": \"cat\", \"meow_volume\": 5})\nprint(type(o.pet).__name__)\n\n# Expected Output:\n# Cat",
+          "code_language": "python",
+          "key_points": [
+            "Literal field + discriminator enables efficient tagged union matching"
+          ],
+          "gotchas": [
+            "All variants must have the discriminator field with unique Literal values"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create custom types with Pydantic?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "custom-types",
+        "Annotated",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic v2 offers several ways to create reusable custom types that encapsulate validation logic.\n\n### Approaches:\n1. **Annotated + AfterValidator/BeforeValidator** -- Simplest approach, wraps validation around existing types\n2. **Custom class with `__get_pydantic_core_schema__`** -- Full control, integrates with pydantic-core\n3. **TypeAdapter** -- Validate any type outside of a model\n4. **Constrained types with Annotated** -- Combine Field-like constraints with Annotated\n\n### Best practices:\n- Use `Annotated` with validators for simple cases\n- Create a proper type class only when you need custom serialization or complex logic\n- `TypeAdapter` is useful for validating standalone values without a model",
+          "pseudo_code": "from pydantic import AfterValidator\nfrom typing import Annotated\n\ndef validate_positive(v: int) -> int:\n    assert v > 0\n    return v\n\nPositiveInt = Annotated[int, AfterValidator(validate_positive)]",
+          "actual_code": "from pydantic import BaseModel, AfterValidator, BeforeValidator, TypeAdapter\nfrom pydantic import Field\nfrom typing import Annotated\nimport re\n\n\n# Approach 1: Annotated + AfterValidator (most common)\ndef validate_email(v: str) -> str:\n    if not re.match(r'^[\\w.-]+@[\\w.-]+\\.\\w+$', v):\n        raise ValueError('invalid email format')\n    return v.lower()\n\nEmailStr = Annotated[str, AfterValidator(validate_email)]\n\n\n# Annotated + BeforeValidator for input transformation\ndef comma_separated_to_list(v) -> list[str]:\n    if isinstance(v, str):\n        return [s.strip() for s in v.split(',') if s.strip()]\n    return v\n\nCommaSeparatedList = Annotated[list[str], BeforeValidator(comma_separated_to_list)]\n\n\n# Combine multiple validators\ndef strip_whitespace(v: str) -> str:\n    return v.strip()\n\ndef must_not_be_empty(v: str) -> str:\n    if not v:\n        raise ValueError('must not be empty')\n    return v\n\nNonEmptyStr = Annotated[str, AfterValidator(strip_whitespace), AfterValidator(must_not_be_empty)]\n\n\n# Use custom types in a model\nclass UserCreate(BaseModel):\n    name: NonEmptyStr\n    email: EmailStr\n    tags: CommaSeparatedList = []\n\n\nuser = UserCreate(name=\"  Alice  \", email=\"ALICE@Test.Com\", tags=\"python, fastapi, pydantic\")\nprint(f\"Name: '{user.name}'\")\nprint(f\"Email: {user.email}\")\nprint(f\"Tags: {user.tags}\")\n\n# TypeAdapter for validating without a model\nadapter = TypeAdapter(list[EmailStr])\nemails = adapter.validate_python([\"A@B.com\", \"C@D.com\"])\nprint(f\"Validated emails: {emails}\")\n\n# Expected Output:\n# Name: 'Alice'\n# Email: alice@test.com\n# Tags: ['python', 'fastapi', 'pydantic']\n# Validated emails: ['a@b.com', 'c@d.com']",
+          "code_language": "python",
+          "key_points": [
+            "Annotated[type, AfterValidator(fn)] is the simplest way to create reusable custom types",
+            "BeforeValidator runs before type coercion; AfterValidator runs after",
+            "Multiple validators can be chained in a single Annotated type",
+            "TypeAdapter validates standalone values without needing a full model"
+          ],
+          "gotchas": [
+            "AfterValidator receives the already-coerced value; BeforeValidator gets raw input",
+            "Validators in Annotated run left to right -- order matters for chained validators",
+            "TypeAdapter.validate_python() creates new objects each call -- cache if performance matters",
+            "Custom types must be serializable if used in FastAPI response models"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `Annotated[type, AfterValidator(fn)]` for reusable validated types. `BeforeValidator` transforms raw input, `AfterValidator` validates after coercion. `TypeAdapter` validates values outside of models.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, AfterValidator\nfrom typing import Annotated\n\ndef check_positive(v: int) -> int:\n    if v <= 0:\n        raise ValueError('must be positive')\n    return v\n\nPositiveInt = Annotated[int, AfterValidator(check_positive)]\n\nclass Item(BaseModel):\n    quantity: PositiveInt\n\nprint(Item(quantity=5).quantity)\n\n# Expected Output:\n# 5",
+          "code_language": "python",
+          "key_points": [
+            "Annotated + AfterValidator creates reusable validated types"
+          ],
+          "gotchas": [
+            "Validators in Annotated run left to right -- order matters"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does JSON Schema generation work with Pydantic models?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "json-schema",
+        "OpenAPI",
+        "documentation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic models automatically generate **JSON Schema** (Draft 2020-12), which FastAPI uses to build its OpenAPI documentation (Swagger UI and ReDoc).\n\n### How it works:\n- `model_json_schema()` returns a dict representing the JSON Schema\n- Field types map to JSON Schema types (`str` -> `string`, `int` -> `integer`, etc.)\n- `Field()` constraints become JSON Schema constraints (`min_length`, `maximum`, `pattern`, etc.)\n- Nested models create `$defs` references\n- `title`, `description`, and `examples` from Field() appear in the schema\n\n### Customization:\n- `json_schema_extra` in `model_config` adds arbitrary schema properties\n- `Field(json_schema_extra={...})` adds per-field schema properties\n- Custom types can define `__get_pydantic_json_schema__` for custom schema generation",
+          "pseudo_code": "class MyModel(BaseModel):\n    name: str = Field(description=\"User's name\")\n    age: int = Field(ge=0, le=150)\n\nschema = MyModel.model_json_schema()\n# Produces JSON Schema with type, constraints, description",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom typing import Optional\nimport json\n\n\nclass Address(BaseModel):\n    street: str = Field(description=\"Street address\")\n    city: str\n    zip_code: str = Field(pattern=r'^\\d{5}$')\n\n\nclass UserCreate(BaseModel):\n    \"\"\"Schema for creating a new user.\"\"\"\n    model_config = {\n        \"json_schema_extra\": {\n            \"examples\": [\n                {\n                    \"username\": \"alice\",\n                    \"email\": \"alice@example.com\",\n                    \"age\": 30,\n                    \"address\": {\"street\": \"123 Main\", \"city\": \"Portland\", \"zip_code\": \"97201\"}\n                }\n            ]\n        }\n    }\n\n    username: str = Field(min_length=3, max_length=50, description=\"Unique username\")\n    email: str = Field(description=\"Valid email address\")\n    age: int = Field(ge=0, le=150, description=\"Age in years\")\n    bio: Optional[str] = Field(default=None, max_length=500)\n    address: Address\n\n\nschema = UserCreate.model_json_schema()\nprint(json.dumps(schema, indent=2))\n\n# Expected Output:\n# {\n#   \"$defs\": {\n#     \"Address\": {\n#       \"properties\": {\n#         \"street\": {\n#           \"description\": \"Street address\",\n#           \"title\": \"Street\",\n#           \"type\": \"string\"\n#         },\n#         \"city\": {\n#           \"title\": \"City\",\n#           \"type\": \"string\"\n#         },\n#         \"zip_code\": {\n#           \"pattern\": \"^\\\\d{5}$\",\n#           \"title\": \"Zip Code\",\n#           \"type\": \"string\"\n#         }\n#       },\n#       \"required\": [\"street\", \"city\", \"zip_code\"],\n#       \"title\": \"Address\",\n#       \"type\": \"object\"\n#     }\n#   },\n#   \"description\": \"Schema for creating a new user.\",\n#   \"examples\": [\n#     {\n#       \"username\": \"alice\",\n#       \"email\": \"alice@example.com\",\n#       \"age\": 30,\n#       \"address\": {\"street\": \"123 Main\", \"city\": \"Portland\", \"zip_code\": \"97201\"}\n#     }\n#   ],\n#   \"properties\": {\n#     \"username\": {\n#       \"description\": \"Unique username\",\n#       \"maxLength\": 50,\n#       \"minLength\": 3,\n#       \"title\": \"Username\",\n#       \"type\": \"string\"\n#     },\n#     \"email\": {\n#       \"description\": \"Valid email address\",\n#       \"title\": \"Email\",\n#       \"type\": \"string\"\n#     },\n#     \"age\": {\n#       \"description\": \"Age in years\",\n#       \"maximum\": 150,\n#       \"minimum\": 0,\n#       \"title\": \"Age\",\n#       \"type\": \"integer\"\n#     },\n#     \"bio\": {\n#       \"anyOf\": [{\"maxLength\": 500, \"type\": \"string\"}, {\"type\": \"null\"}],\n#       \"default\": null,\n#       \"title\": \"Bio\"\n#     },\n#     \"address\": {\"$ref\": \"#/$defs/Address\"}\n#   },\n#   \"required\": [\"username\", \"email\", \"age\", \"address\"],\n#   \"title\": \"UserCreate\",\n#   \"type\": \"object\"\n# }",
+          "code_language": "python",
+          "key_points": [
+            "model_json_schema() generates JSON Schema that FastAPI uses for OpenAPI docs",
+            "Field constraints (min_length, ge, pattern) map directly to JSON Schema keywords",
+            "Nested models create $defs references avoiding schema duplication",
+            "json_schema_extra adds custom properties like examples for Swagger UI"
+          ],
+          "gotchas": [
+            "Optional fields with defaults show as anyOf with null type in the schema",
+            "Custom validators do not automatically appear in the JSON Schema -- add constraints via Field() for docs",
+            "model_json_schema() was called .schema() in v1",
+            "Deeply nested models generate large schemas that can slow down OpenAPI UI rendering"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`model_json_schema()` generates JSON Schema from your model. Field constraints, descriptions, and examples all appear in the schema. FastAPI uses this to build Swagger UI automatically.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, Field\n\nclass Item(BaseModel):\n    name: str = Field(min_length=1, description=\"Item name\")\n    price: float = Field(gt=0)\n\nschema = Item.model_json_schema()\nprint(schema['properties']['name'])\n\n# Expected Output:\n# {'description': 'Item name', 'minLength': 1, 'title': 'Name', 'type': 'string'}",
+          "code_language": "python",
+          "key_points": [
+            "Field constraints automatically become JSON Schema validation keywords"
+          ],
+          "gotchas": [
+            "Custom validators are not reflected in the schema -- use Field() constraints for docs"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle datetime and UUID fields in Pydantic?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "datetime",
+        "UUID",
+        "serialization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic natively supports Python's `datetime`, `date`, `time`, `timedelta`, and `UUID` types with automatic parsing and serialization.\n\n### datetime handling:\n- Accepts ISO 8601 strings (`\"2024-01-15T10:30:00Z\"`), Unix timestamps, and `datetime` objects\n- Serializes to ISO 8601 by default in JSON\n- Pydantic v2 validates timezone awareness based on the annotation\n\n### UUID handling:\n- Accepts UUID strings and `UUID` objects\n- Validates format automatically\n- Serializes to string in JSON\n\n### Common types:\n- `datetime` -- date and time\n- `date` -- date only\n- `time` -- time only\n- `timedelta` -- duration\n- `UUID` / `UUID4` -- universally unique identifier",
+          "pseudo_code": "from datetime import datetime\nfrom uuid import UUID\n\nclass Event(BaseModel):\n    id: UUID\n    starts_at: datetime\n    # Pydantic parses ISO strings, timestamps, etc.",
+          "actual_code": "from pydantic import BaseModel, field_validator, Field\nfrom datetime import datetime, date, timedelta\nfrom uuid import UUID, uuid4\n\n\nclass Event(BaseModel):\n    id: UUID\n    title: str\n    starts_at: datetime\n    ends_at: datetime\n    event_date: date\n    duration: timedelta\n\n\n# Pydantic parses ISO 8601 strings automatically\nevent = Event(\n    id=\"550e8400-e29b-41d4-a716-446655440000\",\n    title=\"Conference\",\n    starts_at=\"2024-06-15T09:00:00Z\",\n    ends_at=\"2024-06-15T17:00:00Z\",\n    event_date=\"2024-06-15\",\n    duration=\"PT8H\"  # ISO 8601 duration: 8 hours\n)\n\nprint(f\"ID type: {type(event.id).__name__}\")\nprint(f\"ID: {event.id}\")\nprint(f\"Starts: {event.starts_at}\")\nprint(f\"Date: {event.event_date}\")\nprint(f\"Duration: {event.duration}\")\n\n# Serialization to JSON-compatible types\ndata = event.model_dump(mode='json')\nprint(f\"\\nJSON serialized:\")\nprint(f\"  id: {data['id']} (type: {type(data['id']).__name__})\")\nprint(f\"  starts_at: {data['starts_at']}\")\n\n# Generate UUIDs with defaults\nclass Record(BaseModel):\n    id: UUID = Field(default_factory=uuid4)\n    created_at: datetime = Field(default_factory=datetime.now)\n    label: str\n\nfrom pydantic import Field\nrec = Record(label=\"test\")\nprint(f\"\\nAuto-generated ID type: {type(rec.id).__name__}\")\nprint(f\"Auto-generated created_at type: {type(rec.created_at).__name__}\")\n\n# Expected Output:\n# ID type: UUID\n# ID: 550e8400-e29b-41d4-a716-446655440000\n# Starts: 2024-06-15 09:00:00+00:00\n# Date: 2024-06-15\n# Duration: 8:00:00\n# \n# JSON serialized:\n#   id: 550e8400-e29b-41d4-a716-446655440000 (type: str)\n#   starts_at: 2024-06-15T09:00:00Z\n# \n# Auto-generated ID type: UUID\n# Auto-generated created_at type: datetime",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic parses ISO 8601 strings into datetime/date/time objects automatically",
+            "UUID strings are validated and converted to UUID objects",
+            "model_dump(mode='json') serializes datetime to ISO strings and UUID to string",
+            "Use default_factory=uuid4 or default_factory=datetime.now for auto-generated values"
+          ],
+          "gotchas": [
+            "datetime without timezone info is treated as naive -- use AwareDatetime from pydantic for timezone-required fields",
+            "model_dump() returns Python objects (UUID, datetime); model_dump(mode='json') returns strings",
+            "timedelta parsing from strings uses ISO 8601 duration format (PT8H), not human-friendly format",
+            "default_factory (not default) must be used for mutable defaults like uuid4()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic parses ISO 8601 strings into `datetime` objects and UUID strings into `UUID` objects. Use `model_dump(mode='json')` to serialize back to strings. `default_factory=uuid4` auto-generates IDs.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom datetime import datetime\nfrom uuid import UUID\n\nclass Event(BaseModel):\n    id: UUID\n    created: datetime\n\ne = Event(id=\"550e8400-e29b-41d4-a716-446655440000\", created=\"2024-01-15T10:30:00Z\")\nprint(type(e.id).__name__, type(e.created).__name__)\n\n# Expected Output:\n# UUID datetime",
+          "code_language": "python",
+          "key_points": [
+            "ISO 8601 strings auto-parsed to datetime; UUID strings to UUID objects"
+          ],
+          "gotchas": [
+            "Use default_factory (not default) for uuid4 and datetime.now"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is model_validate() and how does it differ from model construction?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "model_validate",
+        "construction",
+        "parsing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic v2 provides multiple ways to create model instances, each with different validation behavior.\n\n### Methods:\n| Method | Input | Validates? | Use case |\n|---|---|---|---|\n| `Model(**data)` | keyword args | Yes | Normal construction |\n| `Model.model_validate(data)` | dict or object | Yes | Parse from dict/ORM |\n| `Model.model_validate_json(json_str)` | JSON string | Yes | Parse from JSON |\n| `Model.model_construct(**data)` | keyword args | **No** | Skip validation (perf) |\n\n### model_validate():\n- Replaces v1's `.parse_obj()`\n- Accepts dicts, objects with attributes (if `from_attributes=True`), or model instances\n- Runs all validators\n\n### model_construct():\n- Creates an instance **without any validation**\n- Useful for trusted data from your own database where speed matters\n- Dangerous with untrusted data -- no type checks, no validators",
+          "pseudo_code": "# With validation (safe)\nuser = User.model_validate({\"name\": \"alice\", \"age\": 30})\nuser = User.model_validate_json('{\"name\": \"alice\", \"age\": 30}')\n\n# Without validation (fast but unsafe)\nuser = User.model_construct(name=\"alice\", age=30)",
+          "actual_code": "from pydantic import BaseModel, field_validator, ValidationError\n\n\nclass User(BaseModel):\n    username: str\n    age: int\n\n    @field_validator('username')\n    @classmethod\n    def lowercase_username(cls, v: str) -> str:\n        return v.lower()\n\n    @field_validator('age')\n    @classmethod\n    def check_age(cls, v: int) -> int:\n        if v < 0:\n            raise ValueError('age must be non-negative')\n        return v\n\n\n# 1. Normal construction -- validates\nuser1 = User(username=\"ALICE\", age=30)\nprint(f\"Constructor: {user1.username}, {user1.age}\")\n\n# 2. model_validate from dict -- validates\nuser2 = User.model_validate({\"username\": \"BOB\", \"age\": 25})\nprint(f\"model_validate: {user2.username}, {user2.age}\")\n\n# 3. model_validate_json from JSON string -- validates\nuser3 = User.model_validate_json('{\"username\": \"CHARLIE\", \"age\": 35}')\nprint(f\"model_validate_json: {user3.username}, {user3.age}\")\n\n# 4. model_construct -- NO validation (dangerous!)\nuser4 = User.model_construct(username=\"NOT_LOWERED\", age=-999)\nprint(f\"model_construct: {user4.username}, {user4.age}\")\n# Notice: username NOT lowered, negative age NOT caught!\n\n# model_validate from ORM-like object\nclass DBUser:\n    def __init__(self):\n        self.username = \"FROM_DB\"\n        self.age = 40\n\nclass UserORM(BaseModel):\n    model_config = {\"from_attributes\": True}\n    username: str\n    age: int\n\n    @field_validator('username')\n    @classmethod\n    def lower(cls, v: str) -> str:\n        return v.lower()\n\nuser5 = UserORM.model_validate(DBUser())\nprint(f\"from_attributes: {user5.username}, {user5.age}\")\n\n# Validation error example\ntry:\n    User.model_validate({\"username\": \"test\", \"age\": -5})\nexcept ValidationError as e:\n    print(f\"Validation failed: {e.errors()[0]['msg']}\")\n\n# Expected Output:\n# Constructor: alice, 30\n# model_validate: bob, 25\n# model_validate_json: charlie, 35\n# model_construct: NOT_LOWERED, -999\n# from_attributes: from_db, 40\n# Validation failed: Value error, age must be non-negative",
+          "code_language": "python",
+          "key_points": [
+            "model_validate() replaces parse_obj() -- validates a dict or object into a model",
+            "model_validate_json() replaces parse_raw() -- parses and validates a JSON string",
+            "model_construct() skips all validation for performance with trusted data",
+            "from_attributes=True in model_config enables model_validate on ORM objects"
+          ],
+          "gotchas": [
+            "model_construct() skips ALL validation including type coercion -- use only with trusted data",
+            "model_construct() also skips field_validators so computed/normalized values may be wrong",
+            "model_validate_json() is faster than json.loads() + model_validate() because it uses Rust parsing",
+            "Passing a model instance to model_validate does NOT re-validate by default in v2"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`model_validate(dict)` creates and validates a model from a dict (replaces `parse_obj`). `model_validate_json(str)` parses JSON. `model_construct(**data)` skips validation entirely for trusted data.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\n\nclass User(BaseModel):\n    name: str\n    age: int\n\n# With validation\nu1 = User.model_validate({\"name\": \"Alice\", \"age\": 30})\n# Without validation (fast, unsafe)\nu2 = User.model_construct(name=\"Alice\", age=\"not_validated\")\nprint(u1.age, u2.age)\n\n# Expected Output:\n# 30 not_validated",
+          "code_language": "python",
+          "key_points": [
+            "model_validate runs validators; model_construct skips them entirely"
+          ],
+          "gotchas": [
+            "model_construct skips ALL validation -- types, constraints, and custom validators"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Pydantic's computed fields (computed_field)?",
+      "display_order": 16,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "computed_field",
+        "derived-fields",
+        "serialization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`computed_field` is a Pydantic v2 feature that adds **derived properties** to model serialization. Unlike `@property`, computed fields appear in `model_dump()` output and in the JSON Schema.\n\n### How it works:\n- Decorate a `@property` with `@computed_field`\n- The property's return type annotation determines the schema type\n- Computed fields appear in `model_dump()`, `model_dump_json()`, and JSON Schema\n- They are read-only -- not settable or included in input validation\n\n### vs @property:\n- `@property` alone: accessible via `model.prop` but NOT in serialized output\n- `@computed_field` + `@property`: accessible AND appears in serialization",
+          "pseudo_code": "class Order(BaseModel):\n    unit_price: float\n    quantity: int\n\n    @computed_field\n    @property\n    def total(self) -> float:\n        return self.unit_price * self.quantity\n\n# total appears in model_dump() and JSON Schema",
+          "actual_code": "from pydantic import BaseModel, computed_field\n\n\nclass Rectangle(BaseModel):\n    width: float\n    height: float\n\n    @computed_field\n    @property\n    def area(self) -> float:\n        return self.width * self.height\n\n    @computed_field\n    @property\n    def perimeter(self) -> float:\n        return 2 * (self.width + self.height)\n\n    @computed_field\n    @property\n    def is_square(self) -> bool:\n        return self.width == self.height\n\n\nrect = Rectangle(width=5.0, height=3.0)\n\n# Computed fields accessible as properties\nprint(f\"Area: {rect.area}\")\nprint(f\"Perimeter: {rect.perimeter}\")\nprint(f\"Is square: {rect.is_square}\")\n\n# Computed fields appear in serialization\nprint(f\"\\nmodel_dump: {rect.model_dump()}\")\n\n# Computed fields in JSON Schema\nschema = Rectangle.model_json_schema()\nprint(f\"\\nSchema properties: {list(schema['properties'].keys())}\")\n\n\n# Practical example: user with full name\nclass User(BaseModel):\n    first_name: str\n    last_name: str\n    hourly_rate: float\n    hours_worked: float\n\n    @computed_field\n    @property\n    def full_name(self) -> str:\n        return f\"{self.first_name} {self.last_name}\"\n\n    @computed_field\n    @property\n    def total_pay(self) -> float:\n        return round(self.hourly_rate * self.hours_worked, 2)\n\n\nuser = User(first_name=\"Alice\", last_name=\"Smith\", hourly_rate=45.50, hours_worked=38.5)\nprint(f\"\\n{user.full_name}: ${user.total_pay}\")\nprint(f\"Dump: {user.model_dump()}\")\n\n# Expected Output:\n# Area: 15.0\n# Perimeter: 16.0\n# Is square: False\n# \n# model_dump: {'width': 5.0, 'height': 3.0, 'area': 15.0, 'perimeter': 16.0, 'is_square': False}\n# \n# Schema properties: ['width', 'height', 'area', 'perimeter', 'is_square']\n# \n# Alice Smith: $1751.75\n# Dump: {'first_name': 'Alice', 'last_name': 'Smith', 'hourly_rate': 45.5, 'hours_worked': 38.5, 'full_name': 'Alice Smith', 'total_pay': 1751.75}",
+          "code_language": "python",
+          "key_points": [
+            "computed_field makes @property values appear in model_dump() and JSON Schema",
+            "Must stack @computed_field on top of @property",
+            "Return type annotation is required for JSON Schema generation",
+            "Computed fields are read-only -- they are not part of input validation"
+          ],
+          "gotchas": [
+            "@computed_field must come BEFORE @property in decorator order (top to bottom)",
+            "Computed fields are recalculated on every access -- cache expensive computations manually",
+            "You cannot exclude computed fields with exclude_unset since they are always 'set'",
+            "computed_field was added in Pydantic v2 -- no v1 equivalent"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`@computed_field` + `@property` adds derived values to `model_dump()` and JSON Schema. Unlike plain `@property`, the computed value appears in serialized output. Read-only, not part of input validation.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, computed_field\n\nclass Order(BaseModel):\n    price: float\n    qty: int\n\n    @computed_field\n    @property\n    def total(self) -> float:\n        return self.price * self.qty\n\no = Order(price=9.99, qty=3)\nprint(o.model_dump())\n\n# Expected Output:\n# {'price': 9.99, 'qty': 3, 'total': 29.97}",
+          "code_language": "python",
+          "key_points": [
+            "computed_field makes properties appear in model_dump() output"
+          ],
+          "gotchas": [
+            "@computed_field must be stacked above @property"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle recursive/self-referencing models?",
+      "display_order": 17,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "recursive-models",
+        "self-referencing",
+        "tree-structures"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic supports **self-referencing models** where a model has a field whose type is the model itself. This is essential for tree structures, nested comments, org charts, and similar recursive data.\n\n### How it works in v2:\n- Simply reference the class name in the field type annotation\n- Pydantic v2 handles forward references automatically\n- Use `Optional[Self]` or `list[Self]` for the recursive field\n- The `model_rebuild()` method can resolve forward references if needed\n\n### Common patterns:\n- **Tree nodes**: `children: list['TreeNode']`\n- **Linked lists**: `next_node: Optional['Node']`\n- **Nested comments**: `replies: list['Comment']`\n- **Category hierarchy**: `subcategories: list['Category']`",
+          "pseudo_code": "class TreeNode(BaseModel):\n    value: str\n    children: list['TreeNode'] = []\n\n# Pydantic resolves the forward reference automatically",
+          "actual_code": "from pydantic import BaseModel\nfrom typing import Optional\n\n\n# Tree structure with self-referencing\nclass TreeNode(BaseModel):\n    name: str\n    value: int = 0\n    children: list['TreeNode'] = []\n\n\n# Build a tree from nested dicts\ntree_data = {\n    \"name\": \"root\",\n    \"value\": 1,\n    \"children\": [\n        {\n            \"name\": \"child-a\",\n            \"value\": 2,\n            \"children\": [\n                {\"name\": \"grandchild-a1\", \"value\": 3}\n            ]\n        },\n        {\n            \"name\": \"child-b\",\n            \"value\": 4,\n            \"children\": []\n        }\n    ]\n}\n\ntree = TreeNode(**tree_data)\nprint(f\"Root: {tree.name}\")\nprint(f\"Children: {[c.name for c in tree.children]}\")\nprint(f\"Grandchild: {tree.children[0].children[0].name}\")\n\n\n# Linked list pattern\nclass LinkedNode(BaseModel):\n    value: str\n    next_node: Optional['LinkedNode'] = None\n\n\nlinked = LinkedNode(\n    value=\"first\",\n    next_node={\"value\": \"second\", \"next_node\": {\"value\": \"third\"}}\n)\n\ncurrent = linked\nvalues = []\nwhile current:\n    values.append(current.value)\n    current = current.next_node\nprint(f\"\\nLinked list: {' -> '.join(values)}\")\n\n\n# Practical: nested comments\nclass Comment(BaseModel):\n    author: str\n    text: str\n    replies: list['Comment'] = []\n\n\nthread = Comment(\n    author=\"Alice\", text=\"Great post!\",\n    replies=[\n        Comment(author=\"Bob\", text=\"Thanks!\", replies=[\n            Comment(author=\"Alice\", text=\"No problem!\")\n        ]),\n        Comment(author=\"Charlie\", text=\"I agree!\")\n    ]\n)\n\ndef print_comment(c: Comment, depth: int = 0):\n    print(f\"{'  ' * depth}{c.author}: {c.text}\")\n    for r in c.replies:\n        print_comment(r, depth + 1)\n\nprint(\"\\nComment thread:\")\nprint_comment(thread)\n\n# Expected Output:\n# Root: root\n# Children: ['child-a', 'child-b']\n# Grandchild: grandchild-a1\n# \n# Linked list: first -> second -> third\n# \n# Comment thread:\n# Alice: Great post!\n#   Bob: Thanks!\n#     Alice: No problem!\n#   Charlie: I agree!",
+          "code_language": "python",
+          "key_points": [
+            "Self-referencing works by using the class name as a string type or with from __future__ import annotations",
+            "Pydantic v2 automatically resolves forward references for self-referencing models",
+            "Use list['ModelName'] for tree structures and Optional['ModelName'] for linked structures",
+            "Recursive validation applies at every level of nesting"
+          ],
+          "gotchas": [
+            "Deeply nested data can cause stack overflow or slow validation -- set practical depth limits",
+            "model_rebuild() may be needed if the forward reference is defined in a complex module structure",
+            "JSON Schema for recursive models uses $ref which some OpenAPI tools handle poorly",
+            "Default mutable values like children: list['Node'] = [] are safe in Pydantic (unlike plain Python) because Pydantic copies defaults"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Reference the model's own name as a string in type annotations for recursive structures. Pydantic v2 resolves forward references automatically. Use `list['Model']` for trees and `Optional['Model']` for linked lists.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\n\nclass TreeNode(BaseModel):\n    name: str\n    children: list['TreeNode'] = []\n\ntree = TreeNode(name=\"root\", children=[\n    {\"name\": \"child-a\", \"children\": [{\"name\": \"leaf\"}]}\n])\nprint(tree.children[0].children[0].name)\n\n# Expected Output:\n# leaf",
+          "code_language": "python",
+          "key_points": [
+            "Use string type annotations for self-referencing fields"
+          ],
+          "gotchas": [
+            "Deeply nested data can cause stack overflow -- set practical depth limits"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between model_dump() and model_dump_json()?",
+      "display_order": 18,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "model_dump",
+        "model_dump_json",
+        "serialization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`model_dump()` and `model_dump_json()` both serialize a model, but to different formats with different type handling.\n\n### model_dump():\n- Returns a **Python dict** with Python-native types\n- `datetime` stays as `datetime`, `UUID` stays as `UUID`, etc.\n- Use `mode='json'` parameter to get JSON-compatible Python types (strings for datetime/UUID)\n- Equivalent to v1's `.dict()`\n\n### model_dump_json():\n- Returns a **JSON string** directly\n- Uses Rust-based serializer (faster than `json.dumps(model_dump())`)\n- All types automatically converted to JSON-compatible formats\n- Equivalent to v1's `.json()`\n\n### When to use each:\n- `model_dump()` -- when you need a Python dict for further processing\n- `model_dump(mode='json')` -- when you need a JSON-compatible dict (e.g., for MongoDB)\n- `model_dump_json()` -- when you need a JSON string (e.g., for Redis, message queues)",
+          "pseudo_code": "# Python dict with native types\ndata_dict = model.model_dump()\n# Python dict with JSON types\ndata_json_dict = model.model_dump(mode='json')\n# JSON string\njson_string = model.model_dump_json()",
+          "actual_code": "from pydantic import BaseModel\nfrom datetime import datetime\nfrom uuid import UUID\n\n\nclass Event(BaseModel):\n    id: UUID\n    name: str\n    starts_at: datetime\n    tags: list[str]\n\n\nevent = Event(\n    id=\"550e8400-e29b-41d4-a716-446655440000\",\n    name=\"Conference\",\n    starts_at=\"2024-06-15T09:00:00Z\",\n    tags=[\"tech\", \"python\"]\n)\n\n# model_dump() -- Python dict with native types\npython_dict = event.model_dump()\nprint(\"model_dump():\")\nprint(f\"  id type: {type(python_dict['id']).__name__}\")\nprint(f\"  starts_at type: {type(python_dict['starts_at']).__name__}\")\nprint(f\"  value: {python_dict}\")\n\n# model_dump(mode='json') -- Python dict with JSON-compatible types\njson_dict = event.model_dump(mode='json')\nprint(\"\\nmodel_dump(mode='json'):\")\nprint(f\"  id type: {type(json_dict['id']).__name__}\")\nprint(f\"  starts_at type: {type(json_dict['starts_at']).__name__}\")\nprint(f\"  value: {json_dict}\")\n\n# model_dump_json() -- JSON string\njson_str = event.model_dump_json()\nprint(f\"\\nmodel_dump_json():\")\nprint(f\"  type: {type(json_str).__name__}\")\nprint(f\"  value: {json_str}\")\n\n# model_dump_json with indent\npretty = event.model_dump_json(indent=2)\nprint(f\"\\nPretty JSON:\\n{pretty}\")\n\n# Both support the same filtering options\nprint(f\"\\nExclude tags: {event.model_dump(exclude={'tags'})}\")\nprint(f\"Include only name: {event.model_dump_json(include={'name'})}\")\n\n# Expected Output:\n# model_dump():\n#   id type: UUID\n#   starts_at type: datetime\n#   value: {'id': UUID('550e8400-e29b-41d4-a716-446655440000'), 'name': 'Conference', 'starts_at': datetime.datetime(2024, 6, 15, 9, 0, tzinfo=TzInfo(UTC)), 'tags': ['tech', 'python']}\n# \n# model_dump(mode='json'):\n#   id type: str\n#   starts_at type: str\n#   value: {'id': '550e8400-e29b-41d4-a716-446655440000', 'name': 'Conference', 'starts_at': '2024-06-15T09:00:00Z', 'tags': ['tech', 'python']}\n# \n# model_dump_json():\n#   type: str\n#   value: {\"id\":\"550e8400-e29b-41d4-a716-446655440000\",\"name\":\"Conference\",\"starts_at\":\"2024-06-15T09:00:00Z\",\"tags\":[\"tech\",\"python\"]}\n# \n# Pretty JSON:\n# {\n#   \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n#   \"name\": \"Conference\",\n#   \"starts_at\": \"2024-06-15T09:00:00Z\",\n#   \"tags\": [\n#     \"tech\",\n#     \"python\"\n#   ]\n# }\n# \n# Exclude tags: {'id': UUID('550e8400-e29b-41d4-a716-446655440000'), 'name': 'Conference', 'starts_at': datetime.datetime(2024, 6, 15, 9, 0, tzinfo=TzInfo(UTC))}\n# Include only name: {\"name\":\"Conference\"}",
+          "code_language": "python",
+          "key_points": [
+            "model_dump() returns Python dict with native types (UUID, datetime objects)",
+            "model_dump(mode='json') returns Python dict with JSON-compatible types (strings)",
+            "model_dump_json() returns a JSON string using a fast Rust serializer",
+            "Both methods support the same filtering params: include, exclude, exclude_unset, etc."
+          ],
+          "gotchas": [
+            "model_dump() keeps native Python types that are NOT json.dumps()-compatible without a custom encoder",
+            "model_dump_json() is faster than json.dumps(model_dump(mode='json')) due to Rust serialization",
+            "FastAPI internally uses model_dump(mode='json') for response serialization",
+            "model_dump_json(indent=2) is useful for debugging but adds overhead in production"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`model_dump()` returns a Python dict with native types (UUID, datetime). `model_dump(mode='json')` returns a dict with JSON-compatible strings. `model_dump_json()` returns a JSON string directly using Rust for speed.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom uuid import UUID\n\nclass Item(BaseModel):\n    id: UUID\n    name: str\n\nitem = Item(id=\"550e8400-e29b-41d4-a716-446655440000\", name=\"Widget\")\nprint(type(item.model_dump()['id']).__name__)       # UUID\nprint(type(item.model_dump(mode='json')['id']).__name__)  # str\nprint(type(item.model_dump_json()).__name__)         # str\n\n# Expected Output:\n# UUID\n# str\n# str",
+          "code_language": "python",
+          "key_points": [
+            "model_dump keeps native types; model_dump_json serializes to JSON string"
+          ],
+          "gotchas": [
+            "model_dump() output is NOT json.dumps()-safe without mode='json'"
+          ]
+        }
+      ]
+    }
+  ]
+}

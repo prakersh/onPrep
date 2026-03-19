@@ -1,0 +1,699 @@
+{
+  "concept_slug": "testing",
+  "questions": [
+    {
+      "title": "How does TestClient work for testing FastAPI applications?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "testclient",
+        "starlette"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**TestClient** (from Starlette, re-exported by FastAPI) wraps `httpx` to make synchronous HTTP requests to your FastAPI app without starting a real server. It runs the ASGI app in-process.\n\n### How it works:\n1. Instantiate `TestClient(app)` with your FastAPI application\n2. Call `client.get()`, `client.post()`, etc. like a real HTTP client\n3. Responses have `.status_code`, `.json()`, `.text`, `.headers`\n4. No network I/O -- everything runs in-process\n\n### Key features:\n- Automatic JSON serialization with `json=` parameter\n- Cookie persistence across requests within the same client\n- WebSocket testing via `client.websocket_connect()`\n- Follows redirects by default (disable with `follow_redirects=False`)\n\n### Requirement:\n`pip install httpx` -- TestClient requires httpx as a dependency.",
+          "pseudo_code": "from fastapi.testclient import TestClient\n\nclient = TestClient(app)\nresponse = client.get(\"/items\")\nassert response.status_code == 200\nassert response.json() == [{\"id\": 1, \"name\": \"item\"}]",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\nitems_db: list[dict] = []\n\n@app.get(\"/items\")\ndef list_items():\n    return items_db\n\n@app.post(\"/items\", status_code=201)\ndef create_item(item: Item):\n    item_dict = item.model_dump()\n    item_dict[\"id\"] = len(items_db) + 1\n    items_db.append(item_dict)\n    return item_dict\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    for item in items_db:\n        if item[\"id\"] == item_id:\n            return item\n    return {\"error\": \"not found\"}\n\n# --- Tests ---\nclient = TestClient(app)\n\n# Test GET empty list\nresponse = client.get(\"/items\")\nprint(f\"GET /items: {response.status_code} {response.json()}\")\n\n# Test POST\nresponse = client.post(\"/items\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(f\"POST /items: {response.status_code} {response.json()}\")\n\n# Test GET after creation\nresponse = client.get(\"/items/1\")\nprint(f\"GET /items/1: {response.status_code} {response.json()}\")\n\n# Test validation error (missing required field)\nresponse = client.post(\"/items\", json={\"name\": \"Widget\"})\nprint(f\"Missing price: {response.status_code}\")\n\n# Expected Output:\n# GET /items: 200 []\n# POST /items: 201 {'name': 'Widget', 'price': 9.99, 'id': 1}\n# GET /items/1: 200 {'name': 'Widget', 'price': 9.99, 'id': 1}\n# Missing price: 422",
+          "code_language": "python",
+          "key_points": [
+            "TestClient runs the ASGI app in-process with no real network I/O",
+            "Use json= for automatic serialization of request bodies",
+            "response.json() parses the response body; response.status_code for HTTP status",
+            "Requires httpx: pip install httpx"
+          ],
+          "gotchas": [
+            "TestClient is synchronous in its interface but fully supports async def endpoints -- it runs the ASGI app internally via anyio, so all async code works correctly",
+            "items_db state persists between tests in the same module -- clear it in fixtures",
+            "TestClient follows redirects by default, which can mask redirect bugs",
+            "422 status means Pydantic validation failed -- check response.json() for details"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`TestClient(app)` wraps httpx to make in-process HTTP requests to your FastAPI app. Use `client.get()`, `client.post(json=...)`, then assert on `.status_code` and `.json()`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi.testclient import TestClient\n\nclient = TestClient(app)\nresponse = client.post(\"/items\", json={\"name\": \"Widget\", \"price\": 9.99})\nassert response.status_code == 201\nassert response.json()[\"name\"] == \"Widget\"",
+          "code_language": "python",
+          "key_points": [
+            "In-process testing, no server needed",
+            "json= auto-serializes request bodies"
+          ],
+          "gotchas": [
+            "TestClient is synchronous -- use httpx.AsyncClient for async tests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set up pytest fixtures for FastAPI tests?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "pytest",
+        "fixtures",
+        "conftest"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**pytest fixtures** provide reusable test setup and teardown. For FastAPI, the most common fixtures are:\n\n### Essential fixtures:\n1. **`app`**: The FastAPI application (possibly with test config)\n2. **`client`**: A TestClient bound to the app\n3. **`db`**: A database session with rollback after each test\n4. **`test_user`**: Pre-created test data\n\n### Fixture scopes:\n- **`function`** (default): Fresh fixture per test. Safest for isolation\n- **`module`**: Shared across all tests in a file. Faster but shared state\n- **`session`**: Shared across all tests. Use for expensive setup like DB creation\n\n### conftest.py:\nFixtures in `conftest.py` are automatically discovered by pytest and available to all tests in the same directory and subdirectories.",
+          "pseudo_code": "# conftest.py\n@pytest.fixture(scope=\"session\")\ndef engine():\n    return create_engine(TEST_DB_URL)\n\n@pytest.fixture\ndef db(engine):\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(bind=connection)\n    yield session\n    session.close()\n    transaction.rollback()\n    connection.close()\n\n@pytest.fixture\ndef client(app):\n    return TestClient(app)",
+          "actual_code": "# conftest.py\nimport pytest\nfrom fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\nfrom sqlalchemy import create_engine, String\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom sqlalchemy.pool import StaticPool\nfrom typing import Annotated\n\n# --- App and models ---\nclass Base(DeclarativeBase): pass\n\nclass Item(Base):\n    __tablename__ = \"items\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\ndef get_db():\n    raise NotImplementedError(\"Override in tests\")  # never called in tests\n\nDbDep = Annotated[Session, Depends(get_db)]\n\ndef create_app() -> FastAPI:\n    app = FastAPI()\n\n    @app.post(\"/items\", status_code=201)\n    def create_item(name: str, db: DbDep):\n        item = Item(name=name)\n        db.add(item)\n        db.commit()\n        db.refresh(item)\n        return {\"id\": item.id, \"name\": item.name}\n\n    @app.get(\"/items\")\n    def list_items(db: DbDep):\n        return db.query(Item).all()\n\n    return app\n\n# --- Fixtures ---\n@pytest.fixture(scope=\"session\")\ndef engine():\n    \"\"\"Single in-memory engine for all tests.\"\"\"\n    return create_engine(\n        \"sqlite:///:memory:\",\n        connect_args={\"check_same_thread\": False},\n        poolclass=StaticPool,\n    )\n\n@pytest.fixture(scope=\"session\")\ndef tables(engine):\n    \"\"\"Create tables once for the test session.\"\"\"\n    Base.metadata.create_all(engine)\n    yield\n    Base.metadata.drop_all(engine)\n\n@pytest.fixture\ndef db(engine, tables):\n    \"\"\"Fresh session with rollback after each test.\"\"\"\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(connection)\n    yield session\n    session.close()\n    transaction.rollback()\n    connection.close()\n\n@pytest.fixture\ndef app():\n    return create_app()\n\n@pytest.fixture\ndef client(app, db):\n    \"\"\"TestClient with overridden DB dependency.\"\"\"\n    def override_get_db():\n        yield db\n\n    app.dependency_overrides[get_db] = override_get_db\n    with TestClient(app) as c:\n        yield c\n    app.dependency_overrides.clear()\n\n@pytest.fixture\ndef sample_item(db):\n    \"\"\"Pre-create test data.\"\"\"\n    item = Item(name=\"Test Item\")\n    db.add(item)\n    db.commit()\n    db.refresh(item)\n    return item\n\n# --- Example tests ---\ndef test_create_item(client):\n    response = client.post(\"/items?name=Widget\")\n    assert response.status_code == 201\n    assert response.json()[\"name\"] == \"Widget\"\n\ndef test_list_items(client, sample_item):\n    response = client.get(\"/items\")\n    assert response.status_code == 200\n    assert len(response.json()) == 1\n\ndef test_isolation(client):\n    \"\"\"Previous test's data is rolled back.\"\"\"\n    response = client.get(\"/items\")\n    assert response.status_code == 200\n    assert len(response.json()) == 0  # clean slate\n\nprint(\"Fixtures demonstrated\")\n\n# Expected Output:\n# Fixtures demonstrated",
+          "code_language": "python",
+          "key_points": [
+            "session-scoped engine and tables fixture create the DB once per test run",
+            "function-scoped db fixture with transaction rollback gives each test a clean slate",
+            "dependency_overrides injects the test DB into the app",
+            "conftest.py fixtures are auto-discovered by pytest"
+          ],
+          "gotchas": [
+            "StaticPool is required for SQLite in-memory databases to share the same connection",
+            "Forgetting to clear dependency_overrides leaks test config into other tests",
+            "Session-scoped fixtures cannot depend on function-scoped fixtures",
+            "Transaction rollback does not reset auto-increment counters -- don't assert on exact IDs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Put fixtures in `conftest.py`. Use session-scoped engine and tables, function-scoped `db` with transaction rollback, and a `client` fixture that overrides the DB dependency.",
+          "pseudo_code": "",
+          "actual_code": "@pytest.fixture\ndef db(engine, tables):\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(connection)\n    yield session\n    session.close()\n    transaction.rollback()\n    connection.close()\n\n@pytest.fixture\ndef client(app, db):\n    app.dependency_overrides[get_db] = lambda: (yield db)\n    with TestClient(app) as c:\n        yield c\n    app.dependency_overrides.clear()",
+          "code_language": "python",
+          "key_points": [
+            "Transaction rollback after each test ensures isolation",
+            "dependency_overrides swaps the real DB for the test DB"
+          ],
+          "gotchas": [
+            "Always clear dependency_overrides after tests to prevent leakage"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use dependency_overrides to mock dependencies?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "dependency-overrides",
+        "mocking",
+        "dependency-injection"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**`app.dependency_overrides`** is a dictionary that maps original dependency functions to replacement functions. When a test sets an override, FastAPI uses the replacement instead of the original.\n\n### How it works:\n```python\napp.dependency_overrides[original_dependency] = mock_dependency\n```\n\n### Use cases:\n1. **Replace database session** with a test session\n2. **Mock authentication** to skip auth in tests\n3. **Stub external services** (email, payment, etc.)\n4. **Control return values** for specific test scenarios\n\n### Important:\n- The key must be the **exact function object** used in `Depends()`\n- Override functions must have the same return type\n- Clear overrides after tests with `app.dependency_overrides.clear()`\n- Overrides apply to the entire app, including sub-dependencies",
+          "pseudo_code": "# Original\ndef get_current_user():\n    # real auth logic\n    return user\n\n# In tests\ndef mock_current_user():\n    return User(id=1, name=\"test\")\n\napp.dependency_overrides[get_current_user] = mock_current_user\nclient = TestClient(app)\nresponse = client.get(\"/protected\")\napp.dependency_overrides.clear()",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom typing import Annotated\n\napp = FastAPI()\n\n# --- Production dependencies ---\nclass User(BaseModel):\n    id: int\n    username: str\n    is_admin: bool = False\n\ndef get_current_user() -> User:\n    \"\"\"In production, this validates JWT tokens.\"\"\"\n    raise HTTPException(status_code=401, detail=\"Not authenticated\")\n\ndef get_admin_user(\n    user: Annotated[User, Depends(get_current_user)],\n) -> User:\n    if not user.is_admin:\n        raise HTTPException(status_code=403, detail=\"Not an admin\")\n    return user\n\nUserDep = Annotated[User, Depends(get_current_user)]\nAdminDep = Annotated[User, Depends(get_admin_user)]\n\n@app.get(\"/profile\")\ndef profile(user: UserDep):\n    return {\"username\": user.username}\n\n@app.get(\"/admin/dashboard\")\ndef admin_dashboard(admin: AdminDep):\n    return {\"message\": f\"Welcome admin {admin.username}\"}\n\n@app.get(\"/public\")\ndef public():\n    return {\"message\": \"no auth needed\"}\n\n# --- Tests with overrides ---\n\n# Override: regular user\ndef mock_regular_user() -> User:\n    return User(id=1, username=\"testuser\", is_admin=False)\n\n# Override: admin user\ndef mock_admin_user() -> User:\n    return User(id=99, username=\"admin\", is_admin=True)\n\n# Test 1: Authenticated user\napp.dependency_overrides[get_current_user] = mock_regular_user\nclient = TestClient(app)\nresponse = client.get(\"/profile\")\nprint(f\"Profile: {response.status_code} {response.json()}\")\n\n# Test 2: Non-admin accessing admin route\nresponse = client.get(\"/admin/dashboard\")\nprint(f\"Admin (non-admin user): {response.status_code}\")\n\n# Test 3: Admin user\napp.dependency_overrides[get_current_user] = mock_admin_user\nresponse = client.get(\"/admin/dashboard\")\nprint(f\"Admin (admin user): {response.status_code} {response.json()}\")\n\n# Test 4: Public endpoint (no override needed)\nresponse = client.get(\"/public\")\nprint(f\"Public: {response.status_code}\")\n\n# Always clean up\napp.dependency_overrides.clear()\n\n# Expected Output:\n# Profile: 200 {'username': 'testuser'}\n# Admin (non-admin user): 403\n# Admin (admin user): 200 {'message': 'Welcome admin admin'}\n# Public: 200",
+          "code_language": "python",
+          "key_points": [
+            "dependency_overrides maps original functions to test replacements",
+            "The key must be the exact function object, not a string or copy",
+            "Overrides cascade: overriding get_current_user also affects get_admin_user",
+            "Always clear overrides after tests to prevent state leakage"
+          ],
+          "gotchas": [
+            "If the dependency is defined in another module, you must import the same function object used in Depends()",
+            "Overrides apply globally to the app instance -- concurrent tests may interfere",
+            "Overriding a dependency function cascades to all places where it is used via Depends() -- overriding get_current_user also affects any endpoint or dependency that depends on it",
+            "Yield dependencies need yield in the override too: def mock_db(): yield fake_session"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`app.dependency_overrides[original_fn] = mock_fn` replaces any dependency in tests. The key must be the exact function object. Always call `.clear()` after tests.",
+          "pseudo_code": "",
+          "actual_code": "def mock_current_user():\n    return User(id=1, username=\"testuser\")\n\napp.dependency_overrides[get_current_user] = mock_current_user\nclient = TestClient(app)\nresponse = client.get(\"/profile\")\nassert response.json()[\"username\"] == \"testuser\"\napp.dependency_overrides.clear()",
+          "code_language": "python",
+          "key_points": [
+            "Maps original dependency to a mock function"
+          ],
+          "gotchas": [
+            "The key must be the exact function object used in Depends(), not a different reference"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test with an async client (httpx.AsyncClient)?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "async",
+        "httpx",
+        "asyncclient",
+        "pytest-asyncio"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When your FastAPI endpoints use `async def` with truly async dependencies (async DB, async HTTP calls), you need **`httpx.AsyncClient`** for proper async testing. The synchronous `TestClient` works for many cases but cannot exercise the full async path.\n\n### Setup:\n1. Install `pytest-asyncio` and `httpx`\n2. Mark test functions with `@pytest.mark.anyio` or configure `asyncio_mode = \"auto\"`\n3. Create an `AsyncClient` with `ASGITransport` to run the app in-process\n4. Use `async with` for proper cleanup\n\n### When to use async tests:\n- Endpoints with `async def` and `await` calls\n- Async database sessions (`AsyncSession`)\n- Testing async WebSocket behavior\n- Testing streaming responses",
+          "pseudo_code": "import httpx\nfrom httpx import ASGITransport\n\n@pytest.mark.anyio\nasync def test_endpoint():\n    transport = ASGITransport(app=app)\n    async with httpx.AsyncClient(transport=transport, base_url=\"http://test\") as client:\n        response = await client.get(\"/items\")\n        assert response.status_code == 200",
+          "actual_code": "import pytest\nimport httpx\nfrom httpx import ASGITransport\nfrom fastapi import FastAPI\nimport asyncio\n\napp = FastAPI()\n\n@app.get(\"/items\")\nasync def list_items():\n    # Simulate async operation\n    await asyncio.sleep(0.01)\n    return [{\"id\": 1, \"name\": \"Async Item\"}]\n\n@app.post(\"/items\", status_code=201)\nasync def create_item(name: str):\n    await asyncio.sleep(0.01)\n    return {\"id\": 1, \"name\": name}\n\n# --- conftest.py fixtures ---\n@pytest.fixture\nasync def async_client():\n    transport = ASGITransport(app=app)\n    async with httpx.AsyncClient(\n        transport=transport,\n        base_url=\"http://test\",\n    ) as client:\n        yield client\n\n# --- Test examples ---\n# Note: requires pytest-asyncio with asyncio_mode = \"auto\" in pyproject.toml\n# [tool.pytest.ini_options]\n# asyncio_mode = \"auto\"\n\nasync def test_list_items(async_client):\n    response = await async_client.get(\"/items\")\n    assert response.status_code == 200\n    assert len(response.json()) == 1\n\nasync def test_create_item(async_client):\n    response = await async_client.post(\"/items?name=Widget\")\n    assert response.status_code == 201\n    assert response.json()[\"name\"] == \"Widget\"\n\n# Running inline for demonstration\nasync def main():\n    transport = ASGITransport(app=app)\n    async with httpx.AsyncClient(transport=transport, base_url=\"http://test\") as client:\n        response = await client.get(\"/items\")\n        print(f\"GET /items: {response.status_code} {response.json()}\")\n\n        response = await client.post(\"/items?name=AsyncWidget\")\n        print(f\"POST /items: {response.status_code} {response.json()}\")\n\nasyncio.run(main())\n\n# Expected Output:\n# GET /items: 200 [{'id': 1, 'name': 'Async Item'}]\n# POST /items: 201 {'id': 1, 'name': 'AsyncWidget'}",
+          "code_language": "python",
+          "key_points": [
+            "ASGITransport wraps your app for in-process async testing (no real server)",
+            "Use async with httpx.AsyncClient for proper cleanup of connections",
+            "pytest-asyncio with asyncio_mode='auto' avoids marking every test manually",
+            "base_url is required -- it can be any valid URL since requests stay in-process"
+          ],
+          "gotchas": [
+            "httpx.AsyncClient does not follow redirects by default (unlike TestClient which does)",
+            "Forgetting ASGITransport and using base_url directly makes real HTTP requests to that URL",
+            "pytest-asyncio requires explicit configuration -- without it, async tests silently do not run",
+            "Mixing TestClient and AsyncClient in the same test suite is fine but can be confusing"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `httpx.AsyncClient` with `ASGITransport(app=app)` for async FastAPI tests. Install `pytest-asyncio` and set `asyncio_mode = \"auto\"` in config. Use `await client.get()` in `async def` test functions.",
+          "pseudo_code": "",
+          "actual_code": "import httpx\nfrom httpx import ASGITransport\n\nasync def test_list_items():\n    transport = ASGITransport(app=app)\n    async with httpx.AsyncClient(transport=transport, base_url=\"http://test\") as client:\n        response = await client.get(\"/items\")\n        assert response.status_code == 200",
+          "code_language": "python",
+          "key_points": [
+            "ASGITransport runs the ASGI app in-process"
+          ],
+          "gotchas": [
+            "Without ASGITransport, httpx makes real HTTP requests to the base_url"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you isolate test databases?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "database",
+        "isolation",
+        "fixtures"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Test database isolation ensures that each test starts with a clean state. Without it, tests pass or fail depending on execution order.\n\n### Strategies (from fastest to most isolated):\n\n1. **Transaction rollback** (recommended): Each test runs in a transaction that gets rolled back\n   - Fastest: no actual data written\n   - Limitation: Cannot test code that commits\n\n2. **Truncate tables**: Delete all rows between tests\n   - Medium speed: actual commits happen\n   - Good for: Testing commit behavior\n\n3. **Recreate database**: Drop and recreate all tables per test\n   - Slowest but most isolated\n   - Good for: Migration testing\n\n4. **In-memory SQLite**: Use `sqlite:///:memory:` with `StaticPool`\n   - Very fast, completely isolated per test session\n   - Limitation: SQLite syntax differs from PostgreSQL",
+          "pseudo_code": "# Transaction rollback approach\n@pytest.fixture\ndef db(engine):\n    conn = engine.connect()\n    txn = conn.begin()\n    session = Session(bind=conn)\n    yield session\n    session.close()\n    txn.rollback()  # undo everything\n    conn.close()",
+          "actual_code": "import pytest\nfrom sqlalchemy import create_engine, String, text, select\nfrom sqlalchemy.orm import (\n    DeclarativeBase, Mapped, mapped_column, Session, sessionmaker\n)\nfrom sqlalchemy.pool import StaticPool\n\nclass Base(DeclarativeBase): pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(String(100))\n\n# --- Strategy 1: Transaction rollback (recommended) ---\n@pytest.fixture(scope=\"session\")\ndef engine():\n    engine = create_engine(\n        \"sqlite:///:memory:\",\n        connect_args={\"check_same_thread\": False},\n        poolclass=StaticPool,\n    )\n    Base.metadata.create_all(engine)\n    return engine\n\n@pytest.fixture\ndef db(engine):\n    \"\"\"Each test gets a session that rolls back.\"\"\"\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(connection)\n\n    yield session\n\n    session.close()\n    transaction.rollback()\n    connection.close()\n\ndef test_create_user(db):\n    db.add(User(name=\"Alice\"))\n    db.commit()  # commits to the nested transaction, not the DB\n    assert db.execute(select(User)).scalars().all() != []\n\ndef test_isolation(db):\n    \"\"\"Alice does not exist here -- previous test was rolled back.\"\"\"\n    users = db.execute(select(User)).scalars().all()\n    assert users == []\n\n# --- Strategy 2: Truncate tables ---\n@pytest.fixture\ndef db_truncate(engine):\n    session = Session(engine)\n    yield session\n    session.close()\n    # Truncate all tables\n    with engine.connect() as conn:\n        for table in reversed(Base.metadata.sorted_tables):\n            conn.execute(table.delete())\n        conn.commit()\n\n# --- Strategy 3: Separate test database URL ---\n# In conftest.py or via environment variable\n# TEST_DATABASE_URL = \"postgresql://localhost/myapp_test\"\n# Production code reads from DATABASE_URL\n# Tests override with TEST_DATABASE_URL\n\nprint(\"Test isolation strategies demonstrated\")\n\n# Expected Output:\n# Test isolation strategies demonstrated",
+          "code_language": "python",
+          "key_points": [
+            "Transaction rollback is the fastest strategy -- no data hits the disk",
+            "StaticPool + sqlite:///:memory: gives a fast isolated test database",
+            "session-scoped engine avoids recreating the DB for every test",
+            "Function-scoped db fixture ensures each test gets a clean session"
+          ],
+          "gotchas": [
+            "Transaction rollback does not work if your code uses session.begin_nested() (savepoints)",
+            "In-memory SQLite is not identical to PostgreSQL -- some SQL syntax differs",
+            "StaticPool is required for SQLite in-memory to share the connection across threads",
+            "commit() inside a rolled-back transaction commits to the savepoint, not the actual DB"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use transaction rollback per test: open a connection, begin a transaction, create a session, yield it, then rollback. This gives each test a clean slate without the overhead of recreating tables.",
+          "pseudo_code": "",
+          "actual_code": "@pytest.fixture\ndef db(engine):\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(connection)\n    yield session\n    session.close()\n    transaction.rollback()\n    connection.close()",
+          "code_language": "python",
+          "key_points": [
+            "Rollback after each test gives perfect isolation with zero overhead"
+          ],
+          "gotchas": [
+            "SQLite in-memory requires StaticPool to share the single connection"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you mock external API calls in tests?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "mocking",
+        "external-api",
+        "httpx",
+        "respx"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "External API calls in tests are problematic: they are slow, flaky, rate-limited, and make tests non-deterministic. There are several mocking strategies:\n\n### Strategy 1: Dependency override\nWrap the external call in a dependency and override it in tests. This is the most FastAPI-idiomatic approach.\n\n### Strategy 2: respx (mock httpx)\n`respx` intercepts httpx requests and returns pre-configured responses. Works for both sync and async httpx clients.\n\n### Strategy 3: unittest.mock.patch\nPatch the function that makes the external call. Works but is more fragile (tied to import paths).\n\n### Best practice:\nDesign your code so external services are behind a dependency or service class. This makes testing trivial with dependency_overrides.",
+          "pseudo_code": "# Dependency approach\ndef get_weather_service():\n    return RealWeatherService()\n\n# In tests\ndef mock_weather_service():\n    return FakeWeatherService(temp=72)\n\napp.dependency_overrides[get_weather_service] = mock_weather_service",
+          "actual_code": "import pytest\nfrom fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\nfrom typing import Annotated\nfrom unittest.mock import AsyncMock, patch\n\napp = FastAPI()\n\n# --- Service layer (wraps external API) ---\nclass WeatherService:\n    async def get_temperature(self, city: str) -> float:\n        \"\"\"In production, calls an external weather API.\"\"\"\n        import httpx\n        async with httpx.AsyncClient() as client:\n            resp = await client.get(f\"https://api.weather.com/{city}\")\n            return resp.json()[\"temp\"]\n\ndef get_weather_service() -> WeatherService:\n    return WeatherService()\n\nWeatherDep = Annotated[WeatherService, Depends(get_weather_service)]\n\n@app.get(\"/weather/{city}\")\nasync def get_weather(city: str, weather: WeatherDep):\n    temp = await weather.get_temperature(city)\n    return {\"city\": city, \"temperature\": temp}\n\n# --- Strategy 1: Dependency override with fake ---\nclass FakeWeatherService:\n    async def get_temperature(self, city: str) -> float:\n        return 72.0  # always return 72\n\ndef test_weather_with_override():\n    app.dependency_overrides[get_weather_service] = lambda: FakeWeatherService()\n    client = TestClient(app)\n    response = client.get(\"/weather/London\")\n    assert response.status_code == 200\n    assert response.json() == {\"city\": \"London\", \"temperature\": 72.0}\n    app.dependency_overrides.clear()\n\n# --- Strategy 2: respx (mock httpx) ---\n# pip install respx\n# import respx\n#\n# @respx.mock\n# async def test_weather_with_respx(async_client):\n#     respx.get(\"https://api.weather.com/London\").mock(\n#         return_value=httpx.Response(200, json={\"temp\": 65.0})\n#     )\n#     response = await async_client.get(\"/weather/London\")\n#     assert response.json()[\"temperature\"] == 65.0\n\n# --- Strategy 3: unittest.mock.patch ---\ndef test_weather_with_patch():\n    with patch.object(\n        WeatherService, \"get_temperature\",\n        new_callable=AsyncMock, return_value=55.0\n    ):\n        client = TestClient(app)\n        response = client.get(\"/weather/Paris\")\n        assert response.json()[\"temperature\"] == 55.0\n\ntest_weather_with_override()\ntest_weather_with_patch()\nprint(\"All mock strategies work\")\n\n# Expected Output:\n# All mock strategies work",
+          "code_language": "python",
+          "key_points": [
+            "Wrap external APIs in a service class or dependency for easy mocking",
+            "dependency_overrides is the cleanest approach -- no import path fragility",
+            "respx intercepts httpx at the transport level -- useful when you cannot refactor the dependency",
+            "AsyncMock is needed for mocking async methods with unittest.mock"
+          ],
+          "gotchas": [
+            "unittest.mock.patch is fragile -- it depends on the exact import path of the function",
+            "respx only works with httpx, not requests -- use responses library for the requests package",
+            "Forgetting to mock external calls makes tests slow and flaky in CI",
+            "The fake service must match the interface exactly or you get runtime errors in tests only"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Wrap external APIs in a dependency or service class. In tests, use `dependency_overrides` to swap in a fake, or use `respx` to mock httpx calls, or `unittest.mock.patch` with `AsyncMock`.",
+          "pseudo_code": "",
+          "actual_code": "class FakeWeatherService:\n    async def get_temperature(self, city: str) -> float:\n        return 72.0\n\ndef test_weather():\n    app.dependency_overrides[get_weather_service] = lambda: FakeWeatherService()\n    client = TestClient(app)\n    response = client.get(\"/weather/London\")\n    assert response.json()[\"temperature\"] == 72.0\n    app.dependency_overrides.clear()",
+          "code_language": "python",
+          "key_points": [
+            "dependency_overrides is cleanest -- no import path fragility"
+          ],
+          "gotchas": [
+            "The fake must match the real service's interface exactly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test file upload endpoints?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "file-upload",
+        "multipart",
+        "uploadfile"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Testing file uploads in FastAPI uses the `files` parameter of TestClient (or httpx.AsyncClient). Files are sent as multipart form data.\n\n### TestClient file format:\n```python\nclient.post(\"/upload\", files={\"file\": (\"name.txt\", content, \"mime/type\")})\n```\n\n### Tuple format:\n- `(filename, file_content)` -- minimal\n- `(filename, file_content, content_type)` -- with MIME type\n- `(filename, file_object, content_type)` -- with a file-like object\n\n### Testing multiple files:\nPass a list of tuples: `files=[(\"files\", (name, content)), ...]`\n\n### Testing file + form data:\nUse both `files=` and `data=` parameters.",
+          "pseudo_code": "# Single file\nclient.post(\"/upload\", files={\"file\": (\"test.txt\", b\"content\", \"text/plain\")})\n\n# Multiple files\nclient.post(\"/upload\", files=[\n    (\"files\", (\"a.txt\", b\"aaa\")),\n    (\"files\", (\"b.txt\", b\"bbb\")),\n])\n\n# File + form data\nclient.post(\"/upload\", files={\"file\": ...}, data={\"description\": \"test\"})",
+          "actual_code": "from fastapi import FastAPI, UploadFile, File, Form\nfrom fastapi.testclient import TestClient\nimport io\n\napp = FastAPI()\n\n@app.post(\"/upload\")\nasync def upload_file(file: UploadFile = File(...)):\n    content = await file.read()\n    return {\n        \"filename\": file.filename,\n        \"size\": len(content),\n        \"content_type\": file.content_type,\n    }\n\n@app.post(\"/upload-multiple\")\nasync def upload_multiple(files: list[UploadFile] = File(...)):\n    results = []\n    for f in files:\n        content = await f.read()\n        results.append({\"filename\": f.filename, \"size\": len(content)})\n    return results\n\n@app.post(\"/upload-with-metadata\")\nasync def upload_with_metadata(\n    file: UploadFile = File(...),\n    description: str = Form(...),\n):\n    content = await file.read()\n    return {\n        \"filename\": file.filename,\n        \"size\": len(content),\n        \"description\": description,\n    }\n\nclient = TestClient(app)\n\n# Test 1: Single file upload\nresponse = client.post(\n    \"/upload\",\n    files={\"file\": (\"test.txt\", b\"Hello, World!\", \"text/plain\")},\n)\nprint(f\"Single: {response.json()}\")\n\n# Test 2: Multiple files\nresponse = client.post(\n    \"/upload-multiple\",\n    files=[\n        (\"files\", (\"a.txt\", b\"AAA\", \"text/plain\")),\n        (\"files\", (\"b.csv\", b\"1,2,3\\n4,5,6\", \"text/csv\")),\n    ],\n)\nprint(f\"Multiple: {response.json()}\")\n\n# Test 3: File with form data\nresponse = client.post(\n    \"/upload-with-metadata\",\n    files={\"file\": (\"report.pdf\", b\"%PDF-fake-content\", \"application/pdf\")},\n    data={\"description\": \"Monthly report\"},\n)\nprint(f\"With metadata: {response.json()}\")\n\n# Test 4: Using io.BytesIO (simulating a real file)\nbuffer = io.BytesIO(b\"Binary content here\")\nresponse = client.post(\n    \"/upload\",\n    files={\"file\": (\"data.bin\", buffer, \"application/octet-stream\")},\n)\nprint(f\"BytesIO: {response.json()}\")\n\n# Expected Output:\n# Single: {'filename': 'test.txt', 'size': 13, 'content_type': 'text/plain'}\n# Multiple: [{'filename': 'a.txt', 'size': 3}, {'filename': 'b.csv', 'size': 11}]\n# With metadata: {'filename': 'report.pdf', 'size': 17, 'description': 'Monthly report'}\n# BytesIO: {'filename': 'data.bin', 'size': 19, 'content_type': 'application/octet-stream'}",
+          "code_language": "python",
+          "key_points": [
+            "files= parameter sends multipart form data",
+            "Tuple format: (filename, content, content_type) or (filename, content)",
+            "Multiple files use a list of tuples with the same field name",
+            "Mix files= and data= for file uploads with form fields"
+          ],
+          "gotchas": [
+            "Cannot use json= and files= together -- use data= for additional form fields",
+            "UploadFile.read() is async in the endpoint but TestClient handles this transparently",
+            "Large file tests should use io.BytesIO, not real files on disk",
+            "The content_type in the tuple overrides automatic detection"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `files={\"file\": (\"name.txt\", b\"content\", \"text/plain\")}` in TestClient. For multiple files, use a list of tuples. For file + form data, combine `files=` and `data=`.",
+          "pseudo_code": "",
+          "actual_code": "client = TestClient(app)\n\n# Single file\nresponse = client.post(\"/upload\",\n    files={\"file\": (\"test.txt\", b\"Hello\", \"text/plain\")})\nassert response.json()[\"filename\"] == \"test.txt\"\n\n# File + form data\nresponse = client.post(\"/upload-with-metadata\",\n    files={\"file\": (\"doc.pdf\", b\"content\")},\n    data={\"description\": \"My doc\"})",
+          "code_language": "python",
+          "key_points": [
+            "files= sends multipart; tuple is (filename, content, mime_type)"
+          ],
+          "gotchas": [
+            "Cannot combine json= and files= -- use data= for form fields alongside files"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test WebSocket endpoints?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "websocket",
+        "testclient",
+        "real-time"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "TestClient provides `websocket_connect()` for testing WebSocket endpoints. It returns a context manager that simulates a WebSocket connection.\n\n### API:\n- **`client.websocket_connect(url)`**: Opens a WebSocket connection\n- **`ws.send_text(data)`**: Send a text message\n- **`ws.send_json(data)`**: Send JSON (auto-serialized)\n- **`ws.receive_text()`**: Receive a text message\n- **`ws.receive_json()`**: Receive JSON (auto-parsed)\n- **`ws.close()`**: Close the connection\n\n### Testing patterns:\n1. Test the connection lifecycle (connect, message, disconnect)\n2. Test JSON message exchange\n3. Test error handling (invalid data, disconnection)\n4. Test authentication rejection",
+          "pseudo_code": "with client.websocket_connect(\"/ws\") as ws:\n    ws.send_json({\"message\": \"hello\"})\n    data = ws.receive_json()\n    assert data[\"response\"] == \"hello back\"",
+          "actual_code": "from fastapi import FastAPI, WebSocket, WebSocketDisconnect\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.websocket(\"/ws\")\nasync def websocket_echo(websocket: WebSocket):\n    await websocket.accept()\n    try:\n        while True:\n            data = await websocket.receive_text()\n            await websocket.send_text(f\"Echo: {data}\")\n    except WebSocketDisconnect:\n        pass\n\n@app.websocket(\"/ws/json\")\nasync def websocket_json(websocket: WebSocket):\n    await websocket.accept()\n    try:\n        while True:\n            data = await websocket.receive_json()\n            response = {\n                \"received\": data,\n                \"type\": type(data).__name__,\n            }\n            await websocket.send_json(response)\n    except WebSocketDisconnect:\n        pass\n\n@app.websocket(\"/ws/auth\")\nasync def websocket_auth(websocket: WebSocket):\n    token = websocket.query_params.get(\"token\")\n    if token != \"valid-token\":\n        await websocket.close(code=4001, reason=\"Invalid token\")\n        return\n    await websocket.accept()\n    await websocket.send_text(\"Authenticated!\")\n\nclient = TestClient(app)\n\n# Test 1: Echo text messages\nwith client.websocket_connect(\"/ws\") as ws:\n    ws.send_text(\"Hello\")\n    data = ws.receive_text()\n    print(f\"Echo: {data}\")\n\n    ws.send_text(\"World\")\n    data = ws.receive_text()\n    print(f\"Echo: {data}\")\n\n# Test 2: JSON messages\nwith client.websocket_connect(\"/ws/json\") as ws:\n    ws.send_json({\"action\": \"ping\", \"value\": 42})\n    response = ws.receive_json()\n    print(f\"JSON: {response}\")\n\n# Test 3: Authentication rejection\ntry:\n    with client.websocket_connect(\"/ws/auth?token=bad-token\") as ws:\n        ws.receive_text()  # should raise\nexcept Exception as e:\n    print(f\"Auth rejected (connection closed)\")\n\n# Test 4: Successful authentication\nwith client.websocket_connect(\"/ws/auth?token=valid-token\") as ws:\n    data = ws.receive_text()\n    print(f\"Auth: {data}\")\n\n# Expected Output:\n# Echo: Echo: Hello\n# Echo: Echo: World\n# JSON: {'received': {'action': 'ping', 'value': 42}, 'type': 'dict'}\n# Auth rejected (connection closed)\n# Auth: Authenticated!",
+          "code_language": "python",
+          "key_points": [
+            "websocket_connect() returns a context manager simulating a WS connection",
+            "send_json/receive_json handle serialization automatically",
+            "Query parameters in the URL work for auth tokens: /ws?token=abc",
+            "Connection close during receive raises an exception that you can assert on"
+          ],
+          "gotchas": [
+            "websocket_connect is synchronous even though the WebSocket endpoint is async",
+            "Receiving from a closed connection raises -- use try/except in tests",
+            "There is no built-in timeout on receive -- tests can hang if the server never sends",
+            "WebSocket test connections go through the full ASGI middleware stack just like HTTP requests -- middleware that checks scope['type'] must handle both 'http' and 'websocket' types"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `client.websocket_connect(\"/ws\")` as a context manager. Call `ws.send_text()` / `ws.send_json()` to send and `ws.receive_text()` / `ws.receive_json()` to receive.",
+          "pseudo_code": "",
+          "actual_code": "client = TestClient(app)\n\nwith client.websocket_connect(\"/ws\") as ws:\n    ws.send_text(\"Hello\")\n    data = ws.receive_text()\n    assert data == \"Echo: Hello\"",
+          "code_language": "python",
+          "key_points": [
+            "websocket_connect provides a sync context manager for WS testing"
+          ],
+          "gotchas": [
+            "receive calls can hang if the server endpoint does not send a response"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test authentication-protected routes?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "authentication",
+        "jwt",
+        "dependency-overrides"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Testing authenticated routes requires either **mocking the auth dependency** (faster, simpler) or **generating real tokens** (more realistic). The recommended approach depends on what you are testing.\n\n### Approach 1: dependency_overrides (recommended for most tests)\nOverride `get_current_user` to return a fake user. Tests skip token validation entirely.\n\n### Approach 2: Real tokens (for auth-specific tests)\nGenerate a valid JWT in the test fixture and send it in the Authorization header.\n\n### Approach 3: Fixture-based token helper\nCreate a `client` fixture that pre-configures the Authorization header.\n\n### What to test:\n- Unauthenticated access returns 401\n- Valid token returns the protected resource\n- Expired/invalid tokens return 401\n- Insufficient permissions return 403",
+          "pseudo_code": "# Approach 1: Override\napp.dependency_overrides[get_current_user] = lambda: fake_user\n\n# Approach 2: Real token\ntoken = create_access_token({\"sub\": \"testuser\"})\nclient.get(\"/protected\", headers={\"Authorization\": f\"Bearer {token}\"})\n\n# Approach 3: Fixture\n@pytest.fixture\ndef auth_client():\n    token = create_access_token({\"sub\": \"testuser\"})\n    client.headers = {\"Authorization\": f\"Bearer {token}\"}\n    return client",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom fastapi.security import OAuth2PasswordBearer\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\nfrom typing import Annotated\nfrom datetime import datetime, timedelta, timezone\nimport jwt\n\nSECRET_KEY = \"test-secret-key\"\nALGORITHM = \"HS256\"\n\napp = FastAPI()\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/token\")\n\nclass User(BaseModel):\n    username: str\n    is_admin: bool = False\n\ndef create_access_token(data: dict, expires_minutes: int = 30) -> str:\n    expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)\n    return jwt.encode({**data, \"exp\": expire}, SECRET_KEY, algorithm=ALGORITHM)\n\ndef get_current_user(\n    token: Annotated[str, Depends(oauth2_scheme)],\n) -> User:\n    try:\n        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])\n        return User(username=payload[\"sub\"], is_admin=payload.get(\"admin\", False))\n    except jwt.PyJWTError:\n        raise HTTPException(status_code=401, detail=\"Invalid token\")\n\nUserDep = Annotated[User, Depends(get_current_user)]\n\n@app.get(\"/profile\")\ndef profile(user: UserDep):\n    return {\"username\": user.username}\n\n@app.get(\"/admin\")\ndef admin(user: UserDep):\n    if not user.is_admin:\n        raise HTTPException(status_code=403, detail=\"Admins only\")\n    return {\"admin\": user.username}\n\n# --- Approach 1: dependency_overrides (simplest) ---\ndef test_profile_with_override():\n    app.dependency_overrides[get_current_user] = lambda: User(username=\"alice\")\n    client = TestClient(app)\n    response = client.get(\"/profile\")\n    assert response.status_code == 200\n    assert response.json()[\"username\"] == \"alice\"\n    app.dependency_overrides.clear()\n\n# --- Approach 2: Real token ---\ndef test_profile_with_real_token():\n    token = create_access_token({\"sub\": \"bob\"})\n    client = TestClient(app)\n    response = client.get(\"/profile\", headers={\"Authorization\": f\"Bearer {token}\"})\n    assert response.status_code == 200\n    assert response.json()[\"username\"] == \"bob\"\n\ndef test_unauthenticated():\n    app.dependency_overrides.clear()  # ensure no overrides\n    client = TestClient(app)\n    response = client.get(\"/profile\")\n    assert response.status_code == 401\n\ndef test_forbidden():\n    app.dependency_overrides[get_current_user] = lambda: User(\n        username=\"regular\", is_admin=False\n    )\n    client = TestClient(app)\n    response = client.get(\"/admin\")\n    assert response.status_code == 403\n    app.dependency_overrides.clear()\n\n# Run tests\ntest_profile_with_override()\ntest_profile_with_real_token()\ntest_unauthenticated()\ntest_forbidden()\nprint(\"All auth tests passed\")\n\n# Expected Output:\n# All auth tests passed",
+          "code_language": "python",
+          "key_points": [
+            "dependency_overrides on get_current_user is the simplest way to test protected routes",
+            "Real token tests validate the full auth pipeline including JWT decoding",
+            "Test all cases: unauthenticated (401), forbidden (403), and successful access",
+            "Create a fixture that generates tokens to avoid repeating JWT creation code"
+          ],
+          "gotchas": [
+            "dependency_overrides skips the real auth logic -- use real tokens to test the auth itself",
+            "TestClient does not set Authorization headers automatically -- pass them explicitly",
+            "Expired tokens in tests can cause flaky failures if test timing is unpredictable",
+            "OAuth2PasswordBearer returns 401 with a WWW-Authenticate header, not just a plain 403"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Override `get_current_user` for most tests. Use real JWT tokens when testing the auth pipeline itself. Always test 401 (unauthenticated) and 403 (forbidden) cases.",
+          "pseudo_code": "",
+          "actual_code": "# Override for fast tests\napp.dependency_overrides[get_current_user] = lambda: User(username=\"alice\")\nresponse = client.get(\"/profile\")\nassert response.json()[\"username\"] == \"alice\"\n\n# Real token for auth tests\ntoken = create_access_token({\"sub\": \"bob\"})\nresponse = client.get(\"/profile\", headers={\"Authorization\": f\"Bearer {token}\"})\nassert response.status_code == 200",
+          "code_language": "python",
+          "key_points": [
+            "dependency_overrides for most tests; real tokens for auth-specific tests"
+          ],
+          "gotchas": [
+            "Overriding auth skips the real validation -- test the auth pipeline separately"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test error handling and validation errors?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "error-handling",
+        "validation",
+        "pydantic"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI automatically returns **422 Unprocessable Entity** for Pydantic validation failures and allows custom exception handlers for other error types. Tests should verify both the status code and the error response body.\n\n### What to test:\n1. **422 validation errors**: Missing fields, wrong types, constraint violations\n2. **404 not found**: Requesting non-existent resources\n3. **Custom exceptions**: Application-specific error types\n4. **Error response format**: Verify the error body structure, not just the status code\n\n### FastAPI's 422 response format:\n```json\n{\n  \"detail\": [\n    {\n      \"type\": \"missing\",\n      \"loc\": [\"body\", \"name\"],\n      \"msg\": \"Field required\",\n      \"input\": {...}\n    }\n  ]\n}\n```",
+          "pseudo_code": "# Test validation error\nresponse = client.post(\"/items\", json={})\nassert response.status_code == 422\nassert response.json()[\"detail\"][0][\"loc\"] == [\"body\", \"name\"]\n\n# Test custom error\nresponse = client.get(\"/items/999\")\nassert response.status_code == 404\nassert \"not found\" in response.json()[\"detail\"]",
+          "actual_code": "from fastapi import FastAPI, HTTPException, Request\nfrom fastapi.testclient import TestClient\nfrom fastapi.responses import JSONResponse\nfrom pydantic import BaseModel, field_validator\n\napp = FastAPI()\n\n# Custom exception\nclass ItemNotFoundError(Exception):\n    def __init__(self, item_id: int):\n        self.item_id = item_id\n\n@app.exception_handler(ItemNotFoundError)\nasync def item_not_found_handler(request: Request, exc: ItemNotFoundError):\n    return JSONResponse(\n        status_code=404,\n        content={\"error\": \"item_not_found\", \"item_id\": exc.item_id},\n    )\n\nclass ItemCreate(BaseModel):\n    name: str\n    price: float\n    quantity: int = 0\n\n    @field_validator(\"price\")\n    @classmethod\n    def price_must_be_positive(cls, v: float) -> float:\n        if v <= 0:\n            raise ValueError(\"Price must be positive\")\n        return v\n\nitems_db = {1: {\"id\": 1, \"name\": \"Widget\", \"price\": 9.99}}\n\n@app.post(\"/items\", status_code=201)\ndef create_item(item: ItemCreate):\n    return item.model_dump()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id not in items_db:\n        raise ItemNotFoundError(item_id)\n    return items_db[item_id]\n\nclient = TestClient(app)\n\n# Test 1: Missing required field\nresponse = client.post(\"/items\", json={\"price\": 9.99})\nprint(f\"Missing name: {response.status_code}\")\ndetail = response.json()[\"detail\"]\nprint(f\"  Error loc: {detail[0]['loc']}\")\nprint(f\"  Error type: {detail[0]['type']}\")\n\n# Test 2: Wrong type\nresponse = client.post(\"/items\", json={\"name\": \"Widget\", \"price\": \"not-a-number\"})\nprint(f\"Wrong type: {response.status_code}\")\n\n# Test 3: Validation constraint (negative price)\nresponse = client.post(\"/items\", json={\"name\": \"Widget\", \"price\": -5.0})\nprint(f\"Negative price: {response.status_code}\")\nprint(f\"  Message: {response.json()['detail'][0]['msg']}\")\n\n# Test 4: Custom exception handler\nresponse = client.get(\"/items/999\")\nprint(f\"Not found: {response.status_code} {response.json()}\")\n\n# Test 5: Path parameter validation (string instead of int)\nresponse = client.get(\"/items/abc\")\nprint(f\"Invalid path param: {response.status_code}\")\n\n# Test 6: Valid request\nresponse = client.post(\"/items\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(f\"Valid: {response.status_code}\")\n\n# Expected Output:\n# Missing name: 422\n#   Error loc: ['body', 'name']\n#   Error type: missing\n# Wrong type: 422\n# Negative price: 422\n#   Message: Value error, Price must be positive\n# Not found: 404 {'error': 'item_not_found', 'item_id': 999}\n# Invalid path param: 422\n# Valid: 201",
+          "code_language": "python",
+          "key_points": [
+            "422 is returned for all Pydantic validation failures with a structured detail array",
+            "Each validation error includes loc (field path), msg (description), and type (error kind)",
+            "Custom exception handlers return consistent error formats for domain errors",
+            "Path parameter type mismatches (e.g., string for int) also return 422"
+          ],
+          "gotchas": [
+            "FastAPI's 422 format changed between Pydantic v1 and v2 -- test the actual structure",
+            "Custom exception handlers must be async even if the logic is synchronous",
+            "HTTPException detail can be a string or dict -- custom handlers give more control",
+            "Testing only status codes is insufficient -- always assert on the error body structure"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Test validation errors (422) by sending invalid data and asserting on both `status_code` and `response.json()[\"detail\"]`. Test custom exceptions (404, etc.) by triggering the error condition and verifying the response body.",
+          "pseudo_code": "",
+          "actual_code": "# Missing required field\nresponse = client.post(\"/items\", json={\"price\": 9.99})\nassert response.status_code == 422\nassert response.json()[\"detail\"][0][\"loc\"] == [\"body\", \"name\"]\n\n# Custom error\nresponse = client.get(\"/items/999\")\nassert response.status_code == 404\nassert response.json()[\"error\"] == \"item_not_found\"",
+          "code_language": "python",
+          "key_points": [
+            "Always assert on the error body, not just status codes"
+          ],
+          "gotchas": [
+            "422 error format differs between Pydantic v1 and v2"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you organize FastAPI test files and fixtures?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "organization",
+        "conftest",
+        "pytest"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Well-organized tests are essential for maintainability. The standard pattern mirrors the application structure.\n\n### Recommended structure:\n```\nproject/\n  app/\n    __init__.py\n    main.py\n    models.py\n    schemas.py\n    routes/\n      users.py\n      items.py\n  tests/\n    __init__.py\n    conftest.py          # shared fixtures\n    test_users.py        # tests for user routes\n    test_items.py        # tests for item routes\n    fixtures/\n      __init__.py\n      database.py        # DB fixtures\n      auth.py            # auth fixtures\n      factories.py       # test data factories\n```\n\n### conftest.py hierarchy:\n- `tests/conftest.py`: Shared fixtures (app, client, db)\n- `tests/fixtures/*.py`: Importable fixture modules\n- Each test file can have local fixtures for specific needs\n\n### Naming conventions:\n- Test files: `test_<module>.py`\n- Test functions: `test_<what_it_does>()`\n- Fixtures: Descriptive nouns (`db`, `client`, `sample_user`)\n\n### Test categories:\n- Unit tests: Test functions in isolation\n- Integration tests: Test endpoints with real DB\n- Contract tests: Verify API response shapes",
+          "pseudo_code": "# tests/conftest.py -- shared fixtures\n@pytest.fixture(scope=\"session\")\ndef engine(): ...\n\n@pytest.fixture\ndef db(engine): ...\n\n@pytest.fixture\ndef client(app, db): ...\n\n@pytest.fixture\ndef auth_headers(): ...\n\n# tests/test_users.py\ndef test_create_user(client): ...\ndef test_get_user(client, sample_user): ...\ndef test_create_duplicate_email(client, sample_user): ...",
+          "actual_code": "# tests/conftest.py\nimport pytest\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom sqlalchemy import create_engine\nfrom sqlalchemy.orm import Session, sessionmaker\nfrom sqlalchemy.pool import StaticPool\n\n# Import from your app\n# from app.main import create_app\n# from app.database import Base, get_db\n# from app.models import User, Item\n\n# --- Database fixtures ---\n@pytest.fixture(scope=\"session\")\ndef engine():\n    return create_engine(\n        \"sqlite:///:memory:\",\n        connect_args={\"check_same_thread\": False},\n        poolclass=StaticPool,\n    )\n\n@pytest.fixture(scope=\"session\")\ndef tables(engine):\n    # Base.metadata.create_all(engine)\n    yield\n    # Base.metadata.drop_all(engine)\n\n@pytest.fixture\ndef db(engine, tables):\n    connection = engine.connect()\n    transaction = connection.begin()\n    session = Session(bind=connection)\n    yield session\n    session.close()\n    transaction.rollback()\n    connection.close()\n\n# --- App fixtures ---\n@pytest.fixture\ndef app():\n    # return create_app()\n    return FastAPI()\n\n@pytest.fixture\ndef client(app, db):\n    # app.dependency_overrides[get_db] = lambda: (yield db)\n    with TestClient(app) as c:\n        yield c\n    app.dependency_overrides.clear()\n\n# --- Auth fixtures ---\n@pytest.fixture\ndef auth_headers():\n    \"\"\"Headers for an authenticated regular user.\"\"\"\n    # token = create_access_token({\"sub\": \"testuser\"})\n    token = \"fake-token\"\n    return {\"Authorization\": f\"Bearer {token}\"}\n\n@pytest.fixture\ndef admin_headers():\n    \"\"\"Headers for an admin user.\"\"\"\n    token = \"fake-admin-token\"\n    return {\"Authorization\": f\"Bearer {token}\"}\n\n# --- Factory fixtures ---\n@pytest.fixture\ndef user_factory(db):\n    \"\"\"Create users on demand with customizable fields.\"\"\"\n    def _create(name=\"Test User\", email=None):\n        # email = email or f\"{name.lower().replace(' ', '.')}@test.com\"\n        # user = User(name=name, email=email)\n        # db.add(user)\n        # db.commit()\n        # return user\n        return {\"name\": name, \"email\": email}\n    return _create\n\n@pytest.fixture\ndef sample_user(user_factory):\n    return user_factory(name=\"Alice\", email=\"alice@test.com\")\n\n# --- Example test file: tests/test_users.py ---\ndef test_create_user(client):\n    response = client.post(\"/users\", json={\"name\": \"Bob\", \"email\": \"bob@test.com\"})\n    # assert response.status_code == 201\n\ndef test_get_user(client, sample_user):\n    # response = client.get(f\"/users/{sample_user.id}\")\n    # assert response.status_code == 200\n    pass\n\ndef test_list_users(client, sample_user):\n    # response = client.get(\"/users\")\n    # assert len(response.json()) >= 1\n    pass\n\ndef test_duplicate_email(client, sample_user):\n    # response = client.post(\"/users\", json={\"name\": \"Dup\", \"email\": \"alice@test.com\"})\n    # assert response.status_code == 409\n    pass\n\nprint(\"Test organization demonstrated\")\n\n# Expected Output:\n# Test organization demonstrated",
+          "code_language": "python",
+          "key_points": [
+            "conftest.py fixtures are auto-discovered by pytest for all tests in the directory",
+            "Use factory fixtures for creating test data with customizable fields",
+            "Separate fixtures by concern: database, auth, data factories",
+            "Mirror the app structure in your test directory for easy navigation"
+          ],
+          "gotchas": [
+            "conftest.py must be in the tests directory (or a parent) to be discovered",
+            "Factory fixtures return a callable, not the object itself",
+            "Importing from app modules in conftest.py can cause circular imports if not careful",
+            "Session-scoped fixtures cannot use function-scoped fixtures as dependencies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Put shared fixtures (app, client, db) in `tests/conftest.py`. Mirror your app structure with `test_<module>.py` files. Use factory fixtures for reusable test data creation.",
+          "pseudo_code": "",
+          "actual_code": "# tests/conftest.py\n@pytest.fixture\ndef client(app, db):\n    app.dependency_overrides[get_db] = lambda: (yield db)\n    with TestClient(app) as c:\n        yield c\n    app.dependency_overrides.clear()\n\n@pytest.fixture\ndef user_factory(db):\n    def _create(name=\"Test User\"):\n        user = User(name=name)\n        db.add(user)\n        db.commit()\n        return user\n    return _create",
+          "code_language": "python",
+          "key_points": [
+            "conftest.py for shared fixtures, factory fixtures for test data"
+          ],
+          "gotchas": [
+            "Session-scoped fixtures cannot depend on function-scoped fixtures"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test background tasks?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "background-tasks",
+        "async",
+        "side-effects"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**BackgroundTasks** in FastAPI run after the response is sent. Testing them is tricky because:\n1. They execute asynchronously after the endpoint returns\n2. Their side effects (sending emails, writing files) are not visible in the response\n3. With TestClient, background tasks actually run synchronously before the test continues\n\n### Testing strategies:\n1. **TestClient runs tasks synchronously**: With the sync TestClient, background tasks complete before `response` is returned. You can directly check side effects.\n2. **Mock the task function**: Verify the task was called with correct arguments.\n3. **Extract business logic**: Move the logic into a testable function and test it independently.",
+          "pseudo_code": "# Strategy 1: Check side effects (TestClient runs tasks synchronously)\nresponse = client.post(\"/send-email\")\nassert response.status_code == 200\nassert email_was_sent()  # task already ran\n\n# Strategy 2: Mock the task\nwith patch(\"app.tasks.send_email\") as mock_send:\n    response = client.post(\"/send-email\")\n    mock_send.assert_called_once_with(\"user@test.com\")\n\n# Strategy 3: Test task function directly\ndef test_send_email_task():\n    send_email(\"user@test.com\")  # test in isolation\n    assert email_log[-1] == \"user@test.com\"",
+          "actual_code": "from fastapi import FastAPI, BackgroundTasks\nfrom fastapi.testclient import TestClient\nfrom unittest.mock import patch, MagicMock\n\napp = FastAPI()\n\n# Shared log for demonstrating side effects\nemail_log: list[str] = []\n\ndef send_notification_email(email: str, message: str):\n    \"\"\"Simulates sending an email (would be async HTTP call in production).\"\"\"\n    email_log.append(f\"{email}: {message}\")\n\n@app.post(\"/register\")\ndef register_user(\n    email: str,\n    background_tasks: BackgroundTasks,\n):\n    # Register user (synchronous)\n    user = {\"email\": email, \"id\": 1}\n\n    # Schedule email (runs after response)\n    background_tasks.add_task(\n        send_notification_email,\n        email=email,\n        message=\"Welcome!\",\n    )\n\n    return {\"user_id\": user[\"id\"], \"message\": \"Registration started\"}\n\nclient = TestClient(app)\n\n# Strategy 1: Check side effects\n# TestClient runs background tasks synchronously before returning\nemail_log.clear()\nresponse = client.post(\"/register?email=alice@test.com\")\nprint(f\"Status: {response.status_code}\")\nprint(f\"Email log: {email_log}\")\nassert len(email_log) == 1\nassert \"alice@test.com\" in email_log[0]\n\n# Strategy 2: Mock the task function\nwith patch(\"__main__.send_notification_email\") as mock_send:\n    response = client.post(\"/register?email=bob@test.com\")\n    print(f\"Mock called: {mock_send.called}\")\n    mock_send.assert_called_once_with(\n        email=\"bob@test.com\",\n        message=\"Welcome!\",\n    )\n\n# Strategy 3: Test the task function directly\nemail_log.clear()\nsend_notification_email(\"charlie@test.com\", \"Direct test\")\nprint(f\"Direct call log: {email_log}\")\nassert email_log == [\"charlie@test.com: Direct test\"]\n\nprint(\"All background task tests passed\")\n\n# Expected Output:\n# Status: 200\n# Email log: ['alice@test.com: Welcome!']\n# Mock called: True\n# Direct call log: ['charlie@test.com: Direct test']\n# All background task tests passed",
+          "code_language": "python",
+          "key_points": [
+            "TestClient runs background tasks synchronously -- side effects are visible immediately",
+            "Mock the task function to verify it was called with correct arguments",
+            "Extract task logic into standalone functions for independent unit testing",
+            "Background tasks in production run after the response -- test timing differs"
+          ],
+          "gotchas": [
+            "TestClient behavior differs from production: tasks run synchronously in tests, asynchronously in production",
+            "If the background task has a bug, TestClient raises the exception -- in production it would be silently lost",
+            "Background tasks do not have access to yield-dependency cleanup -- the session is already closed",
+            "asyncio.create_task() in background tasks requires careful handling in tests"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TestClient runs background tasks synchronously, so side effects are visible right after the response. Use `unittest.mock.patch` to verify the task was called, or test the task function directly.",
+          "pseudo_code": "",
+          "actual_code": "# Side effects visible immediately with TestClient\nresponse = client.post(\"/register?email=alice@test.com\")\nassert len(email_log) == 1  # task already ran\n\n# Or mock it\nwith patch(\"app.tasks.send_email\") as mock:\n    client.post(\"/register?email=bob@test.com\")\n    mock.assert_called_once()",
+          "code_language": "python",
+          "key_points": [
+            "TestClient runs tasks synchronously -- check side effects directly"
+          ],
+          "gotchas": [
+            "Production runs tasks asynchronously -- timing behavior differs from tests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test middleware behavior?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "middleware",
+        "request-response",
+        "headers"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Middleware in FastAPI processes requests before they reach endpoints and responses before they are sent. Testing middleware requires verifying both the request transformation and the response transformation.\n\n### What to test:\n1. **Response headers added by middleware** (CORS, timing, request ID)\n2. **Request blocking** (rate limiting, IP filtering)\n3. **Request modification** (adding headers, logging)\n4. **Error handling** in middleware\n\n### Testing approach:\nUse TestClient normally -- middleware runs automatically for every request. Check response headers, status codes, and body to verify middleware behavior.",
+          "pseudo_code": "# Middleware adds a header\n@app.middleware(\"http\")\nasync def add_timing(request, call_next):\n    start = time.time()\n    response = await call_next(request)\n    response.headers[\"X-Process-Time\"] = str(time.time() - start)\n    return response\n\n# Test\nresponse = client.get(\"/anything\")\nassert \"X-Process-Time\" in response.headers",
+          "actual_code": "import time\nimport uuid\nfrom fastapi import FastAPI, Request, Response\nfrom fastapi.testclient import TestClient\nfrom starlette.middleware.base import BaseHTTPMiddleware\n\napp = FastAPI()\n\n# Middleware 1: Add request timing header\n@app.middleware(\"http\")\nasync def timing_middleware(request: Request, call_next):\n    start = time.time()\n    response = await call_next(request)\n    process_time = time.time() - start\n    response.headers[\"X-Process-Time\"] = f\"{process_time:.4f}\"\n    return response\n\n# Middleware 2: Add request ID\n@app.middleware(\"http\")\nasync def request_id_middleware(request: Request, call_next):\n    request_id = request.headers.get(\"X-Request-ID\", str(uuid.uuid4()))\n    response = await call_next(request)\n    response.headers[\"X-Request-ID\"] = request_id\n    return response\n\n# Middleware 3: Block certain paths\n@app.middleware(\"http\")\nasync def block_middleware(request: Request, call_next):\n    if request.url.path.startswith(\"/internal\"):\n        return Response(content=\"Forbidden\", status_code=403)\n    return await call_next(request)\n\n@app.get(\"/health\")\ndef health():\n    return {\"status\": \"ok\"}\n\n@app.get(\"/internal/debug\")\ndef debug():\n    return {\"debug\": True}\n\nclient = TestClient(app)\n\n# Test 1: Timing header is present\nresponse = client.get(\"/health\")\nprint(f\"Timing header: {response.headers.get('X-Process-Time')}\")\nassert \"X-Process-Time\" in response.headers\nassert float(response.headers[\"X-Process-Time\"]) >= 0\n\n# Test 2: Request ID propagation\nresponse = client.get(\"/health\", headers={\"X-Request-ID\": \"test-123\"})\nprint(f\"Request ID: {response.headers['X-Request-ID']}\")\nassert response.headers[\"X-Request-ID\"] == \"test-123\"\n\n# Test 3: Auto-generated request ID\nresponse = client.get(\"/health\")\nrequest_id = response.headers[\"X-Request-ID\"]\nprint(f\"Auto request ID: {request_id}\")\nassert len(request_id) > 0  # UUID was generated\n\n# Test 4: Path blocking\nresponse = client.get(\"/internal/debug\")\nprint(f\"Blocked: {response.status_code} {response.text}\")\nassert response.status_code == 403\n\n# Test 5: Non-blocked path works normally\nresponse = client.get(\"/health\")\nprint(f\"Health: {response.status_code}\")\nassert response.status_code == 200\n\nprint(\"All middleware tests passed\")\n\n# Expected Output:\n# Timing header: 0.0001\n# Request ID: test-123\n# Auto request ID: <uuid-string>\n# Blocked: 403 Forbidden\n# Health: 200\n# All middleware tests passed",
+          "code_language": "python",
+          "key_points": [
+            "Middleware runs automatically on every TestClient request",
+            "Check response.headers for middleware-added headers",
+            "Test both normal flow and blocked/rejected requests",
+            "Send custom headers in TestClient to test header propagation"
+          ],
+          "gotchas": [
+            "Middleware added with @app.middleware('http') runs in registration order on the request path (first registered = outermost = runs first) and reverse order on the response path",
+            "Timing values in tests are very small -- assert >= 0 rather than exact values",
+            "If middleware raises an exception, the response may not have expected headers",
+            "StreamingResponse in middleware may cause body reading issues"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Middleware runs automatically with TestClient. Check `response.headers` for added headers, verify blocked paths return 403, and send custom request headers to test propagation.",
+          "pseudo_code": "",
+          "actual_code": "client = TestClient(app)\n\n# Test timing header exists\nresponse = client.get(\"/health\")\nassert \"X-Process-Time\" in response.headers\n\n# Test path blocking\nresponse = client.get(\"/internal/debug\")\nassert response.status_code == 403\n\n# Test header propagation\nresponse = client.get(\"/health\", headers={\"X-Request-ID\": \"test-123\"})\nassert response.headers[\"X-Request-ID\"] == \"test-123\"",
+          "code_language": "python",
+          "key_points": [
+            "Middleware runs automatically; check response headers and status codes"
+          ],
+          "gotchas": [
+            "Middleware execution order is the reverse of registration order"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you achieve test coverage for FastAPI applications?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "coverage",
+        "pytest-cov",
+        "quality"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Test coverage** measures what percentage of your code is executed during tests. For FastAPI applications, you use `pytest-cov` to track coverage and identify untested code paths.\n\n### Setup:\n1. Install: `pip install pytest-cov`\n2. Run: `pytest --cov=app --cov-report=term-missing`\n3. The `term-missing` option shows which lines are not covered\n\n### Coverage targets:\n- **90%+ overall**: Good target for production applications\n- **100% on critical paths**: Auth, payment, data mutations\n- **Skip low-value coverage**: Config files, __repr__ methods\n\n### What to cover:\n- All endpoint paths (happy path + error paths)\n- Validation edge cases\n- Authentication/authorization branches\n- Error handlers and middleware\n- Background tasks\n\n### Coverage configuration in pyproject.toml:\nConfigure source, exclude patterns, and failure thresholds.",
+          "pseudo_code": "# Run coverage\npytest --cov=app --cov-report=term-missing -v\n\n# pyproject.toml\n[tool.coverage.run]\nsource = [\"app\"]\n\n[tool.coverage.report]\nfail_under = 90\nexclude_lines = [\"pragma: no cover\", \"if TYPE_CHECKING:\"]",
+          "actual_code": "# pyproject.toml configuration\n\"\"\"\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]\nasyncio_mode = \"auto\"\n\n[tool.coverage.run]\nsource = [\"app\"]\nomit = [\n    \"*/tests/*\",\n    \"*/migrations/*\",\n    \"app/config.py\",\n]\n\n[tool.coverage.report]\nfail_under = 90\nshow_missing = true\nexclude_lines = [\n    \"pragma: no cover\",\n    \"if TYPE_CHECKING:\",\n    \"if __name__ == .__main__.:\",\n    \"raise NotImplementedError\",\n    \"\\\\.\\\\.\\\\.\",\n]\n\n[tool.coverage.html]\ndirectory = \"htmlcov\"\n\"\"\"\n\n# Example: testing all branches of an endpoint\nfrom fastapi import FastAPI, HTTPException\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nitems_db = {}\n\n@app.post(\"/items\", status_code=201)\ndef create_item(name: str, price: float):\n    if price <= 0:               # branch 1: validation\n        raise HTTPException(400, \"Price must be positive\")\n    if name in items_db:         # branch 2: duplicate\n        raise HTTPException(409, \"Item already exists\")\n    items_db[name] = price       # branch 3: success\n    return {\"name\": name, \"price\": price}\n\nclient = TestClient(app)\n\n# Test all branches for 100% coverage of this endpoint\ndef test_create_success():\n    items_db.clear()\n    r = client.post(\"/items?name=Widget&price=9.99\")\n    assert r.status_code == 201\n\ndef test_create_negative_price():\n    r = client.post(\"/items?name=Bad&price=-1\")\n    assert r.status_code == 400\n\ndef test_create_duplicate():\n    items_db.clear()\n    items_db[\"Widget\"] = 9.99\n    r = client.post(\"/items?name=Widget&price=5.00\")\n    assert r.status_code == 409\n\n# Run all\ntest_create_success()\ntest_create_negative_price()\ntest_create_duplicate()\nprint(\"All coverage branches tested\")\nprint(\"Run: pytest --cov=app --cov-report=term-missing -v\")\n\n# Expected Output:\n# All coverage branches tested\n# Run: pytest --cov=app --cov-report=term-missing -v",
+          "code_language": "python",
+          "key_points": [
+            "pytest --cov=app --cov-report=term-missing shows uncovered lines",
+            "fail_under in pyproject.toml fails CI if coverage drops below threshold",
+            "Test every branch: happy path, validation errors, auth failures, edge cases",
+            "Use exclude_lines to skip untestable code like TYPE_CHECKING blocks"
+          ],
+          "gotchas": [
+            "High coverage does not mean good tests -- you can cover code without meaningful assertions",
+            "Branch coverage (--cov-branch) is stricter than line coverage -- use it for critical code",
+            "Background tasks and middleware are often missed in coverage -- test them explicitly",
+            "Coverage omit patterns need careful tuning to avoid excluding important code"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `pytest --cov=app --cov-report=term-missing` to measure coverage. Set `fail_under = 90` in pyproject.toml to enforce a minimum. Test every branch: success, validation error, auth failure, not found.",
+          "pseudo_code": "",
+          "actual_code": "# Run coverage\n# pytest --cov=app --cov-report=term-missing -v\n\n# pyproject.toml\n# [tool.coverage.run]\n# source = [\"app\"]\n# [tool.coverage.report]\n# fail_under = 90\n# show_missing = true",
+          "code_language": "python",
+          "key_points": [
+            "term-missing shows exact uncovered lines"
+          ],
+          "gotchas": [
+            "High coverage does not mean quality tests -- assertions matter more than lines covered"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you test with different configurations (testing vs production)?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "configuration",
+        "settings",
+        "pydantic-settings",
+        "environment"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI applications should use different configurations for testing, development, and production. **Pydantic Settings** (`pydantic-settings` package) is the standard way to manage configuration with environment variable support.\n\n### Pattern:\n1. Define settings as a Pydantic `BaseSettings` class\n2. Create a `get_settings` dependency\n3. Override the dependency in tests with test-specific values\n\n### Key differences between environments:\n| Setting | Production | Testing |\n|---------|-----------|--------|\n| Database | PostgreSQL | SQLite in-memory |\n| Debug | False | True |\n| Email | Real SMTP | Mock/log |\n| External APIs | Real endpoints | Mock/fake |\n| Secret key | From env var | Hardcoded test value |",
+          "pseudo_code": "class Settings(BaseSettings):\n    database_url: str = \"sqlite:///./app.db\"\n    debug: bool = False\n    secret_key: str\n\ndef get_settings():\n    return Settings()\n\n# In tests:\ndef test_settings():\n    return Settings(database_url=\"sqlite:///:memory:\", debug=True)\n\napp.dependency_overrides[get_settings] = test_settings",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\nfrom pydantic_settings import BaseSettings\nfrom pydantic import ConfigDict\nfrom typing import Annotated\nfrom functools import lru_cache\n\n# --- Settings class ---\nclass Settings(BaseSettings):\n    app_name: str = \"MyApp\"\n    database_url: str = \"postgresql://localhost/myapp\"\n    secret_key: str = \"change-me-in-production\"\n    debug: bool = False\n    testing: bool = False\n    email_backend: str = \"smtp\"\n\n    model_config = ConfigDict(\n        env_file=\".env\",        # load from .env file\n        env_prefix=\"APP_\",      # APP_DATABASE_URL, APP_SECRET_KEY, etc.\n        extra=\"ignore\",         # ignore unknown env vars\n    )\n\n# Cache settings to avoid re-reading env vars on every request\n@lru_cache\ndef get_settings() -> Settings:\n    return Settings()\n\nSettingsDep = Annotated[Settings, Depends(get_settings)]\n\n# --- App ---\napp = FastAPI()\n\n@app.get(\"/info\")\ndef info(settings: SettingsDep):\n    return {\n        \"app_name\": settings.app_name,\n        \"debug\": settings.debug,\n        \"testing\": settings.testing,\n    }\n\n@app.get(\"/db-url\")\ndef db_url(settings: SettingsDep):\n    if settings.testing:\n        return {\"db\": \"test database\"}\n    return {\"db\": \"production database\"}\n\n# --- Test configuration ---\ndef get_test_settings() -> Settings:\n    return Settings(\n        app_name=\"MyApp-Test\",\n        database_url=\"sqlite:///:memory:\",\n        secret_key=\"test-secret\",\n        debug=True,\n        testing=True,\n        email_backend=\"console\",\n    )\n\n# Override in tests\napp.dependency_overrides[get_settings] = get_test_settings\nclient = TestClient(app)\n\nresponse = client.get(\"/info\")\nprint(f\"Info: {response.json()}\")\n\nresponse = client.get(\"/db-url\")\nprint(f\"DB: {response.json()}\")\n\n# Verify test config is active\nassert response.json()[\"db\"] == \"test database\"\n\napp.dependency_overrides.clear()\n\n# --- Alternative: conftest.py pattern ---\n# @pytest.fixture(autouse=True)\n# def override_settings():\n#     app.dependency_overrides[get_settings] = get_test_settings\n#     yield\n#     app.dependency_overrides.clear()\n\nprint(\"Configuration override demonstrated\")\n\n# Expected Output:\n# Info: {'app_name': 'MyApp-Test', 'debug': True, 'testing': True}\n# DB: {'db': 'test database'}\n# Configuration override demonstrated",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic BaseSettings reads from environment variables and .env files",
+            "env_prefix avoids naming collisions (APP_DATABASE_URL instead of DATABASE_URL)",
+            "Override get_settings in tests to inject test-specific configuration",
+            "lru_cache on get_settings avoids re-parsing env vars on every request"
+          ],
+          "gotchas": [
+            "lru_cache means settings are frozen after first call -- clear the cache if you change env vars at runtime",
+            "The .env file is not loaded in tests unless you explicitly point to it",
+            "pydantic-settings is a separate package from pydantic: pip install pydantic-settings",
+            "autouse=True on the settings fixture ensures all tests get the test configuration"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use Pydantic `BaseSettings` for configuration. Create `get_settings()` as a dependency, then override it in tests with `app.dependency_overrides[get_settings] = get_test_settings`.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic_settings import BaseSettings\n\nclass Settings(BaseSettings):\n    database_url: str = \"postgresql://localhost/myapp\"\n    testing: bool = False\n\ndef get_test_settings():\n    return Settings(database_url=\"sqlite:///:memory:\", testing=True)\n\napp.dependency_overrides[get_settings] = get_test_settings",
+          "code_language": "python",
+          "key_points": [
+            "Override get_settings dependency in tests for different configuration"
+          ],
+          "gotchas": [
+            "pydantic-settings is a separate package: pip install pydantic-settings"
+          ]
+        }
+      ]
+    }
+  ]
+}

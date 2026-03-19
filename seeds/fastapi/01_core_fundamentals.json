@@ -1,0 +1,684 @@
+{
+  "concept_slug": "core-fundamentals",
+  "questions": [
+    {
+      "title": "What is FastAPI and what are its key features?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "overview",
+        "features",
+        "python"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**FastAPI** is a modern, high-performance Python web framework for building APIs. It was created by Sebastian Ramirez and first released in 2018.\n\n### Key features:\n- **Fast**: Built on Starlette and Uvicorn (ASGI), performance comparable to Node.js and Go\n- **Type hints**: Leverages Python type annotations for automatic validation, serialization, and documentation\n- **Automatic docs**: Generates interactive Swagger UI and ReDoc documentation from your code\n- **Data validation**: Uses Pydantic for request/response validation with detailed error messages\n- **Async support**: Native `async`/`await` support for high-concurrency workloads\n- **Dependency injection**: Built-in DI system for clean, testable code\n- **Standards-based**: Fully compliant with OpenAPI 3.1 and JSON Schema\n- **Editor support**: Excellent autocomplete and type checking due to type hints\n\n### Why it is popular:\nFastAPI combines the ease of use of Flask with the performance of async frameworks and the automatic validation of type-safe languages. It reduces bugs by catching type errors at request time rather than deep in business logic.",
+          "pseudo_code": "# FastAPI at a glance\nimport FastAPI\n\napp = create FastAPI application\n\n@app.GET(\"/items/{id}\")\nfunction get_item(id: integer, query: string = default):\n    # id is auto-validated as integer\n    # query is auto-validated as string with default\n    return {\"id\": id, \"query\": query}\n\n# Auto-generated docs at /docs (Swagger) and /redoc (ReDoc)\n# Auto request validation, serialization, error responses",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef read_root():\n    return {\"message\": \"Hello, FastAPI!\"}\n\n@app.get(\"/items/{item_id}\")\ndef read_item(item_id: int, q: str = \"default\"):\n    \"\"\"item_id is validated as int, q is an optional query param.\"\"\"\n    return {\"item_id\": item_id, \"q\": q}\n\n# Run with: uvicorn main:app --reload\n# Visit http://127.0.0.1:8000/docs for Swagger UI\n# Visit http://127.0.0.1:8000/redoc for ReDoc\n\n# Quick verification with TestClient\nfrom fastapi.testclient import TestClient\n\nclient = TestClient(app)\nresponse = client.get(\"/items/42?q=search\")\nprint(response.json())\nprint(response.status_code)\n\n# Expected Output:\n# {'item_id': 42, 'q': 'search'}\n# 200",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI is built on Starlette (web) and Pydantic (data validation)",
+            "Type hints drive validation, serialization, and auto-generated docs",
+            "Native async/await support with ASGI for high concurrency",
+            "Automatic interactive API docs at /docs and /redoc"
+          ],
+          "gotchas": [
+            "FastAPI requires Python 3.8+ (3.10+ recommended for modern type syntax)",
+            "You need an ASGI server like Uvicorn to run FastAPI -- it cannot run standalone like Flask's development server",
+            "FastAPI is the framework, Uvicorn is the server -- they are separate packages"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI is a high-performance Python web framework that uses type hints for automatic validation, serialization, and API documentation. Built on Starlette and Pydantic, it supports async/await natively and auto-generates Swagger UI and ReDoc docs.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef read_item(item_id: int, q: str = \"default\"):\n    return {\"item_id\": item_id, \"q\": q}\n\n# Run: uvicorn main:app --reload\n# Docs at /docs, /redoc",
+          "code_language": "python",
+          "key_points": [
+            "Built on Starlette + Pydantic, type hints drive everything",
+            "Auto-generates OpenAPI docs at /docs and /redoc"
+          ],
+          "gotchas": [
+            "Requires an ASGI server (Uvicorn) to run -- pip install 'fastapi[standard]' includes it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI compare to Flask and Django?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "flask",
+        "django",
+        "comparison",
+        "framework"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### FastAPI vs Flask vs Django\n\n| Feature | FastAPI | Flask | Django |\n|---------|---------|-------|--------|\n| **Type** | Async API framework | Micro framework | Full-stack framework |\n| **Server** | ASGI (Uvicorn) | WSGI (Gunicorn) | WSGI (Gunicorn) |\n| **Validation** | Automatic (Pydantic) | Manual or extensions | Forms/DRF serializers |\n| **API Docs** | Auto-generated | Manual (flask-restx) | Manual (DRF + drf-yasg) |\n| **Async** | Native | Limited (Flask 2.0+) | Limited (Django 4.1+) |\n| **ORM** | None built-in | None built-in | Django ORM built-in |\n| **Admin** | None built-in | None built-in | Built-in admin panel |\n| **Learning curve** | Low (if you know type hints) | Very low | Moderate |\n\n### When to choose each:\n- **FastAPI**: APIs, microservices, high-concurrency, real-time features\n- **Flask**: Simple web apps, prototypes, or when you want maximum flexibility\n- **Django**: Full-featured web apps with admin, ORM, auth, templates out of the box\n\n### Performance:\nFastAPI on Uvicorn is significantly faster than Flask/Django for I/O-bound workloads due to native async support. For CPU-bound work, the difference is minimal since Python's GIL limits all three equally.",
+          "pseudo_code": "# Flask style\n@app.route('/items/<int:item_id>', methods=['GET'])\ndef get_item(item_id):\n    # Manual validation needed\n    return jsonify({\"id\": item_id})\n\n# Django REST Framework style\nclass ItemView(APIView):\n    def get(self, request, item_id):\n        serializer = ItemSerializer(data=...)\n        serializer.is_valid(raise_exception=True)\n        return Response(serializer.data)\n\n# FastAPI style\n@app.get('/items/{item_id}')\ndef get_item(item_id: int) -> Item:\n    # Validation is automatic from type hints\n    return Item(id=item_id)",
+          "actual_code": "# FastAPI: validation is automatic from type hints\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n    in_stock: bool = True\n\n@app.post(\"/items/\")\ndef create_item(item: Item):\n    \"\"\"Request body is auto-validated against the Item model.\n    Invalid data returns 422 with detailed error messages.\n    Swagger UI shows the schema automatically.\"\"\"\n    return {\"item\": item.model_dump(), \"message\": \"created\"}\n\n# Compare: Flask requires manual validation\n# @app.route('/items/', methods=['POST'])\n# def create_item():\n#     data = request.get_json()\n#     if 'name' not in data:          # manual check\n#         return jsonify(error='...'), 400\n#     if not isinstance(data['price'], (int, float)):  # manual check\n#         return jsonify(error='...'), 400\n#     return jsonify(data), 201\n\nfrom fastapi.testclient import TestClient\nclient = TestClient(app)\n\n# Valid request\nresponse = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(response.json())\n\n# Invalid request -- automatic 422 error\nresponse = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": \"not-a-number\"})\nprint(response.status_code)\n\n# Expected Output:\n# {'item': {'name': 'Widget', 'price': 9.99, 'in_stock': True}, 'message': 'created'}\n# 422",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI provides automatic validation, serialization, and docs -- Flask/Django need extensions",
+            "FastAPI is ASGI-native (async), Flask/Django are WSGI-based with limited async support",
+            "Django is batteries-included (ORM, admin, auth); FastAPI and Flask are minimal by design",
+            "FastAPI excels at API-first development; Django excels at full-stack web apps"
+          ],
+          "gotchas": [
+            "FastAPI has no built-in ORM, template engine, or admin panel -- you add what you need",
+            "Flask 2.0+ supports async views but is still WSGI under the hood, limiting true concurrency",
+            "Django REST Framework is not Django itself -- it is a separate package for building APIs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI is async-first with auto-validation and docs from type hints. Flask is a minimal WSGI framework requiring extensions for validation. Django is full-stack with ORM, admin, and auth built in. Choose FastAPI for APIs, Flask for simple apps, Django for full-featured web apps.",
+          "pseudo_code": "",
+          "actual_code": "# FastAPI: type hints do the work\nfrom fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\n@app.post(\"/items/\")\ndef create(item: Item):  # auto-validated, auto-documented\n    return item.model_dump()",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI: auto validation + docs from types; Flask: manual; Django: ORM + admin built in",
+            "FastAPI is ASGI (async), Flask/Django are WSGI"
+          ],
+          "gotchas": [
+            "FastAPI has no built-in ORM or admin panel -- you must add them yourself"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is ASGI and how does it differ from WSGI?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "asgi",
+        "wsgi",
+        "server",
+        "async"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### WSGI (Web Server Gateway Interface)\nWSGI is the traditional Python web server interface (PEP 3333). It handles one request at a time per worker in a **synchronous** model.\n\n### ASGI (Asynchronous Server Gateway Interface)\nASGI is the async successor to WSGI. It supports:\n- **HTTP** (like WSGI)\n- **WebSockets** (real-time bidirectional communication)\n- **Long-lived connections** (server-sent events, streaming)\n- **Background tasks** during request handling\n\n### Key differences:\n| Aspect | WSGI | ASGI |\n|--------|------|------|\n| Concurrency | One request per thread/process | Many requests per event loop |\n| WebSockets | Not supported | Native support |\n| Streaming | Limited | Full support |\n| Servers | Gunicorn, mod_wsgi | Uvicorn, Daphne, Hypercorn |\n| Frameworks | Flask, Django | FastAPI, Starlette, Django Channels |\n\n### Why ASGI matters for FastAPI:\nWhen your API calls external services, databases, or file I/O, ASGI lets the server handle other requests while waiting. A single Uvicorn worker can handle thousands of concurrent connections versus a WSGI worker that blocks on one.",
+          "pseudo_code": "# WSGI interface (synchronous)\ndef wsgi_app(environ, start_response):\n    # Can only handle one request at a time per worker\n    status = '200 OK'\n    headers = [('Content-Type', 'text/plain')]\n    start_response(status, headers)\n    return [b'Hello World']\n\n# ASGI interface (asynchronous)\nasync def asgi_app(scope, receive, send):\n    # Can handle many requests concurrently\n    # scope: connection info (type, path, headers)\n    # receive: get request body/messages\n    # send: send response chunks\n    await send({\"type\": \"http.response.start\", ...})\n    await send({\"type\": \"http.response.body\", ...})",
+          "actual_code": "# FastAPI is an ASGI app -- you can see this directly\nfrom fastapi import FastAPI\nimport asyncio\n\napp = FastAPI()\n\n# Sync handler: FastAPI runs it in a thread pool automatically\n@app.get(\"/sync\")\ndef sync_endpoint():\n    \"\"\"Runs in a thread pool so it doesn't block the event loop.\"\"\"\n    import time\n    time.sleep(0.1)  # Blocking call -- OK because it's in a thread\n    return {\"type\": \"sync\"}\n\n# Async handler: runs directly on the event loop\n@app.get(\"/async\")\nasync def async_endpoint():\n    \"\"\"Runs on the event loop -- must use async I/O.\"\"\"\n    await asyncio.sleep(0.1)  # Non-blocking\n    return {\"type\": \"async\"}\n\n# Demonstrating ASGI nature\nprint(f\"FastAPI app type: {type(app)}\")\nprint(f\"Is callable: {callable(app)}\")\n\n# The ASGI interface FastAPI implements under the hood:\n# async def __call__(self, scope, receive, send):\n#     await super().__call__(scope, receive, send)\n\n# WSGI comparison (Flask):\n# from flask import Flask\n# flask_app = Flask(__name__)\n# # Flask implements: def __call__(self, environ, start_response)\n\n# Expected Output:\n# FastAPI app type: <class 'fastapi.applications.FastAPI'>\n# Is callable: True",
+          "code_language": "python",
+          "key_points": [
+            "WSGI is synchronous (one request per worker); ASGI is async (many concurrent requests per worker)",
+            "ASGI supports HTTP, WebSockets, and streaming natively; WSGI only supports HTTP",
+            "FastAPI uses Uvicorn (ASGI server), Flask/Django traditionally use Gunicorn (WSGI server)",
+            "Sync def handlers in FastAPI run in a thread pool automatically to avoid blocking the event loop"
+          ],
+          "gotchas": [
+            "Using blocking I/O (time.sleep, requests library) in an async def handler blocks the entire event loop",
+            "ASGI does not automatically make CPU-bound code faster -- the GIL still applies",
+            "Gunicorn can run ASGI apps too via gunicorn -k uvicorn.workers.UvicornWorker"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "WSGI is synchronous (one request per worker), ASGI is asynchronous (many concurrent requests per worker). FastAPI uses ASGI via Uvicorn, enabling WebSockets, streaming, and high concurrency. ASGI is the async successor to WSGI.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nimport asyncio\n\napp = FastAPI()\n\n# Async handler -- runs on the event loop\n@app.get(\"/async\")\nasync def async_endpoint():\n    await asyncio.sleep(0.1)  # non-blocking\n    return {\"message\": \"async response\"}\n\n# Sync handler -- auto-runs in thread pool\n@app.get(\"/sync\")\ndef sync_endpoint():\n    return {\"message\": \"sync response\"}",
+          "code_language": "python",
+          "key_points": [
+            "ASGI = async, supports WebSockets + streaming; WSGI = sync, HTTP only",
+            "FastAPI runs on Uvicorn (ASGI); Flask runs on Gunicorn (WSGI)"
+          ],
+          "gotchas": [
+            "Never use blocking I/O (time.sleep, requests) inside async def -- it blocks the entire event loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What role does Starlette play in FastAPI?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "starlette",
+        "architecture",
+        "asgi"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Starlette** is a lightweight ASGI framework that provides the core web functionality FastAPI is built on. FastAPI's `FastAPI` class directly inherits from Starlette's `Starlette` class.\n\n### What Starlette provides to FastAPI:\n- **Routing system**: Path matching, path parameters, route ordering\n- **Request/Response classes**: `Request`, `Response`, `JSONResponse`, `HTMLResponse`, etc.\n- **Middleware support**: CORS, GZip, sessions, trusted hosts\n- **WebSocket support**: Full WebSocket endpoint handling\n- **Background tasks**: `BackgroundTask` class for post-response work\n- **Test client**: `TestClient` based on httpx\n- **Static files**: Serving static assets\n- **Exception handling**: Base exception handlers and middleware\n\n### What FastAPI adds on top:\n- **Pydantic integration**: Automatic validation and serialization\n- **Dependency injection**: `Depends()` system\n- **OpenAPI generation**: Automatic Swagger/ReDoc docs\n- **Security utilities**: OAuth2, API keys, HTTP Bearer\n- **Parameter declarations**: `Path()`, `Query()`, `Body()`, `Header()`, `Cookie()`\n\n### The inheritance chain:\n`FastAPI` -> `Starlette` -> `object`\n\nThis means any Starlette feature works directly in FastAPI. You can use Starlette middleware, mount Starlette sub-applications, or use its lower-level features when needed.",
+          "pseudo_code": "# FastAPI inherits from Starlette\nclass FastAPI(Starlette):\n    # Adds Pydantic validation\n    # Adds dependency injection\n    # Adds OpenAPI schema generation\n    # All Starlette features still available\n    pass\n\n# You can use any Starlette feature in FastAPI\napp = FastAPI()\napp.add_middleware(StarletteMiddleware)  # Works!\napp.mount(\"/static\", StaticFiles())      # Works!",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.applications import Starlette\nfrom starlette.responses import HTMLResponse\nfrom starlette.staticfiles import StaticFiles\nfrom starlette.middleware.trustedhost import TrustedHostMiddleware\n\napp = FastAPI()\n\n# Proof: FastAPI inherits from Starlette\nprint(f\"FastAPI bases: {FastAPI.__bases__}\")\nprint(f\"Is subclass of Starlette: {issubclass(FastAPI, Starlette)}\")\n\n# Using Starlette's response classes directly\n@app.get(\"/html\", response_class=HTMLResponse)\ndef get_html():\n    return \"<h1>This uses Starlette's HTMLResponse</h1>\"\n\n# Using Starlette middleware in FastAPI\napp.add_middleware(\n    TrustedHostMiddleware,\n    allowed_hosts=[\"example.com\", \"*.example.com\"]\n)\n\n# Mounting Starlette static files\n# app.mount(\"/static\", StaticFiles(directory=\"static\"), name=\"static\")\n\n# Using Starlette's Request object\nfrom starlette.requests import Request\n\n@app.get(\"/info\")\ndef get_info(request: Request):\n    return {\n        \"client\": request.client.host if request.client else None,\n        \"url\": str(request.url),\n    }\n\n# Expected Output:\n# FastAPI bases: (<class 'starlette.applications.Starlette'>,)\n# Is subclass of Starlette: True",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI directly inherits from Starlette -- it IS a Starlette app with extra features",
+            "Starlette provides routing, request/response, middleware, WebSockets, and test client",
+            "FastAPI adds Pydantic validation, dependency injection, and OpenAPI docs on top",
+            "All Starlette features and middleware work directly in FastAPI"
+          ],
+          "gotchas": [
+            "Import from fastapi when possible (e.g., from fastapi import Request) even though it re-exports Starlette classes",
+            "Starlette's own TestClient is re-exported as fastapi.testclient.TestClient",
+            "When searching for solutions, Starlette docs are often relevant for FastAPI"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Starlette is the ASGI framework that FastAPI inherits from. It provides routing, request/response handling, middleware, WebSockets, and the test client. FastAPI adds Pydantic validation, dependency injection, and auto-generated OpenAPI docs on top.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.applications import Starlette\n\napp = FastAPI()\n\n# FastAPI IS a Starlette app\nprint(issubclass(FastAPI, Starlette))\n\n# Expected Output:\n# True",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI inherits from Starlette, adding validation and OpenAPI on top"
+          ],
+          "gotchas": [
+            "Import from fastapi (not starlette) when both provide the same class"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What role does Pydantic play in FastAPI?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "validation",
+        "serialization",
+        "type-hints"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Pydantic** is the data validation library that powers FastAPI's automatic request/response handling. FastAPI uses Pydantic v2 for:\n\n### 1. Request body validation\nWhen you declare a parameter with a Pydantic model type, FastAPI automatically parses the JSON body and validates every field.\n\n### 2. Response serialization\nUsing `response_model`, FastAPI serializes your return value through a Pydantic model, filtering out fields not in the schema.\n\n### 3. OpenAPI schema generation\nPydantic models automatically generate JSON Schema, which FastAPI uses for Swagger/ReDoc docs.\n\n### 4. Settings management\nPydantic's `BaseSettings` reads from environment variables with type validation.\n\n### Key Pydantic v2 features used in FastAPI:\n- `BaseModel` for schemas\n- `Field()` for constraints (min/max, regex, description)\n- `field_validator` / `model_validator` for custom validation\n- `model_dump()` for serialization (replaces `.dict()` from v1)\n- `model_config` dict (replaces `class Config` from v1)\n- `ConfigDict` for model configuration",
+          "pseudo_code": "# Pydantic handles the full request lifecycle in FastAPI\n\n1. Request arrives with JSON body\n2. FastAPI extracts body -> passes to Pydantic model\n3. Pydantic validates types, constraints, custom validators\n4. If invalid -> automatic 422 response with error details\n5. If valid -> your function receives a typed Python object\n6. On response -> Pydantic serializes output via response_model\n7. Schema -> auto-generates OpenAPI docs",
+          "actual_code": "from pydantic import BaseModel, Field, field_validator, ConfigDict\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\nclass ItemCreate(BaseModel):\n    \"\"\"Pydantic model for request validation.\"\"\"\n    model_config = ConfigDict(str_strip_whitespace=True)\n\n    name: str = Field(min_length=1, max_length=100, description=\"Item name\")\n    price: float = Field(gt=0, description=\"Price must be positive\")\n    tags: list[str] = []\n\n    @field_validator(\"name\")\n    @classmethod\n    def name_must_be_capitalized(cls, v: str) -> str:\n        if not v[0].isupper():\n            raise ValueError(\"Name must start with uppercase\")\n        return v\n\nclass ItemResponse(BaseModel):\n    \"\"\"Pydantic model for response serialization.\"\"\"\n    name: str\n    price: float\n    tags: list[str]\n    # Note: internal fields like 'id' or 'created_at' can be excluded\n\n@app.post(\"/items/\", response_model=ItemResponse)\ndef create_item(item: ItemCreate):\n    # item is already validated by Pydantic\n    print(f\"Received: {item.model_dump()}\")\n    return item  # Serialized through ItemResponse\n\nclient = TestClient(app)\n\n# Valid request\nresponse = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": 9.99, \"tags\": [\"sale\"]})\nprint(\"Valid:\", response.json())\n\n# Invalid: price is negative\nresponse = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": -5})\nprint(\"Invalid price status:\", response.status_code)\n\n# Invalid: name not capitalized\nresponse = client.post(\"/items/\", json={\"name\": \"widget\", \"price\": 9.99})\nprint(\"Invalid name status:\", response.status_code)\n\n# Expected Output:\n# Received: {'name': 'Widget', 'price': 9.99, 'tags': ['sale']}\n# Valid: {'name': 'Widget', 'price': 9.99, 'tags': ['sale']}\n# Invalid price status: 422\n# Invalid name status: 422",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic validates request bodies automatically -- invalid data returns 422 with detailed errors",
+            "response_model filters and serializes output through a Pydantic model",
+            "Pydantic models auto-generate JSON Schema used for Swagger/ReDoc docs",
+            "Use Pydantic v2 syntax: model_dump(), field_validator, model_config (not .dict(), @validator, class Config)"
+          ],
+          "gotchas": [
+            "Pydantic v2 is a major rewrite -- v1 syntax like .dict(), @validator, and class Config still work but are deprecated",
+            "field_validator needs @classmethod decorator in Pydantic v2",
+            "model_dump() replaces .dict() and model_dump_json() replaces .json()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic provides data validation and serialization for FastAPI. When you declare a Pydantic model as a parameter type, FastAPI auto-validates the request body and returns 422 on errors. It also generates the OpenAPI schema for docs.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, Field\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str = Field(min_length=1)\n    price: float = Field(gt=0)\n\n@app.post(\"/items/\")\ndef create(item: Item):  # auto-validated\n    return item.model_dump()  # Pydantic v2 serialization",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic validates requests and serializes responses automatically",
+            "Use model_dump() not .dict() (Pydantic v2)"
+          ],
+          "gotchas": [
+            "Pydantic v2 syntax differs from v1 -- use field_validator, model_config, model_dump()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you install and create a basic FastAPI application?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "installation",
+        "setup",
+        "uvicorn",
+        "quickstart"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "### Installation\n\nFastAPI can be installed in two ways:\n\n```\npip install fastapi              # Core only\npip install 'fastapi[standard]'  # Core + Uvicorn + extras\n```\n\nThe `[standard]` option includes:\n- **uvicorn**: ASGI server to run the app\n- **httpx**: For TestClient\n- **jinja2**: Template support\n- **python-multipart**: Form/file upload support\n\n### Creating a basic app:\n\n1. Create a `main.py` file\n2. Import FastAPI and create an instance\n3. Define route handlers with decorators\n4. Run with Uvicorn\n\n### Running the app:\n- **Development**: `uvicorn main:app --reload` (auto-reloads on code changes)\n- **Production**: `uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4`\n- **Programmatic**: `uvicorn.run(\"main:app\", reload=True)` in a script\n\nThe `main:app` syntax means: in the file `main.py`, use the variable named `app`.",
+          "pseudo_code": "# Step 1: Install\npip install 'fastapi[standard]'\n\n# Step 2: Create main.py\nimport FastAPI\napp = FastAPI()\n\n@app.GET(\"/\")\nfunction root():\n    return greeting message\n\n# Step 3: Run\nuvicorn main:app --reload",
+          "actual_code": "# main.py -- A complete basic FastAPI application\nfrom fastapi import FastAPI\n\n# Create the FastAPI instance\napp = FastAPI(\n    title=\"My API\",\n    version=\"1.0.0\",\n)\n\n@app.get(\"/\")\ndef root():\n    return {\"message\": \"Hello, World!\"}\n\n@app.get(\"/health\")\ndef health_check():\n    return {\"status\": \"healthy\"}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int, q: str | None = None):\n    result = {\"item_id\": item_id}\n    if q:\n        result[\"q\"] = q\n    return result\n\n# Verify it works with TestClient\nfrom fastapi.testclient import TestClient\n\nclient = TestClient(app)\nprint(client.get(\"/\").json())\nprint(client.get(\"/health\").json())\nprint(client.get(\"/items/1?q=test\").json())\n\n# Run with: uvicorn main:app --reload\n# Or programmatically:\n# if __name__ == \"__main__\":\n#     import uvicorn\n#     uvicorn.run(\"main:app\", host=\"127.0.0.1\", port=8000, reload=True)\n\n# Expected Output:\n# {'message': 'Hello, World!'}\n# {'status': 'healthy'}\n# {'item_id': 1, 'q': 'test'}",
+          "code_language": "python",
+          "key_points": [
+            "pip install 'fastapi[standard]' includes Uvicorn and common extras",
+            "uvicorn main:app --reload is the standard development command",
+            "main:app means 'the app variable in main.py'",
+            "--reload flag auto-restarts on code changes (development only)"
+          ],
+          "gotchas": [
+            "The --reload flag should never be used in production -- it watches files and restarts, adding overhead",
+            "python-multipart must be installed for Form data and file uploads (included in [standard])",
+            "uvicorn.run() with reload=True requires passing the app as a string 'main:app', not the object directly"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Install with `pip install 'fastapi[standard]'`, create an app instance with `app = FastAPI()`, define routes with decorators like `@app.get(\"/\")`, and run with `uvicorn main:app --reload`.",
+          "pseudo_code": "",
+          "actual_code": "# pip install 'fastapi[standard]'\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef root():\n    return {\"message\": \"Hello, World!\"}\n\n# Run: uvicorn main:app --reload",
+          "code_language": "python",
+          "key_points": [
+            "'fastapi[standard]' includes Uvicorn, httpx, and common extras",
+            "uvicorn main:app --reload for development"
+          ],
+          "gotchas": [
+            "Never use --reload in production -- it adds file-watching overhead"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI automatically generate OpenAPI/Swagger documentation?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "openapi",
+        "swagger",
+        "documentation",
+        "auto-docs"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI automatically generates an **OpenAPI 3.1 schema** from your code and serves two interactive documentation UIs:\n\n### How it works:\n1. You define routes with type hints, Pydantic models, and parameter declarations\n2. FastAPI inspects these at startup and builds a complete OpenAPI schema\n3. The schema is served as JSON at `/openapi.json`\n4. Two UI renderers consume this schema:\n   - **Swagger UI** at `/docs` -- interactive, lets you try API calls\n   - **ReDoc** at `/redoc` -- clean read-only documentation\n\n### What gets documented automatically:\n- Path parameters with types\n- Query parameters with defaults and constraints\n- Request body schemas (from Pydantic models)\n- Response schemas (from `response_model`)\n- Status codes\n- Tags for grouping\n- Docstrings become operation descriptions\n- `Field(description=...)` becomes field descriptions\n- `summary` and `description` parameters in decorators\n\n### Customizing docs:\n- Add `summary`, `description`, `tags` to route decorators\n- Use docstrings on handler functions\n- Set `response_description` on routes\n- Use Pydantic `Field(description=..., examples=[...])` for field docs\n- Configure app-level metadata (title, version, description, terms, contact, license)",
+          "pseudo_code": "# FastAPI doc generation pipeline\n1. At startup, inspect all route decorators\n2. For each route, extract:\n   - Path parameters + types\n   - Query parameters + defaults\n   - Body schema from Pydantic models\n   - Response schema from response_model\n   - Tags, summary, description\n3. Build OpenAPI 3.1 JSON schema\n4. Serve schema at /openapi.json\n5. Swagger UI at /docs reads the schema\n6. ReDoc at /redoc reads the schema",
+          "actual_code": "from fastapi import FastAPI, Query\nfrom pydantic import BaseModel, Field\n\napp = FastAPI(\n    title=\"Bookstore API\",\n    description=\"A sample API for managing books\",\n    version=\"2.0.0\",\n    contact={\"name\": \"API Support\", \"email\": \"support@example.com\"},\n    license_info={\"name\": \"MIT\"},\n)\n\nclass BookCreate(BaseModel):\n    \"\"\"Schema for creating a new book.\"\"\"\n    title: str = Field(min_length=1, description=\"The book title\")\n    author: str = Field(description=\"Author full name\")\n    price: float = Field(gt=0, description=\"Price in USD\", examples=[29.99])\n\nclass BookResponse(BaseModel):\n    id: int\n    title: str\n    author: str\n    price: float\n\n@app.get(\n    \"/books/\",\n    response_model=list[BookResponse],\n    tags=[\"books\"],\n    summary=\"List all books\",\n)\ndef list_books(\n    skip: int = Query(default=0, ge=0, description=\"Records to skip\"),\n    limit: int = Query(default=10, le=100, description=\"Max records\"),\n):\n    \"\"\"Retrieve a paginated list of books from the catalog.\"\"\"\n    return []\n\n@app.post(\n    \"/books/\",\n    response_model=BookResponse,\n    status_code=201,\n    tags=[\"books\"],\n    summary=\"Create a book\",\n)\ndef create_book(book: BookCreate):\n    \"\"\"Add a new book to the catalog.\"\"\"\n    return BookResponse(id=1, **book.model_dump())\n\n# Access the generated OpenAPI schema programmatically\nschema = app.openapi()\nprint(f\"API Title: {schema['info']['title']}\")\nprint(f\"Version: {schema['info']['version']}\")\nprint(f\"Paths: {list(schema['paths'].keys())}\")\n\n# Expected Output:\n# API Title: Bookstore API\n# Version: 2.0.0\n# Paths: ['/books/']",
+          "code_language": "python",
+          "key_points": [
+            "OpenAPI schema is auto-generated at /openapi.json from type hints and Pydantic models",
+            "Swagger UI at /docs is interactive (try requests); ReDoc at /redoc is read-only",
+            "Docstrings, Field(description=...), and decorator params all feed into the docs",
+            "app.openapi() gives programmatic access to the generated schema"
+          ],
+          "gotchas": [
+            "Disable docs in production with app = FastAPI(docs_url=None, redoc_url=None) if your API is not public",
+            "If you override openapi() method, it caches the result -- clear app.openapi_schema = None to regenerate",
+            "Docstrings support Markdown formatting in the docs UI"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI inspects your type hints, Pydantic models, and decorators at startup to build an OpenAPI 3.1 schema (at `/openapi.json`). Swagger UI is served at `/docs` and ReDoc at `/redoc` -- both are auto-generated, no extra config needed.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI(title=\"My API\", version=\"1.0.0\")\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\n@app.post(\"/items/\", response_model=Item, tags=[\"items\"])\ndef create_item(item: Item):\n    \"\"\"Create a new item.\"\"\"  # Shows in docs\n    return item\n\n# /docs -> Swagger UI, /redoc -> ReDoc, /openapi.json -> raw schema",
+          "code_language": "python",
+          "key_points": [
+            "Docs auto-generated at /docs (Swagger) and /redoc (ReDoc) from your code"
+          ],
+          "gotchas": [
+            "Disable docs in production if your API is not public: FastAPI(docs_url=None, redoc_url=None)"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the typical project structure for a FastAPI application?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "project-structure",
+        "architecture",
+        "best-practices"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI does not enforce a project structure, but the community has converged on a pattern that scales well.\n\n### Small project (single file):\n```\nmain.py\nrequirements.txt\n```\n\n### Medium project (package):\n```\napp/\n  __init__.py\n  main.py          # FastAPI app creation, lifespan\n  config.py        # Settings (Pydantic BaseSettings)\n  models.py        # SQLAlchemy/DB models\n  schemas.py       # Pydantic request/response models\n  database.py      # DB engine, session\n  dependencies.py  # Shared dependencies\n  routers/\n    __init__.py\n    items.py       # APIRouter for /items\n    users.py       # APIRouter for /users\ntests/\n  __init__.py\n  conftest.py\n  test_items.py\n  test_users.py\n```\n\n### Large project (domain-driven):\n```\napp/\n  __init__.py\n  main.py\n  core/\n    config.py\n    security.py\n    database.py\n  items/\n    router.py\n    schemas.py\n    models.py\n    service.py\n    dependencies.py\n  users/\n    router.py\n    schemas.py\n    models.py\n    service.py\ntests/\nalembic/\n```\n\n### Key principles:\n- **Separate schemas from models**: Pydantic schemas (API) vs SQLAlchemy models (DB)\n- **Use APIRouter**: One router per resource/domain\n- **Centralize config**: Use Pydantic BaseSettings for environment variables\n- **Keep main.py thin**: Only app creation, middleware, and router includes",
+          "pseudo_code": "# main.py -- thin entry point\napp = FastAPI()\napp.include_router(items_router, prefix=\"/items\")\napp.include_router(users_router, prefix=\"/users\")\n\n# routers/items.py -- domain logic\nrouter = APIRouter(tags=[\"items\"])\n\n@router.get(\"/\")\ndef list_items(db = Depends(get_db)):\n    return db.query(Item).all()\n\n# schemas.py -- Pydantic models (API contracts)\n# models.py  -- SQLAlchemy models (DB tables)\n# These are SEPARATE concerns",
+          "actual_code": "# app/main.py -- Thin entry point\nfrom contextlib import asynccontextmanager\nfrom fastapi import FastAPI\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Startup: initialize resources\n    print(\"Starting up...\")\n    yield\n    # Shutdown: cleanup resources\n    print(\"Shutting down...\")\n\napp = FastAPI(title=\"My App\", lifespan=lifespan)\n\n# Include routers\nfrom app.routers import items, users\napp.include_router(items.router, prefix=\"/items\", tags=[\"items\"])\napp.include_router(users.router, prefix=\"/users\", tags=[\"users\"])\n\n# -----------------------------------------------\n# app/routers/items.py -- Domain router\nfrom fastapi import APIRouter, Depends\n\nrouter = APIRouter()\n\n@router.get(\"/\")\ndef list_items():\n    return [{\"id\": 1, \"name\": \"Widget\"}]\n\n@router.get(\"/{item_id}\")\ndef get_item(item_id: int):\n    return {\"id\": item_id, \"name\": \"Widget\"}\n\n# -----------------------------------------------\n# app/schemas.py -- Pydantic schemas (API contract)\nfrom pydantic import BaseModel\n\nclass ItemCreate(BaseModel):\n    name: str\n    price: float\n\nclass ItemResponse(BaseModel):\n    id: int\n    name: str\n    price: float\n\n# -----------------------------------------------\n# app/config.py -- Centralized settings\nfrom pydantic_settings import BaseSettings\n\nclass Settings(BaseSettings):\n    database_url: str = \"sqlite:///./app.db\"\n    debug: bool = False\n    secret_key: str = \"change-me\"\n\n    model_config = {\"env_file\": \".env\"}\n\nsettings = Settings()\nprint(f\"Debug mode: {settings.debug}\")\n\n# Expected Output:\n# Debug mode: False",
+          "code_language": "python",
+          "key_points": [
+            "Separate Pydantic schemas (API) from SQLAlchemy models (DB) -- they serve different purposes",
+            "Use APIRouter per resource/domain and include_router in main.py",
+            "Keep main.py thin: app creation, middleware, router registration",
+            "Use Pydantic BaseSettings for configuration from environment variables"
+          ],
+          "gotchas": [
+            "schemas.py (Pydantic) and models.py (SQLAlchemy) are different -- do not mix API contracts with DB models",
+            "Circular imports are common if routers import from main.py -- use dependency injection to avoid this",
+            "Use lifespan context manager, not the deprecated @app.on_event('startup') decorator"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI projects typically have `main.py` (app setup), `routers/` (APIRouter per resource), `schemas.py` (Pydantic models), `models.py` (DB models), and `config.py` (settings). Keep main.py thin and use `include_router` to compose the app.",
+          "pseudo_code": "",
+          "actual_code": "# app/main.py\nfrom fastapi import FastAPI\nfrom app.routers import items, users\n\napp = FastAPI()\napp.include_router(items.router, prefix=\"/items\", tags=[\"items\"])\napp.include_router(users.router, prefix=\"/users\", tags=[\"users\"])\n\n# app/routers/items.py\nfrom fastapi import APIRouter\nrouter = APIRouter()\n\n@router.get(\"/\")\ndef list_items():\n    return []",
+          "code_language": "python",
+          "key_points": [
+            "Routers per resource, schemas separate from DB models, thin main.py"
+          ],
+          "gotchas": [
+            "Do not mix Pydantic schemas and SQLAlchemy models in the same file"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you run a FastAPI application with Uvicorn?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "uvicorn",
+        "server",
+        "deployment",
+        "development"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Uvicorn** is the recommended ASGI server for running FastAPI. It is based on `uvloop` (a fast event loop) and `httptools` (a fast HTTP parser).\n\n### Command line usage:\n```\nuvicorn main:app [options]\n```\n\n### Common options:\n| Option | Description | Default |\n|--------|-------------|---------|\n| `--reload` | Auto-reload on changes | Off |\n| `--host` | Bind address | 127.0.0.1 |\n| `--port` | Port number | 8000 |\n| `--workers` | Number of worker processes | 1 |\n| `--log-level` | Logging level | info |\n| `--ssl-keyfile` | SSL key file | None |\n| `--ssl-certfile` | SSL cert file | None |\n\n### Development vs Production:\n- **Dev**: `uvicorn main:app --reload --log-level debug`\n- **Prod**: `uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4`\n- **Prod (Gunicorn)**: `gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker`\n\nUsing Gunicorn with Uvicorn workers is recommended for production because Gunicorn manages worker processes (restart on crash, graceful shutdown), while Uvicorn handles async connections within each worker.",
+          "pseudo_code": "# Development\nuvicorn module:variable --reload\n\n# Production (Uvicorn only)\nuvicorn module:variable --host 0.0.0.0 --workers N\n\n# Production (Gunicorn + Uvicorn workers)\ngunicorn module:variable -w N -k uvicorn.workers.UvicornWorker\n\n# Programmatic\nimport uvicorn\nuvicorn.run(\"module:variable\", host, port, reload)",
+          "actual_code": "# Different ways to run a FastAPI app\n\n# 1. Command line (most common)\n# Development:\n#   uvicorn main:app --reload\n# Production:\n#   uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4\n# With Gunicorn (production):\n#   gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker\n\n# 2. Programmatic (useful for debugging)\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef root():\n    return {\"status\": \"running\"}\n\nif __name__ == \"__main__\":\n    import uvicorn\n    uvicorn.run(\n        \"main:app\",     # Must be string for reload to work\n        host=\"127.0.0.1\",\n        port=8000,\n        reload=True,     # Development only\n        log_level=\"info\",\n    )\n\n# 3. Verify with TestClient (no server needed)\nfrom fastapi.testclient import TestClient\nclient = TestClient(app)\nprint(client.get(\"/\").json())\n\n# Expected Output:\n# {'status': 'running'}",
+          "code_language": "python",
+          "key_points": [
+            "uvicorn main:app --reload for development; add --host 0.0.0.0 --workers N for production",
+            "main:app means the 'app' variable in 'main.py' -- both parts are customizable",
+            "Gunicorn with UvicornWorker is the recommended production setup for process management",
+            "Programmatic uvicorn.run() requires string app reference ('main:app') when reload=True"
+          ],
+          "gotchas": [
+            "--reload watches all files including data files -- use --reload-dir to limit scope",
+            "--workers > 1 is incompatible with --reload (reload only works with single worker)",
+            "uvicorn.run(app) with the object directly works but breaks reload since it cannot re-import"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Run with `uvicorn main:app --reload` for development. For production, use `uvicorn main:app --host 0.0.0.0 --workers 4` or `gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker` for process management.",
+          "pseudo_code": "",
+          "actual_code": "# Development\n# uvicorn main:app --reload\n\n# Production\n# uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4\n\n# Programmatic\nif __name__ == \"__main__\":\n    import uvicorn\n    uvicorn.run(\"main:app\", host=\"127.0.0.1\", port=8000, reload=True)",
+          "code_language": "python",
+          "key_points": [
+            "main:app = 'app' variable in 'main.py'; --reload for dev only"
+          ],
+          "gotchas": [
+            "--workers and --reload cannot be used together"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are path operations in FastAPI?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "path-operations",
+        "http-methods",
+        "decorators",
+        "routing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "A **path operation** in FastAPI is the combination of an HTTP method and a URL path. The term comes from the OpenAPI specification where each endpoint is called an \"operation\" on a \"path\".\n\n### Components:\n- **Path**: The URL (e.g., `/items/{item_id}`)\n- **Operation**: The HTTP method (GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD, TRACE)\n- **Decorator**: `@app.get()`, `@app.post()`, etc.\n- **Function**: The handler that runs when the path + method match\n\n### HTTP method semantics:\n| Method | Purpose | Idempotent | Has Body |\n|--------|---------|------------|----------|\n| GET | Read | Yes | No |\n| POST | Create | No | Yes |\n| PUT | Full update | Yes | Yes |\n| PATCH | Partial update | No* | Yes |\n| DELETE | Remove | Yes | Optional |\n\n### Decorator parameters:\n- `status_code`: Default response status\n- `tags`: Group in docs\n- `summary`: Short description\n- `description`: Long description (overrides docstring)\n- `response_model`: Output schema\n- `deprecated`: Mark as deprecated\n- `responses`: Additional response schemas",
+          "pseudo_code": "# A path operation = HTTP method + URL path + handler function\n\n@app.METHOD(\"/path\")\ndef handler(params):\n    # Process request\n    return response\n\n# FastAPI provides decorators for all HTTP methods:\n# @app.get()    - Read\n# @app.post()   - Create\n# @app.put()    - Full replace\n# @app.patch()  - Partial update\n# @app.delete() - Remove\n# @app.options(), @app.head(), @app.trace()",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\n# Store for demonstration\nitems_db: dict[int, dict] = {}\nnext_id = 1\n\n@app.get(\"/items/\", tags=[\"items\"], summary=\"List all items\")\ndef list_items():\n    \"\"\"Retrieve all items from the store.\"\"\"\n    return list(items_db.values())\n\n@app.post(\"/items/\", status_code=201, tags=[\"items\"])\ndef create_item(item: Item):\n    global next_id\n    record = {\"id\": next_id, **item.model_dump()}\n    items_db[next_id] = record\n    next_id += 1\n    return record\n\n@app.get(\"/items/{item_id}\", tags=[\"items\"])\ndef get_item(item_id: int):\n    return items_db.get(item_id, {\"error\": \"not found\"})\n\n@app.put(\"/items/{item_id}\", tags=[\"items\"])\ndef replace_item(item_id: int, item: Item):\n    items_db[item_id] = {\"id\": item_id, **item.model_dump()}\n    return items_db[item_id]\n\n@app.delete(\"/items/{item_id}\", status_code=204, tags=[\"items\"])\ndef delete_item(item_id: int):\n    items_db.pop(item_id, None)\n\nclient = TestClient(app)\n\n# POST -- create\nresp = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(f\"POST: {resp.status_code} {resp.json()}\")\n\n# GET -- read\nresp = client.get(\"/items/1\")\nprint(f\"GET:  {resp.status_code} {resp.json()}\")\n\n# PUT -- update\nresp = client.put(\"/items/1\", json={\"name\": \"Gadget\", \"price\": 19.99})\nprint(f\"PUT:  {resp.status_code} {resp.json()}\")\n\n# DELETE -- remove\nresp = client.delete(\"/items/1\")\nprint(f\"DEL:  {resp.status_code}\")\n\n# Expected Output:\n# POST: 201 {'id': 1, 'name': 'Widget', 'price': 9.99}\n# GET:  200 {'id': 1, 'name': 'Widget', 'price': 9.99}\n# PUT:  200 {'id': 1, 'name': 'Gadget', 'price': 19.99}\n# DEL:  204",
+          "code_language": "python",
+          "key_points": [
+            "A path operation = HTTP method decorator + URL path + handler function",
+            "FastAPI has dedicated decorators: @app.get(), @app.post(), @app.put(), @app.patch(), @app.delete()",
+            "Decorator parameters control status code, tags, summary, response model, and deprecation",
+            "Each HTTP method has specific semantics: GET reads, POST creates, PUT replaces, DELETE removes"
+          ],
+          "gotchas": [
+            "PUT replaces the entire resource; PATCH updates partial fields -- do not confuse them",
+            "DELETE returning 204 means no content -- the response body is empty",
+            "The function name is used as the operation_id in OpenAPI -- keep them unique"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Path operations combine an HTTP method with a URL path via decorators like `@app.get(\"/items/\")`. FastAPI provides `@app.get()`, `@app.post()`, `@app.put()`, `@app.patch()`, `@app.delete()` for standard CRUD operations.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n\n@app.get(\"/items/\")\ndef list_items():\n    return []\n\n@app.post(\"/items/\", status_code=201)\ndef create_item(item: Item):\n    return item.model_dump()",
+          "code_language": "python",
+          "key_points": [
+            "Each HTTP method has a decorator: @app.get(), @app.post(), @app.put(), @app.delete()",
+            "status_code parameter sets the default response code"
+          ],
+          "gotchas": [
+            "Handler function names must be unique -- they become operation IDs in the OpenAPI schema"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI handle automatic data serialization?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "serialization",
+        "json",
+        "pydantic",
+        "response"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI automatically serializes return values to JSON using a multi-step process:\n\n### Serialization pipeline:\n1. **Return value** from your handler (dict, Pydantic model, list, etc.)\n2. **response_model filtering** -- if `response_model` is set, the output is filtered through that Pydantic model (removes extra fields, applies aliases)\n3. **JSON-compatible conversion** -- FastAPI's `jsonable_encoder()` converts Python objects to JSON-compatible types (datetime -> string, UUID -> string, Pydantic model -> dict)\n4. **JSONResponse** -- wraps the result in a `JSONResponse` with proper Content-Type headers\n\n### What gets auto-serialized:\n- `dict` and `list` -- passed directly\n- Pydantic `BaseModel` -- converted via `.model_dump()`\n- `datetime`, `date`, `time` -- ISO 8601 strings\n- `UUID` -- string representation\n- `Enum` -- `.value`\n- `bytes` -- base64 encoded\n- SQLAlchemy models -- converted if response_model is set\n- Nested combinations of all the above\n\n### jsonable_encoder:\nThis utility function converts any Python object to a JSON-safe structure. Useful when you need to serialize data outside of a response (e.g., before storing in a DB).",
+          "pseudo_code": "# FastAPI serialization pipeline\ndef handle_response(return_value, response_model=None):\n    if response_model:\n        # Filter through Pydantic model\n        return_value = response_model.model_validate(return_value)\n    \n    # Convert to JSON-compatible dict\n    json_data = jsonable_encoder(return_value)\n    # datetime -> \"2024-01-15T...\"\n    # UUID -> \"550e8400-...\"\n    # Pydantic model -> dict\n    \n    return JSONResponse(content=json_data)",
+          "actual_code": "from datetime import datetime, date\nfrom uuid import UUID, uuid4\nfrom enum import Enum\nfrom fastapi import FastAPI\nfrom fastapi.encoders import jsonable_encoder\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Status(str, Enum):\n    active = \"active\"\n    inactive = \"inactive\"\n\nclass UserDB(BaseModel):\n    \"\"\"Full user model (internal).\"\"\"\n    id: UUID\n    name: str\n    email: str\n    hashed_password: str  # Should NOT be in response\n    status: Status\n    created_at: datetime\n\nclass UserResponse(BaseModel):\n    \"\"\"Filtered user model (API response).\"\"\"\n    id: UUID\n    name: str\n    email: str\n    status: Status\n    created_at: datetime\n\n@app.get(\"/user\", response_model=UserResponse)\ndef get_user():\n    # Return full DB model -- response_model filters out hashed_password\n    return UserDB(\n        id=uuid4(),\n        name=\"Alice\",\n        email=\"alice@example.com\",\n        hashed_password=\"$2b$12$secret\",\n        status=Status.active,\n        created_at=datetime(2024, 1, 15, 10, 30),\n    )\n\n# Using jsonable_encoder directly\ndata = {\n    \"id\": uuid4(),\n    \"created\": datetime.now(),\n    \"date\": date.today(),\n}\nencoded = jsonable_encoder(data)\nprint(f\"UUID type: {type(encoded['id'])}\")\nprint(f\"Datetime type: {type(encoded['created'])}\")\n\nclient = TestClient(app)\nresp = client.get(\"/user\")\nuser = resp.json()\nprint(f\"Has password: {'hashed_password' in user}\")\nprint(f\"Has email: {'email' in user}\")\nprint(f\"Status: {user['status']}\")\n\n# Expected Output:\n# UUID type: <class 'str'>\n# Datetime type: <class 'str'>\n# Has password: False\n# Has email: True\n# Status: active",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI auto-serializes dicts, Pydantic models, datetimes, UUIDs, Enums to JSON",
+            "response_model filters output -- prevents internal fields (like passwords) from leaking",
+            "jsonable_encoder() converts any Python object to JSON-compatible types",
+            "Pydantic models are serialized via model_dump(), not manually"
+          ],
+          "gotchas": [
+            "Without response_model, ALL fields in the returned dict/model are included in the response",
+            "SQLAlchemy models need response_model to serialize properly -- they are not Pydantic models",
+            "jsonable_encoder converts in-place for dicts -- it does not deep-copy"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI auto-serializes return values to JSON. Dicts, Pydantic models, datetimes, UUIDs, and Enums are all converted automatically. Use `response_model` to filter which fields appear in the response.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\nfrom datetime import datetime\n\napp = FastAPI()\n\nclass UserOut(BaseModel):\n    name: str\n    joined: datetime\n\n@app.get(\"/user\", response_model=UserOut)\ndef get_user():\n    # datetime auto-serialized to ISO string\n    return {\"name\": \"Alice\", \"joined\": datetime.now(), \"secret\": \"hidden\"}\n    # \"secret\" is filtered out by response_model",
+          "code_language": "python",
+          "key_points": [
+            "Return dicts, Pydantic models, or complex types -- FastAPI serializes to JSON",
+            "response_model filters out fields not in the schema"
+          ],
+          "gotchas": [
+            "Without response_model, all returned fields are exposed -- including sensitive data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the OpenAPI schema and how does FastAPI use it?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "openapi",
+        "schema",
+        "api-specification",
+        "json-schema"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **OpenAPI Specification** (formerly Swagger) is a standard format for describing REST APIs. It defines endpoints, parameters, request/response schemas, authentication, and more in a machine-readable JSON or YAML document.\n\n### FastAPI generates OpenAPI 3.1:\nFastAPI builds the OpenAPI schema automatically from:\n- Route decorators (`@app.get`, `@app.post`, etc.)\n- Path/query/header/cookie parameters with types\n- Pydantic models (request bodies, response models)\n- Docstrings and description parameters\n- Tags, deprecation markers, status codes\n\n### Schema structure:\n```json\n{\n  \"openapi\": \"3.1.0\",\n  \"info\": {\"title\": \"...\", \"version\": \"...\"},\n  \"paths\": {\n    \"/items/\": {\n      \"get\": { ... },\n      \"post\": { ... }\n    }\n  },\n  \"components\": {\n    \"schemas\": { ... }  // Pydantic model definitions\n  }\n}\n```\n\n### What uses the schema:\n- **Swagger UI** (`/docs`) -- interactive API explorer\n- **ReDoc** (`/redoc`) -- clean API documentation\n- **Code generators** -- generate client SDKs in any language\n- **API testing tools** -- Postman, Insomnia can import it\n- **API gateways** -- validate requests against the schema",
+          "pseudo_code": "# How FastAPI builds the OpenAPI schema\n\n1. At startup, iterate all registered routes\n2. For each route:\n   a. Extract HTTP method and path\n   b. Inspect function signature for parameters\n   c. Convert Pydantic models to JSON Schema\n   d. Collect tags, summary, description, status codes\n3. Assemble into OpenAPI 3.1 document\n4. Cache the result (generated once)\n5. Serve at /openapi.json",
+          "actual_code": "from fastapi import FastAPI, Query\nfrom pydantic import BaseModel\nimport json\n\napp = FastAPI(\n    title=\"Pet Store\",\n    version=\"1.0.0\",\n    description=\"A sample API\",\n)\n\nclass Pet(BaseModel):\n    name: str\n    species: str\n    age: int\n\n@app.get(\"/pets/\", response_model=list[Pet], tags=[\"pets\"])\ndef list_pets(limit: int = Query(default=10, le=100)):\n    \"\"\"List all pets with optional limit.\"\"\"\n    return []\n\n@app.post(\"/pets/\", response_model=Pet, status_code=201, tags=[\"pets\"])\ndef create_pet(pet: Pet):\n    \"\"\"Add a new pet.\"\"\"\n    return pet\n\n# Access the generated OpenAPI schema\nschema = app.openapi()\n\n# Explore the schema structure\nprint(f\"OpenAPI version: {schema['openapi']}\")\nprint(f\"Title: {schema['info']['title']}\")\nprint(f\"Paths: {list(schema['paths'].keys())}\")\nprint(f\"Methods for /pets/: {list(schema['paths']['/pets/'].keys())}\")\nprint(f\"Schemas: {list(schema.get('components', {}).get('schemas', {}).keys())}\")\n\n# The raw schema is available at /openapi.json\n# print(json.dumps(schema, indent=2))  # Full schema\n\n# Expected Output:\n# OpenAPI version: 3.1.0\n# Title: Pet Store\n# Paths: ['/pets/']\n# Methods for /pets/: ['get', 'post']\n# Schemas: ['Pet', 'ValidationError', 'HTTPValidationError']",
+          "code_language": "python",
+          "key_points": [
+            "OpenAPI is a standard specification for describing REST APIs in machine-readable format",
+            "FastAPI auto-generates OpenAPI 3.1 from type hints, Pydantic models, and decorators",
+            "The schema is served at /openapi.json and consumed by Swagger UI and ReDoc",
+            "Code generators and API tools (Postman, etc.) can import the schema to build clients"
+          ],
+          "gotchas": [
+            "The schema is cached after first generation -- changes require app restart or clearing app.openapi_schema",
+            "OpenAPI 3.1 uses JSON Schema 2020-12, which differs slightly from OpenAPI 3.0's subset",
+            "Custom response types (StreamingResponse, FileResponse) do not auto-generate schemas -- document them manually with responses={}"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "OpenAPI is a standard format for describing REST APIs. FastAPI auto-generates an OpenAPI 3.1 schema at `/openapi.json` from your routes and Pydantic models. Swagger UI (`/docs`) and ReDoc (`/redoc`) render this schema as interactive documentation.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI(title=\"My API\")\n\nclass Item(BaseModel):\n    name: str\n\n@app.get(\"/items/\", response_model=list[Item])\ndef list_items():\n    return []\n\nschema = app.openapi()\nprint(schema[\"openapi\"])  # '3.1.0'\n\n# Expected Output:\n# 3.1.0",
+          "code_language": "python",
+          "key_points": [
+            "OpenAPI schema auto-generated at /openapi.json from your code"
+          ],
+          "gotchas": [
+            "Schema is cached on first access -- restart the app to regenerate after code changes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add metadata to your FastAPI application (title, version, description)?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "metadata",
+        "openapi",
+        "configuration",
+        "documentation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI accepts metadata parameters that populate the OpenAPI schema and appear in the auto-generated documentation.\n\n### App-level metadata:\n- `title` -- API name (shown as heading in docs)\n- `description` -- Supports Markdown, appears below the title\n- `version` -- API version string\n- `terms_of_service` -- URL to terms\n- `contact` -- Dict with `name`, `url`, `email`\n- `license_info` -- Dict with `name`, `url`\n- `openapi_url` -- Path for the schema (default: `/openapi.json`)\n- `docs_url` -- Path for Swagger UI (default: `/docs`)\n- `redoc_url` -- Path for ReDoc (default: `/redoc`)\n\n### Tag metadata:\nYou can describe tags with `openapi_tags` to add descriptions and external doc links to each tag group in the docs.\n\n### Route-level metadata:\n- `summary` -- Short description (or the function name)\n- `description` -- Detailed description (or the docstring)\n- `response_description` -- Description of the response\n- `tags` -- List of tag strings\n- `deprecated` -- Boolean to mark as deprecated",
+          "pseudo_code": "# App-level metadata\napp = FastAPI(\n    title=\"...\",\n    description=\"Markdown supported\",\n    version=\"1.0.0\",\n    contact={name, email, url},\n    license_info={name, url},\n)\n\n# Tag descriptions\napp = FastAPI(openapi_tags=[\n    {name, description, externalDocs}\n])\n\n# Route-level metadata\n@app.get(\"/path\", summary=\"...\", tags=[\"tag\"])\ndef handler():\n    \"\"\"Docstring becomes description.\"\"\"",
+          "actual_code": "from fastapi import FastAPI\n\n# Define tag metadata\ntags_metadata = [\n    {\n        \"name\": \"users\",\n        \"description\": \"Operations with users. Manage user accounts.\",\n    },\n    {\n        \"name\": \"items\",\n        \"description\": \"Manage items in the store.\",\n        \"externalDocs\": {\n            \"description\": \"External docs\",\n            \"url\": \"https://example.com/docs\",\n        },\n    },\n]\n\napp = FastAPI(\n    title=\"My Awesome API\",\n    description=\"\"\"## A full-featured API\n\nThis API supports:\n- **User management**\n- **Item CRUD operations**\n\n> Markdown is fully supported in descriptions.\n\"\"\",\n    version=\"2.1.0\",\n    terms_of_service=\"https://example.com/terms\",\n    contact={\n        \"name\": \"API Support Team\",\n        \"url\": \"https://example.com/support\",\n        \"email\": \"support@example.com\",\n    },\n    license_info={\n        \"name\": \"MIT\",\n        \"url\": \"https://opensource.org/licenses/MIT\",\n    },\n    openapi_tags=tags_metadata,\n)\n\n@app.get(\n    \"/users/\",\n    tags=[\"users\"],\n    summary=\"List all users\",\n    response_description=\"A list of user objects\",\n)\ndef list_users():\n    \"\"\"Retrieve all registered users.\n\n    This endpoint returns a paginated list.\n    \"\"\"\n    return []\n\n@app.get(\"/items/\", tags=[\"items\"], deprecated=True)\ndef list_items_v1():\n    \"\"\"Deprecated: Use /v2/items/ instead.\"\"\"\n    return []\n\nschema = app.openapi()\nprint(f\"Title: {schema['info']['title']}\")\nprint(f\"Version: {schema['info']['version']}\")\nprint(f\"Contact: {schema['info']['contact']['name']}\")\nprint(f\"License: {schema['info']['license']['name']}\")\n\n# Expected Output:\n# Title: My Awesome API\n# Version: 2.1.0\n# Contact: API Support Team\n# License: MIT",
+          "code_language": "python",
+          "key_points": [
+            "Pass title, description, version, contact, and license_info to FastAPI() constructor",
+            "description supports full Markdown formatting in the docs",
+            "openapi_tags adds descriptions to tag groups shown in Swagger UI and ReDoc",
+            "Route-level summary, description, tags, and deprecated customize each endpoint's docs"
+          ],
+          "gotchas": [
+            "The docstring of a handler function becomes the description in docs -- summary defaults to function name if not set",
+            "Setting docs_url=None disables Swagger UI entirely (useful for production)",
+            "openapi_tags order determines the display order of tag groups in the docs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pass `title`, `description`, `version`, `contact`, and `license_info` to `FastAPI()`. Use `openapi_tags` for tag descriptions. Route-level metadata uses `summary`, `tags`, and `deprecated` parameters.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI(\n    title=\"My API\",\n    description=\"A sample API with metadata\",\n    version=\"1.0.0\",\n    contact={\"name\": \"Support\", \"email\": \"help@example.com\"},\n)\n\n@app.get(\"/items/\", tags=[\"items\"], summary=\"List items\")\ndef list_items():\n    \"\"\"Retrieve all items.\"\"\"  # becomes description in docs\n    return []",
+          "code_language": "python",
+          "key_points": [
+            "Metadata is passed to FastAPI() and appears in auto-generated docs"
+          ],
+          "gotchas": [
+            "docstring becomes the route description; summary defaults to function name if omitted"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between Swagger UI and ReDoc in FastAPI?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "swagger",
+        "redoc",
+        "documentation",
+        "openapi"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI serves two documentation UIs that both consume the same OpenAPI schema but present it differently:\n\n### Swagger UI (`/docs`)\n- **Interactive**: You can fill in parameters and execute API calls directly from the browser\n- **Try it out**: Has \"Try it out\" button for each endpoint\n- **Authorization**: Supports entering auth tokens/API keys for authenticated requests\n- **Layout**: Vertically stacked, operation-focused\n- **Best for**: Developers testing and debugging the API during development\n\n### ReDoc (`/redoc`)\n- **Read-only**: No ability to execute API calls\n- **Three-panel layout**: Navigation, content, and code samples side by side\n- **Clean design**: Better for documentation that will be shared with consumers\n- **Search**: Built-in search across all endpoints\n- **Best for**: API documentation for external consumers, stakeholders\n\n### Customization:\nBoth can be disabled or moved to different URLs. You can also replace them with custom documentation pages.\n\n| Feature | Swagger UI | ReDoc |\n|---------|-----------|-------|\n| URL | `/docs` | `/redoc` |\n| Interactive | Yes | No |\n| Try requests | Yes | No |\n| Auth support | Yes | No |\n| Search | No | Yes |\n| Layout | Single column | Three panel |",
+          "pseudo_code": "# Both UIs read from the same OpenAPI schema\nschema = GET /openapi.json\n\n# Swagger UI renders at /docs\n#   -> Interactive, \"Try it out\" button, auth support\n\n# ReDoc renders at /redoc\n#   -> Read-only, three-panel, cleaner layout\n\n# Disable either or both:\napp = FastAPI(docs_url=None)     # No Swagger\napp = FastAPI(redoc_url=None)    # No ReDoc\napp = FastAPI(docs_url=None, redoc_url=None)  # No docs",
+          "actual_code": "from fastapi import FastAPI\n\n# Default: both enabled\napp_default = FastAPI(title=\"Default Docs\")\n# Swagger UI at /docs, ReDoc at /redoc\n\n# Custom paths\napp_custom = FastAPI(\n    title=\"Custom Paths\",\n    docs_url=\"/api/docs\",      # Move Swagger UI\n    redoc_url=\"/api/redoc\",    # Move ReDoc\n    openapi_url=\"/api/openapi.json\",  # Move schema\n)\n\n# Disable both (production)\napp_no_docs = FastAPI(\n    title=\"No Docs\",\n    docs_url=None,\n    redoc_url=None,\n)\n\n# Disable only ReDoc\napp_swagger_only = FastAPI(\n    title=\"Swagger Only\",\n    redoc_url=None,\n)\n\nprint(f\"Default docs_url: /docs\")\nprint(f\"Custom docs_url: /api/docs\")\nprint(f\"No docs: docs_url=None, redoc_url=None\")\n\n# Check that the openapi schema still generates\nschema = app_no_docs.openapi()\nprint(f\"Schema still generated: {'info' in schema}\")\n\n# Expected Output:\n# Default docs_url: /docs\n# Custom docs_url: /api/docs\n# No docs: docs_url=None, redoc_url=None\n# Schema still generated: True",
+          "code_language": "python",
+          "key_points": [
+            "Swagger UI (/docs) is interactive -- execute API calls directly from the browser",
+            "ReDoc (/redoc) is read-only with a clean three-panel layout for documentation",
+            "Both consume the same OpenAPI schema from /openapi.json",
+            "Either or both can be disabled by setting docs_url=None or redoc_url=None"
+          ],
+          "gotchas": [
+            "Disabling docs_url and redoc_url does NOT disable the OpenAPI schema -- /openapi.json is still accessible unless you set openapi_url=None",
+            "Swagger UI's 'Try it out' sends real requests to your API -- be careful with destructive operations",
+            "Custom OAuth2 flows in Swagger UI require additional configuration via swagger_ui_init_oauth"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Swagger UI (`/docs`) is interactive -- you can test API calls in the browser. ReDoc (`/redoc`) is read-only with a cleaner layout for documentation. Both read the same OpenAPI schema. Either can be disabled with `docs_url=None` or `redoc_url=None`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\n# Both enabled by default\napp = FastAPI(title=\"My API\")\n# /docs  -> Swagger UI (interactive)\n# /redoc -> ReDoc (read-only)\n\n# Disable for production\n# app = FastAPI(docs_url=None, redoc_url=None)",
+          "code_language": "python",
+          "key_points": [
+            "Swagger UI is interactive with 'Try it out'; ReDoc is read-only with cleaner layout"
+          ],
+          "gotchas": [
+            "Setting docs_url=None does not disable /openapi.json -- set openapi_url=None to fully hide the schema"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI achieve high performance compared to other Python frameworks?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "performance",
+        "async",
+        "uvicorn",
+        "starlette"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI is one of the fastest Python web frameworks. Its performance comes from multiple layers:\n\n### 1. ASGI + Uvicorn\n- **Uvicorn** uses `uvloop` (a C-based event loop, 2-4x faster than asyncio) and `httptools` (a C-based HTTP parser)\n- ASGI allows handling thousands of concurrent connections with a single process\n\n### 2. Starlette\n- Minimal overhead routing with compiled path matching\n- Lightweight request/response objects\n- No unnecessary middleware in the default stack\n\n### 3. Pydantic v2 (Rust core)\n- Pydantic v2 rewrote the validation engine in Rust (`pydantic-core`)\n- 5-50x faster than Pydantic v1 for validation and serialization\n- This directly impacts every request that uses models\n\n### 4. Async I/O\n- `async def` handlers run on the event loop without blocking\n- While waiting for DB/HTTP/file I/O, the server handles other requests\n- A single Uvicorn worker can handle thousands of concurrent I/O-bound requests\n\n### 5. Sync handler optimization\n- `def` (non-async) handlers run in a thread pool, avoiding event loop blocking\n- FastAPI detects which handlers are async and routes them appropriately\n\n### Performance context:\n- For I/O-bound work: FastAPI ~ Node.js, Go (thousands of concurrent requests)\n- For CPU-bound work: Same as any Python framework (limited by GIL)\n- Benchmarks show FastAPI handling 2-5x more requests/sec than Flask for concurrent workloads",
+          "pseudo_code": "# Why FastAPI is fast -- layered optimizations\n\nLayer 1: Uvicorn (server)\n  - uvloop: C-based event loop (2-4x faster than asyncio)\n  - httptools: C-based HTTP parser\n\nLayer 2: Starlette (framework)\n  - Compiled path matching\n  - Lightweight request/response\n  - Minimal middleware overhead\n\nLayer 3: Pydantic v2 (validation)\n  - Rust-based core (pydantic-core)\n  - 5-50x faster than Pydantic v1\n\nLayer 4: async/await (concurrency)\n  - Non-blocking I/O\n  - Single process handles thousands of connections\n  - sync def handlers auto-routed to thread pool",
+          "actual_code": "import asyncio\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nimport time\n\napp = FastAPI()\n\n# Async handler -- non-blocking, runs on event loop\n@app.get(\"/async\")\nasync def async_handler():\n    # In real code: async DB query, async HTTP call, etc.\n    await asyncio.sleep(0.01)  # Non-blocking\n    return {\"handler\": \"async\"}\n\n# Sync handler -- auto-runs in thread pool\n@app.get(\"/sync\")\ndef sync_handler():\n    # Blocking code is OK here -- FastAPI uses a thread pool\n    time.sleep(0.01)\n    return {\"handler\": \"sync\"}\n\n# Performance benefit of async: concurrent requests\n# With async handlers, while one request awaits I/O,\n# the server processes other requests on the same thread.\n\n# Pydantic v2 performance (Rust core)\nfrom pydantic import BaseModel\n\nclass Item(BaseModel):\n    name: str\n    price: float\n    tags: list[str] = []\n\n# Validation is fast because pydantic-core is written in Rust\nstart = time.perf_counter()\nfor _ in range(10000):\n    Item(name=\"Widget\", price=9.99, tags=[\"sale\"])\nelapsed = time.perf_counter() - start\nprint(f\"10k Pydantic v2 validations: {elapsed:.3f}s\")\n\nclient = TestClient(app)\nprint(client.get(\"/async\").json())\nprint(client.get(\"/sync\").json())\n\n# Expected Output:\n# 10k Pydantic v2 validations: 0.0XXs\n# {'handler': 'async'}\n# {'handler': 'sync'}",
+          "code_language": "python",
+          "key_points": [
+            "Uvicorn uses uvloop (C event loop) and httptools (C HTTP parser) for raw speed",
+            "Pydantic v2's Rust core (pydantic-core) makes validation 5-50x faster than v1",
+            "Async handlers enable handling thousands of concurrent I/O-bound requests per worker",
+            "Sync def handlers are auto-routed to a thread pool so they do not block the event loop"
+          ],
+          "gotchas": [
+            "FastAPI performance gains are for I/O-bound work -- CPU-bound tasks are still limited by Python's GIL",
+            "Using blocking libraries (requests, time.sleep) in async def handlers negates all performance benefits",
+            "Benchmarks vary wildly based on workload type -- always profile your specific use case"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI's speed comes from Uvicorn (C-based event loop + HTTP parser), Starlette (minimal overhead), Pydantic v2 (Rust validation core), and native async/await. For I/O-bound work, it rivals Node.js and Go. For CPU-bound work, it is still limited by Python's GIL.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nimport asyncio\n\napp = FastAPI()\n\n# Async: runs on event loop, handles many concurrent requests\n@app.get(\"/fast\")\nasync def fast():\n    await asyncio.sleep(0.01)  # Non-blocking I/O\n    return {\"speed\": \"fast\"}\n\n# Sync: auto-threaded, won't block event loop\n@app.get(\"/also-fast\")\ndef also_fast():\n    return {\"speed\": \"also fast\"}",
+          "code_language": "python",
+          "key_points": [
+            "Speed from: Uvicorn (C event loop), Pydantic v2 (Rust core), async I/O"
+          ],
+          "gotchas": [
+            "Using blocking I/O in async def handlers kills performance -- use sync def or async libraries"
+          ]
+        }
+      ]
+    }
+  ]
+}

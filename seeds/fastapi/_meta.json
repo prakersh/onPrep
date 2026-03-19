@@ -1,0 +1,155 @@
+{
+  "name": "FastAPI",
+  "icon": "fastapi",
+  "is_active": true,
+  "display_order": 3,
+  "concepts": [
+    {
+      "title": "Core Framework & Fundamentals",
+      "slug": "core-fundamentals",
+      "description": "What is FastAPI, vs Flask/Django, Starlette+Pydantic architecture, ASGI vs WSGI, project structure, auto-generated OpenAPI/Swagger docs, installation",
+      "display_order": 1,
+      "estimated_minutes": 30,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Routing & Path Operations",
+      "slug": "routing-path-operations",
+      "description": "Path/query parameters with type validation, HTTP method decorators, APIRouter, route ordering, tags, deprecated routes, redirect responses",
+      "display_order": 2,
+      "estimated_minutes": 30,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Request Handling & Response Models",
+      "slug": "request-response",
+      "description": "JSON body parsing, Form data, File/UploadFile, response_model, status codes, JSONResponse/HTMLResponse/StreamingResponse, headers, cookies",
+      "display_order": 3,
+      "estimated_minutes": 35,
+      "difficulty": "beginner"
+    },
+    {
+      "title": "Pydantic Models & Data Validation",
+      "slug": "pydantic-validation",
+      "description": "BaseModel, Field() constraints, field_validator, model_validator, nested models, Optional vs required, model_dump, Pydantic v2 changes, BaseSettings, discriminated unions",
+      "display_order": 4,
+      "estimated_minutes": 40,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Async Programming & Concurrency",
+      "slug": "async-programming",
+      "description": "async def vs def handlers, event loop, asyncio.gather, run_in_executor, async context managers, httpx async client, performance implications",
+      "display_order": 5,
+      "estimated_minutes": 40,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Dependency Injection System",
+      "slug": "dependency-injection",
+      "description": "Depends(), class-based deps, yield deps (cleanup), sub-dependencies, caching, global dependencies, Annotated style, overriding for tests",
+      "display_order": 6,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Security & Authentication",
+      "slug": "security-authentication",
+      "description": "OAuth2PasswordBearer, JWT creation/validation, password hashing, protecting routes, RBAC, API key auth, HTTPBearer, security scopes, token refresh",
+      "display_order": 7,
+      "estimated_minutes": 45,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Middleware & CORS",
+      "slug": "middleware-cors",
+      "description": "@app.middleware(\"http\"), CORSMiddleware config, execution order, custom middleware, GZipMiddleware, TrustedHostMiddleware, middleware vs deps",
+      "display_order": 8,
+      "estimated_minutes": 30,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Error Handling & Validation Errors",
+      "slug": "error-handling",
+      "description": "HTTPException, custom exception handlers, RequestValidationError, StarletteHTTPException vs FastAPI's, error response formatting, logging",
+      "display_order": 9,
+      "estimated_minutes": 30,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Database Integration & SQLAlchemy",
+      "slug": "database-integration",
+      "description": "SQLAlchemy setup, session dependency with yield, async SQLAlchemy, Alembic migrations, CRUD patterns, connection pooling, repository pattern",
+      "display_order": 10,
+      "estimated_minutes": 40,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "Testing FastAPI Applications",
+      "slug": "testing",
+      "description": "TestClient, pytest fixtures, dependency_overrides, async testing (httpx.AsyncClient), test DB isolation, mocking external APIs, testing file uploads",
+      "display_order": 11,
+      "estimated_minutes": 35,
+      "difficulty": "intermediate"
+    },
+    {
+      "title": "WebSockets & Real-time Features",
+      "slug": "websockets-realtime",
+      "description": "WebSocket endpoints, accept/receive/send, WebSocketDisconnect, ConnectionManager pattern, authentication, JSON over WS, SSE alternative",
+      "display_order": 12,
+      "estimated_minutes": 30,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Background Tasks & Lifespan Events",
+      "slug": "background-tasks-events",
+      "description": "BackgroundTasks usage, lifespan context manager (replaces deprecated on_event), Celery/ARQ for heavy work, streaming responses",
+      "display_order": 13,
+      "estimated_minutes": 30,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Performance & Optimization",
+      "slug": "performance-optimization",
+      "description": "Caching (Redis, in-memory), rate limiting, response compression, async optimization, connection pooling, N+1 prevention, pagination, load testing",
+      "display_order": 14,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    },
+    {
+      "title": "Deployment & Production",
+      "slug": "deployment-production",
+      "description": "Uvicorn/Gunicorn config, Docker (official python image, NOT deprecated tiangolo image), env vars, structured logging, health checks, reverse proxy, scaling",
+      "display_order": 15,
+      "estimated_minutes": 35,
+      "difficulty": "advanced"
+    }
+  ],
+  "relationships": [
+    {"from": "core-fundamentals", "to": "routing-path-operations", "type": "prerequisite"},
+    {"from": "core-fundamentals", "to": "request-response", "type": "prerequisite"},
+    {"from": "core-fundamentals", "to": "async-programming", "type": "prerequisite"},
+    {"from": "core-fundamentals", "to": "middleware-cors", "type": "prerequisite"},
+    {"from": "core-fundamentals", "to": "deployment-production", "type": "prerequisite"},
+    {"from": "routing-path-operations", "to": "request-response", "type": "prerequisite"},
+    {"from": "routing-path-operations", "to": "dependency-injection", "type": "prerequisite"},
+    {"from": "routing-path-operations", "to": "websockets-realtime", "type": "prerequisite"},
+    {"from": "request-response", "to": "pydantic-validation", "type": "prerequisite"},
+    {"from": "request-response", "to": "error-handling", "type": "prerequisite"},
+    {"from": "pydantic-validation", "to": "error-handling", "type": "prerequisite"},
+    {"from": "dependency-injection", "to": "security-authentication", "type": "prerequisite"},
+    {"from": "dependency-injection", "to": "database-integration", "type": "prerequisite"},
+    {"from": "dependency-injection", "to": "testing", "type": "prerequisite"},
+    {"from": "dependency-injection", "to": "background-tasks-events", "type": "prerequisite"},
+    {"from": "async-programming", "to": "websockets-realtime", "type": "prerequisite"},
+    {"from": "async-programming", "to": "background-tasks-events", "type": "prerequisite"},
+    {"from": "async-programming", "to": "performance-optimization", "type": "prerequisite"},
+    {"from": "database-integration", "to": "performance-optimization", "type": "prerequisite"},
+    {"from": "pydantic-validation", "to": "database-integration", "type": "related"},
+    {"from": "middleware-cors", "to": "security-authentication", "type": "related"},
+    {"from": "testing", "to": "deployment-production", "type": "related"},
+    {"from": "error-handling", "to": "middleware-cors", "type": "related"},
+    {"from": "background-tasks-events", "to": "performance-optimization", "type": "related"},
+    {"from": "security-authentication", "to": "testing", "type": "related"}
+  ]
+}

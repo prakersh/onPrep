@@ -1,0 +1,815 @@
+{
+  "concept_slug": "request-response",
+  "questions": [
+    {
+      "title": "How do you accept JSON request bodies using Pydantic models?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "request-body",
+        "pydantic",
+        "json",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI automatically parses JSON request bodies into Pydantic models when you declare a parameter with a Pydantic model type. The framework inspects the function signature, sees the Pydantic type, and reads the request body as JSON, validates it against the model, and passes the validated object to your handler.\n\n### How it works:\n1. Client sends a POST/PUT/PATCH request with a JSON body\n2. FastAPI reads the raw body and parses it as JSON\n3. The JSON dict is passed to the Pydantic model constructor\n4. Pydantic validates all fields (types, constraints, custom validators)\n5. If validation fails, FastAPI returns a **422 Unprocessable Entity** with detailed error messages\n6. If validation passes, your function receives a typed Python object\n\n### Key features:\n- **Automatic type coercion**: strings that look like numbers are coerced where safe\n- **Default values**: fields with defaults become optional in the request\n- **Nested models**: Pydantic models can contain other Pydantic models\n- **JSON Schema**: the model auto-generates the request body schema in Swagger docs\n\n### Validation errors:\nWhen validation fails, FastAPI returns a structured 422 response with `detail` containing an array of error objects, each specifying the field location, message, and error type.",
+          "pseudo_code": "# Declare a Pydantic model\nclass ItemCreate(BaseModel):\n    name: string (required)\n    price: float (must be > 0)\n    tags: list of strings (defaults to empty)\n\n# Use it as a parameter type\n@app.POST(\"/items/\")\nfunction create_item(item: ItemCreate):\n    # item is already validated\n    # Access fields: item.name, item.price, item.tags\n    return item as dict",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\nclass ItemCreate(BaseModel):\n    name: str = Field(min_length=1, max_length=100)\n    price: float = Field(gt=0)\n    description: str | None = None\n    tags: list[str] = []\n\n@app.post(\"/items/\", status_code=201)\ndef create_item(item: ItemCreate):\n    \"\"\"item is auto-parsed from the JSON request body.\"\"\"\n    return {\"item\": item.model_dump(), \"message\": \"created\"}\n\nclient = TestClient(app)\n\n# Valid JSON body\nresponse = client.post(\"/items/\", json={\n    \"name\": \"Widget\",\n    \"price\": 9.99,\n    \"tags\": [\"sale\"]\n})\nprint(\"Valid:\", response.status_code, response.json())\n\n# Missing required field\nresponse = client.post(\"/items/\", json={\"price\": 9.99})\nprint(\"Missing name:\", response.status_code)\n\n# Invalid type\nresponse = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": \"free\"})\nprint(\"Bad type:\", response.status_code)\n\n# Expected Output:\n# Valid: 201 {'item': {'name': 'Widget', 'price': 9.99, 'description': None, 'tags': ['sale']}, 'message': 'created'}\n# Missing name: 422\n# Bad type: 422",
+          "code_language": "python",
+          "key_points": [
+            "Declare a Pydantic model as a function parameter and FastAPI auto-parses the JSON body into it",
+            "Validation failures return 422 with detailed error messages listing every invalid field",
+            "Fields with default values are optional in the request body",
+            "The Pydantic model auto-generates the request body schema in Swagger UI docs"
+          ],
+          "gotchas": [
+            "A parameter typed as a Pydantic model is always read from the request body, not from query or path",
+            "FastAPI attempts to parse the body as JSON regardless of Content-Type for Pydantic model parameters -- a missing or non-parseable body causes a 422 validation error",
+            "Pydantic v2 is stricter by default -- 'true' (string) won't coerce to True (bool) unless you configure it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Declare a Pydantic model as a parameter type and FastAPI automatically reads the JSON body, validates it, and passes the typed object to your handler. Invalid data returns 422 with detailed errors.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n    tags: list[str] = []\n\n@app.post(\"/items/\")\ndef create_item(item: Item):  # auto-parsed from JSON body\n    return item.model_dump()",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic model parameter = auto-parsed JSON body with full validation"
+          ],
+          "gotchas": [
+            "Missing or invalid fields return 422, not 400 -- this is by design per OpenAPI spec"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle Form data in FastAPI?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "form-data",
+        "html-forms",
+        "request",
+        "python-multipart"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI handles HTML form data (`application/x-www-form-urlencoded`) using the `Form()` function. Unlike JSON bodies that use Pydantic models directly, form fields are declared as individual function parameters annotated with `Form()`.\n\n### How it works:\n1. Import `Form` from `fastapi`\n2. Declare each form field as a parameter with `Form()` as its default\n3. FastAPI reads the form-encoded body and extracts each field\n4. Type validation still applies (e.g., `int` fields must be numeric)\n\n### Why Form is separate from Body:\nForm data uses a different encoding (`application/x-www-form-urlencoded` or `multipart/form-data`) than JSON (`application/json`). FastAPI needs to know the encoding format to parse correctly.\n\n### Common use cases:\n- Login forms (username/password)\n- HTML form submissions\n- OAuth2 password flow (requires Form fields per spec)\n- Legacy API compatibility\n\n### Annotated syntax (recommended):\nUse `Annotated[str, Form()]` for cleaner type hints that work better with editors and type checkers.",
+          "pseudo_code": "# Form data uses Form() instead of Body()\nfrom fastapi import Form\n\n@app.POST(\"/login/\")\nfunction login(\n    username: string = Form(),   # Required form field\n    password: string = Form(),   # Required form field\n    remember: bool = Form(False) # Optional with default\n):\n    # Fields parsed from form-encoded body\n    # NOT from JSON\n    return {username, remember}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Form\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Using Annotated syntax (recommended)\n@app.post(\"/login/\")\ndef login(\n    username: Annotated[str, Form()],\n    password: Annotated[str, Form()],\n    remember_me: Annotated[bool, Form()] = False,\n):\n    # password would be hashed in real code\n    return {\"username\": username, \"remember_me\": remember_me}\n\n# Form with validation\n@app.post(\"/register/\")\ndef register(\n    username: Annotated[str, Form(min_length=3, max_length=50)],\n    email: Annotated[str, Form()],\n    age: Annotated[int, Form(ge=13)],\n):\n    return {\"username\": username, \"email\": email, \"age\": age}\n\nclient = TestClient(app)\n\n# Send form data (not JSON)\nresponse = client.post(\"/login/\", data={\n    \"username\": \"alice\",\n    \"password\": \"secret123\",\n    \"remember_me\": \"true\"\n})\nprint(\"Login:\", response.json())\n\nresponse = client.post(\"/register/\", data={\n    \"username\": \"bob\",\n    \"email\": \"bob@example.com\",\n    \"age\": \"25\"\n})\nprint(\"Register:\", response.json())\n\n# Expected Output:\n# Login: {'username': 'alice', 'remember_me': True}\n# Register: {'username': 'bob', 'email': 'bob@example.com', 'age': 25}",
+          "code_language": "python",
+          "key_points": [
+            "Use Form() to declare form fields -- they read from application/x-www-form-urlencoded, not JSON",
+            "Each form field is a separate function parameter, unlike JSON bodies which use Pydantic models",
+            "Annotated[str, Form()] is the recommended modern syntax for form parameters",
+            "Form fields support the same validation constraints as Query and Path (min_length, ge, etc.)"
+          ],
+          "gotchas": [
+            "python-multipart must be installed for Form to work -- pip install python-multipart (included in fastapi[standard])",
+            "You cannot mix Form() and Body() in the same endpoint -- they use different content types",
+            "Form data sends all values as strings -- FastAPI coerces '25' to int, 'true' to bool automatically"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `Form()` to read HTML form data. Each form field is a separate parameter annotated with `Form()`. Unlike JSON bodies, form data uses `application/x-www-form-urlencoded` encoding.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Form\n\napp = FastAPI()\n\n@app.post(\"/login/\")\ndef login(\n    username: Annotated[str, Form()],\n    password: Annotated[str, Form()],\n):\n    return {\"username\": username}",
+          "code_language": "python",
+          "key_points": [
+            "Form() reads form-encoded data, not JSON -- each field is a separate parameter"
+          ],
+          "gotchas": [
+            "Requires python-multipart package -- pip install python-multipart"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle file uploads with File and UploadFile?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "file-upload",
+        "uploadfile",
+        "multipart",
+        "request"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides two ways to handle file uploads:\n\n### 1. `bytes` with `File()`\nReads the entire file into memory as bytes. Simple but only suitable for small files.\n\n### 2. `UploadFile`\nA file-like object that uses spooled temporary files. The file is kept on disk if it exceeds a size threshold, making it suitable for large files.\n\n### UploadFile attributes:\n- `filename` -- original filename from the client\n- `content_type` -- MIME type (e.g., `image/png`)\n- `file` -- the underlying SpooledTemporaryFile\n- `size` -- file size in bytes\n\n### UploadFile async methods:\n- `await file.read(size)` -- read bytes\n- `await file.write(data)` -- write bytes\n- `await file.seek(offset)` -- move position\n- `await file.close()` -- close the file\n\n### Content type:\nFile uploads use `multipart/form-data` encoding. You can combine file uploads with form fields in the same endpoint.\n\n### Annotated syntax:\nUse `Annotated[UploadFile, File()]` for the recommended modern style.",
+          "pseudo_code": "# Small files -- reads entire file into memory\n@app.POST(\"/upload-bytes/\")\nfunction upload(file: bytes = File()):\n    size = length(file)\n    return {size}\n\n# Large files -- spooled to disk\n@app.POST(\"/upload/\")\nfunction upload(file: UploadFile):\n    contents = await file.read()\n    filename = file.filename\n    content_type = file.content_type\n    return {filename, size, content_type}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, File, UploadFile\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Method 1: bytes -- entire file in memory (small files only)\n@app.post(\"/upload-bytes/\")\ndef upload_bytes(file: Annotated[bytes, File()]):\n    return {\"size\": len(file)}\n\n# Method 2: UploadFile -- spooled to disk for large files\n@app.post(\"/upload/\")\nasync def upload_file(file: UploadFile):\n    contents = await file.read()\n    return {\n        \"filename\": file.filename,\n        \"content_type\": file.content_type,\n        \"size\": len(contents),\n    }\n\n# Combine file upload with form fields\n@app.post(\"/upload-with-meta/\")\nasync def upload_with_metadata(\n    file: UploadFile,\n    description: Annotated[str, Form()] = \"No description\",\n):\n    contents = await file.read()\n    return {\n        \"filename\": file.filename,\n        \"description\": description,\n        \"size\": len(contents),\n    }\n\nclient = TestClient(app)\n\n# Upload as bytes\nresponse = client.post(\n    \"/upload-bytes/\",\n    files={\"file\": (\"test.txt\", b\"Hello, World!\", \"text/plain\")}\n)\nprint(\"Bytes:\", response.json())\n\n# Upload as UploadFile\nresponse = client.post(\n    \"/upload/\",\n    files={\"file\": (\"report.pdf\", b\"PDF content here\", \"application/pdf\")}\n)\nprint(\"UploadFile:\", response.json())\n\n# Expected Output:\n# Bytes: {'size': 13}\n# UploadFile: {'filename': 'report.pdf', 'content_type': 'application/pdf', 'size': 16}",
+          "code_language": "python",
+          "key_points": [
+            "bytes with File() loads the entire file into memory -- use only for small files",
+            "UploadFile spools large files to disk and provides filename, content_type, and async read/write methods",
+            "File uploads use multipart/form-data encoding and can be combined with Form fields",
+            "Use await file.read() to get contents, file.filename for the original name"
+          ],
+          "gotchas": [
+            "python-multipart must be installed for file uploads to work",
+            "UploadFile.read() is async -- use 'await' in async def handlers or use file.file.read() in sync handlers",
+            "UploadFile does not validate file type or size -- you must check content_type and size manually"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `UploadFile` for file uploads -- it spools large files to disk and provides `filename`, `content_type`, and async `read()`. Use `bytes` with `File()` only for small files that fit in memory.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, UploadFile\n\napp = FastAPI()\n\n@app.post(\"/upload/\")\nasync def upload(file: UploadFile):\n    contents = await file.read()\n    return {\"filename\": file.filename, \"size\": len(contents)}",
+          "code_language": "python",
+          "key_points": [
+            "UploadFile handles large files via disk spooling; bytes loads everything into memory"
+          ],
+          "gotchas": [
+            "You must validate file type and size yourself -- UploadFile does not enforce limits"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is response_model and how does it filter response data?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "response-model",
+        "serialization",
+        "pydantic",
+        "filtering"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`response_model` is a decorator parameter that tells FastAPI to filter and validate the response through a Pydantic model before sending it to the client.\n\n### What response_model does:\n1. **Filters fields**: Only fields defined in the response model are included in the output\n2. **Validates types**: Ensures the response conforms to the declared schema\n3. **Generates docs**: Adds the response schema to OpenAPI/Swagger documentation\n4. **Serializes**: Converts Python objects (datetime, UUID, etc.) to JSON-compatible types\n\n### Why it matters:\nYou often have internal data with sensitive fields (passwords, internal IDs) that should never be sent to clients. `response_model` acts as a security filter, ensuring only the declared fields are exposed.\n\n### How filtering works:\n- Your handler can return a dict, Pydantic model, ORM object, or any object with matching attributes\n- FastAPI passes the return value through the response model\n- Fields not in the response model are silently dropped\n- Missing required fields raise a server error\n\n### Return type annotation vs response_model:\nFastAPI also supports `-> ItemResponse` return type annotations for response filtering, but `response_model` in the decorator takes precedence and is more explicit.",
+          "pseudo_code": "# Internal model has sensitive data\nclass UserDB:\n    id, name, email, hashed_password, is_admin\n\n# Response model exposes only safe fields\nclass UserResponse:\n    id, name, email\n\n@app.GET(\"/users/{id}\", response_model=UserResponse)\nfunction get_user(id):\n    user = db.get(id)\n    return user  # FastAPI filters out hashed_password and is_admin\n    # Client only sees: {id, name, email}",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# Full internal model\nclass UserInDB(BaseModel):\n    id: int\n    name: str\n    email: str\n    hashed_password: str\n    is_admin: bool\n\n# Public response model -- no sensitive fields\nclass UserResponse(BaseModel):\n    id: int\n    name: str\n    email: str\n\n# response_model filters the output\n@app.get(\"/users/{user_id}\", response_model=UserResponse)\ndef get_user(user_id: int):\n    # Return full internal model -- response_model strips sensitive fields\n    return UserInDB(\n        id=user_id,\n        name=\"Alice\",\n        email=\"alice@example.com\",\n        hashed_password=\"$2b$12$secrethash\",\n        is_admin=True,\n    )\n\n# Without response_model -- everything is exposed\n@app.get(\"/users-unsafe/{user_id}\")\ndef get_user_unsafe(user_id: int):\n    return {\n        \"id\": user_id,\n        \"name\": \"Alice\",\n        \"email\": \"alice@example.com\",\n        \"hashed_password\": \"$2b$12$secrethash\",\n    }\n\nclient = TestClient(app)\n\nsafe = client.get(\"/users/1\").json()\nprint(\"Safe:\", safe)\nprint(\"Has password:\", \"hashed_password\" in safe)\n\nunsafe = client.get(\"/users-unsafe/1\").json()\nprint(\"Unsafe has password:\", \"hashed_password\" in unsafe)\n\n# Expected Output:\n# Safe: {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'}\n# Has password: False\n# Unsafe has password: True",
+          "code_language": "python",
+          "key_points": [
+            "response_model filters the response to only include fields defined in the Pydantic model",
+            "It prevents sensitive data (passwords, internal flags) from leaking to clients",
+            "It also generates the response schema in Swagger/OpenAPI docs",
+            "You can return any object with matching attributes -- dicts, ORM objects, or Pydantic models"
+          ],
+          "gotchas": [
+            "Without response_model, ALL fields in your return value are sent to the client -- including sensitive data",
+            "response_model in the decorator takes precedence over the function's return type annotation",
+            "If the return value is missing a required field in response_model, FastAPI raises a 500 server error, not 422"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`response_model` filters your handler's return value through a Pydantic model, stripping out any fields not in the schema. It prevents sensitive data from leaking and generates the response schema in docs.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass UserOut(BaseModel):\n    id: int\n    name: str\n\n@app.get(\"/users/{uid}\", response_model=UserOut)\ndef get_user(uid: int):\n    # password is stripped by response_model\n    return {\"id\": uid, \"name\": \"Alice\", \"password\": \"secret\"}",
+          "code_language": "python",
+          "key_points": [
+            "response_model filters output fields and generates docs schema"
+          ],
+          "gotchas": [
+            "Without response_model, all returned fields are exposed -- including sensitive data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set HTTP status codes in responses?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "status-codes",
+        "http",
+        "response",
+        "rest"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides multiple ways to set HTTP status codes:\n\n### 1. Decorator parameter (default status code)\nSet the default status code in the route decorator. This is the most common approach.\n\n### 2. `status` module constants\nFastAPI re-exports Starlette's `status` module with named constants for all standard HTTP codes. This improves readability and catches typos at import time.\n\n### 3. `Response` parameter (dynamic status code)\nInject a `Response` object to change the status code dynamically at runtime.\n\n### 4. Raise `HTTPException`\nRaise an exception with a specific status code for error cases.\n\n### 5. Return a `Response` directly\nReturn a `JSONResponse`, `HTMLResponse`, etc. with a custom status code.\n\n### Common status codes:\n| Code | Constant | Meaning |\n|------|----------|---------|\n| 200 | HTTP_200_OK | Default for GET |\n| 201 | HTTP_201_CREATED | Resource created |\n| 204 | HTTP_204_NO_CONTENT | Success, no body |\n| 400 | HTTP_400_BAD_REQUEST | Client error |\n| 404 | HTTP_404_NOT_FOUND | Not found |\n| 422 | HTTP_422_UNPROCESSABLE_ENTITY | Validation error |",
+          "pseudo_code": "# Method 1: Default in decorator\n@app.POST(\"/items/\", status_code=201)\nfunction create_item(item):\n    return item  # Always returns 201\n\n# Method 2: Dynamic via Response parameter\n@app.PUT(\"/items/{id}\")\nfunction update(id, item, response: Response):\n    if exists(id):\n        response.status_code = 200  # Updated\n    else:\n        response.status_code = 201  # Created\n    return item\n\n# Method 3: Error via HTTPException\nif not found:\n    raise HTTPException(status_code=404, detail=\"Not found\")",
+          "actual_code": "from fastapi import FastAPI, HTTPException, Response, status\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n\nitems_db: dict[int, dict] = {}\n\n# Method 1: Default status code in decorator\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\ndef create_item(item: Item):\n    items_db[1] = item.model_dump()\n    return {\"id\": 1, **item.model_dump()}\n\n# Method 2: Dynamic status code via Response parameter\n@app.put(\"/items/{item_id}\")\ndef upsert_item(item_id: int, item: Item, response: Response):\n    if item_id in items_db:\n        response.status_code = status.HTTP_200_OK\n    else:\n        response.status_code = status.HTTP_201_CREATED\n    items_db[item_id] = item.model_dump()\n    return {\"id\": item_id, **item.model_dump()}\n\n# Method 3: HTTPException for errors\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id not in items_db:\n        raise HTTPException(\n            status_code=status.HTTP_404_NOT_FOUND,\n            detail=f\"Item {item_id} not found\",\n        )\n    return items_db[item_id]\n\n# Method 4: No content response\n@app.delete(\"/items/{item_id}\", status_code=status.HTTP_204_NO_CONTENT)\ndef delete_item(item_id: int):\n    items_db.pop(item_id, None)\n\nclient = TestClient(app)\n\n# 201 Created\nresp = client.post(\"/items/\", json={\"name\": \"Widget\"})\nprint(f\"Create: {resp.status_code}\")\n\n# 404 Not Found\nresp = client.get(\"/items/99\")\nprint(f\"Not found: {resp.status_code} {resp.json()['detail']}\")\n\n# 204 No Content\nresp = client.delete(\"/items/1\")\nprint(f\"Delete: {resp.status_code}\")\n\n# Expected Output:\n# Create: 201\n# Not found: 404 Item 99 not found\n# Delete: 204",
+          "code_language": "python",
+          "key_points": [
+            "Set default status code with status_code parameter in the route decorator",
+            "Use status.HTTP_201_CREATED constants for readability instead of magic numbers",
+            "Inject Response parameter to change status code dynamically at runtime",
+            "Raise HTTPException for error status codes with detail messages"
+          ],
+          "gotchas": [
+            "status_code=204 (No Content) means the response body is empty -- do not return data with 204",
+            "The default status code is 200 for all methods if not specified -- POST endpoints should explicitly set 201",
+            "HTTPException detail is included in the response JSON body -- do not put sensitive info in it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set the default status code in the decorator with `status_code=201`, use `status.HTTP_201_CREATED` constants for readability, inject `Response` for dynamic codes, or raise `HTTPException` for errors.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, HTTPException, status\n\napp = FastAPI()\n\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\ndef create_item():\n    return {\"id\": 1}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    raise HTTPException(status_code=404, detail=\"Not found\")",
+          "code_language": "python",
+          "key_points": [
+            "Decorator status_code for defaults, HTTPException for errors, Response for dynamic codes"
+          ],
+          "gotchas": [
+            "Default is 200 for all methods -- set 201 explicitly for POST creation endpoints"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between JSONResponse, HTMLResponse, and PlainTextResponse?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "response-types",
+        "json",
+        "html",
+        "content-type"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides several response classes (inherited from Starlette) for returning different content types:\n\n### JSONResponse (default)\n- Content-Type: `application/json`\n- Serializes Python dicts/lists to JSON\n- This is what FastAPI uses automatically when you return a dict or Pydantic model\n- Supports custom headers and status codes\n\n### HTMLResponse\n- Content-Type: `text/html`\n- Returns raw HTML strings\n- Used for server-rendered pages or HTML fragments\n- Set via `response_class=HTMLResponse` in the decorator\n\n### PlainTextResponse\n- Content-Type: `text/plain`\n- Returns raw text without any formatting\n- Useful for health checks, simple status endpoints, or text-based APIs\n\n### How to use them:\n1. **Return directly**: Return a response class instance from your handler\n2. **Set response_class**: Use the decorator parameter to change the default for that endpoint\n3. **Override per-request**: Always return a specific response class instance\n\n### Other useful response classes:\n- `RedirectResponse` -- HTTP redirects\n- `StreamingResponse` -- streaming large data\n- `FileResponse` -- serving files\n- `ORJSONResponse` -- faster JSON with orjson library",
+          "pseudo_code": "# JSONResponse -- default, no special handling needed\n@app.GET(\"/data\")\nfunction get_data():\n    return {\"key\": \"value\"}  # Auto-wrapped in JSONResponse\n\n# HTMLResponse -- set response_class\n@app.GET(\"/page\", response_class=HTMLResponse)\nfunction get_page():\n    return \"<h1>Hello</h1>\"  # Content-Type: text/html\n\n# PlainTextResponse -- set response_class\n@app.GET(\"/health\", response_class=PlainTextResponse)\nfunction health():\n    return \"OK\"  # Content-Type: text/plain\n\n# Direct return -- always works\n@app.GET(\"/custom\")\nfunction custom():\n    return JSONResponse(content={...}, status_code=201, headers={...})",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import (\n    JSONResponse, HTMLResponse, PlainTextResponse, RedirectResponse\n)\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# JSONResponse -- default behavior\n@app.get(\"/api/data\")\ndef get_data():\n    return {\"message\": \"This is JSON\"}  # Auto JSONResponse\n\n# HTMLResponse via response_class\n@app.get(\"/page\", response_class=HTMLResponse)\ndef get_page():\n    return \"\"\"\n    <html>\n        <body><h1>Hello from FastAPI</h1></body>\n    </html>\n    \"\"\"\n\n# PlainTextResponse\n@app.get(\"/health\", response_class=PlainTextResponse)\ndef health_check():\n    return \"OK\"\n\n# Direct return with custom status and headers\n@app.get(\"/custom\")\ndef custom_response():\n    return JSONResponse(\n        content={\"status\": \"created\"},\n        status_code=201,\n        headers={\"X-Custom\": \"header-value\"},\n    )\n\n# Redirect\n@app.get(\"/old-page\")\ndef old_page():\n    return RedirectResponse(url=\"/page\")\n\nclient = TestClient(app)\n\nresp = client.get(\"/api/data\")\nprint(f\"JSON: {resp.headers['content-type']} -> {resp.json()}\")\n\nresp = client.get(\"/page\")\nprint(f\"HTML: {resp.headers['content-type']}\")\n\nresp = client.get(\"/health\")\nprint(f\"Text: {resp.headers['content-type']} -> {resp.text}\")\n\nresp = client.get(\"/custom\")\nprint(f\"Custom: {resp.status_code} X-Custom={resp.headers['x-custom']}\")\n\n# Expected Output:\n# JSON: application/json -> {'message': 'This is JSON'}\n# HTML: text/html; charset=utf-8\n# Text: text/plain; charset=utf-8 -> OK\n# Custom: 201 X-Custom=header-value",
+          "code_language": "python",
+          "key_points": [
+            "JSONResponse is the default -- returning a dict auto-wraps it in JSONResponse",
+            "HTMLResponse sets Content-Type to text/html for server-rendered pages",
+            "PlainTextResponse sets Content-Type to text/plain for simple text output",
+            "Return a response class instance directly for full control over status, headers, and content"
+          ],
+          "gotchas": [
+            "response_class=HTMLResponse disables response_model validation -- FastAPI trusts your raw HTML string",
+            "When returning a Response instance directly, FastAPI skips jsonable_encoder -- you handle serialization",
+            "ORJSONResponse requires the orjson package but is significantly faster for large JSON payloads"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "JSONResponse (default) returns `application/json`, HTMLResponse returns `text/html`, and PlainTextResponse returns `text/plain`. Set via `response_class` in the decorator or return an instance directly for custom status/headers.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import HTMLResponse, PlainTextResponse\n\napp = FastAPI()\n\n@app.get(\"/\")  # default JSONResponse\ndef json_endpoint():\n    return {\"msg\": \"JSON\"}\n\n@app.get(\"/page\", response_class=HTMLResponse)\ndef html_endpoint():\n    return \"<h1>HTML</h1>\"\n\n@app.get(\"/health\", response_class=PlainTextResponse)\ndef text_endpoint():\n    return \"OK\"",
+          "code_language": "python",
+          "key_points": [
+            "JSONResponse is default; use response_class to switch to HTML or PlainText"
+          ],
+          "gotchas": [
+            "response_class=HTMLResponse disables response_model validation"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use StreamingResponse for large data?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "streaming",
+        "large-data",
+        "response",
+        "generator"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**StreamingResponse** sends data to the client in chunks rather than loading the entire response into memory. This is essential for large files, real-time data, or dynamically generated content.\n\n### How it works:\n1. You provide a generator (sync or async) that yields chunks of data\n2. FastAPI/Starlette sends each chunk as it is yielded\n3. The client receives data progressively\n4. Memory usage stays constant regardless of total data size\n\n### When to use StreamingResponse:\n- **Large files**: CSV exports, logs, reports\n- **Real-time data**: Server-Sent Events (SSE)\n- **Dynamic generation**: Content generated on-the-fly\n- **Proxying**: Forwarding data from another service\n\n### Parameters:\n- `content` -- a generator, async generator, or iterable\n- `media_type` -- Content-Type header (e.g., `text/csv`, `text/event-stream`)\n- `headers` -- custom response headers\n- `status_code` -- HTTP status (default 200)\n\n### For file downloads:\nUse `FileResponse` for static files. Use `StreamingResponse` when the content is generated dynamically or read from another source.",
+          "pseudo_code": "# Streaming large data\n@app.GET(\"/download-csv\")\nfunction download_csv():\n    def generate_rows():\n        yield \"header1,header2\\n\"\n        for row in database.query_all():\n            yield f\"{row.col1},{row.col2}\\n\"\n    \n    return StreamingResponse(\n        content=generate_rows(),\n        media_type=\"text/csv\",\n        headers={\"Content-Disposition\": \"attachment; filename=data.csv\"}\n    )",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import StreamingResponse\nfrom fastapi.testclient import TestClient\nimport io\n\napp = FastAPI()\n\n# Stream a large CSV dynamically\n@app.get(\"/download-csv\")\ndef download_csv():\n    def generate():\n        yield \"id,name,price\\n\"\n        for i in range(1, 101):  # Could be millions of rows\n            yield f\"{i},Item {i},{i * 9.99:.2f}\\n\"\n\n    return StreamingResponse(\n        content=generate(),\n        media_type=\"text/csv\",\n        headers={\"Content-Disposition\": \"attachment; filename=items.csv\"},\n    )\n\n# Stream from a file-like object\n@app.get(\"/download-report\")\ndef download_report():\n    buffer = io.BytesIO(b\"Report content here...\")\n    return StreamingResponse(\n        content=buffer,\n        media_type=\"application/octet-stream\",\n        headers={\"Content-Disposition\": \"attachment; filename=report.bin\"},\n    )\n\n# Async generator streaming\n@app.get(\"/stream-events\")\nasync def stream_events():\n    async def event_generator():\n        for i in range(5):\n            yield f\"data: event {i}\\n\\n\"\n\n    return StreamingResponse(\n        content=event_generator(),\n        media_type=\"text/event-stream\",\n    )\n\nclient = TestClient(app)\n\n# Download CSV\nresp = client.get(\"/download-csv\")\nlines = resp.text.strip().split(\"\\n\")\nprint(f\"CSV lines: {len(lines)} (header + 100 rows)\")\nprint(f\"First line: {lines[0]}\")\nprint(f\"Content-Disposition: {resp.headers['content-disposition']}\")\n\n# Expected Output:\n# CSV lines: 101 (header + 100 rows)\n# First line: id,name,price\n# Content-Disposition: attachment; filename=items.csv",
+          "code_language": "python",
+          "key_points": [
+            "StreamingResponse sends data in chunks using a generator -- constant memory usage for any data size",
+            "Pass a sync generator, async generator, or file-like object as the content parameter",
+            "Set media_type for correct Content-Type and Content-Disposition for file downloads",
+            "Use for large CSV exports, real-time SSE streams, or dynamically generated content"
+          ],
+          "gotchas": [
+            "StreamingResponse does not set Content-Length -- the client does not know the total size upfront",
+            "If your generator raises an exception mid-stream, the client receives a truncated response with no error status",
+            "For static files on disk, use FileResponse instead -- it sets Content-Length and supports range requests"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "StreamingResponse sends data in chunks via a generator, keeping memory usage constant for any size. Pass a generator as `content` and set `media_type` for the correct Content-Type.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import StreamingResponse\n\napp = FastAPI()\n\n@app.get(\"/download\")\ndef download():\n    def generate():\n        yield \"id,name\\n\"\n        for i in range(1000):\n            yield f\"{i},Item {i}\\n\"\n\n    return StreamingResponse(generate(), media_type=\"text/csv\")",
+          "code_language": "python",
+          "key_points": [
+            "Uses a generator to stream chunks -- memory stays constant regardless of data size"
+          ],
+          "gotchas": [
+            "StreamingResponse does not set Content-Length -- use FileResponse for static files"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set response headers?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "headers",
+        "response",
+        "http",
+        "custom-headers"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides several ways to set custom response headers:\n\n### Method 1: Response parameter\nInject a `Response` parameter and set headers on it. The headers are merged into the final response even when returning a dict.\n\n### Method 2: Return a Response directly\nReturn a `JSONResponse` (or other response class) with a `headers` dict. This gives you full control.\n\n### Method 3: Middleware\nUse middleware to add headers to every response (e.g., security headers, CORS).\n\n### Common custom headers:\n- `X-Request-ID` -- trace a request across services\n- `X-Process-Time` -- time taken to process\n- `Cache-Control` -- caching behavior\n- `X-Total-Count` -- total items for paginated responses\n\n### Header naming:\nHTTP headers are case-insensitive. FastAPI/Starlette normalizes them to lowercase in the response. Custom headers conventionally start with `X-`.",
+          "pseudo_code": "# Method 1: Response parameter (recommended)\n@app.GET(\"/data\")\nfunction get_data(response: Response):\n    response.headers[\"X-Custom\"] = \"value\"\n    response.headers[\"Cache-Control\"] = \"max-age=3600\"\n    return {\"data\": \"value\"}  # Headers are merged\n\n# Method 2: Direct Response\n@app.GET(\"/data\")\nfunction get_data():\n    return JSONResponse(\n        content={\"data\": \"value\"},\n        headers={\"X-Custom\": \"value\"}\n    )",
+          "actual_code": "from fastapi import FastAPI, Response\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\nimport time\n\napp = FastAPI()\n\n# Method 1: Response parameter (headers merged with the returned dict)\n@app.get(\"/items/\")\ndef list_items(response: Response):\n    response.headers[\"X-Total-Count\"] = \"42\"\n    response.headers[\"Cache-Control\"] = \"max-age=60\"\n    return [{\"id\": 1, \"name\": \"Widget\"}]\n\n# Method 2: Return Response directly\n@app.get(\"/custom/\")\ndef custom_response():\n    return JSONResponse(\n        content={\"message\": \"hello\"},\n        headers={\n            \"X-Request-ID\": \"abc-123\",\n            \"X-Process-Time\": \"0.05\",\n        },\n    )\n\n# Method 3: Middleware for all responses\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.requests import Request\n\nclass TimingMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request: Request, call_next):\n        start = time.perf_counter()\n        response = await call_next(request)\n        elapsed = time.perf_counter() - start\n        response.headers[\"X-Process-Time\"] = f\"{elapsed:.4f}\"\n        return response\n\napp.add_middleware(TimingMiddleware)\n\nclient = TestClient(app)\n\nresp = client.get(\"/items/\")\nprint(f\"X-Total-Count: {resp.headers['x-total-count']}\")\nprint(f\"Cache-Control: {resp.headers['cache-control']}\")\nprint(f\"X-Process-Time: {resp.headers.get('x-process-time', 'set')}\")\n\nresp = client.get(\"/custom/\")\nprint(f\"X-Request-ID: {resp.headers['x-request-id']}\")\n\n# Expected Output:\n# X-Total-Count: 42\n# Cache-Control: max-age=60\n# X-Process-Time: <float value>\n# X-Request-ID: abc-123",
+          "code_language": "python",
+          "key_points": [
+            "Inject Response parameter and set .headers['X-Custom'] to add headers while still returning dicts",
+            "Return JSONResponse directly with a headers dict for full control over the response",
+            "Use middleware to add headers (like X-Process-Time) to every response globally",
+            "HTTP headers are case-insensitive -- X-Custom and x-custom are the same"
+          ],
+          "gotchas": [
+            "When returning a Response directly, response_model validation is skipped entirely",
+            "The Response parameter approach merges headers -- if you also return a Response directly, the parameter headers are ignored",
+            "Header values must be strings -- convert numbers with str() before setting"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Inject a `Response` parameter and set `response.headers['X-Custom'] = 'value'` to add headers while returning a dict. Or return `JSONResponse(content=..., headers=...)` for full control.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Response\n\napp = FastAPI()\n\n@app.get(\"/items/\")\ndef list_items(response: Response):\n    response.headers[\"X-Total-Count\"] = \"42\"\n    return [{\"id\": 1}]  # Header is merged into response",
+          "code_language": "python",
+          "key_points": [
+            "Response parameter lets you set headers while still returning dicts/models"
+          ],
+          "gotchas": [
+            "Header values must be strings -- convert numbers with str()"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set and read cookies?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "cookies",
+        "request",
+        "response",
+        "session"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides tools for both reading cookies from requests and setting cookies in responses.\n\n### Reading cookies:\nUse `Cookie()` to declare a cookie parameter, similar to `Query()` or `Header()`. FastAPI extracts the value from the request's Cookie header.\n\n### Setting cookies:\nUse `response.set_cookie()` on the injected Response parameter. This adds a `Set-Cookie` header to the response.\n\n### Cookie parameters:\n- `key` -- cookie name\n- `value` -- cookie value\n- `max_age` -- seconds until expiry\n- `expires` -- absolute expiry datetime\n- `path` -- URL path scope (default `/`)\n- `domain` -- domain scope\n- `secure` -- only send over HTTPS\n- `httponly` -- not accessible via JavaScript (prevents XSS)\n- `samesite` -- CSRF protection: `lax`, `strict`, or `none`\n\n### Deleting cookies:\nUse `response.delete_cookie(key)` which sets the cookie with an expired date.\n\n### Security best practices:\n- Always set `httponly=True` for session cookies\n- Set `secure=True` in production (HTTPS)\n- Use `samesite=\"lax\"` or `samesite=\"strict\"` for CSRF protection",
+          "pseudo_code": "# Reading a cookie from the request\n@app.GET(\"/me\")\nfunction get_me(session_id: string = Cookie(default=None)):\n    if session_id:\n        return lookup_user(session_id)\n    return {\"error\": \"not logged in\"}\n\n# Setting a cookie in the response\n@app.POST(\"/login\")\nfunction login(response: Response, credentials):\n    token = create_session(credentials)\n    response.set_cookie(\n        key=\"session_id\", value=token,\n        httponly=True, secure=True, samesite=\"lax\"\n    )\n    return {\"message\": \"logged in\"}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Cookie, Response\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Setting a cookie\n@app.post(\"/login\")\ndef login(response: Response):\n    response.set_cookie(\n        key=\"session_token\",\n        value=\"abc-123-secret\",\n        max_age=3600,           # 1 hour\n        httponly=True,          # Not accessible via JS\n        secure=False,           # True in production (HTTPS)\n        samesite=\"lax\",         # CSRF protection\n    )\n    return {\"message\": \"logged in\"}\n\n# Reading a cookie\n@app.get(\"/me\")\ndef get_me(\n    session_token: Annotated[str | None, Cookie()] = None,\n):\n    if session_token:\n        return {\"user\": \"alice\", \"session\": session_token}\n    return {\"error\": \"not authenticated\"}\n\n# Deleting a cookie\n@app.post(\"/logout\")\ndef logout(response: Response):\n    response.delete_cookie(key=\"session_token\")\n    return {\"message\": \"logged out\"}\n\nclient = TestClient(app)\n\n# Login -- sets cookie\nresp = client.post(\"/login\")\nprint(f\"Login: {resp.json()}\")\nprint(f\"Set-Cookie present: {'session_token' in resp.headers.get('set-cookie', '')}\")\n\n# Access with cookie\nclient.cookies.set(\"session_token\", \"abc-123-secret\")\nresp = client.get(\"/me\")\nprint(f\"Me: {resp.json()}\")\n\n# Without cookie\nclient.cookies.clear()\nresp = client.get(\"/me\")\nprint(f\"No cookie: {resp.json()}\")\n\n# Expected Output:\n# Login: {'message': 'logged in'}\n# Set-Cookie present: True\n# Me: {'user': 'alice', 'session': 'abc-123-secret'}\n# No cookie: {'error': 'not authenticated'}",
+          "code_language": "python",
+          "key_points": [
+            "Read cookies with Cookie() parameter -- works like Query() but reads from the Cookie header",
+            "Set cookies with response.set_cookie(key, value, httponly, secure, samesite)",
+            "Delete cookies with response.delete_cookie(key) which expires the cookie",
+            "Always set httponly=True and secure=True for session cookies in production"
+          ],
+          "gotchas": [
+            "Cookie parameter names use underscores in Python (session_token) but hyphens are also matched from the request",
+            "secure=True means the cookie is only sent over HTTPS -- set to False during local development",
+            "Cookies are sent with every request to the matching domain/path -- do not store large data in them"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Read cookies with `Cookie()` as a parameter type. Set cookies with `response.set_cookie(key, value, httponly=True)`. Delete with `response.delete_cookie(key)`. Always use `httponly=True` and `secure=True` for session cookies.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Cookie, Response\n\napp = FastAPI()\n\n@app.post(\"/login\")\ndef login(response: Response):\n    response.set_cookie(key=\"token\", value=\"abc\", httponly=True)\n    return {\"ok\": True}\n\n@app.get(\"/me\")\ndef me(token: Annotated[str | None, Cookie()] = None):\n    return {\"token\": token}",
+          "code_language": "python",
+          "key_points": [
+            "Cookie() reads from request; response.set_cookie() writes to response"
+          ],
+          "gotchas": [
+            "secure=True only sends cookies over HTTPS -- set False for local development"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you combine path, query, and body parameters in one endpoint?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "path-params",
+        "query-params",
+        "body",
+        "parameters"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI determines where each parameter comes from based on its type and declaration:\n\n### Parameter resolution rules:\n1. **Path parameters**: If the parameter name appears in the path string `\"/items/{item_id}\"`, it is a path parameter\n2. **Body parameters**: If the parameter type is a Pydantic model, it is read from the request body\n3. **Query parameters**: Simple types (str, int, float, bool) that are NOT in the path are query parameters\n4. **Explicit declarations**: Use `Path()`, `Query()`, `Body()`, `Header()`, `Cookie()` to override the default behavior\n\n### Combining all three:\nYou can have path, query, and body parameters in the same endpoint. FastAPI resolves each one from the correct location automatically.\n\n### Priority of explicit declarations:\n`Path()` > `Query()` > `Body()` -- but typically you only need explicit declarations when adding validation constraints or changing defaults.",
+          "pseudo_code": "# FastAPI resolution rules:\n# 1. In path string -> path parameter\n# 2. Pydantic model -> body parameter\n# 3. Simple type not in path -> query parameter\n\n@app.PUT(\"/items/{item_id}\")\nfunction update_item(\n    item_id: int,              # Path (in URL)\n    q: string = None,          # Query (simple type, not in path)\n    item: ItemUpdate,          # Body (Pydantic model)\n):\n    # item_id from URL: /items/42\n    # q from query string: ?q=search\n    # item from JSON body: {\"name\": \"...\", \"price\": ...}\n    return {item_id, q, item}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Path, Query\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass ItemUpdate(BaseModel):\n    name: str\n    price: float\n\n@app.put(\"/items/{item_id}\")\ndef update_item(\n    item_id: Annotated[int, Path(ge=1, description=\"The item ID\")],\n    q: Annotated[str | None, Query(max_length=50)] = None,\n    item: ItemUpdate = ...,  # ... means required\n):\n    result = {\"item_id\": item_id, \"item\": item.model_dump()}\n    if q:\n        result[\"q\"] = q\n    return result\n\n# More complex: path + query + body + header\nfrom fastapi import Header\n\n@app.post(\"/stores/{store_id}/items/\")\ndef create_store_item(\n    store_id: Annotated[int, Path(ge=1)],         # Path\n    category: Annotated[str | None, Query()] = None,  # Query\n    item: ItemUpdate = ...,                        # Body (Pydantic)\n    x_request_id: Annotated[str | None, Header()] = None,  # Header\n):\n    return {\n        \"store_id\": store_id,\n        \"category\": category,\n        \"item\": item.model_dump(),\n        \"request_id\": x_request_id,\n    }\n\nclient = TestClient(app)\n\n# Path + query + body\nresp = client.put(\n    \"/items/42?q=search\",\n    json={\"name\": \"Widget\", \"price\": 9.99},\n)\nprint(\"Combined:\", resp.json())\n\n# Path + query + body + header\nresp = client.post(\n    \"/stores/1/items/?category=electronics\",\n    json={\"name\": \"Gadget\", \"price\": 29.99},\n    headers={\"X-Request-ID\": \"req-456\"},\n)\nprint(\"All four:\", resp.json())\n\n# Expected Output:\n# Combined: {'item_id': 42, 'item': {'name': 'Widget', 'price': 9.99}, 'q': 'search'}\n# All four: {'store_id': 1, 'category': 'electronics', 'item': {'name': 'Gadget', 'price': 29.99}, 'request_id': 'req-456'}",
+          "code_language": "python",
+          "key_points": [
+            "Path params: name matches the path string; query params: simple types not in path; body: Pydantic models",
+            "All three (plus headers and cookies) can be combined in a single endpoint",
+            "Use Annotated[type, Path()], Annotated[type, Query()] for explicit declarations with validation",
+            "FastAPI auto-resolves parameter sources from type hints and path string"
+          ],
+          "gotchas": [
+            "A simple type (str, int) is ALWAYS a query param unless it matches a path variable or you use Body() explicitly",
+            "If you have two Pydantic models as parameters, FastAPI expects a JSON body with nested keys (see question 11)",
+            "Path parameters are always required -- you cannot have optional path params"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI resolves parameters automatically: names in the URL path are path params, Pydantic models are body, and simple types not in the path are query params. All three can be combined in one endpoint.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\n@app.put(\"/items/{item_id}\")  # path + query + body\ndef update(item_id: int, q: str | None = None, item: Item = ...):\n    return {\"id\": item_id, \"q\": q, \"item\": item.model_dump()}",
+          "code_language": "python",
+          "key_points": [
+            "Path: in URL; Body: Pydantic model; Query: simple types not in path"
+          ],
+          "gotchas": [
+            "Simple types default to query params -- use Body() to force them into the request body"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI handle multiple request body parameters?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "request-body",
+        "multiple-bodies",
+        "pydantic",
+        "body"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When you declare multiple Pydantic model parameters in a single endpoint, FastAPI expects a JSON body with each model as a **named key**.\n\n### Single body parameter:\n```json\n{\"name\": \"Widget\", \"price\": 9.99}\n```\nThe body IS the model directly.\n\n### Multiple body parameters:\n```json\n{\n    \"item\": {\"name\": \"Widget\", \"price\": 9.99},\n    \"user\": {\"name\": \"Alice\"}\n}\n```\nEach model becomes a key in the JSON body. The key name matches the parameter name.\n\n### Body() for singular values:\nYou can use `Body()` to embed a simple value (str, int) into the request body as a key, rather than it being treated as a query parameter.\n\n### Body(embed=True):\nFor a single Pydantic model, if you want the model nested under a key instead of being the root, use `Body(embed=True)`.",
+          "pseudo_code": "# Single Pydantic param -> body IS the model\n# Body: {\"name\": \"Widget\", \"price\": 9.99}\n@app.POST(\"/items/\")\nfunction create(item: Item):\n    pass\n\n# Multiple Pydantic params -> each is a key\n# Body: {\"item\": {...}, \"user\": {...}}\n@app.POST(\"/items/\")\nfunction create(item: Item, user: User):\n    pass\n\n# Body(embed=True) -> single model under a key\n# Body: {\"item\": {\"name\": \"Widget\"}}\n@app.POST(\"/items/\")\nfunction create(item: Item = Body(embed=True)):\n    pass",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Body\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\nclass User(BaseModel):\n    username: str\n\n# Multiple body params -> each becomes a JSON key\n@app.post(\"/items-with-user/\")\ndef create_with_user(item: Item, user: User):\n    return {\"item\": item.model_dump(), \"user\": user.model_dump()}\n\n# Singular value in body using Body()\n@app.post(\"/items-with-note/\")\ndef create_with_note(\n    item: Item,\n    importance: Annotated[int, Body(ge=1, le=5)],\n):\n    return {\"item\": item.model_dump(), \"importance\": importance}\n\n# embed=True: single model under its parameter name key\n@app.post(\"/items-embedded/\")\ndef create_embedded(item: Annotated[Item, Body(embed=True)]):\n    return item.model_dump()\n\nclient = TestClient(app)\n\n# Multiple body params: {\"item\": {...}, \"user\": {...}}\nresp = client.post(\"/items-with-user/\", json={\n    \"item\": {\"name\": \"Widget\", \"price\": 9.99},\n    \"user\": {\"username\": \"alice\"},\n})\nprint(\"Multi-body:\", resp.json())\n\n# Body value: {\"item\": {...}, \"importance\": 5}\nresp = client.post(\"/items-with-note/\", json={\n    \"item\": {\"name\": \"Gadget\", \"price\": 19.99},\n    \"importance\": 5,\n})\nprint(\"With note:\", resp.json())\n\n# Embedded: {\"item\": {\"name\": \"Thing\", \"price\": 1.99}}\nresp = client.post(\"/items-embedded/\", json={\n    \"item\": {\"name\": \"Thing\", \"price\": 1.99},\n})\nprint(\"Embedded:\", resp.json())\n\n# Expected Output:\n# Multi-body: {'item': {'name': 'Widget', 'price': 9.99}, 'user': {'username': 'alice'}}\n# With note: {'item': {'name': 'Gadget', 'price': 19.99}, 'importance': 5}\n# Embedded: {'name': 'Thing', 'price': 1.99}",
+          "code_language": "python",
+          "key_points": [
+            "Multiple Pydantic params create a JSON body with each model as a named key",
+            "Body() makes simple types (str, int) part of the request body instead of query params",
+            "Body(embed=True) nests a single model under its parameter name as a key",
+            "Parameter names become the JSON keys -- item: Item expects {\"item\": {...}}"
+          ],
+          "gotchas": [
+            "With a single Pydantic model, the body IS the model directly -- multiple models change the structure",
+            "Adding a second body param changes the expected JSON shape for ALL body params -- this can break clients",
+            "Body() with simple types requires the value in the JSON body, not the query string"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "With multiple Pydantic model parameters, FastAPI expects a JSON body where each model is a named key: `{\"item\": {...}, \"user\": {...}}`. Use `Body(embed=True)` to nest a single model under a key.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n\nclass User(BaseModel):\n    username: str\n\n@app.post(\"/create/\")\ndef create(item: Item, user: User):\n    # Body: {\"item\": {\"name\": \"...\"}, \"user\": {\"username\": \"...\"}}\n    return {\"item\": item.model_dump(), \"user\": user.model_dump()}",
+          "code_language": "python",
+          "key_points": [
+            "Multiple Pydantic params = each becomes a key in the JSON body"
+          ],
+          "gotchas": [
+            "Adding a second body param changes the expected JSON structure -- can break existing clients"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the Request object and when do you use it directly?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "request-object",
+        "starlette",
+        "raw-request",
+        "advanced"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `Request` object gives you direct access to the raw HTTP request. While FastAPI's parameter declarations handle most use cases, sometimes you need lower-level access.\n\n### When to use Request directly:\n- Accessing raw request body (non-JSON, non-form)\n- Reading all headers or cookies at once\n- Getting client IP address\n- Accessing the URL, method, or path\n- Checking content type before parsing\n- Forwarding requests to other services (proxying)\n- Working with custom content types\n\n### Key attributes:\n- `request.method` -- HTTP method (GET, POST, etc.)\n- `request.url` -- full URL\n- `request.headers` -- all headers as a mapping\n- `request.query_params` -- query string as a mapping\n- `request.path_params` -- path parameters as a dict\n- `request.cookies` -- cookies as a dict\n- `request.client` -- client IP and port\n- `request.state` -- arbitrary state for middleware/dependency data sharing\n\n### Key methods:\n- `await request.body()` -- raw body as bytes\n- `await request.json()` -- parse body as JSON\n- `await request.form()` -- parse body as form data\n- `await request.stream()` -- async iterator for streaming body",
+          "pseudo_code": "# Declare Request as a parameter -- no special annotation needed\nfrom fastapi import Request\n\n@app.GET(\"/info\")\nfunction get_info(request: Request):\n    client_ip = request.client.host\n    user_agent = request.headers[\"user-agent\"]\n    all_cookies = request.cookies\n    full_url = str(request.url)\n    return {client_ip, user_agent, full_url}\n\n# Raw body access\n@app.POST(\"/webhook\")\nasync function webhook(request: Request):\n    raw_body = await request.body()\n    content_type = request.headers[\"content-type\"]\n    # Process raw bytes based on content type",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Access request metadata\n@app.get(\"/info\")\ndef request_info(request: Request):\n    return {\n        \"method\": request.method,\n        \"url\": str(request.url),\n        \"client\": request.client.host if request.client else None,\n        \"headers_count\": len(request.headers),\n        \"user_agent\": request.headers.get(\"user-agent\", \"unknown\"),\n    }\n\n# Raw body access (useful for webhooks, custom content types)\n@app.post(\"/webhook\")\nasync def webhook(request: Request):\n    content_type = request.headers.get(\"content-type\", \"\")\n    raw_body = await request.body()\n    return {\n        \"content_type\": content_type,\n        \"body_size\": len(raw_body),\n        \"body_preview\": raw_body[:100].decode(\"utf-8\", errors=\"replace\"),\n    }\n\n# Combine Request with regular params\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int, request: Request):\n    return {\n        \"item_id\": item_id,\n        \"full_url\": str(request.url),\n        \"query_params\": dict(request.query_params),\n    }\n\nclient = TestClient(app)\n\nresp = client.get(\"/info\")\nprint(\"Info:\", resp.json()[\"method\"], resp.json()[\"url\"])\n\nresp = client.post(\n    \"/webhook\",\n    content=b'{\"event\": \"payment\"}',\n    headers={\"Content-Type\": \"application/json\"},\n)\nprint(\"Webhook:\", resp.json())\n\nresp = client.get(\"/items/42?sort=price&order=asc\")\nprint(\"Query params:\", resp.json()[\"query_params\"])\n\n# Expected Output:\n# Info: GET http://testserver/info\n# Webhook: {'content_type': 'application/json', 'body_size': 20, 'body_preview': '{\"event\": \"payment\"}'}\n# Query params: {'sort': 'price', 'order': 'asc'}",
+          "code_language": "python",
+          "key_points": [
+            "Request gives direct access to method, URL, headers, cookies, client IP, and raw body",
+            "Just declare request: Request as a parameter -- no Depends() or annotation needed",
+            "Use await request.body() for raw bytes, await request.json() for parsed JSON",
+            "Request can be combined with regular path/query/body parameters in the same handler"
+          ],
+          "gotchas": [
+            "request.body() and request.json() are async -- use 'await' or use sync alternatives with caution",
+            "Reading request.body() consumes the stream -- calling it twice returns empty bytes the second time",
+            "Request bypasses FastAPI's validation -- you handle parsing and error responses yourself"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The `Request` object gives raw access to the HTTP request -- method, URL, headers, cookies, client IP, and body. Declare `request: Request` as a parameter. Use it for webhooks, proxying, or when you need data FastAPI does not expose through parameter declarations.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.get(\"/info\")\ndef info(request: Request):\n    return {\n        \"method\": request.method,\n        \"url\": str(request.url),\n        \"client_ip\": request.client.host if request.client else None,\n    }",
+          "code_language": "python",
+          "key_points": [
+            "Declare request: Request for raw HTTP access -- method, headers, body, client IP"
+          ],
+          "gotchas": [
+            "Reading request.body() consumes the stream -- it returns empty on second read"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you return files with FileResponse?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "file-response",
+        "download",
+        "static-files",
+        "response"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**FileResponse** sends a file from disk to the client efficiently. It uses asynchronous file reading and sets appropriate headers automatically.\n\n### What FileResponse does:\n- Reads the file from disk asynchronously\n- Sets `Content-Length` from the file size (enables progress bars)\n- Sets `Content-Type` from the file extension (or your `media_type` parameter)\n- Supports `Content-Disposition` for downloads (inline vs attachment)\n- Supports HTTP Range requests for partial content (video streaming, resume downloads)\n\n### Parameters:\n- `path` -- file path on disk\n- `filename` -- suggested download filename (triggers download in browser)\n- `media_type` -- override auto-detected MIME type\n- `headers` -- additional response headers\n- `stat_result` -- pre-computed os.stat result (optimization)\n\n### FileResponse vs StreamingResponse:\n- **FileResponse**: for static files on disk, sets Content-Length, supports range requests\n- **StreamingResponse**: for dynamically generated content, no Content-Length\n\n### Security:\nNever pass user input directly as the file path without validation -- this leads to path traversal attacks.",
+          "pseudo_code": "# Serve a file for download\n@app.GET(\"/download/{filename}\")\nfunction download(filename):\n    file_path = safe_join(UPLOAD_DIR, filename)\n    if not file_path.exists():\n        raise HTTPException(404)\n    return FileResponse(\n        path=file_path,\n        filename=filename,          # Triggers download dialog\n        media_type=\"application/pdf\" # Override content type\n    )",
+          "actual_code": "import tempfile\nimport os\nfrom pathlib import Path\nfrom fastapi import FastAPI, HTTPException\nfrom fastapi.responses import FileResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Create a temp file for demonstration\ntmp_dir = tempfile.mkdtemp()\ntest_file = Path(tmp_dir) / \"report.txt\"\ntest_file.write_text(\"This is the report content.\\nLine 2.\\nLine 3.\")\n\n# Basic file download\n@app.get(\"/download\")\ndef download_report():\n    return FileResponse(\n        path=test_file,\n        filename=\"report.txt\",  # Triggers browser download dialog\n        media_type=\"text/plain\",\n    )\n\n# Serve file inline (display in browser, not download)\n@app.get(\"/view\")\ndef view_report():\n    return FileResponse(\n        path=test_file,\n        media_type=\"text/plain\",\n        # No filename = browser displays inline\n    )\n\n# Dynamic file serving with path validation\nUPLOAD_DIR = Path(tmp_dir)\n\n@app.get(\"/files/{filename}\")\ndef get_file(filename: str):\n    # SECURITY: validate filename to prevent path traversal\n    safe_path = UPLOAD_DIR / Path(filename).name  # .name strips directory components\n    if not safe_path.exists():\n        raise HTTPException(status_code=404, detail=\"File not found\")\n    return FileResponse(path=safe_path)\n\nclient = TestClient(app)\n\nresp = client.get(\"/download\")\nprint(f\"Status: {resp.status_code}\")\nprint(f\"Content-Disposition: {resp.headers.get('content-disposition')}\")\nprint(f\"Content-Length: {resp.headers.get('content-length')}\")\nprint(f\"Content: {resp.text[:30]}\")\n\n# Cleanup\nos.unlink(test_file)\nos.rmdir(tmp_dir)\n\n# Expected Output:\n# Status: 200\n# Content-Disposition: attachment; filename=\"report.txt\"\n# Content-Length: 45\n# Content: This is the report content.",
+          "code_language": "python",
+          "key_points": [
+            "FileResponse sends files from disk with automatic Content-Length and Content-Type headers",
+            "Set filename parameter to trigger browser download dialog (Content-Disposition: attachment)",
+            "Without filename, the file is displayed inline in the browser",
+            "FileResponse supports range requests for video streaming and resumable downloads"
+          ],
+          "gotchas": [
+            "NEVER pass raw user input as the file path -- always validate to prevent path traversal (../../etc/passwd)",
+            "FileResponse raises an error if the file does not exist -- check before returning",
+            "For dynamically generated content, use StreamingResponse instead -- FileResponse requires a file on disk"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FileResponse serves a file from disk with auto-detected Content-Type and Content-Length. Set `filename` to trigger browser download. It supports range requests for video streaming and resumable downloads.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import FileResponse\n\napp = FastAPI()\n\n@app.get(\"/download\")\ndef download():\n    return FileResponse(\n        path=\"/path/to/report.pdf\",\n        filename=\"report.pdf\",  # triggers download\n        media_type=\"application/pdf\",\n    )",
+          "code_language": "python",
+          "key_points": [
+            "FileResponse sets Content-Length and supports range requests -- use for files on disk"
+          ],
+          "gotchas": [
+            "Never pass user input directly as file path -- validate to prevent path traversal attacks"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle optional request body fields?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "optional-fields",
+        "pydantic",
+        "request-body",
+        "partial-update"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Optional fields in Pydantic models can be declared in several ways, each with different behavior:\n\n### Method 1: Default value\nGive a field a default value. It becomes optional in the request body.\n```python\ntags: list[str] = []\n```\n\n### Method 2: None type with default None\nUse `| None` (or `Optional[...]`) with `= None`. The field is optional and defaults to None.\n```python\ndescription: str | None = None\n```\n\n### Method 3: All-optional model for PATCH updates\nFor partial updates, make ALL fields optional so clients send only what changed.\n\n### Key distinction: missing vs None\n- A field with `= None` that is not sent in the body -> value is `None`\n- A field that IS sent as `null` -> value is also `None`\n- To distinguish \"not sent\" from \"sent as null\", use `model.model_fields_set`\n\n### PATCH partial updates:\nFor PATCH endpoints, create a model where all fields are optional, then use `model_dump(exclude_unset=True)` to get only the fields the client actually sent.",
+          "pseudo_code": "# Required vs optional fields\nclass ItemCreate:\n    name: str              # Required -- must be in the body\n    price: float           # Required\n    description: str | None = None  # Optional, defaults to None\n    tags: list[str] = []   # Optional, defaults to empty list\n\n# PATCH partial update model\nclass ItemUpdate:\n    name: str | None = None    # All fields optional\n    price: float | None = None\n\n@app.PATCH(\"/items/{id}\")\nfunction patch_item(id, updates: ItemUpdate):\n    # Only get fields the client sent\n    changes = updates.model_dump(exclude_unset=True)\n    # {\"price\": 19.99} if client only sent price\n    apply_changes(id, changes)",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# Mix of required and optional fields\nclass ItemCreate(BaseModel):\n    name: str                       # Required\n    price: float                    # Required\n    description: str | None = None  # Optional, defaults to None\n    tags: list[str] = []            # Optional, defaults to empty list\n    discount: float = 0.0           # Optional, defaults to 0.0\n\n@app.post(\"/items/\")\ndef create_item(item: ItemCreate):\n    return item.model_dump()\n\n# All-optional model for PATCH\nclass ItemUpdate(BaseModel):\n    name: str | None = None\n    price: float | None = None\n    description: str | None = None\n    tags: list[str] | None = None\n\n@app.patch(\"/items/{item_id}\")\ndef patch_item(item_id: int, updates: ItemUpdate):\n    # exclude_unset=True: only fields the client actually sent\n    changes = updates.model_dump(exclude_unset=True)\n    return {\"item_id\": item_id, \"changes\": changes}\n\nclient = TestClient(app)\n\n# Only required fields -- optional ones get defaults\nresp = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(\"Minimal:\", resp.json())\n\n# PATCH: send only what changed\nresp = client.patch(\"/items/1\", json={\"price\": 19.99})\nprint(\"Patch:\", resp.json())\n\n# PATCH: send null explicitly\nresp = client.patch(\"/items/1\", json={\"description\": None})\nprint(\"Null:\", resp.json())\n\n# Expected Output:\n# Minimal: {'name': 'Widget', 'price': 9.99, 'description': None, 'tags': [], 'discount': 0.0}\n# Patch: {'item_id': 1, 'changes': {'price': 19.99}}\n# Null: {'item_id': 1, 'changes': {'description': None}}",
+          "code_language": "python",
+          "key_points": [
+            "Fields with default values (= None, = [], = 0) are optional in the request body",
+            "str | None = None means the field can be a string, null, or omitted entirely",
+            "model_dump(exclude_unset=True) returns only fields the client sent -- essential for PATCH updates",
+            "model_fields_set tells you exactly which fields were provided in the request"
+          ],
+          "gotchas": [
+            "str | None without = None is still REQUIRED -- the client must send it (even as null)",
+            "model_dump(exclude_unset=True) distinguishes 'not sent' from 'sent as None' -- model_dump() alone does not",
+            "An empty dict {} is a valid body for an all-optional model -- it passes validation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `field: str | None = None` for optional fields that default to None. For PATCH updates, make all fields optional and use `model_dump(exclude_unset=True)` to get only what the client sent.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\nclass ItemUpdate(BaseModel):\n    name: str | None = None\n    price: float | None = None\n\n@app.patch(\"/items/{id}\")\ndef patch(id: int, updates: ItemUpdate):\n    changes = updates.model_dump(exclude_unset=True)\n    return {\"id\": id, \"changes\": changes}  # Only sent fields",
+          "code_language": "python",
+          "key_points": [
+            "model_dump(exclude_unset=True) returns only client-provided fields for partial updates"
+          ],
+          "gotchas": [
+            "str | None without = None is still required -- the default value makes it optional"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is response_model_exclude and response_model_include?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "response-model",
+        "filtering",
+        "serialization",
+        "pydantic"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI's route decorators accept `response_model_include` and `response_model_exclude` parameters to fine-tune which fields appear in the response without creating a separate response model.\n\n### response_model_include:\nA set of field names to include. Only these fields appear in the response.\n\n### response_model_exclude:\nA set of field names to exclude. All fields EXCEPT these appear in the response.\n\n### When to use:\n- Quick prototyping when creating a separate response model feels heavy\n- Excluding one or two sensitive fields from an existing model\n- Including only specific fields for a summary endpoint\n\n### When NOT to use:\n- Production APIs -- prefer separate Pydantic response models instead\n- When you need different validation rules for input vs output\n- When the exclusion logic is complex or involves nested fields\n\n### Other response_model options:\n- `response_model_exclude_unset=True` -- omit fields that were not explicitly set\n- `response_model_exclude_defaults=True` -- omit fields that equal their default value\n- `response_model_exclude_none=True` -- omit fields with None values",
+          "pseudo_code": "class User:\n    id, name, email, password, is_admin\n\n# Include only specific fields\n@app.GET(\"/summary\", response_model=User, response_model_include={\"id\", \"name\"})\n# Response: {\"id\": 1, \"name\": \"Alice\"}\n\n# Exclude sensitive fields\n@app.GET(\"/profile\", response_model=User, response_model_exclude={\"password\", \"is_admin\"})\n# Response: {\"id\": 1, \"name\": \"Alice\", \"email\": \"alice@example.com\"}\n\n# Exclude unset/none values\n@app.GET(\"/compact\", response_model=User, response_model_exclude_none=True)\n# Omits any field that is None",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass User(BaseModel):\n    id: int\n    name: str\n    email: str\n    hashed_password: str\n    is_admin: bool\n    bio: str | None = None\n\nfake_user = User(\n    id=1, name=\"Alice\", email=\"alice@example.com\",\n    hashed_password=\"$2b$12$hash\", is_admin=True, bio=None,\n)\n\n# Include only specific fields\n@app.get(\"/users/summary\", response_model=User,\n         response_model_include={\"id\", \"name\"})\ndef user_summary():\n    return fake_user\n\n# Exclude sensitive fields\n@app.get(\"/users/profile\", response_model=User,\n         response_model_exclude={\"hashed_password\", \"is_admin\"})\ndef user_profile():\n    return fake_user\n\n# Exclude None values\n@app.get(\"/users/compact\", response_model=User,\n         response_model_exclude={\"hashed_password\", \"is_admin\"},\n         response_model_exclude_none=True)\ndef user_compact():\n    return fake_user\n\nclient = TestClient(app)\n\nprint(\"Summary:\", client.get(\"/users/summary\").json())\nprint(\"Profile:\", client.get(\"/users/profile\").json())\nprint(\"Compact:\", client.get(\"/users/compact\").json())\n\n# Expected Output:\n# Summary: {'id': 1, 'name': 'Alice'}\n# Profile: {'id': 1, 'name': 'Alice', 'email': 'alice@example.com', 'bio': None}\n# Compact: {'id': 1, 'name': 'Alice', 'email': 'alice@example.com'}",
+          "code_language": "python",
+          "key_points": [
+            "response_model_include limits output to only the specified field names",
+            "response_model_exclude removes specified fields from the output",
+            "response_model_exclude_none=True omits fields with None values for cleaner responses",
+            "These are shortcuts -- prefer separate response Pydantic models for production APIs"
+          ],
+          "gotchas": [
+            "Include/exclude are quick hacks -- they do not generate correct OpenAPI schemas for the filtered model",
+            "Nested model fields require dict syntax for include/exclude: {\"address\": {\"city\"}}",
+            "Using both include and exclude together: include is applied first, then exclude removes from that set"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`response_model_include` limits output to specified fields. `response_model_exclude` removes specified fields. They are shortcuts for filtering without creating separate response models. Prefer dedicated response models for production.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass User(BaseModel):\n    id: int\n    name: str\n    password: str\n\n@app.get(\"/user\", response_model=User,\n         response_model_exclude={\"password\"})\ndef get_user():\n    return User(id=1, name=\"Alice\", password=\"secret\")\n# Returns: {\"id\": 1, \"name\": \"Alice\"}",
+          "code_language": "python",
+          "key_points": [
+            "include/exclude filter fields without creating a separate response model"
+          ],
+          "gotchas": [
+            "Include/exclude do not update the OpenAPI schema -- prefer separate response models for production"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle multiple file uploads?",
+      "display_order": 16,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "file-upload",
+        "multiple-files",
+        "uploadfile",
+        "multipart"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI handles multiple file uploads by declaring the parameter as `list[UploadFile]`. The client sends multiple files under the same form field name.\n\n### Two approaches:\n\n### 1. Multiple files, same field name\nDeclare `files: list[UploadFile]`. The client sends multiple files under the `files` field in a multipart form.\n\n### 2. Multiple files, different field names\nDeclare separate `UploadFile` parameters with different names for files that serve different purposes (e.g., `photo` and `document`).\n\n### Combining with form data:\nYou can combine multiple file uploads with regular form fields. All are sent as `multipart/form-data`.\n\n### Processing tips:\n- Iterate over the list to process each file\n- Check `file.content_type` and `file.size` for validation\n- Use `await file.read()` for each file's contents\n- Close files after processing with `await file.close()`",
+          "pseudo_code": "# Multiple files, same field\n@app.POST(\"/upload-many/\")\nfunction upload(files: list[UploadFile]):\n    results = []\n    for file in files:\n        content = await file.read()\n        results.append({name: file.filename, size: len(content)})\n    return results\n\n# Multiple files, different fields\n@app.POST(\"/upload-docs/\")\nfunction upload(photo: UploadFile, resume: UploadFile):\n    return {photo: photo.filename, resume: resume.filename}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, File, UploadFile\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Multiple files under the same field name\n@app.post(\"/upload-many/\")\nasync def upload_many(files: list[UploadFile]):\n    results = []\n    for file in files:\n        contents = await file.read()\n        results.append({\n            \"filename\": file.filename,\n            \"size\": len(contents),\n            \"content_type\": file.content_type,\n        })\n    return {\"file_count\": len(results), \"files\": results}\n\n# Different files for different purposes\n@app.post(\"/apply/\")\nasync def apply_job(\n    resume: UploadFile,\n    cover_letter: UploadFile,\n    portfolio: UploadFile | None = None,  # Optional file\n):\n    result = {\n        \"resume\": resume.filename,\n        \"cover_letter\": cover_letter.filename,\n    }\n    if portfolio:\n        result[\"portfolio\"] = portfolio.filename\n    return result\n\nclient = TestClient(app)\n\n# Upload multiple files\nresponse = client.post(\"/upload-many/\", files=[\n    (\"files\", (\"doc1.txt\", b\"Content of doc 1\", \"text/plain\")),\n    (\"files\", (\"doc2.txt\", b\"Content of doc 2\", \"text/plain\")),\n    (\"files\", (\"image.png\", b\"PNG data\", \"image/png\")),\n])\nprint(\"Count:\", response.json()[\"file_count\"])\nfor f in response.json()[\"files\"]:\n    print(f\"  {f['filename']}: {f['size']} bytes\")\n\n# Upload to separate fields\nresponse = client.post(\"/apply/\", files={\n    \"resume\": (\"resume.pdf\", b\"PDF data\", \"application/pdf\"),\n    \"cover_letter\": (\"letter.txt\", b\"Dear Sir\", \"text/plain\"),\n})\nprint(\"Apply:\", response.json())\n\n# Expected Output:\n# Count: 3\n#   doc1.txt: 16 bytes\n#   doc2.txt: 16 bytes\n#   image.png: 8 bytes\n# Apply: {'resume': 'resume.pdf', 'cover_letter': 'letter.txt'}",
+          "code_language": "python",
+          "key_points": [
+            "list[UploadFile] accepts multiple files under the same form field name",
+            "Separate UploadFile parameters accept files under different field names",
+            "Optional files use UploadFile | None = None with a default of None",
+            "All files are sent as multipart/form-data and processed with await file.read()"
+          ],
+          "gotchas": [
+            "All files are loaded into memory when using await file.read() -- process large files in chunks instead",
+            "The form field name must match: list[UploadFile] needs all files under the same key (e.g., 'files')",
+            "There is no built-in limit on file count or total size -- add validation to prevent abuse"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `list[UploadFile]` for multiple files under the same field, or separate `UploadFile` parameters for different file purposes. All are sent as multipart/form-data.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, UploadFile\n\napp = FastAPI()\n\n@app.post(\"/upload/\")\nasync def upload(files: list[UploadFile]):\n    return [\n        {\"name\": f.filename, \"size\": len(await f.read())}\n        for f in files\n    ]",
+          "code_language": "python",
+          "key_points": [
+            "list[UploadFile] accepts multiple files from a single form field"
+          ],
+          "gotchas": [
+            "No built-in size or count limits -- validate manually to prevent abuse"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you accept both JSON and Form data in the same endpoint?",
+      "display_order": 17,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "json",
+        "form-data",
+        "content-type",
+        "request"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI does **not** natively support accepting both JSON and Form data in a single endpoint. Each endpoint handler declares a specific content type expectation (JSON via Pydantic models, form via `Form()`). You cannot mix `Body()` and `Form()` in the same function.\n\n### Workarounds:\n\n### 1. Use the raw Request object\nRead the raw request, check the Content-Type header, and parse accordingly.\n\n### 2. Separate endpoints\nCreate two endpoints (one for JSON, one for form data) that call the same logic.\n\n### 3. Content-Type middleware\nUse middleware to convert form data to JSON before it reaches the handler.\n\n### Why this limitation exists:\nJSON (`application/json`) and form data (`application/x-www-form-urlencoded` or `multipart/form-data`) are fundamentally different encodings. OpenAPI spec defines a single content type per request body schema, and FastAPI follows this strictly.",
+          "pseudo_code": "# Approach 1: Raw Request with content-type detection\n@app.POST(\"/items/\")\nasync function create_item(request: Request):\n    content_type = request.headers[\"content-type\"]\n    if \"application/json\" in content_type:\n        data = await request.json()\n    elif \"form\" in content_type:\n        form = await request.form()\n        data = dict(form)\n    else:\n        raise 415 Unsupported Media Type\n    \n    # Validate with Pydantic manually\n    item = ItemCreate.model_validate(data)\n    return item\n\n# Approach 2: Separate endpoints, shared logic\n@app.POST(\"/items/json\")\ndef create_json(item: ItemCreate):\n    return save_item(item)\n\n@app.POST(\"/items/form\")\ndef create_form(name: str = Form(), price: float = Form()):\n    item = ItemCreate(name=name, price=price)\n    return save_item(item)",
+          "actual_code": "from fastapi import FastAPI, Form, Request, HTTPException\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, ValidationError\n\napp = FastAPI()\n\nclass ItemCreate(BaseModel):\n    name: str\n    price: float\n\n# Approach 1: Content-Type detection with raw Request\n@app.post(\"/items/\")\nasync def create_item(request: Request):\n    content_type = request.headers.get(\"content-type\", \"\")\n\n    if \"application/json\" in content_type:\n        data = await request.json()\n    elif \"form\" in content_type:\n        form = await request.form()\n        data = dict(form)\n    else:\n        raise HTTPException(status_code=415, detail=\"Unsupported content type\")\n\n    # Validate manually with Pydantic\n    try:\n        item = ItemCreate.model_validate(data)\n    except ValidationError as e:\n        raise HTTPException(status_code=422, detail=e.errors())\n\n    return {\"item\": item.model_dump(), \"source\": content_type}\n\n# Approach 2: Separate endpoints with shared logic\ndef save_item(item: ItemCreate):\n    return {\"saved\": item.model_dump()}\n\n@app.post(\"/items/json\")\ndef create_json(item: ItemCreate):\n    return save_item(item)\n\n@app.post(\"/items/form\")\ndef create_form(\n    name: str = Form(),\n    price: float = Form(),\n):\n    return save_item(ItemCreate(name=name, price=price))\n\nclient = TestClient(app)\n\n# JSON request\nresp = client.post(\"/items/\", json={\"name\": \"Widget\", \"price\": 9.99})\nprint(\"JSON:\", resp.json()[\"item\"])\n\n# Form request\nresp = client.post(\"/items/\", data={\"name\": \"Gadget\", \"price\": \"19.99\"})\nprint(\"Form:\", resp.json()[\"item\"])\n\n# Separate endpoints\nprint(\"JSON endpoint:\", client.post(\"/items/json\", json={\"name\": \"A\", \"price\": 1.0}).json())\nprint(\"Form endpoint:\", client.post(\"/items/form\", data={\"name\": \"B\", \"price\": \"2.0\"}).json())\n\n# Expected Output:\n# JSON: {'name': 'Widget', 'price': 9.99}\n# Form: {'name': 'Gadget', 'price': 19.99}\n# JSON endpoint: {'saved': {'name': 'A', 'price': 1.0}}\n# Form endpoint: {'saved': {'name': 'B', 'price': 2.0}}",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI does not natively support both JSON and form data in one endpoint",
+            "Use the raw Request object with Content-Type detection to handle both formats",
+            "Validate manually with Pydantic model_validate() when using the Request approach",
+            "Alternative: create separate endpoints for JSON and form that share business logic"
+          ],
+          "gotchas": [
+            "The Request approach bypasses FastAPI's auto-validation and auto-documentation",
+            "Form data sends all values as strings -- Pydantic coerces '9.99' to float, but complex nested objects are not supported",
+            "The OpenAPI schema cannot represent an endpoint that accepts both JSON and form data"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI does not natively support both JSON and form data in one endpoint. Use the raw `Request` object with Content-Type detection, or create separate endpoints that share business logic.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n    price: float\n\n@app.post(\"/items/\")\nasync def create(request: Request):\n    ct = request.headers.get(\"content-type\", \"\")\n    if \"json\" in ct:\n        data = await request.json()\n    elif \"form\" in ct:\n        data = dict(await request.form())\n    else:\n        raise HTTPException(415, \"Unsupported type\")\n    return Item.model_validate(data).model_dump()",
+          "code_language": "python",
+          "key_points": [
+            "Check Content-Type header and parse accordingly using raw Request"
+          ],
+          "gotchas": [
+            "Using Request bypasses auto-validation and OpenAPI docs -- validate manually with Pydantic"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI handle request body with nested models?",
+      "display_order": 18,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "nested-models",
+        "pydantic",
+        "request-body",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic models can contain other Pydantic models as fields, creating nested structures. FastAPI validates the entire nested hierarchy automatically.\n\n### How nested validation works:\n1. The outer model's fields are validated first\n2. For each field that is a Pydantic model, its fields are validated recursively\n3. If any nested field fails validation, the error path includes the full location (e.g., `body -> address -> zip_code`)\n4. The OpenAPI schema includes the full nested structure in Swagger docs\n\n### Common patterns:\n- **Address inside User**: `address: Address`\n- **List of nested items**: `items: list[OrderItem]`\n- **Optional nested object**: `metadata: Metadata | None = None`\n- **Deeply nested**: models inside models inside models\n\n### JSON Schema:\nNested Pydantic models generate nested JSON Schema objects in the OpenAPI docs, with each model appearing in the `components/schemas` section and referenced via `$ref`.\n\n### Performance:\nPydantic v2's Rust core validates nested models efficiently. Deep nesting does not significantly impact performance.",
+          "pseudo_code": "# Define nested models\nclass Address:\n    street: str\n    city: str\n    zip_code: str\n\nclass OrderItem:\n    product: str\n    quantity: int\n    price: float\n\nclass Order:\n    customer_name: str\n    shipping_address: Address           # Nested model\n    items: list[OrderItem]              # List of nested models\n    billing_address: Address | None = None  # Optional nested\n\n# JSON body:\n# {\n#   \"customer_name\": \"Alice\",\n#   \"shipping_address\": {\"street\": \"...\", \"city\": \"...\", \"zip_code\": \"...\"},\n#   \"items\": [{\"product\": \"...\", \"quantity\": 1, \"price\": 9.99}]\n# }",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel, Field\n\napp = FastAPI()\n\nclass Address(BaseModel):\n    street: str\n    city: str\n    state: str = Field(min_length=2, max_length=2)\n    zip_code: str\n\nclass OrderItem(BaseModel):\n    product_name: str\n    quantity: int = Field(ge=1)\n    unit_price: float = Field(gt=0)\n\nclass OrderCreate(BaseModel):\n    customer_name: str\n    shipping_address: Address                      # Required nested\n    items: list[OrderItem] = Field(min_length=1)   # List of nested\n    billing_address: Address | None = None         # Optional nested\n    notes: str | None = None\n\n@app.post(\"/orders/\", status_code=201)\ndef create_order(order: OrderCreate):\n    total = sum(i.quantity * i.unit_price for i in order.items)\n    return {\n        \"customer\": order.customer_name,\n        \"shipping_city\": order.shipping_address.city,\n        \"item_count\": len(order.items),\n        \"total\": round(total, 2),\n    }\n\nclient = TestClient(app)\n\n# Valid nested request\nresp = client.post(\"/orders/\", json={\n    \"customer_name\": \"Alice\",\n    \"shipping_address\": {\n        \"street\": \"123 Main St\",\n        \"city\": \"Springfield\",\n        \"state\": \"IL\",\n        \"zip_code\": \"62701\",\n    },\n    \"items\": [\n        {\"product_name\": \"Widget\", \"quantity\": 2, \"unit_price\": 9.99},\n        {\"product_name\": \"Gadget\", \"quantity\": 1, \"unit_price\": 24.99},\n    ],\n})\nprint(\"Order:\", resp.json())\n\n# Invalid nested field\nresp = client.post(\"/orders/\", json={\n    \"customer_name\": \"Bob\",\n    \"shipping_address\": {\n        \"street\": \"456 Oak Ave\",\n        \"city\": \"Dallas\",\n        \"state\": \"Texas\",  # Too long -- must be 2 chars\n        \"zip_code\": \"75201\",\n    },\n    \"items\": [{\"product_name\": \"X\", \"quantity\": 1, \"unit_price\": 5.0}],\n})\nprint(\"Invalid nested:\", resp.status_code)\n\n# Expected Output:\n# Order: {'customer': 'Alice', 'shipping_city': 'Springfield', 'item_count': 2, 'total': 44.97}\n# Invalid nested: 422",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic models can contain other models as fields for deeply nested validation",
+            "list[Model] validates each item in the list against the nested model schema",
+            "Optional nested models use Model | None = None for optional sub-objects",
+            "Validation errors include the full path (e.g., body -> shipping_address -> state)"
+          ],
+          "gotchas": [
+            "Deeply nested models increase the JSON Schema complexity in Swagger docs -- keep nesting reasonable",
+            "Circular references (Model A contains Model B which contains Model A) require model_rebuild() to work",
+            "Nested model changes affect all endpoints using the parent model -- extract shared models carefully"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic models can contain other Pydantic models as fields, creating validated nested JSON structures. Use `list[Model]` for arrays of nested objects and `Model | None = None` for optional nesting. Validation errors show the full path to the invalid field.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel\nfrom fastapi import FastAPI\n\napp = FastAPI()\n\nclass Address(BaseModel):\n    city: str\n    zip_code: str\n\nclass User(BaseModel):\n    name: str\n    address: Address  # Nested model\n\n@app.post(\"/users/\")\ndef create(user: User):\n    return {\"name\": user.name, \"city\": user.address.city}\n# Body: {\"name\": \"Alice\", \"address\": {\"city\": \"NYC\", \"zip_code\": \"10001\"}}",
+          "code_language": "python",
+          "key_points": [
+            "Nested Pydantic models are validated recursively with full error path reporting"
+          ],
+          "gotchas": [
+            "Circular model references require Pydantic's model_rebuild() to resolve forward references"
+          ]
+        }
+      ]
+    }
+  ]
+}

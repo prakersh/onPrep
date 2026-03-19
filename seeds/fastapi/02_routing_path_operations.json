@@ -1,0 +1,673 @@
+{
+  "concept_slug": "routing-path-operations",
+  "questions": [
+    {
+      "title": "How do you define path operations (GET, POST, PUT, DELETE) in FastAPI?",
+      "display_order": 1,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "routing",
+        "http-methods",
+        "path-operations"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI uses **decorator methods** on the app (or router) instance to define path operations. Each HTTP method has a corresponding decorator:\n\n### Available decorators:\n- `@app.get()` -- Read resources\n- `@app.post()` -- Create resources\n- `@app.put()` -- Full update/replace\n- `@app.patch()` -- Partial update\n- `@app.delete()` -- Remove resources\n- `@app.options()` -- CORS preflight, allowed methods\n- `@app.head()` -- Like GET but no body\n- `@app.trace()` -- Diagnostic echo\n\n### Decorator parameters:\n- `path` (first arg) -- The URL pattern\n- `status_code` -- Default response status code\n- `tags` -- List of tags for docs grouping\n- `summary` -- Short description for docs\n- `description` -- Long description (overrides docstring)\n- `response_model` -- Pydantic model for response filtering\n- `deprecated` -- Mark endpoint as deprecated\n- `responses` -- Dict of additional response schemas\n\n### Key conventions:\n- Return a dict or Pydantic model -- FastAPI auto-serializes to JSON\n- POST typically returns 201, DELETE returns 204\n- Each function handles exactly one HTTP method (unlike Flask which can handle multiple)",
+          "pseudo_code": "@app.HTTP_METHOD(\"/path\", status_code=CODE, tags=[\"tag\"])\ndef handler_function(parameters):\n    # process request\n    return response_data\n\n# Unlike Flask, each decorator = one HTTP method\n# Flask: @app.route('/items', methods=['GET', 'POST'])\n# FastAPI: @app.get('/items') and @app.post('/items') separately",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Task(BaseModel):\n    title: str\n    done: bool = False\n\ntasks: dict[int, dict] = {}\ncounter = 0\n\n@app.get(\"/tasks/\", tags=[\"tasks\"])\ndef list_tasks():\n    \"\"\"List all tasks.\"\"\"\n    return list(tasks.values())\n\n@app.post(\"/tasks/\", status_code=201, tags=[\"tasks\"])\ndef create_task(task: Task):\n    \"\"\"Create a new task.\"\"\"\n    global counter\n    counter += 1\n    record = {\"id\": counter, **task.model_dump()}\n    tasks[counter] = record\n    return record\n\n@app.get(\"/tasks/{task_id}\", tags=[\"tasks\"])\ndef get_task(task_id: int):\n    \"\"\"Get a specific task.\"\"\"\n    return tasks.get(task_id, {\"error\": \"not found\"})\n\n@app.put(\"/tasks/{task_id}\", tags=[\"tasks\"])\ndef replace_task(task_id: int, task: Task):\n    \"\"\"Replace an entire task.\"\"\"\n    tasks[task_id] = {\"id\": task_id, **task.model_dump()}\n    return tasks[task_id]\n\n@app.patch(\"/tasks/{task_id}\", tags=[\"tasks\"])\ndef update_task(task_id: int, task: Task):\n    \"\"\"Partially update a task.\"\"\"\n    if task_id in tasks:\n        stored = tasks[task_id]\n        stored.update(task.model_dump(exclude_unset=True))\n        return stored\n    return {\"error\": \"not found\"}\n\n@app.delete(\"/tasks/{task_id}\", status_code=204, tags=[\"tasks\"])\ndef delete_task(task_id: int):\n    \"\"\"Delete a task.\"\"\"\n    tasks.pop(task_id, None)\n\nclient = TestClient(app)\n\nresp = client.post(\"/tasks/\", json={\"title\": \"Buy milk\"})\nprint(f\"POST 201: {resp.json()}\")\n\nresp = client.get(\"/tasks/1\")\nprint(f\"GET 200: {resp.json()}\")\n\nresp = client.put(\"/tasks/1\", json={\"title\": \"Buy oat milk\", \"done\": True})\nprint(f\"PUT 200: {resp.json()}\")\n\nresp = client.delete(\"/tasks/1\")\nprint(f\"DELETE: {resp.status_code}\")\n\n# Expected Output:\n# POST 201: {'id': 1, 'title': 'Buy milk', 'done': False}\n# GET 200: {'id': 1, 'title': 'Buy milk', 'done': False}\n# PUT 200: {'id': 1, 'title': 'Buy oat milk', 'done': True}\n# DELETE: 204",
+          "code_language": "python",
+          "key_points": [
+            "Each HTTP method has its own decorator: @app.get(), @app.post(), @app.put(), @app.patch(), @app.delete()",
+            "Unlike Flask, each decorator handles exactly one HTTP method",
+            "status_code parameter sets the default response code (POST=201, DELETE=204 are common)",
+            "Return dicts or Pydantic models -- FastAPI auto-serializes to JSON"
+          ],
+          "gotchas": [
+            "PUT replaces the entire resource; PATCH updates only provided fields -- use model_dump(exclude_unset=True) for PATCH",
+            "DELETE with status_code=204 returns no body -- returning data from a 204 handler is silently ignored",
+            "Function names must be unique across the app -- they become OpenAPI operation IDs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI uses method-specific decorators: `@app.get()`, `@app.post()`, `@app.put()`, `@app.patch()`, `@app.delete()`. Each decorator handles one HTTP method (unlike Flask's `methods=[]`). Return dicts or Pydantic models for auto-serialization.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Item(BaseModel):\n    name: str\n\n@app.get(\"/items/\")\ndef list_items():\n    return []\n\n@app.post(\"/items/\", status_code=201)\ndef create_item(item: Item):\n    return item.model_dump()\n\n@app.delete(\"/items/{item_id}\", status_code=204)\ndef delete_item(item_id: int):\n    pass",
+          "code_language": "python",
+          "key_points": [
+            "One decorator per HTTP method, not methods=[] like Flask",
+            "status_code sets the default response code"
+          ],
+          "gotchas": [
+            "status_code=204 means no response body -- any returned data is ignored"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do path parameters work with type validation?",
+      "display_order": 2,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "path-parameters",
+        "type-validation",
+        "routing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Path parameters are declared using curly braces in the URL path and matched to function parameters by name. FastAPI uses Python **type annotations** to automatically validate and convert path parameters.\n\n### How it works:\n1. Declare `{param_name}` in the path string\n2. Add a matching function parameter with a type annotation\n3. FastAPI validates the URL segment against the type\n4. Invalid types return automatic 422 errors with details\n\n### Supported types:\n- `int` -- Integer validation\n- `float` -- Float validation\n- `str` -- String (default)\n- `bool` -- Accepts `true`, `false`, `1`, `0`, `yes`, `no`\n- `UUID` -- UUID format validation\n- `Path` from pathlib -- File path type\n\n### Important:\n- Path parameters are **always required** (they are part of the URL)\n- The parameter name in the function must match the `{name}` in the path\n- Type conversion happens automatically (string from URL -> typed Python value)",
+          "pseudo_code": "# Path parameter validation flow\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):  # Must match {item_id}\n    ...\n\n# Request: GET /items/42\n# 1. Extract \"42\" from URL\n# 2. Validate: can \"42\" be converted to int? Yes -> 42\n# 3. Call get_item(item_id=42)\n\n# Request: GET /items/abc\n# 1. Extract \"abc\" from URL\n# 2. Validate: can \"abc\" be converted to int? No!\n# 3. Return 422 {\"detail\": [{\"msg\": \"value is not a valid integer\"}]}",
+          "actual_code": "from uuid import UUID\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Integer path parameter\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    return {\"item_id\": item_id, \"type\": type(item_id).__name__}\n\n# Float path parameter\n@app.get(\"/price/{amount}\")\ndef get_price(amount: float):\n    return {\"amount\": amount}\n\n# Boolean path parameter\n@app.get(\"/feature/{enabled}\")\ndef check_feature(enabled: bool):\n    return {\"enabled\": enabled}\n\n# UUID path parameter\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: UUID):\n    return {\"user_id\": str(user_id)}\n\n# String path parameter (default)\n@app.get(\"/files/{filename}\")\ndef get_file(filename: str):\n    return {\"filename\": filename}\n\nclient = TestClient(app)\n\n# Valid: int conversion\nresp = client.get(\"/items/42\")\nprint(f\"Int: {resp.json()}\")\n\n# Valid: bool conversion (accepts true/false/1/0/yes/no)\nresp = client.get(\"/feature/true\")\nprint(f\"Bool: {resp.json()}\")\n\n# Invalid: \"abc\" is not an int -> 422\nresp = client.get(\"/items/abc\")\nprint(f\"Invalid int: {resp.status_code}\")\n\n# Valid UUID\nresp = client.get(\"/users/550e8400-e29b-41d4-a716-446655440000\")\nprint(f\"UUID: {resp.json()}\")\n\n# Invalid UUID\nresp = client.get(\"/users/not-a-uuid\")\nprint(f\"Invalid UUID: {resp.status_code}\")\n\n# Expected Output:\n# Int: {'item_id': 42, 'type': 'int'}\n# Bool: {'enabled': True}\n# Invalid int: 422\n# UUID: {'user_id': '550e8400-e29b-41d4-a716-446655440000'}\n# Invalid UUID: 422",
+          "code_language": "python",
+          "key_points": [
+            "Path parameters use {name} in the URL and matching typed function parameters",
+            "FastAPI auto-validates and converts: str from URL -> int, float, bool, UUID, etc.",
+            "Invalid values return 422 with detailed error messages automatically",
+            "Path parameters are always required -- they are part of the URL structure"
+          ],
+          "gotchas": [
+            "Path parameter names must match exactly between the URL template and function signature",
+            "bool accepts many values: true/false, 1/0, yes/no, on/off (case-insensitive)",
+            "Path parameters cannot contain forward slashes by default -- use path type for that"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Declare `{param}` in the path and add a typed function parameter. FastAPI auto-validates and converts: `int`, `float`, `bool`, `UUID`, `str`. Invalid values return 422 automatically.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):  # \"42\" -> 42, \"abc\" -> 422\n    return {\"item_id\": item_id}\n\n# GET /items/42   -> {\"item_id\": 42}\n# GET /items/abc  -> 422 error",
+          "code_language": "python",
+          "key_points": [
+            "Type annotations on function params drive automatic URL validation"
+          ],
+          "gotchas": [
+            "Parameter name in {braces} must match the function parameter name exactly"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do query parameters work in FastAPI?",
+      "display_order": 3,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "query-parameters",
+        "validation",
+        "routing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Query parameters** are function parameters that do NOT appear in the path template. FastAPI automatically treats them as query string parameters (`?key=value&key2=value2`).\n\n### How FastAPI identifies query parameters:\n- If a parameter name appears in `{braces}` in the path -> path parameter\n- If a parameter name does NOT appear in the path -> query parameter\n- If the type is a Pydantic model -> request body\n\n### Default values and required:\n- Parameter with default value -> **optional** query param\n- Parameter without default -> **required** query param\n- `param: str | None = None` -> optional, defaults to None\n\n### Type validation:\nQuery parameters are validated the same as path parameters. FastAPI converts strings from the URL to the declared type.\n\n### Lists as query parameters:\nUse `list[str]` or `Query(default=[])` for multi-value parameters like `?tag=a&tag=b`.",
+          "pseudo_code": "# Query parameter detection\n@app.get(\"/items/{item_id}\")\ndef get_items(item_id: int, skip: int = 0, limit: int = 10):\n    # item_id -> path param (in {braces})\n    # skip -> query param (not in path, has default)\n    # limit -> query param (not in path, has default)\n    pass\n\n# URL: /items/42?skip=10&limit=5\n# item_id = 42, skip = 10, limit = 5\n\n# URL: /items/42\n# item_id = 42, skip = 0 (default), limit = 10 (default)",
+          "actual_code": "from fastapi import FastAPI, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Basic query parameters with defaults\n@app.get(\"/items/\")\ndef list_items(skip: int = 0, limit: int = 10):\n    return {\"skip\": skip, \"limit\": limit}\n\n# Required query parameter (no default)\n@app.get(\"/search/\")\ndef search(q: str):  # No default = required\n    return {\"query\": q}\n\n# Optional query parameter\n@app.get(\"/find/\")\ndef find(q: str | None = None):\n    if q:\n        return {\"results\": f\"searching for {q}\"}\n    return {\"results\": \"no query\"}\n\n# Multiple values: ?tag=python&tag=fastapi\n@app.get(\"/filter/\")\ndef filter_items(tag: list[str] = Query(default=[])):\n    return {\"tags\": tag}\n\n# Mix path and query parameters\n@app.get(\"/users/{user_id}/items/\")\ndef user_items(user_id: int, skip: int = 0, limit: int = 10):\n    return {\"user_id\": user_id, \"skip\": skip, \"limit\": limit}\n\nclient = TestClient(app)\n\n# Optional with defaults\nprint(client.get(\"/items/\").json())\nprint(client.get(\"/items/?skip=5&limit=20\").json())\n\n# Required query param\nprint(client.get(\"/search/?q=fastapi\").json())\nprint(f\"Missing required: {client.get('/search/').status_code}\")\n\n# Optional param\nprint(client.get(\"/find/\").json())\nprint(client.get(\"/find/?q=test\").json())\n\n# List param\nprint(client.get(\"/filter/?tag=python&tag=fastapi\").json())\n\n# Expected Output:\n# {'skip': 0, 'limit': 10}\n# {'skip': 5, 'limit': 20}\n# {'query': 'fastapi'}\n# Missing required: 422\n# {'results': 'no query'}\n# {'results': 'searching for test'}\n# {'tags': ['python', 'fastapi']}",
+          "code_language": "python",
+          "key_points": [
+            "Function params not in the URL path are automatically treated as query parameters",
+            "Params with default values are optional; without defaults they are required",
+            "Use list[str] with Query(default=[]) for multi-value query params like ?tag=a&tag=b",
+            "Query params get the same automatic type validation as path params"
+          ],
+          "gotchas": [
+            "A required query param (no default) returns 422 if missing -- not 404",
+            "str | None = None makes a param optional; just str makes it required",
+            "bool query params accept: true/false, 1/0, yes/no, on/off (case-insensitive)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Function parameters not in the URL path are auto-detected as query parameters. Parameters with defaults are optional; without defaults they are required. Use `Query()` for advanced validation and list types.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/items/\")\ndef list_items(skip: int = 0, limit: int = 10, q: str | None = None):\n    # skip and limit have defaults (optional)\n    # q is explicitly optional (None default)\n    return {\"skip\": skip, \"limit\": limit, \"q\": q}\n\n# /items/?skip=5&limit=20&q=search",
+          "code_language": "python",
+          "key_points": [
+            "Params not in URL path = query params; with default = optional, without = required"
+          ],
+          "gotchas": [
+            "Missing required query params return 422 (validation error), not 404"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you make query parameters optional or required?",
+      "display_order": 4,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "query-parameters",
+        "optional",
+        "required",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI determines whether a query parameter is required or optional based on the **default value** and **type annotation**:\n\n### Required:\n```python\ndef endpoint(q: str):        # Required -- no default\ndef endpoint(q: str = ...):   # Required -- explicit Ellipsis\ndef endpoint(q: str = Query()):  # Required -- Query with no default\n```\n\n### Optional:\n```python\ndef endpoint(q: str = \"default\"):     # Optional with default string\ndef endpoint(q: str | None = None):   # Optional, None if not provided\ndef endpoint(q: int = 0):             # Optional with default 0\ndef endpoint(q: str = Query(default=None)):  # Optional via Query\n```\n\n### The Ellipsis (`...`) trick:\nUse `...` as the default to mark a parameter as required when using `Query()`, `Path()`, etc. This is useful when you want to add validation constraints but still require the parameter.\n\n### None vs default value:\n- `str | None = None` -- Optional, caller can omit it entirely, you get None\n- `str = \"all\"` -- Optional, caller can omit it, you get \"all\"\n- `str` -- Required, caller must provide it or get 422",
+          "pseudo_code": "# Required vs Optional decision tree\nif parameter has no default value:\n    -> REQUIRED (422 if missing)\nelif default is ... (Ellipsis):\n    -> REQUIRED (explicit)\nelif default is None or some value:\n    -> OPTIONAL (uses default if missing)\n\n# With Query() for extra validation\nQuery()              -> required\nQuery(default=None)  -> optional\nQuery(default=\"x\")   -> optional with default\nQuery(min_length=1)  -> required with constraint",
+          "actual_code": "from fastapi import FastAPI, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.get(\"/search/\")\ndef search(\n    # Required: no default\n    q: str,\n    # Required with validation: Ellipsis default\n    category: str = Query(min_length=1, max_length=50),\n    # Optional: default value\n    page: int = 1,\n    # Optional: None default\n    sort_by: str | None = None,\n    # Optional with validation\n    limit: int = Query(default=10, ge=1, le=100),\n):\n    return {\n        \"q\": q,\n        \"category\": category,\n        \"page\": page,\n        \"sort_by\": sort_by,\n        \"limit\": limit,\n    }\n\nclient = TestClient(app)\n\n# All required params provided\nresp = client.get(\"/search/?q=python&category=books\")\nprint(f\"Valid: {resp.json()}\")\n\n# Missing required param 'q'\nresp = client.get(\"/search/?category=books\")\nprint(f\"Missing q: {resp.status_code}\")\n\n# Missing required param 'category'\nresp = client.get(\"/search/?q=python\")\nprint(f\"Missing category: {resp.status_code}\")\n\n# All params including optional\nresp = client.get(\"/search/?q=python&category=books&page=2&sort_by=price&limit=25\")\nprint(f\"All params: {resp.json()}\")\n\n# Invalid limit (over max)\nresp = client.get(\"/search/?q=python&category=books&limit=200\")\nprint(f\"Invalid limit: {resp.status_code}\")\n\n# Expected Output:\n# Valid: {'q': 'python', 'category': 'books', 'page': 1, 'sort_by': None, 'limit': 10}\n# Missing q: 422\n# Missing category: 422\n# All params: {'q': 'python', 'category': 'books', 'page': 2, 'sort_by': 'price', 'limit': 25}\n# Invalid limit: 422",
+          "code_language": "python",
+          "key_points": [
+            "No default = required; any default value (including None) = optional",
+            "Use Query() with no default or ... (Ellipsis) for required params with validation",
+            "str | None = None makes a truly optional param; str = 'default' provides a fallback",
+            "Query(ge=1, le=100) adds numeric constraints; Query(min_length=1) adds string constraints"
+          ],
+          "gotchas": [
+            "Query() with no default argument is required -- Query(default=None) is optional",
+            "Do not confuse str | None = None (optional) with str (required) -- the None default is what makes it optional",
+            "Ellipsis (...) as default is Pythonic but confusing to newcomers -- it means 'required'"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "No default value = required (422 if missing). Any default (including `None`) = optional. Use `Query()` to add constraints like min/max while controlling whether the param is required.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Query\n\napp = FastAPI()\n\n@app.get(\"/items/\")\ndef list_items(\n    q: str,                                    # Required\n    skip: int = 0,                             # Optional, default 0\n    limit: int = Query(default=10, le=100),    # Optional, max 100\n    tag: str | None = None,                    # Optional, default None\n):\n    return {\"q\": q, \"skip\": skip, \"limit\": limit, \"tag\": tag}",
+          "code_language": "python",
+          "key_points": [
+            "No default = required; default value = optional; None = explicitly optional"
+          ],
+          "gotchas": [
+            "Query() with no default is required -- add default=None to make it optional"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is APIRouter and how does it organize routes?",
+      "display_order": 5,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "apirouter",
+        "organization",
+        "modular",
+        "routing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**APIRouter** is FastAPI's tool for organizing routes into separate modules. It works like Flask's Blueprints -- you define routes on a router, then include the router in the main app.\n\n### Why use APIRouter:\n- **Separation of concerns**: Each resource/domain gets its own file\n- **Shared configuration**: Set prefix, tags, dependencies once for all routes\n- **Reusability**: Routers can be included in multiple apps\n- **Team collaboration**: Different developers can work on different routers\n\n### APIRouter parameters:\n- `prefix` -- URL prefix for all routes (e.g., `/items`)\n- `tags` -- Default tags for all routes in this router\n- `dependencies` -- Dependencies applied to all routes\n- `responses` -- Default response schemas\n- `deprecated` -- Mark all routes as deprecated\n\n### How to use:\n1. Create a router in a separate file\n2. Define routes on the router (same API as app)\n3. Include the router in the main app with `app.include_router()`",
+          "pseudo_code": "# routers/items.py\nrouter = APIRouter(prefix=\"/items\", tags=[\"items\"])\n\n@router.get(\"/\")\ndef list_items(): ...\n\n@router.post(\"/\")\ndef create_item(): ...\n\n# main.py\napp = FastAPI()\napp.include_router(items_router)\n# Now /items/ and POST /items/ are registered",
+          "actual_code": "from fastapi import FastAPI, APIRouter, Depends\nfrom fastapi.testclient import TestClient\n\n# --- routers/items.py ---\nitems_router = APIRouter(\n    prefix=\"/items\",\n    tags=[\"items\"],\n    responses={404: {\"description\": \"Not found\"}},\n)\n\n@items_router.get(\"/\")\ndef list_items():\n    return [{\"id\": 1, \"name\": \"Widget\"}]\n\n@items_router.get(\"/{item_id}\")\ndef get_item(item_id: int):\n    return {\"id\": item_id, \"name\": \"Widget\"}\n\n@items_router.post(\"/\", status_code=201)\ndef create_item(name: str):\n    return {\"id\": 2, \"name\": name}\n\n# --- routers/users.py ---\nusers_router = APIRouter(\n    prefix=\"/users\",\n    tags=[\"users\"],\n)\n\n@users_router.get(\"/\")\ndef list_users():\n    return [{\"id\": 1, \"username\": \"alice\"}]\n\n@users_router.get(\"/{user_id}\")\ndef get_user(user_id: int):\n    return {\"id\": user_id, \"username\": \"alice\"}\n\n# --- main.py ---\napp = FastAPI(title=\"Modular App\")\n\n# Include routers\napp.include_router(items_router)\napp.include_router(users_router)\n\n# You can also override prefix/tags at include time:\n# app.include_router(items_router, prefix=\"/v2/items\", tags=[\"items-v2\"])\n\nclient = TestClient(app)\n\nprint(client.get(\"/items/\").json())\nprint(client.get(\"/items/42\").json())\nprint(client.get(\"/users/\").json())\nprint(client.get(\"/users/1\").json())\n\n# Verify all routes are registered\nroutes = [r.path for r in app.routes if hasattr(r, 'path')]\nprint(f\"Routes: {sorted(routes)}\")\n\n# Expected Output:\n# [{'id': 1, 'name': 'Widget'}]\n# {'id': 42, 'name': 'Widget'}\n# [{'id': 1, 'username': 'alice'}]\n# {'id': 1, 'username': 'alice'}\n# Routes: ['/docs', '/docs/oauth2-redirect', '/items/', '/items/{item_id}', '/openapi.json', '/redoc', '/users/', '/users/{user_id}']",
+          "code_language": "python",
+          "key_points": [
+            "APIRouter works like Flask's Blueprints -- organize routes into separate modules",
+            "Set prefix, tags, and dependencies on the router to apply to all its routes",
+            "app.include_router() registers all router routes in the main app",
+            "Prefix and tags can be overridden at include time"
+          ],
+          "gotchas": [
+            "If you set prefix on both the router AND include_router, they concatenate (e.g., /api + /items = /api/items)",
+            "Tags set on the router apply to all routes -- route-level tags are additive, not replacements",
+            "Router dependencies run for every route in the router -- be careful with expensive dependencies"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "APIRouter groups routes into separate modules, like Flask Blueprints. Define routes on a router with `@router.get()`, then attach it to the app with `app.include_router(router, prefix=\"/items\")`. Set shared prefix, tags, and dependencies at the router level.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, APIRouter\n\nrouter = APIRouter(prefix=\"/items\", tags=[\"items\"])\n\n@router.get(\"/\")\ndef list_items():\n    return []\n\n@router.post(\"/\", status_code=201)\ndef create_item():\n    return {\"id\": 1}\n\napp = FastAPI()\napp.include_router(router)  # /items/ and POST /items/",
+          "code_language": "python",
+          "key_points": [
+            "APIRouter groups routes; include_router attaches them to the app"
+          ],
+          "gotchas": [
+            "Prefix on router + prefix on include_router concatenate -- do not double-prefix"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does route ordering affect path matching in FastAPI?",
+      "display_order": 6,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "routing",
+        "path-matching",
+        "order",
+        "precedence"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI evaluates routes in the **order they are defined**. The first matching route wins. This is critical when you have routes that could overlap.\n\n### The classic problem:\n```python\n@app.get(\"/users/{user_id}\")  # Matches ANY string after /users/\n@app.get(\"/users/me\")         # Never reached! \"me\" matches {user_id}\n```\n\n### The fix:\nPlace **specific routes before parameterized routes**:\n```python\n@app.get(\"/users/me\")         # Checked first\n@app.get(\"/users/{user_id}\")  # Only if \"me\" did not match\n```\n\n### Rules:\n1. Routes are evaluated top-to-bottom (definition order)\n2. First match wins -- later routes for the same path pattern are ignored\n3. Fixed paths should come before parameterized paths\n4. More specific patterns should come before more general ones\n5. This applies across routers too -- include order matters",
+          "pseudo_code": "# BAD: /users/me is unreachable\n@app.get(\"/users/{user_id}\")  # Catches everything: /users/me, /users/42\n@app.get(\"/users/me\")         # Dead code!\n\n# GOOD: specific before generic\n@app.get(\"/users/me\")         # Exact match checked first\n@app.get(\"/users/{user_id}\")  # Fallback for everything else",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\n# CORRECT ordering: specific before generic\napp = FastAPI()\n\n@app.get(\"/users/me\")\ndef get_current_user():\n    \"\"\"Must come BEFORE /users/{user_id}.\"\"\"\n    return {\"user\": \"current_user\", \"handler\": \"get_current_user\"}\n\n@app.get(\"/users/admin\")\ndef get_admin():\n    \"\"\"Another specific route before the generic one.\"\"\"\n    return {\"user\": \"admin\", \"handler\": \"get_admin\"}\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: str):\n    \"\"\"Generic handler for all other user IDs.\"\"\"\n    return {\"user\": user_id, \"handler\": \"get_user\"}\n\nclient = TestClient(app)\n\n# /users/me -> get_current_user (specific match)\nprint(client.get(\"/users/me\").json())\n\n# /users/admin -> get_admin (specific match)\nprint(client.get(\"/users/admin\").json())\n\n# /users/42 -> get_user (generic match)\nprint(client.get(\"/users/42\").json())\n\n# /users/alice -> get_user (generic match)\nprint(client.get(\"/users/alice\").json())\n\n# Expected Output:\n# {'user': 'current_user', 'handler': 'get_current_user'}\n# {'user': 'admin', 'handler': 'get_admin'}\n# {'user': '42', 'handler': 'get_user'}\n# {'user': 'alice', 'handler': 'get_user'}",
+          "code_language": "python",
+          "key_points": [
+            "Routes are matched in definition order -- first match wins",
+            "Place specific/fixed routes BEFORE parameterized routes",
+            "/users/me must come before /users/{user_id} or it will never be reached",
+            "Router include order also matters -- first included router's routes are checked first"
+          ],
+          "gotchas": [
+            "This is the most common FastAPI routing bug -- /users/me after /users/{user_id} means 'me' becomes the user_id",
+            "FastAPI does not warn you about shadowed routes -- you must check ordering yourself",
+            "When using APIRouter, the include order in main.py determines evaluation order across routers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Routes match in definition order -- first match wins. Always place specific routes (`/users/me`) before parameterized routes (`/users/{user_id}`), or the parameter will capture \"me\" as a user_id.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/me\")         # Specific: checked first\ndef current_user():\n    return {\"user\": \"me\"}\n\n@app.get(\"/users/{user_id}\")  # Generic: fallback\ndef get_user(user_id: str):\n    return {\"user\": user_id}",
+          "code_language": "python",
+          "key_points": [
+            "Definition order matters -- specific routes before parameterized routes"
+          ],
+          "gotchas": [
+            "FastAPI does not warn about shadowed routes -- you must check ordering manually"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add tags to organize API endpoints?",
+      "display_order": 7,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "tags",
+        "documentation",
+        "organization",
+        "openapi"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Tags** group related endpoints together in the auto-generated documentation (Swagger UI and ReDoc). They help users navigate large APIs.\n\n### Where to set tags:\n1. **Route-level**: `@app.get(\"/items/\", tags=[\"items\"])`\n2. **Router-level**: `APIRouter(tags=[\"items\"])` -- applies to all routes in the router\n3. **Include-level**: `app.include_router(router, tags=[\"items\"])` -- overrides router tags\n\n### Tag metadata:\nUse `openapi_tags` on the FastAPI app to add descriptions and external doc links to tags:\n\n```python\ntags_metadata = [\n    {\"name\": \"items\", \"description\": \"Manage items.\"},\n    {\"name\": \"users\", \"description\": \"User operations.\"},\n]\napp = FastAPI(openapi_tags=tags_metadata)\n```\n\n### Tag ordering:\nTags appear in Swagger/ReDoc in the order defined in `openapi_tags`. Endpoints within a tag appear in definition order.\n\n### Multiple tags:\nA single route can have multiple tags, and it will appear under each tag group in the docs.",
+          "pseudo_code": "# Tags group endpoints in docs\n\n# Route-level tags\n@app.get(\"/items/\", tags=[\"items\"])\n\n# Router-level tags (apply to all routes)\nrouter = APIRouter(tags=[\"items\"])\n\n# Tag descriptions for docs\napp = FastAPI(openapi_tags=[\n    {\"name\": \"items\", \"description\": \"Item CRUD\"},\n    {\"name\": \"users\", \"description\": \"User management\"},\n])",
+          "actual_code": "from fastapi import FastAPI, APIRouter\nfrom enum import Enum\n\n# Define tag metadata with descriptions\ntags_metadata = [\n    {\n        \"name\": \"users\",\n        \"description\": \"Operations for managing user accounts.\",\n    },\n    {\n        \"name\": \"items\",\n        \"description\": \"CRUD operations for items in the store.\",\n    },\n    {\n        \"name\": \"admin\",\n        \"description\": \"Administrative operations. **Requires admin access.**\",\n    },\n]\n\napp = FastAPI(title=\"Tagged API\", openapi_tags=tags_metadata)\n\n# Router-level tags\nusers_router = APIRouter(prefix=\"/users\", tags=[\"users\"])\nitems_router = APIRouter(prefix=\"/items\", tags=[\"items\"])\n\n@users_router.get(\"/\")\ndef list_users():\n    return []\n\n@items_router.get(\"/\")\ndef list_items():\n    return []\n\n# Route-level tag (adds to router tags)\n@items_router.delete(\"/{item_id}\", tags=[\"admin\"])\ndef delete_item(item_id: int):\n    \"\"\"This appears under both 'items' and 'admin' tags.\"\"\"\n    pass\n\n# Route with multiple tags\n@app.get(\"/dashboard/\", tags=[\"users\", \"admin\"])\ndef dashboard():\n    \"\"\"Appears under both 'users' and 'admin' sections in docs.\"\"\"\n    return {\"status\": \"ok\"}\n\napp.include_router(users_router)\napp.include_router(items_router)\n\n# Check tags in the schema\nschema = app.openapi()\ntags = schema.get(\"tags\", [])\nfor tag in tags:\n    print(f\"Tag: {tag['name']} - {tag.get('description', 'N/A')}\")\n\n# Expected Output:\n# Tag: users - Operations for managing user accounts.\n# Tag: items - CRUD operations for items in the store.\n# Tag: admin - Administrative operations. **Requires admin access.**",
+          "code_language": "python",
+          "key_points": [
+            "Tags group endpoints in Swagger UI and ReDoc documentation",
+            "Set tags at route-level, router-level, or include_router level",
+            "openapi_tags adds descriptions and controls display order in docs",
+            "A route can have multiple tags -- it appears under each group in the docs"
+          ],
+          "gotchas": [
+            "Route-level tags are additive to router-level tags, not replacements",
+            "Tags without metadata (not in openapi_tags) still work but lack descriptions",
+            "Tag order in openapi_tags controls display order in documentation"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Tags group endpoints in Swagger/ReDoc docs. Set them on routes (`tags=[\"items\"]`), routers (`APIRouter(tags=[\"items\"])`), or at include time. Use `openapi_tags` on the app for tag descriptions.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, APIRouter\n\napp = FastAPI(openapi_tags=[\n    {\"name\": \"items\", \"description\": \"Item operations.\"},\n])\n\nrouter = APIRouter(prefix=\"/items\", tags=[\"items\"])\n\n@router.get(\"/\")\ndef list_items():\n    return []\n\napp.include_router(router)",
+          "code_language": "python",
+          "key_points": [
+            "Tags organize endpoints into groups in the auto-generated docs"
+          ],
+          "gotchas": [
+            "Route-level tags are additive to router-level tags, not replacements"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you mark routes as deprecated?",
+      "display_order": 8,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "deprecated",
+        "api-versioning",
+        "documentation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI lets you mark endpoints as **deprecated** using the `deprecated=True` parameter on route decorators. Deprecated endpoints:\n\n- Still work normally (they accept and respond to requests)\n- Appear with a ~~strikethrough~~ in Swagger UI\n- Are marked as deprecated in the OpenAPI schema\n- Signal to API consumers that the endpoint will be removed in a future version\n\n### Where to set deprecated:\n1. **Route-level**: `@app.get(\"/old\", deprecated=True)`\n2. **Router-level**: `APIRouter(deprecated=True)` -- marks all routes in the router\n\n### Best practices for deprecation:\n- Add a description explaining what to use instead\n- Keep the deprecated endpoint working until the next major version\n- Log usage of deprecated endpoints to track migration progress\n- Consider returning a `Deprecation` header in the response",
+          "pseudo_code": "# Mark a single route as deprecated\n@app.get(\"/v1/items/\", deprecated=True)\ndef old_list_items():\n    \"\"\"Deprecated: Use /v2/items/ instead.\"\"\"\n    return []\n\n# Mark an entire router as deprecated\nv1_router = APIRouter(prefix=\"/v1\", deprecated=True)\n\n# The endpoint still works -- it's just flagged in docs",
+          "actual_code": "from fastapi import FastAPI, APIRouter\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Current version\n@app.get(\"/v2/items/\", tags=[\"items\"])\ndef list_items_v2():\n    \"\"\"Current endpoint for listing items.\"\"\"\n    return [{\"id\": 1, \"name\": \"Widget\", \"version\": \"v2\"}]\n\n# Deprecated route -- still works but flagged in docs\n@app.get(\"/v1/items/\", tags=[\"items\"], deprecated=True)\ndef list_items_v1():\n    \"\"\"**Deprecated**: Use `/v2/items/` instead.\n\n    This endpoint will be removed in version 3.0.\"\"\"\n    return [{\"id\": 1, \"name\": \"Widget\", \"version\": \"v1\"}]\n\n# Deprecated entire router\nlegacy_router = APIRouter(\n    prefix=\"/legacy\",\n    tags=[\"legacy\"],\n    deprecated=True,  # All routes in this router are deprecated\n)\n\n@legacy_router.get(\"/data\")\ndef legacy_data():\n    \"\"\"**Deprecated**: Use /v2/data instead.\"\"\"\n    return {\"data\": \"old format\"}\n\napp.include_router(legacy_router)\n\nclient = TestClient(app)\n\n# Deprecated endpoints still work\nprint(client.get(\"/v1/items/\").json())\nprint(client.get(\"/legacy/data\").json())\n\n# Check deprecation in OpenAPI schema\nschema = app.openapi()\nv1_route = schema[\"paths\"][\"/v1/items/\"][\"get\"]\nprint(f\"v1 deprecated: {v1_route.get('deprecated', False)}\")\n\nv2_route = schema[\"paths\"][\"/v2/items/\"][\"get\"]\nprint(f\"v2 deprecated: {v2_route.get('deprecated', False)}\")\n\n# Expected Output:\n# [{'id': 1, 'name': 'Widget', 'version': 'v1'}]\n# {'data': 'old format'}\n# v1 deprecated: True\n# v2 deprecated: False",
+          "code_language": "python",
+          "key_points": [
+            "deprecated=True flags the route in OpenAPI docs (strikethrough in Swagger UI)",
+            "Deprecated routes still work normally -- they just warn consumers in docs",
+            "Set deprecated on individual routes or on an entire APIRouter",
+            "Use the docstring to explain what consumers should use instead"
+          ],
+          "gotchas": [
+            "Deprecated does NOT disable the endpoint -- it only marks it in documentation",
+            "There is no built-in way to return a Deprecation header -- you must add it manually with Response.headers",
+            "Clients ignoring documentation will keep using deprecated endpoints indefinitely"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set `deprecated=True` on a route decorator or `APIRouter` to mark endpoints as deprecated. They still work normally but appear with strikethrough in Swagger UI. Use the docstring to explain alternatives.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/v1/items/\", deprecated=True)\ndef old_items():\n    \"\"\"Deprecated: Use /v2/items/ instead.\"\"\"\n    return []\n\n@app.get(\"/v2/items/\")\ndef new_items():\n    return [{\"id\": 1}]",
+          "code_language": "python",
+          "key_points": [
+            "deprecated=True marks the route in docs; the endpoint still works"
+          ],
+          "gotchas": [
+            "deprecated only affects documentation -- it does not block requests"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you return redirect responses?",
+      "display_order": 9,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "redirect",
+        "response",
+        "http-status"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides `RedirectResponse` from Starlette for HTTP redirects. Common status codes:\n\n### Redirect status codes:\n| Code | Name | Method preserved? | Use case |\n|------|------|-------------------|----------|\n| 301 | Moved Permanently | No (becomes GET) | Permanent URL change |\n| 302 | Found | No (becomes GET) | Temporary redirect (default) |\n| 303 | See Other | No (becomes GET) | After POST (Post/Redirect/Get) |\n| 307 | Temporary Redirect | Yes | Temporary, preserves method |\n| 308 | Permanent Redirect | Yes | Permanent, preserves method |\n\n### Key distinction:\n- **301/302/303**: Browser changes the method to GET (even if original was POST)\n- **307/308**: Browser preserves the original HTTP method\n\n### Usage:\n1. Return `RedirectResponse` directly from a handler\n2. Use `response_class=RedirectResponse` in the decorator\n3. Set appropriate status code based on your needs",
+          "pseudo_code": "# Return redirect from handler\n@app.get(\"/old-path\")\ndef old_handler():\n    return RedirectResponse(url=\"/new-path\")\n\n# With status code\n@app.get(\"/old\")\ndef redirect():\n    return RedirectResponse(url=\"/new\", status_code=301)\n\n# Post/Redirect/Get pattern\n@app.post(\"/submit\")\ndef submit():\n    # process form...\n    return RedirectResponse(url=\"/success\", status_code=303)",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import RedirectResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.get(\"/\")\ndef home():\n    return {\"page\": \"home\"}\n\n# Simple redirect (302 by default)\n@app.get(\"/old-home\")\ndef old_home():\n    return RedirectResponse(url=\"/\")\n\n# Permanent redirect (301)\n@app.get(\"/legacy\")\ndef legacy():\n    return RedirectResponse(url=\"/\", status_code=301)\n\n# Redirect to external URL\n@app.get(\"/docs-redirect\")\ndef docs_redirect():\n    return RedirectResponse(url=\"https://fastapi.tiangolo.com\")\n\n# Post/Redirect/Get pattern (303)\n@app.post(\"/submit\")\ndef submit():\n    # Process form data...\n    return RedirectResponse(url=\"/success\", status_code=303)\n\n@app.get(\"/success\")\ndef success():\n    return {\"message\": \"Form submitted successfully!\"}\n\n# Redirect with preserved HTTP method (307)\n@app.post(\"/api/v1/data\")\ndef old_api():\n    return RedirectResponse(url=\"/api/v2/data\", status_code=307)\n\nclient = TestClient(app, follow_redirects=False)\n\nresp = client.get(\"/old-home\")\nprint(f\"302 redirect: status={resp.status_code}, location={resp.headers['location']}\")\n\nresp = client.get(\"/legacy\")\nprint(f\"301 redirect: status={resp.status_code}, location={resp.headers['location']}\")\n\n# Follow the redirect\nclient2 = TestClient(app)  # follow_redirects=True by default\nresp = client2.get(\"/old-home\")\nprint(f\"Followed redirect: {resp.json()}\")\n\n# Expected Output:\n# 302 redirect: status=302, location=/\n# 301 redirect: status=301, location=/\n# Followed redirect: {'page': 'home'}",
+          "code_language": "python",
+          "key_points": [
+            "RedirectResponse(url, status_code) handles HTTP redirects",
+            "301/302/303 change the method to GET; 307/308 preserve the original method",
+            "303 is correct for Post/Redirect/Get pattern (after form submission)",
+            "Default status code is 307 for RedirectResponse (preserves method)"
+          ],
+          "gotchas": [
+            "RedirectResponse default status is 307 (not 302) -- explicitly set 302 or 301 if you want GET redirect",
+            "301 redirects are cached aggressively by browsers -- use 302 during development",
+            "TestClient follows redirects by default -- use follow_redirects=False to test the redirect itself"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Return `RedirectResponse(url=\"/new-path\", status_code=302)` for temporary redirects, 301 for permanent, and 303 for Post/Redirect/Get pattern. 307/308 preserve the HTTP method; 301/302/303 change it to GET.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.responses import RedirectResponse\n\napp = FastAPI()\n\n@app.get(\"/old\")\ndef old():\n    return RedirectResponse(url=\"/new\", status_code=301)\n\n@app.post(\"/submit\")\ndef submit():\n    return RedirectResponse(url=\"/success\", status_code=303)",
+          "code_language": "python",
+          "key_points": [
+            "RedirectResponse(url, status_code) for redirects; 303 for Post/Redirect/Get"
+          ],
+          "gotchas": [
+            "RedirectResponse defaults to 307 (preserves method), not 302 -- be explicit"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define multiple path parameters?",
+      "display_order": 10,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "path-parameters",
+        "nested-resources",
+        "routing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "You can include multiple `{param}` placeholders in a single path to represent nested or related resources. Each placeholder maps to a separate function parameter.\n\n### Common patterns:\n- `/users/{user_id}/items/{item_id}` -- Nested resource\n- `/org/{org_id}/team/{team_id}/member/{member_id}` -- Deep nesting\n- `/files/{directory}/{filename}` -- File path segments\n\n### Rules:\n- Each `{param}` must have a matching function parameter\n- Each parameter gets its own type annotation and validation\n- Parameters are validated independently\n- Order of function parameters does not matter -- matching is by name\n\n### When to use nested paths:\n- When resources have a parent-child relationship (user -> items)\n- When the child resource only makes sense in the context of the parent\n- Avoid excessive nesting (3+ levels often indicates a design issue)",
+          "pseudo_code": "# Multiple path params\n@app.get(\"/users/{user_id}/posts/{post_id}\")\ndef get_post(user_id: int, post_id: int):\n    # user_id and post_id validated independently\n    return {\"user\": user_id, \"post\": post_id}\n\n# URL: /users/42/posts/7\n# -> user_id=42, post_id=7\n\n# URL: /users/abc/posts/7\n# -> 422 (user_id fails int validation)",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Two path parameters\n@app.get(\"/users/{user_id}/items/{item_id}\")\ndef get_user_item(user_id: int, item_id: int):\n    return {\"user_id\": user_id, \"item_id\": item_id}\n\n# Three path parameters\n@app.get(\"/org/{org_id}/team/{team_id}/members/{member_id}\")\ndef get_member(org_id: str, team_id: str, member_id: int):\n    return {\n        \"org\": org_id,\n        \"team\": team_id,\n        \"member_id\": member_id,\n    }\n\n# Mixed: path params + query params\n@app.get(\"/users/{user_id}/posts/{post_id}\")\ndef get_post(user_id: int, post_id: int, include_comments: bool = False):\n    result = {\"user_id\": user_id, \"post_id\": post_id}\n    if include_comments:\n        result[\"comments\"] = []\n    return result\n\nclient = TestClient(app)\n\n# Two params\nprint(client.get(\"/users/1/items/42\").json())\n\n# Three params\nprint(client.get(\"/org/acme/team/backend/members/7\").json())\n\n# Path + query params\nprint(client.get(\"/users/1/posts/5?include_comments=true\").json())\n\n# Invalid: user_id fails validation\nprint(f\"Invalid: {client.get('/users/abc/items/1').status_code}\")\n\n# Expected Output:\n# {'user_id': 1, 'item_id': 42}\n# {'org': 'acme', 'team': 'backend', 'member_id': 7}\n# {'user_id': 1, 'post_id': 5, 'comments': []}\n# Invalid: 422",
+          "code_language": "python",
+          "key_points": [
+            "Include multiple {param} placeholders in one path for nested resources",
+            "Each param gets its own type annotation and independent validation",
+            "Function parameter order does not matter -- matching is by name",
+            "Combine path params with query params freely"
+          ],
+          "gotchas": [
+            "Deep nesting (3+ levels) often signals a design problem -- consider flattening the API",
+            "If any single path parameter fails validation, the entire request gets 422",
+            "Parameter names in {braces} must be valid Python identifiers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use multiple `{param}` in the path for nested resources. Each maps to a typed function parameter. `GET /users/{user_id}/items/{item_id}` validates both independently.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\napp = FastAPI()\n\n@app.get(\"/users/{user_id}/items/{item_id}\")\ndef get_item(user_id: int, item_id: int):\n    return {\"user_id\": user_id, \"item_id\": item_id}\n\n# GET /users/1/items/42 -> {\"user_id\": 1, \"item_id\": 42}",
+          "code_language": "python",
+          "key_points": [
+            "Multiple {param} in path; each validated independently by type annotation"
+          ],
+          "gotchas": [
+            "Avoid 3+ levels of nesting -- it usually means the API design needs flattening"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does Enum validation work with path parameters?",
+      "display_order": 11,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "enum",
+        "path-parameters",
+        "validation"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Python `Enum` classes can be used as path parameter types to restrict values to a predefined set. FastAPI will:\n\n1. Validate that the URL value matches one of the enum members\n2. Return 422 if the value is not in the enum\n3. Show allowed values in the OpenAPI docs (as a dropdown in Swagger UI)\n4. Convert the string to the enum instance automatically\n\n### How to use:\n- Create a `str, Enum` class (inherit from both `str` and `Enum`)\n- The `str` mixin ensures the enum values are strings (matching URL segments)\n- Use the enum class as the type annotation for the path parameter\n\n### Why `str, Enum` (not just `Enum`):\nURL path segments are strings. The `str` mixin makes enum values directly comparable to strings and ensures proper JSON serialization.",
+          "pseudo_code": "# Define allowed values\nclass ModelName(str, Enum):\n    value1 = \"value1\"\n    value2 = \"value2\"\n\n@app.get(\"/models/{model_name}\")\ndef get_model(model_name: ModelName):\n    # model_name is a ModelName enum instance\n    # Access value: model_name.value\n    # Compare: model_name == ModelName.value1\n\n# Valid: /models/value1 -> ModelName.value1\n# Invalid: /models/unknown -> 422",
+          "actual_code": "from enum import Enum\nfrom fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\nclass Color(str, Enum):\n    red = \"red\"\n    green = \"green\"\n    blue = \"blue\"\n\nclass Priority(str, Enum):\n    low = \"low\"\n    medium = \"medium\"\n    high = \"high\"\n    critical = \"critical\"\n\napp = FastAPI()\n\n@app.get(\"/colors/{color}\")\ndef get_color(color: Color):\n    return {\n        \"color\": color,           # Serialized as string due to str mixin\n        \"value\": color.value,\n        \"name\": color.name,\n    }\n\n@app.get(\"/tasks/{priority}\")\ndef list_tasks(priority: Priority):\n    # Compare enum values directly\n    if priority == Priority.critical:\n        return {\"priority\": priority, \"alert\": True}\n    return {\"priority\": priority, \"alert\": False}\n\nclient = TestClient(app)\n\n# Valid enum values\nprint(client.get(\"/colors/red\").json())\nprint(client.get(\"/colors/blue\").json())\n\n# Invalid enum value -> 422\nresp = client.get(\"/colors/yellow\")\nprint(f\"Invalid color: {resp.status_code}\")\n\n# Enum comparison\nprint(client.get(\"/tasks/critical\").json())\nprint(client.get(\"/tasks/low\").json())\n\n# Expected Output:\n# {'color': 'red', 'value': 'red', 'name': 'red'}\n# {'color': 'blue', 'value': 'blue', 'name': 'blue'}\n# Invalid color: 422\n# {'priority': 'critical', 'alert': True}\n# {'priority': 'low', 'alert': False}",
+          "code_language": "python",
+          "key_points": [
+            "Use str, Enum classes to restrict path parameters to predefined values",
+            "Invalid values return 422 automatically with the list of allowed values",
+            "Swagger UI shows enum values as a dropdown for easy testing",
+            "The str mixin is required for proper string comparison and JSON serialization"
+          ],
+          "gotchas": [
+            "Always inherit from (str, Enum) not just Enum -- without str, values are not JSON-serializable",
+            "Enum values are case-sensitive: 'Red' does not match 'red'",
+            "Python 3.11+ also supports StrEnum which replaces (str, Enum)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a `str, Enum` class with allowed values. Use it as a path parameter type. FastAPI auto-validates against enum members and returns 422 for invalid values. Swagger UI shows a dropdown.",
+          "pseudo_code": "",
+          "actual_code": "from enum import Enum\nfrom fastapi import FastAPI\n\nclass Color(str, Enum):\n    red = \"red\"\n    green = \"green\"\n    blue = \"blue\"\n\napp = FastAPI()\n\n@app.get(\"/colors/{color}\")\ndef get_color(color: Color):\n    return {\"color\": color}  # \"red\", \"green\", or \"blue\"\n\n# /colors/red -> {\"color\": \"red\"}\n# /colors/yellow -> 422",
+          "code_language": "python",
+          "key_points": [
+            "str, Enum restricts path params to predefined values with auto-validation"
+          ],
+          "gotchas": [
+            "Inherit from (str, Enum) not just Enum -- str is needed for JSON serialization"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What are the available parameter types (path, query, header, cookie)?",
+      "display_order": 12,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "parameters",
+        "header",
+        "cookie",
+        "path",
+        "query"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI can extract data from four locations in an HTTP request, each with its own declaration function:\n\n### 1. Path parameters\n- Source: URL path segments (`/items/{item_id}`)\n- Declare: Match `{name}` in path to function parameter\n- Always required\n\n### 2. Query parameters\n- Source: URL query string (`?skip=0&limit=10`)\n- Declare: Function parameters not in path\n- Can be required or optional\n\n### 3. Header parameters\n- Source: HTTP request headers\n- Declare: `Header()` function\n- FastAPI auto-converts underscores to hyphens (e.g., `user_agent` reads `User-Agent`)\n\n### 4. Cookie parameters\n- Source: HTTP cookies\n- Declare: `Cookie()` function\n- Reads from the Cookie header\n\n### Type declarations:\n| Location | Import | Usage |\n|----------|--------|-------|\n| Path | `from fastapi import Path` | `item_id: int = Path()` |\n| Query | `from fastapi import Query` | `skip: int = Query(default=0)` |\n| Header | `from fastapi import Header` | `token: str = Header()` |\n| Cookie | `from fastapi import Cookie` | `session: str = Cookie()` |",
+          "pseudo_code": "@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: int,                        # Path: from URL\n    q: str = None,                       # Query: from ?q=...\n    user_agent: str = Header(None),      # Header: from User-Agent\n    session_id: str = Cookie(None),      # Cookie: from cookies\n):\n    # FastAPI extracts each from the correct location",
+          "actual_code": "from fastapi import FastAPI, Path, Query, Header, Cookie\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    # Path parameter\n    item_id: int = Path(description=\"The item ID\", ge=1),\n    # Query parameter\n    q: str | None = Query(default=None, max_length=50),\n    # Header parameter\n    user_agent: str | None = Header(default=None),\n    x_token: str | None = Header(default=None),\n    # Cookie parameter\n    session_id: str | None = Cookie(default=None),\n):\n    return {\n        \"item_id\": item_id,\n        \"q\": q,\n        \"user_agent\": user_agent,\n        \"x_token\": x_token,\n        \"session_id\": session_id,\n    }\n\nclient = TestClient(app)\n\n# Send all parameter types\nresp = client.get(\n    \"/items/42\",\n    params={\"q\": \"search\"},\n    headers={\"X-Token\": \"secret123\"},\n    cookies={\"session_id\": \"abc-def\"},\n)\nprint(resp.json())\n\n# Header auto-conversion: user_agent reads User-Agent header\nresp = client.get(\n    \"/items/1\",\n    headers={\"User-Agent\": \"MyApp/1.0\"},\n)\nresult = resp.json()\nprint(f\"User-Agent: {result['user_agent']}\")\n\n# Path validation: item_id must be >= 1\nresp = client.get(\"/items/0\")\nprint(f\"Invalid path: {resp.status_code}\")\n\n# Expected Output:\n# {'item_id': 42, 'q': 'search', 'user_agent': 'testclient', 'x_token': 'secret123', 'session_id': 'abc-def'}\n# User-Agent: MyApp/1.0\n# Invalid path: 422",
+          "code_language": "python",
+          "key_points": [
+            "Four parameter sources: Path (URL), Query (query string), Header (HTTP headers), Cookie (cookies)",
+            "Path() and Query() add validation constraints; Header() and Cookie() extract from their sources",
+            "Header auto-converts underscores to hyphens: user_agent reads the User-Agent header",
+            "All four support the same validation features: type checking, constraints, description"
+          ],
+          "gotchas": [
+            "Header parameters auto-convert _ to - (user_agent -> User-Agent) -- disable with Header(convert_underscores=False)",
+            "Cookie() reads a single cookie value -- for all cookies, use Request.cookies",
+            "Header() returns the last value if a header appears multiple times -- use list[str] for all values"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI extracts data from four sources: `Path()` (URL segments), `Query()` (query string), `Header()` (HTTP headers), and `Cookie()` (cookies). Headers auto-convert underscores to hyphens.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Path, Query, Header, Cookie\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: int = Path(ge=1),\n    q: str | None = Query(default=None),\n    x_token: str | None = Header(default=None),\n    session: str | None = Cookie(default=None),\n):\n    return {\"item_id\": item_id, \"q\": q, \"token\": x_token}",
+          "code_language": "python",
+          "key_points": [
+            "Path, Query, Header, Cookie extract from URL, query string, headers, cookies respectively"
+          ],
+          "gotchas": [
+            "Header converts _ to - automatically: user_agent reads User-Agent header"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you set response status codes for different operations?",
+      "display_order": 13,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "status-codes",
+        "http",
+        "response"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides multiple ways to set HTTP response status codes:\n\n### 1. Decorator parameter (most common):\n```python\n@app.post(\"/items/\", status_code=201)\n```\nThis sets the **default** status code for successful responses and documents it in OpenAPI.\n\n### 2. Using the `status` module:\n```python\nfrom fastapi import status\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\n```\nProvides named constants for readability and IDE autocomplete.\n\n### 3. Using Response parameter:\n```python\nfrom fastapi import Response\ndef handler(response: Response):\n    response.status_code = 201\n```\nDynamically set status code within the handler.\n\n### 4. Returning Response directly:\n```python\nfrom fastapi.responses import JSONResponse\nreturn JSONResponse(content={...}, status_code=201)\n```\n\n### Common status codes:\n| Code | Constant | Use case |\n|------|----------|----------|\n| 200 | HTTP_200_OK | GET, PUT, PATCH success |\n| 201 | HTTP_201_CREATED | POST success |\n| 204 | HTTP_204_NO_CONTENT | DELETE success |\n| 400 | HTTP_400_BAD_REQUEST | Invalid request |\n| 404 | HTTP_404_NOT_FOUND | Resource not found |\n| 422 | HTTP_422_UNPROCESSABLE_ENTITY | Validation error (auto) |",
+          "pseudo_code": "# Method 1: Decorator (most common)\n@app.post(\"/items/\", status_code=201)\ndef create(): ...\n\n# Method 2: Named constants\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\ndef create(): ...\n\n# Method 3: Dynamic in handler\ndef handler(response: Response):\n    response.status_code = 201\n\n# Method 4: Return Response object\nreturn JSONResponse({...}, status_code=201)",
+          "actual_code": "from fastapi import FastAPI, Response, HTTPException, status\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Method 1: status_code in decorator\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\ndef create_item():\n    return {\"id\": 1, \"name\": \"Widget\"}\n\n# Method 2: 204 No Content (empty response)\n@app.delete(\"/items/{item_id}\", status_code=status.HTTP_204_NO_CONTENT)\ndef delete_item(item_id: int):\n    pass  # Return nothing for 204\n\n# Method 3: Dynamic status code via Response\n@app.put(\"/items/{item_id}\")\ndef update_item(item_id: int, response: Response):\n    exists = item_id <= 10  # Simulated check\n    if exists:\n        response.status_code = status.HTTP_200_OK\n        return {\"id\": item_id, \"updated\": True}\n    else:\n        response.status_code = status.HTTP_201_CREATED\n        return {\"id\": item_id, \"created\": True}\n\n# Method 4: Return Response directly\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    if item_id > 100:\n        return JSONResponse(\n            status_code=status.HTTP_404_NOT_FOUND,\n            content={\"error\": \"Item not found\"},\n        )\n    return {\"id\": item_id}\n\n# HTTPException for error status codes\n@app.get(\"/protected/\")\ndef protected():\n    raise HTTPException(\n        status_code=status.HTTP_403_FORBIDDEN,\n        detail=\"Access denied\",\n    )\n\nclient = TestClient(app)\n\nprint(f\"POST 201: {client.post('/items/').status_code}\")\nprint(f\"DELETE 204: {client.delete('/items/1').status_code}\")\nprint(f\"PUT existing: {client.put('/items/5').status_code}\")\nprint(f\"PUT new: {client.put('/items/50').status_code}\")\nprint(f\"GET found: {client.get('/items/1').status_code}\")\nprint(f\"GET not found: {client.get('/items/999').status_code}\")\nprint(f\"Forbidden: {client.get('/protected/').status_code}\")\n\n# Expected Output:\n# POST 201: 201\n# DELETE 204: 204\n# PUT existing: 200\n# PUT new: 201\n# GET found: 200\n# GET not found: 404\n# Forbidden: 403",
+          "code_language": "python",
+          "key_points": [
+            "status_code in the decorator sets the default success status and documents it in OpenAPI",
+            "Use fastapi.status constants (HTTP_201_CREATED, etc.) for readability",
+            "Inject Response parameter to set status dynamically within a handler",
+            "Use HTTPException for error status codes (403, 404, etc.)"
+          ],
+          "gotchas": [
+            "status_code in the decorator sets the actual HTTP response status for normal return values -- it is only ignored when you return a Response object directly (which carries its own status code)",
+            "204 No Content means NO response body -- any returned data is silently dropped",
+            "HTTPException stops execution and returns immediately -- code after raise is not executed"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set `status_code` in the decorator for the default, use `fastapi.status` constants for readability, inject `Response` for dynamic codes, or `raise HTTPException` for errors.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, status, HTTPException\n\napp = FastAPI()\n\n@app.post(\"/items/\", status_code=status.HTTP_201_CREATED)\ndef create():\n    return {\"id\": 1}\n\n@app.delete(\"/items/{id}\", status_code=status.HTTP_204_NO_CONTENT)\ndef delete(id: int):\n    pass\n\n@app.get(\"/items/{id}\")\ndef get(id: int):\n    raise HTTPException(status_code=404, detail=\"Not found\")",
+          "code_language": "python",
+          "key_points": [
+            "Decorator status_code for default; HTTPException for errors; Response for dynamic"
+          ],
+          "gotchas": [
+            "204 means no body -- returned data is silently dropped"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does FastAPI handle trailing slashes in routes?",
+      "display_order": 14,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "trailing-slash",
+        "routing",
+        "url"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI (via Starlette) treats trailing slashes as **strict** by default -- `/items` and `/items/` are different routes.\n\n### Default behavior:\n- `@app.get(\"/items\")` matches `/items` only. `/items/` returns **307 redirect** to `/items`.\n- `@app.get(\"/items/\")` matches `/items/` only. `/items` returns **307 redirect** to `/items/`.\n\n### This differs from Flask:\n- Flask with trailing slash (`/items/`) auto-redirects `/items` -> `/items/`\n- Flask without trailing slash (`/items`) returns 404 for `/items/`\n- FastAPI redirects both ways (307 redirect)\n\n### Controlling behavior:\nUse `redirect_slashes` parameter on the FastAPI app:\n```python\napp = FastAPI(redirect_slashes=False)  # No auto-redirect, strict matching\n```\n\n### Best practice:\nBe consistent -- pick either with or without trailing slashes for all your routes. Most REST APIs use no trailing slash (`/items`, `/users/1`).",
+          "pseudo_code": "# With trailing slash\n@app.get(\"/items/\")   # Matches /items/ directly\n                      # /items -> 307 redirect to /items/\n\n# Without trailing slash\n@app.get(\"/items\")    # Matches /items directly\n                      # /items/ -> 307 redirect to /items\n\n# Disable redirects\napp = FastAPI(redirect_slashes=False)\n# /items only matches /items\n# /items/ returns 404",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.testclient import TestClient\n\n# Default behavior: redirect_slashes=True\napp = FastAPI()\n\n@app.get(\"/items\")\ndef list_items():\n    return {\"path\": \"/items\"}\n\n@app.get(\"/users/\")\ndef list_users():\n    return {\"path\": \"/users/\"}\n\nclient = TestClient(app, follow_redirects=False)\n\n# Exact match\nresp = client.get(\"/items\")\nprint(f\"/items -> {resp.status_code}\")\n\n# Trailing slash on a no-slash route -> redirect\nresp = client.get(\"/items/\")\nprint(f\"/items/ -> {resp.status_code} redirect to {resp.headers.get('location', 'N/A')}\")\n\n# Exact match (with slash)\nresp = client.get(\"/users/\")\nprint(f\"/users/ -> {resp.status_code}\")\n\n# Missing slash on a slash route -> redirect\nresp = client.get(\"/users\")\nprint(f\"/users -> {resp.status_code} redirect to {resp.headers.get('location', 'N/A')}\")\n\n# With redirects disabled\nstrict_app = FastAPI(redirect_slashes=False)\n\n@strict_app.get(\"/items\")\ndef strict_items():\n    return {\"strict\": True}\n\nstrict_client = TestClient(strict_app)\nprint(f\"\\nStrict /items -> {strict_client.get('/items').status_code}\")\nprint(f\"Strict /items/ -> {strict_client.get('/items/').status_code}\")\n\n# Expected Output:\n# /items -> 200\n# /items/ -> 307 redirect to http://testserver/items\n# /users/ -> 200\n# /users -> 307 redirect to http://testserver/users/\n# \n# Strict /items -> 200\n# Strict /items/ -> 404",
+          "code_language": "python",
+          "key_points": [
+            "FastAPI treats /items and /items/ as different routes by default",
+            "Mismatched trailing slashes get a 307 redirect to the correct URL",
+            "Set redirect_slashes=False for strict matching (no auto-redirect)",
+            "Be consistent across your API -- pick one convention"
+          ],
+          "gotchas": [
+            "307 redirects preserve the HTTP method (POST stays POST) but still add a round trip",
+            "API clients may not follow redirects automatically -- this can cause unexpected failures",
+            "redirect_slashes=True (default) can mask bugs where clients use inconsistent URLs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI treats `/items` and `/items/` as different routes. Mismatched trailing slashes get a 307 redirect. Use `FastAPI(redirect_slashes=False)` for strict matching. Be consistent across your API.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\n\n# Default: mismatched trailing slashes redirect (307)\napp = FastAPI()\n\n@app.get(\"/items\")   # /items -> 200, /items/ -> 307 redirect\ndef items():\n    return []\n\n# Strict: no redirects\nstrict = FastAPI(redirect_slashes=False)\n\n@strict.get(\"/items\")  # /items -> 200, /items/ -> 404\ndef strict_items():\n    return []",
+          "code_language": "python",
+          "key_points": [
+            "/items and /items/ are different routes; mismatches get 307 redirect by default"
+          ],
+          "gotchas": [
+            "Some API clients do not follow redirects -- this can cause unexpected 307 responses"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Path() and Query() for additional validation?",
+      "display_order": 15,
+      "difficulty": "beginner",
+      "tags": [
+        "fastapi",
+        "validation",
+        "path",
+        "query",
+        "constraints"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`Path()` and `Query()` are FastAPI functions that add **validation constraints**, **documentation metadata**, and **default values** to path and query parameters.\n\n### Numeric constraints:\n- `ge` -- Greater than or equal to\n- `gt` -- Greater than\n- `le` -- Less than or equal to\n- `lt` -- Less than\n\n### String constraints:\n- `min_length` -- Minimum string length\n- `max_length` -- Maximum string length\n- `pattern` -- Regex pattern to match\n\n### Documentation:\n- `title` -- Parameter title in docs\n- `description` -- Parameter description\n- `examples` -- Example values for Swagger UI\n- `deprecated` -- Mark parameter as deprecated\n\n### Annotated style (recommended):\nPydantic v2 and modern FastAPI recommend `Annotated[type, Path()]` or `Annotated[type, Query()]` for cleaner syntax and better reusability.",
+          "pseudo_code": "# Path() and Query() add constraints to parameters\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: int = Path(ge=1, le=1000, description=\"Item ID\"),\n    q: str = Query(min_length=1, max_length=50),\n    page: int = Query(default=1, ge=1),\n):\n    # All constraints validated automatically\n    # Invalid values -> 422 with details\n    ...\n\n# Annotated style (recommended)\ndef get_item(\n    item_id: Annotated[int, Path(ge=1)],\n    q: Annotated[str, Query(max_length=50)],\n):\n    ...",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Path, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Using Annotated style (recommended)\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: Annotated[int, Path(\n        title=\"Item ID\",\n        description=\"The unique identifier for the item\",\n        ge=1,\n        le=10000,\n    )],\n    q: Annotated[str | None, Query(\n        min_length=2,\n        max_length=50,\n        description=\"Search query\",\n    )] = None,\n    page: Annotated[int, Query(\n        ge=1,\n        le=100,\n        description=\"Page number\",\n    )] = 1,\n):\n    return {\"item_id\": item_id, \"q\": q, \"page\": page}\n\n# String pattern validation\n@app.get(\"/users/{username}\")\ndef get_user(\n    username: Annotated[str, Path(\n        min_length=3,\n        max_length=20,\n        pattern=\"^[a-zA-Z0-9_]+$\",\n        description=\"Alphanumeric username\",\n    )],\n):\n    return {\"username\": username}\n\n# Deprecated parameter\n@app.get(\"/search/\")\ndef search(\n    q: str,\n    category: Annotated[str | None, Query(\n        deprecated=True,\n        description=\"Use 'type' instead\",\n    )] = None,\n    type: str | None = None,\n):\n    return {\"q\": q, \"type\": type or category}\n\nclient = TestClient(app)\n\n# Valid\nprint(client.get(\"/items/42?q=test&page=2\").json())\n\n# Invalid: item_id < 1\nprint(f\"item_id=0: {client.get('/items/0').status_code}\")\n\n# Invalid: q too short\nprint(f\"q='a': {client.get('/items/1?q=a').status_code}\")\n\n# Valid username\nprint(client.get(\"/users/alice_99\").json())\n\n# Invalid: username has special chars\nprint(f\"bad username: {client.get('/users/al!ce').status_code}\")\n\n# Expected Output:\n# {'item_id': 42, 'q': 'test', 'page': 2}\n# item_id=0: 422\n# q='a': 422\n# {'username': 'alice_99'}\n# bad username: 422",
+          "code_language": "python",
+          "key_points": [
+            "Path() and Query() add numeric (ge, gt, le, lt) and string (min_length, max_length, pattern) constraints",
+            "Use Annotated[type, Path()] style for cleaner, reusable parameter declarations",
+            "description and examples parameters populate OpenAPI docs for each parameter",
+            "All validation failures return 422 with details about which constraint was violated"
+          ],
+          "gotchas": [
+            "Path parameters are always required -- Path(default=...) or a default value does not make them optional",
+            "pattern uses Python regex syntax, not JavaScript regex -- anchors (^ $) are recommended",
+            "Annotated style requires Python 3.9+ (from typing import Annotated) or typing_extensions"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Path()` and `Query()` add validation constraints (ge, le, min_length, max_length, pattern) and documentation (description, examples, deprecated) to parameters. Use `Annotated[type, Path()]` style for modern FastAPI.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Path, Query\n\napp = FastAPI()\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: Annotated[int, Path(ge=1, le=10000)],\n    q: Annotated[str | None, Query(max_length=50)] = None,\n):\n    return {\"item_id\": item_id, \"q\": q}\n\n# /items/0 -> 422 (ge=1 violated)\n# /items/5?q=test -> {\"item_id\": 5, \"q\": \"test\"}",
+          "code_language": "python",
+          "key_points": [
+            "Path()/Query() add constraints; Annotated style is recommended for modern FastAPI"
+          ],
+          "gotchas": [
+            "Path params are always required -- you cannot make them optional with a default value"
+          ]
+        }
+      ]
+    }
+  ]
+}

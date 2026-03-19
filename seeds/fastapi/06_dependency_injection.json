@@ -1,0 +1,680 @@
+{
+  "concept_slug": "dependency-injection",
+  "questions": [
+    {
+      "title": "What is dependency injection and how does Depends() work?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "dependency-injection",
+        "depends",
+        "design-pattern",
+        "fundamentals"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Dependency injection (DI)** is a design pattern where a function receives its dependencies from the outside rather than creating them internally. In FastAPI, `Depends()` is the DI mechanism that automatically calls a function, resolves its parameters, and injects the return value into your handler.\n\n### How Depends() works:\n1. You define a dependency function (regular function or async)\n2. Declare a parameter with `Depends(your_function)` as the default\n3. When the endpoint is called, FastAPI calls the dependency function first\n4. The return value of the dependency is injected as the parameter value\n5. If the dependency has its own `Depends()` parameters, they are resolved recursively\n\n### What can be a dependency:\n- Regular functions (`def`)\n- Async functions (`async def`)\n- Classes (the `__init__` is called)\n- Generator functions (using `yield` for cleanup)\n- Any callable\n\n### Why use DI in FastAPI:\n- **DRY**: Share common logic (auth, pagination, DB session) across endpoints\n- **Testability**: Override dependencies in tests with `app.dependency_overrides`\n- **Separation of concerns**: Keep business logic separate from cross-cutting concerns\n- **Composability**: Dependencies can depend on other dependencies (chaining)\n- **Auto-documentation**: FastAPI includes dependency parameters in OpenAPI docs",
+          "pseudo_code": "# Define a dependency function\ndef get_db():\n    db = create_database_session()\n    return db\n\n# Use it in an endpoint with Depends()\n@app.GET(\"/items/\")\nfunction list_items(db = Depends(get_db)):\n    # db is the return value of get_db()\n    return db.query(Item).all()\n\n# FastAPI execution flow:\n# 1. Request arrives at /items/\n# 2. FastAPI sees Depends(get_db)\n# 3. Calls get_db() -> returns db session\n# 4. Injects db into list_items(db=session)\n# 5. Handler runs and returns response",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Simple dependency function\ndef common_parameters(\n    skip: int = Query(default=0, ge=0),\n    limit: int = Query(default=10, le=100),\n):\n    \"\"\"Reusable pagination parameters.\"\"\"\n    return {\"skip\": skip, \"limit\": limit}\n\n# Use with Depends()\n@app.get(\"/items/\")\ndef list_items(params: Annotated[dict, Depends(common_parameters)]):\n    return {\"items\": [], **params}\n\n@app.get(\"/users/\")\ndef list_users(params: Annotated[dict, Depends(common_parameters)]):\n    return {\"users\": [], **params}\n\n# Dependency that performs validation/auth\ndef verify_api_key(api_key: str = Query()):\n    if api_key != \"secret-key\":\n        from fastapi import HTTPException\n        raise HTTPException(status_code=403, detail=\"Invalid API key\")\n    return api_key\n\n@app.get(\"/protected/\")\ndef protected_route(key: Annotated[str, Depends(verify_api_key)]):\n    return {\"message\": \"Access granted\", \"key\": key}\n\nclient = TestClient(app)\n\n# Pagination dependency reused\nprint(\"Items:\", client.get(\"/items/?skip=5&limit=20\").json())\nprint(\"Users:\", client.get(\"/users/\").json())\n\n# Auth dependency\nprint(\"Valid key:\", client.get(\"/protected/?api_key=secret-key\").json())\nprint(\"Bad key:\", client.get(\"/protected/?api_key=wrong\").status_code)\n\n# Expected Output:\n# Items: {'items': [], 'skip': 5, 'limit': 20}\n# Users: {'users': [], 'skip': 0, 'limit': 10}\n# Valid key: {'message': 'Access granted', 'key': 'secret-key'}\n# Bad key: 403",
+          "code_language": "python",
+          "key_points": [
+            "Depends() calls a function and injects its return value as a parameter",
+            "Dependencies can have their own parameters (Query, Path, other Depends) -- resolved recursively",
+            "Dependencies are reusable across multiple endpoints for DRY code (pagination, auth, DB sessions)",
+            "Dependencies can raise HTTPException to abort the request (e.g., auth failure)"
+          ],
+          "gotchas": [
+            "Depends() takes a callable, not the result of calling it -- use Depends(get_db) not Depends(get_db())",
+            "Sync dependencies block the event loop if slow -- use async def for I/O-bound dependencies",
+            "Dependencies are called per-request by default -- they do not persist state between requests"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependency injection in FastAPI uses `Depends()` to call a function and inject its return value into your handler. Define reusable logic (auth, pagination, DB sessions) as dependency functions and share them across endpoints.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\n\napp = FastAPI()\n\ndef pagination(skip: int = Query(0), limit: int = Query(10)):\n    return {\"skip\": skip, \"limit\": limit}\n\n@app.get(\"/items/\")\ndef list_items(params: Annotated[dict, Depends(pagination)]):\n    return {\"items\": [], **params}",
+          "code_language": "python",
+          "key_points": [
+            "Depends(func) calls func per-request and injects the return value"
+          ],
+          "gotchas": [
+            "Pass the function itself to Depends, not the call result -- Depends(func) not Depends(func())"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use the Annotated[type, Depends()] syntax?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "annotated",
+        "depends",
+        "type-hints",
+        "modern-syntax"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The `Annotated[type, Depends()]` syntax is the **recommended modern way** to declare dependencies in FastAPI (since version 0.95.0). It uses Python's `typing.Annotated` to attach metadata to type hints.\n\n### Old syntax vs Annotated syntax:\n```python\n# Old syntax (still works)\ndef handler(db: Session = Depends(get_db)):\n\n# Modern Annotated syntax (recommended)\ndef handler(db: Annotated[Session, Depends(get_db)]):\n```\n\n### Benefits of Annotated:\n1. **Type checker friendly**: The type is `Session`, not `Depends(...)`, so editors provide correct autocomplete\n2. **Reusable type aliases**: Define once, use everywhere\n3. **Clearer intent**: The type and the dependency source are explicit\n4. **Default values**: You can still add `= None` for optional dependencies\n\n### Type aliases (most powerful feature):\nDefine a type alias like `DbSession = Annotated[Session, Depends(get_db)]` and reuse it across all handlers. If the dependency changes, update only the alias.\n\n### Works with all FastAPI parameter types:\n`Annotated` works with `Depends()`, `Query()`, `Path()`, `Body()`, `Header()`, `Cookie()`, `Form()`, and `File()`.",
+          "pseudo_code": "# Step 1: Define dependency\ndef get_db() -> Session:\n    session = SessionLocal()\n    try:\n        yield session\n    finally:\n        session.close()\n\n# Step 2: Create reusable type alias\nDbSession = Annotated[Session, Depends(get_db)]\nCurrentUser = Annotated[User, Depends(get_current_user)]\n\n# Step 3: Use the alias in handlers\n@app.GET(\"/items/\")\ndef list_items(db: DbSession, user: CurrentUser):\n    return db.query(Item).filter(owner=user.id).all()\n\n@app.POST(\"/items/\")\ndef create_item(db: DbSession, user: CurrentUser, item: ItemCreate):\n    # Same DbSession and CurrentUser aliases reused\n    pass",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Dependencies\ndef get_current_user(token: str = Query()):\n    # In real code: decode JWT, lookup user\n    return {\"user_id\": 1, \"name\": \"Alice\", \"token\": token}\n\ndef pagination(\n    skip: int = Query(default=0, ge=0),\n    limit: int = Query(default=10, le=100),\n) -> dict:\n    return {\"skip\": skip, \"limit\": limit}\n\n# Reusable type aliases -- define once, use everywhere\nCurrentUser = Annotated[dict, Depends(get_current_user)]\nPaginationParams = Annotated[dict, Depends(pagination)]\n\n# Clean handler signatures using aliases\n@app.get(\"/items/\")\ndef list_items(user: CurrentUser, params: PaginationParams):\n    return {\n        \"user\": user[\"name\"],\n        \"items\": [],\n        **params,\n    }\n\n@app.get(\"/orders/\")\ndef list_orders(user: CurrentUser, params: PaginationParams):\n    return {\n        \"user\": user[\"name\"],\n        \"orders\": [],\n        **params,\n    }\n\n# Annotated works with all parameter types\n@app.get(\"/search/\")\ndef search(\n    q: Annotated[str, Query(min_length=1, description=\"Search term\")],\n    user: CurrentUser,\n):\n    return {\"query\": q, \"user\": user[\"name\"]}\n\nclient = TestClient(app)\n\nprint(\"Items:\", client.get(\"/items/?token=abc&skip=5\").json())\nprint(\"Orders:\", client.get(\"/orders/?token=abc\").json())\nprint(\"Search:\", client.get(\"/search/?q=widget&token=abc\").json())\n\n# Expected Output:\n# Items: {'user': 'Alice', 'items': [], 'skip': 5, 'limit': 10}\n# Orders: {'user': 'Alice', 'orders': [], 'skip': 0, 'limit': 10}\n# Search: {'query': 'widget', 'user': 'Alice'}",
+          "code_language": "python",
+          "key_points": [
+            "Annotated[Type, Depends(func)] is the recommended modern syntax for dependency injection",
+            "Create reusable type aliases like CurrentUser = Annotated[User, Depends(get_user)] for DRY code",
+            "Type checkers see the actual type (User), not Depends(), giving correct autocomplete",
+            "Annotated works with all FastAPI parameter types: Query, Path, Body, Header, Cookie, Form"
+          ],
+          "gotchas": [
+            "Annotated requires Python 3.9+ (from typing import Annotated) or 3.8 (from typing_extensions)",
+            "The old syntax (param: Type = Depends(func)) still works but is not recommended for new code",
+            "Annotated type aliases must use Annotated, not just a plain type -- Annotated[Session, Depends()] not Session"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Annotated[Type, Depends(func)]` is the modern way to declare dependencies. Create reusable aliases like `CurrentUser = Annotated[User, Depends(get_user)]` and use them across handlers for clean, DRY code.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\n\napp = FastAPI()\n\ndef get_user(token: str = Query()):\n    return {\"name\": \"Alice\"}\n\nCurrentUser = Annotated[dict, Depends(get_user)]  # Reusable alias\n\n@app.get(\"/items/\")\ndef items(user: CurrentUser):  # Clean signature\n    return {\"user\": user[\"name\"]}",
+          "code_language": "python",
+          "key_points": [
+            "Annotated + type aliases = reusable, type-checker-friendly dependency declarations"
+          ],
+          "gotchas": [
+            "Requires Python 3.9+ for typing.Annotated, or use typing_extensions for 3.8"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do class-based dependencies work?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "class-dependency",
+        "depends",
+        "callable",
+        "oop"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In FastAPI, any callable can be a dependency -- including classes. When you use a class as a dependency, FastAPI calls the class constructor (`__init__`) and injects the resulting instance.\n\n### How it works:\n1. Define a class with `__init__` parameters (using FastAPI annotations like `Query()`, `Path()`, etc.)\n2. Use `Depends(ClassName)` in your handler\n3. FastAPI calls `ClassName(...)` with resolved parameters\n4. The instance is injected into your handler\n\n### Why use class-based dependencies:\n- **Structured parameters**: Group related parameters into a single object with named attributes\n- **Methods**: The injected instance can have methods for additional logic\n- **Reusability**: The class is a clean, self-contained unit of logic\n- **IDE support**: Attributes are auto-completed on the instance\n\n### Shorthand with Depends():\nWhen the type annotation matches the dependency class, you can use `Depends()` without arguments:\n```python\ndef handler(params: Annotated[Pagination, Depends()]):\n# Equivalent to: Depends(Pagination)\n```\n\n### __call__ dependencies:\nYou can also make class instances callable with `__call__` for stateful dependencies.",
+          "pseudo_code": "# Class-based dependency\nclass Pagination:\n    def __init__(self, skip: int = 0, limit: int = 10):\n        self.skip = skip\n        self.limit = limit\n\n# Usage with Depends(ClassName)\n@app.GET(\"/items/\")\nfunction list_items(pagination: Pagination = Depends(Pagination)):\n    # pagination.skip, pagination.limit are available\n    return items[pagination.skip : pagination.skip + pagination.limit]\n\n# Shorthand: Depends() infers the class from type hint\n@app.GET(\"/items/\")\nfunction list_items(pagination: Annotated[Pagination, Depends()]):\n    # Same as above",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Class-based dependency\nclass Pagination:\n    def __init__(\n        self,\n        skip: int = Query(default=0, ge=0),\n        limit: int = Query(default=10, le=100),\n    ):\n        self.skip = skip\n        self.limit = limit\n\n# Shorthand: Depends() infers class from Annotated type\n@app.get(\"/items/\")\ndef list_items(pagination: Annotated[Pagination, Depends()]):\n    fake_items = [f\"item_{i}\" for i in range(50)]\n    page = fake_items[pagination.skip : pagination.skip + pagination.limit]\n    return {\"items\": page, \"skip\": pagination.skip, \"limit\": pagination.limit}\n\n# Callable class (__call__) for stateful dependency\nclass ApiKeyChecker:\n    def __init__(self, valid_keys: list[str]):\n        self.valid_keys = valid_keys\n\n    def __call__(self, api_key: str = Query()):\n        if api_key not in self.valid_keys:\n            from fastapi import HTTPException\n            raise HTTPException(status_code=403, detail=\"Invalid API key\")\n        return api_key\n\n# Create an instance with configuration\ncheck_key = ApiKeyChecker(valid_keys=[\"key-1\", \"key-2\"])\n\n@app.get(\"/secure/\")\ndef secure_endpoint(key: Annotated[str, Depends(check_key)]):\n    return {\"message\": \"Access granted\", \"key\": key}\n\nclient = TestClient(app)\n\nprint(\"Page 1:\", client.get(\"/items/?skip=0&limit=3\").json())\nprint(\"Page 2:\", client.get(\"/items/?skip=3&limit=3\").json())\nprint(\"Secure:\", client.get(\"/secure/?api_key=key-1\").json())\nprint(\"Bad key:\", client.get(\"/secure/?api_key=invalid\").status_code)\n\n# Expected Output:\n# Page 1: {'items': ['item_0', 'item_1', 'item_2'], 'skip': 0, 'limit': 3}\n# Page 2: {'items': ['item_3', 'item_4', 'item_5'], 'skip': 3, 'limit': 3}\n# Secure: {'message': 'Access granted', 'key': 'key-1'}\n# Bad key: 403",
+          "code_language": "python",
+          "key_points": [
+            "Classes can be dependencies -- FastAPI calls __init__ and injects the instance",
+            "Annotated[ClassName, Depends()] is shorthand when type matches the dependency class",
+            "Callable class instances (with __call__) support stateful dependencies with configuration",
+            "Class dependencies group related parameters into a structured object with named attributes"
+          ],
+          "gotchas": [
+            "Depends() without arguments only works when the Annotated type IS the dependency class",
+            "Class __init__ parameters follow the same rules as function dependencies (Query, Path, etc.)",
+            "__call__ dependencies are instances, not classes -- Depends(checker_instance) not Depends(CheckerClass)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Classes can be dependencies -- FastAPI calls `__init__` and injects the instance. Use `Annotated[ClassName, Depends()]` for shorthand. For stateful dependencies, use callable class instances with `__call__`.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Query\n\napp = FastAPI()\n\nclass Pagination:\n    def __init__(self, skip: int = Query(0), limit: int = Query(10)):\n        self.skip = skip\n        self.limit = limit\n\n@app.get(\"/items/\")\ndef items(p: Annotated[Pagination, Depends()]):\n    return {\"skip\": p.skip, \"limit\": p.limit}",
+          "code_language": "python",
+          "key_points": [
+            "Class as dependency: __init__ is called, instance is injected"
+          ],
+          "gotchas": [
+            "Depends() shorthand only works when the Annotated type matches the dependency class"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do yield dependencies work for cleanup (e.g., database sessions)?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "yield-dependency",
+        "cleanup",
+        "database-session",
+        "context-manager"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Yield dependencies use Python's generator syntax to provide a resource and then clean it up after the response is sent. This is essential for resources that need cleanup, like database sessions, file handles, or locks.\n\n### How yield dependencies work:\n1. Code **before** `yield` runs before the handler (setup)\n2. The `yield`ed value is injected into the handler\n3. The handler runs and sends the response\n4. Code **after** `yield` runs after the response is sent (cleanup)\n5. If an exception occurs, it is re-raised after cleanup\n\n### Execution flow:\n```\nDependency setup (before yield)\n  -> Handler runs\n    -> Response sent to client\nDependency cleanup (after yield)\n```\n\n### Why use yield for DB sessions:\n- The session is created fresh per request\n- The session is always closed, even if the handler raises an exception\n- This is equivalent to a context manager / `try...finally` pattern\n\n### Async yield dependencies:\nAsync yield dependencies (`async def`) use `async yield` and are needed when cleanup involves async operations (e.g., closing async DB connections).\n\n### Error handling in yield dependencies:\nWrap the `yield` in `try...finally` to ensure cleanup happens even on errors. You can also catch specific exceptions in the `except` block.",
+          "pseudo_code": "# Yield dependency pattern\ndef get_db():\n    db = SessionLocal()  # Setup: create session\n    try:\n        yield db            # Inject into handler\n    finally:\n        db.close()          # Cleanup: always runs\n\n# Execution timeline:\n# 1. db = SessionLocal()       -- setup\n# 2. yield db                  -- inject into handler\n# 3. handler runs              -- uses db\n# 4. response sent to client\n# 5. db.close()                -- cleanup (always runs)",
+          "actual_code": "from typing import Annotated, Generator\nfrom fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Simulated database session\nclass FakeDBSession:\n    def __init__(self):\n        self.closed = False\n        print(\"  DB session opened\")\n\n    def query(self, table: str):\n        return [{\"id\": 1, \"name\": \"Widget\"}]\n\n    def close(self):\n        self.closed = True\n        print(\"  DB session closed\")\n\n# Yield dependency for DB session\ndef get_db() -> Generator[FakeDBSession, None, None]:\n    db = FakeDBSession()\n    try:\n        yield db  # Injected into handler\n    finally:\n        db.close()  # Always runs, even on errors\n\nDbSession = Annotated[FakeDBSession, Depends(get_db)]\n\n@app.get(\"/items/\")\ndef list_items(db: DbSession):\n    print(\"  Handler running\")\n    items = db.query(\"items\")\n    return {\"items\": items}\n\n@app.get(\"/error/\")\ndef error_endpoint(db: DbSession):\n    print(\"  Handler about to error\")\n    raise ValueError(\"Something went wrong\")\n\nclient = TestClient(app)\n\nprint(\"=== Successful request ===\")\nresp = client.get(\"/items/\")\nprint(f\"  Response: {resp.json()}\")\n\nprint(\"\\n=== Error request ===\")\ntry:\n    client.get(\"/error/\")\nexcept ValueError:\n    print(\"  Error caught, but session was still closed\")\n\n# Expected Output:\n# === Successful request ===\n#   DB session opened\n#   Handler running\n#   DB session closed\n#   Response: {'items': [{'id': 1, 'name': 'Widget'}]}\n#\n# === Error request ===\n#   DB session opened\n#   Handler about to error\n#   DB session closed\n#   Error caught, but session was still closed",
+          "code_language": "python",
+          "key_points": [
+            "Code before yield is setup (create resource), after yield is cleanup (close resource)",
+            "The yielded value is injected into the handler as the dependency value",
+            "Wrap yield in try/finally to guarantee cleanup even when the handler raises exceptions",
+            "Yield dependencies are the standard pattern for database session management in FastAPI"
+          ],
+          "gotchas": [
+            "Cleanup code (after yield) runs AFTER the response is sent -- you cannot modify the response there",
+            "Only one yield is allowed per dependency -- it is a generator, not a coroutine",
+            "Exceptions in cleanup code (after yield) are logged but do not change the already-sent response"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Yield dependencies provide a resource before `yield` and clean up after. Code after `yield` always runs (like `finally`), making it perfect for DB sessions that must be closed after each request.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated, Generator\nfrom fastapi import FastAPI, Depends\n\napp = FastAPI()\n\ndef get_db() -> Generator:\n    db = SessionLocal()\n    try:\n        yield db       # Injected into handler\n    finally:\n        db.close()     # Always runs after response\n\n@app.get(\"/items/\")\ndef items(db: Annotated[Session, Depends(get_db)]):\n    return db.query(Item).all()",
+          "code_language": "python",
+          "key_points": [
+            "Before yield = setup; after yield = cleanup (guaranteed via try/finally)"
+          ],
+          "gotchas": [
+            "Cleanup runs after the response is sent -- you cannot modify the response in cleanup code"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do sub-dependencies chain together?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "sub-dependencies",
+        "chaining",
+        "depends",
+        "composition"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Sub-dependencies are dependencies that have their own `Depends()` parameters, forming a chain. FastAPI resolves the entire chain recursively, starting from the deepest dependency and working up.\n\n### How chaining works:\n```\nHandler -> Depends(dep_a) -> Depends(dep_b) -> Depends(dep_c)\n```\nFastAPI resolves from the bottom up:\n1. Resolve `dep_c` (no dependencies)\n2. Resolve `dep_b` (receives `dep_c` result)\n3. Resolve `dep_a` (receives `dep_b` result)\n4. Handler receives `dep_a` result\n\n### Common chain patterns:\n- **Auth chain**: `get_token -> decode_token -> get_current_user -> require_admin`\n- **DB chain**: `get_settings -> get_db_url -> get_db_session`\n- **Validation chain**: `parse_request -> validate_business_rules -> authorize_action`\n\n### Benefits:\n- Each dependency is a small, focused, testable unit\n- Dependencies can be composed in different combinations\n- Changes to a low-level dependency propagate automatically\n- Each level can add validation, transformation, or authorization",
+          "pseudo_code": "# Chain: get_token -> get_user -> require_admin\ndef get_token(authorization: Header):\n    return parse_bearer_token(authorization)\n\ndef get_current_user(token = Depends(get_token)):\n    user = decode_and_lookup(token)\n    return user\n\ndef require_admin(user = Depends(get_current_user)):\n    if not user.is_admin:\n        raise 403 Forbidden\n    return user\n\n# Handler only declares the top-level dependency\n@app.DELETE(\"/users/{id}\")\ndef delete_user(admin = Depends(require_admin)):\n    # admin is guaranteed to be an admin user\n    # The entire chain (token -> user -> admin) ran automatically\n    pass",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Header, HTTPException\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Level 1: Extract token from header\ndef get_token(\n    authorization: Annotated[str, Header()],\n) -> str:\n    if not authorization.startswith(\"Bearer \"):\n        raise HTTPException(status_code=401, detail=\"Invalid auth header\")\n    return authorization.removeprefix(\"Bearer \")\n\n# Level 2: Decode token to user (depends on Level 1)\ndef get_current_user(\n    token: Annotated[str, Depends(get_token)],\n) -> dict:\n    # In real code: decode JWT, query database\n    if token == \"valid-token\":\n        return {\"id\": 1, \"name\": \"Alice\", \"is_admin\": True}\n    raise HTTPException(status_code=401, detail=\"Invalid token\")\n\n# Level 3: Require admin role (depends on Level 2)\ndef require_admin(\n    user: Annotated[dict, Depends(get_current_user)],\n) -> dict:\n    if not user.get(\"is_admin\"):\n        raise HTTPException(status_code=403, detail=\"Admin required\")\n    return user\n\n# Type aliases for clean handlers\nCurrentUser = Annotated[dict, Depends(get_current_user)]\nAdminUser = Annotated[dict, Depends(require_admin)]\n\n# Regular user endpoint -- 2-level chain\n@app.get(\"/me\")\ndef get_me(user: CurrentUser):\n    return {\"user\": user[\"name\"]}\n\n# Admin endpoint -- 3-level chain\n@app.delete(\"/users/{user_id}\")\ndef delete_user(user_id: int, admin: AdminUser):\n    return {\"deleted\": user_id, \"by\": admin[\"name\"]}\n\nclient = TestClient(app)\n\n# Full chain succeeds\nresp = client.get(\"/me\", headers={\"Authorization\": \"Bearer valid-token\"})\nprint(\"Me:\", resp.json())\n\nresp = client.delete(\"/users/42\", headers={\"Authorization\": \"Bearer valid-token\"})\nprint(\"Delete:\", resp.json())\n\n# Chain fails at Level 1\nresp = client.get(\"/me\", headers={\"Authorization\": \"BadFormat\"})\nprint(\"Bad header:\", resp.status_code)\n\n# Expected Output:\n# Me: {'user': 'Alice'}\n# Delete: {'deleted': 42, 'by': 'Alice'}\n# Bad header: 401",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies can depend on other dependencies, forming a resolution chain",
+            "FastAPI resolves from the deepest dependency upward, injecting results at each level",
+            "Each level can validate, transform, or raise errors -- failures stop the chain",
+            "Use type aliases (AdminUser = Annotated[dict, Depends(require_admin)]) for clean handler signatures"
+          ],
+          "gotchas": [
+            "Circular dependencies (A depends on B, B depends on A) cause infinite recursion -- FastAPI does not detect this",
+            "Deep chains run sequentially -- each level waits for the previous to complete",
+            "If the same sub-dependency appears multiple times in a chain, it is called once by default (caching)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies can have their own `Depends()` parameters, creating chains. FastAPI resolves from the deepest level up. Common pattern: `get_token -> get_user -> require_admin`, where the handler only declares the top-level dependency.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Header, HTTPException\n\napp = FastAPI()\n\ndef get_token(authorization: Annotated[str, Header()]):\n    return authorization.removeprefix(\"Bearer \")\n\ndef get_user(token: Annotated[str, Depends(get_token)]):\n    return {\"name\": \"Alice\", \"token\": token}\n\n@app.get(\"/me\")\ndef me(user: Annotated[dict, Depends(get_user)]):\n    return user  # Chain: header -> token -> user",
+          "code_language": "python",
+          "key_points": [
+            "Sub-dependencies chain automatically -- handler declares only the top-level one"
+          ],
+          "gotchas": [
+            "Circular dependencies cause infinite recursion -- FastAPI does not detect them"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does dependency caching work (use_cache parameter)?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "dependency-caching",
+        "use-cache",
+        "performance",
+        "depends"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "By default, FastAPI caches the result of a dependency within a single request. If the same dependency function appears multiple times in the dependency tree, it is called **only once**, and the cached result is reused.\n\n### Default behavior (use_cache=True):\n- Dependency `get_db()` appears in both `get_user(db)` and `get_items(db)`\n- The handler depends on both `get_user` and `get_items`\n- `get_db()` is called **once**, and the same session is shared\n\n### Disabling cache (use_cache=False):\n- `Depends(get_db, use_cache=False)` forces a fresh call every time\n- Each usage gets its own independent instance\n- Use when you need separate instances (e.g., separate DB transactions)\n\n### Scope of caching:\n- Cache is **per-request only** -- not across requests\n- Each incoming request starts with a fresh cache\n- After the response, the cache is discarded\n\n### Why caching matters:\n- **Database sessions**: You want one session per request, shared across all dependencies\n- **User authentication**: Decode the token once, reuse the user object everywhere\n- **Performance**: Avoid redundant expensive operations within a request",
+          "pseudo_code": "# Default: cached (called once per request)\ndef get_db():\n    return create_session()  # Called ONCE even if used 3 times\n\ndef get_user(db = Depends(get_db)):    # Uses cached db\n    return db.query(User)\n\ndef get_items(db = Depends(get_db)):   # Uses SAME cached db\n    return db.query(Item)\n\n@app.GET(\"/\")\ndef handler(user = Depends(get_user), items = Depends(get_items)):\n    # get_db() was called once, shared by both\n    pass\n\n# use_cache=False: called each time\ndef get_fresh_db():\n    return create_session()  # Called EACH time\n\ndef dep_a(db = Depends(get_fresh_db, use_cache=False)):  # New session\ndef dep_b(db = Depends(get_fresh_db, use_cache=False)):  # Different session",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\ncall_count = 0\n\ndef get_db_session():\n    global call_count\n    call_count += 1\n    session_id = call_count\n    print(f\"  Creating session #{session_id}\")\n    return {\"session_id\": session_id}\n\n# Both use get_db_session -- cached by default\ndef get_user(db: Annotated[dict, Depends(get_db_session)]):\n    return {\"user\": \"Alice\", \"db_session\": db[\"session_id\"]}\n\ndef get_settings(db: Annotated[dict, Depends(get_db_session)]):\n    return {\"theme\": \"dark\", \"db_session\": db[\"session_id\"]}\n\n@app.get(\"/cached\")\ndef cached_endpoint(\n    user: Annotated[dict, Depends(get_user)],\n    settings: Annotated[dict, Depends(get_settings)],\n):\n    # get_db_session called ONCE -- same session_id for both\n    return {\n        \"user_session\": user[\"db_session\"],\n        \"settings_session\": settings[\"db_session\"],\n        \"same_session\": user[\"db_session\"] == settings[\"db_session\"],\n    }\n\n# use_cache=False: fresh call each time\ndef get_user_no_cache(\n    db: Annotated[dict, Depends(get_db_session, use_cache=False)],\n):\n    return {\"user\": \"Alice\", \"db_session\": db[\"session_id\"]}\n\ndef get_settings_no_cache(\n    db: Annotated[dict, Depends(get_db_session, use_cache=False)],\n):\n    return {\"theme\": \"dark\", \"db_session\": db[\"session_id\"]}\n\n@app.get(\"/uncached\")\ndef uncached_endpoint(\n    user: Annotated[dict, Depends(get_user_no_cache)],\n    settings: Annotated[dict, Depends(get_settings_no_cache)],\n):\n    return {\n        \"user_session\": user[\"db_session\"],\n        \"settings_session\": settings[\"db_session\"],\n        \"same_session\": user[\"db_session\"] == settings[\"db_session\"],\n    }\n\nclient = TestClient(app)\n\ncall_count = 0\nprint(\"=== Cached (default) ===\")\nresp = client.get(\"/cached\")\nprint(f\"  Result: {resp.json()}\")\n\ncall_count = 0\nprint(\"\\n=== Uncached ===\")\nresp = client.get(\"/uncached\")\nprint(f\"  Result: {resp.json()}\")\n\n# Expected Output:\n# === Cached (default) ===\n#   Creating session #1\n#   Result: {'user_session': 1, 'settings_session': 1, 'same_session': True}\n#\n# === Uncached ===\n#   Creating session #1\n#   Creating session #2\n#   Result: {'user_session': 1, 'settings_session': 2, 'same_session': False}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies are cached per-request by default -- called once even if used multiple times",
+            "Caching ensures one DB session is shared across all dependencies within a single request",
+            "Depends(func, use_cache=False) forces a fresh call for each usage",
+            "Cache is per-request only -- each new request starts with a clean cache"
+          ],
+          "gotchas": [
+            "Caching is per dependency function identity -- two different functions that call the same code are not cached together",
+            "use_cache=False on a yield dependency creates multiple instances that each get their own cleanup",
+            "The cache does not survive across requests -- it is not a global or application-level cache"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies are cached per-request by default. If `get_db` appears in multiple sub-dependencies, it runs once and the same result is shared. Use `Depends(func, use_cache=False)` to force a fresh call each time.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends\n\napp = FastAPI()\n\ndef get_db():\n    return {\"session\": \"shared\"}  # Called once per request\n\ndef dep_a(db: Annotated[dict, Depends(get_db)]): return db\ndef dep_b(db: Annotated[dict, Depends(get_db)]): return db\n\n@app.get(\"/\")\ndef handler(\n    a: Annotated[dict, Depends(dep_a)],\n    b: Annotated[dict, Depends(dep_b)],\n):\n    return {\"same\": a is b}  # True -- cached",
+          "code_language": "python",
+          "key_points": [
+            "Same dependency used multiple times = called once, result shared within the request"
+          ],
+          "gotchas": [
+            "Cache is per-request, not global -- each request gets fresh dependency instances"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you define global dependencies on the app or router?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "global-dependencies",
+        "app-level",
+        "router-level",
+        "middleware"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Global dependencies run for **every request** to the app or router, without needing to declare them on each endpoint. They are useful for cross-cutting concerns like authentication, logging, or rate limiting.\n\n### App-level dependencies:\nPass `dependencies=[Depends(...)]` to the `FastAPI()` constructor. These run for every endpoint in the entire application.\n\n### Router-level dependencies:\nPass `dependencies=[Depends(...)]` to `APIRouter()`. These run for every endpoint in that router.\n\n### How they work:\n- Global dependencies run before the handler\n- They **do not inject** their return value into the handler -- they run for side effects (validation, auth checks)\n- If a global dependency raises an exception, the handler is never called\n- They can be combined with per-endpoint dependencies\n\n### Execution order:\n1. App-level dependencies (in order)\n2. Router-level dependencies (in order)\n3. Endpoint-level dependencies (in order)\n4. Handler function",
+          "pseudo_code": "# App-level: runs for ALL endpoints\napp = FastAPI(dependencies=[Depends(verify_auth), Depends(log_request)])\n\n# Router-level: runs for all endpoints in this router\nrouter = APIRouter(\n    prefix=\"/admin\",\n    dependencies=[Depends(require_admin)]\n)\n\n# Endpoint-level: runs only for this endpoint\n@router.get(\"/settings\", dependencies=[Depends(rate_limit)])\ndef get_settings():\n    pass\n\n# Execution order for GET /admin/settings:\n# 1. verify_auth (app)\n# 2. log_request (app)\n# 3. require_admin (router)\n# 4. rate_limit (endpoint)\n# 5. get_settings() handler",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, APIRouter, Depends, Header, HTTPException\nfrom fastapi.testclient import TestClient\n\n# Global dependency: runs for every request\ndef verify_api_key(\n    x_api_key: Annotated[str, Header()],\n):\n    if x_api_key != \"master-key\":\n        raise HTTPException(status_code=403, detail=\"Invalid API key\")\n    # No return value needed -- runs for side effects\n\ndef log_request():\n    print(\"  [LOG] Request received\")\n\n# App-level dependencies\napp = FastAPI(dependencies=[Depends(verify_api_key), Depends(log_request)])\n\n# Router-level dependency\ndef require_admin_role(\n    x_role: Annotated[str, Header()],\n):\n    if x_role != \"admin\":\n        raise HTTPException(status_code=403, detail=\"Admin role required\")\n\nadmin_router = APIRouter(\n    prefix=\"/admin\",\n    tags=[\"admin\"],\n    dependencies=[Depends(require_admin_role)],\n)\n\n# Public router -- no extra dependencies beyond app-level\npublic_router = APIRouter(prefix=\"/public\", tags=[\"public\"])\n\n@public_router.get(\"/items/\")\ndef list_items():\n    return {\"items\": [\"widget\", \"gadget\"]}\n\n@admin_router.get(\"/users/\")\ndef list_users():\n    return {\"users\": [\"alice\", \"bob\"]}\n\n@admin_router.delete(\"/users/{user_id}\")\ndef delete_user(user_id: int):\n    return {\"deleted\": user_id}\n\napp.include_router(public_router)\napp.include_router(admin_router)\n\nclient = TestClient(app)\nheaders = {\"X-API-Key\": \"master-key\"}\n\n# Public endpoint -- only app-level deps\nprint(\"Public:\", client.get(\"/public/items/\", headers=headers).json())\n\n# Admin endpoint -- app + router deps\nprint(\"Admin:\", client.get(\n    \"/admin/users/\",\n    headers={**headers, \"X-Role\": \"admin\"}\n).json())\n\n# Admin without role -- router dep blocks\nprint(\"No role:\", client.get(\n    \"/admin/users/\",\n    headers=headers\n).status_code)\n\n# No API key -- app dep blocks\nprint(\"No key:\", client.get(\"/public/items/\").status_code)\n\n# Expected Output:\n#   [LOG] Request received\n# Public: {'items': ['widget', 'gadget']}\n#   [LOG] Request received\n# Admin: {'users': ['alice', 'bob']}\n#   [LOG] Request received\n# No role: 403\n# No key: 422",
+          "code_language": "python",
+          "key_points": [
+            "App-level: FastAPI(dependencies=[Depends(...)]) runs for ALL endpoints",
+            "Router-level: APIRouter(dependencies=[Depends(...)]) runs for all endpoints in that router",
+            "Global dependencies run for side effects -- their return values are NOT injected into handlers",
+            "Execution order: app deps -> router deps -> endpoint deps -> handler"
+          ],
+          "gotchas": [
+            "Global dependency return values are discarded -- if you need the value in the handler, use per-endpoint Depends()",
+            "Global dependencies cannot be overridden per-endpoint -- they always run in addition to endpoint deps",
+            "A failing global dependency returns an error even if the endpoint would have handled it differently"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pass `dependencies=[Depends(...)]` to `FastAPI()` for app-wide dependencies or `APIRouter()` for router-wide. They run for every request but do not inject return values -- use for auth, logging, rate limiting.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException\nfrom typing import Annotated\n\ndef verify_key(x_api_key: Annotated[str, Header()]):\n    if x_api_key != \"secret\":\n        raise HTTPException(403)\n\napp = FastAPI(dependencies=[Depends(verify_key)])  # All endpoints\n\nrouter = APIRouter(prefix=\"/admin\", dependencies=[Depends(require_admin)])\napp.include_router(router)",
+          "code_language": "python",
+          "key_points": [
+            "dependencies=[Depends(...)] on app/router runs for all endpoints without injection"
+          ],
+          "gotchas": [
+            "Global dependency return values are discarded -- use endpoint-level Depends() if you need the value"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you override dependencies for testing?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "testing",
+        "dependency-override",
+        "mocking",
+        "testclient"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI provides `app.dependency_overrides`, a dictionary that maps original dependency functions to replacement functions. During testing, you replace real dependencies (database, auth, external APIs) with test-friendly alternatives.\n\n### How it works:\n1. `app.dependency_overrides[original_func] = mock_func`\n2. Whenever FastAPI would call `original_func`, it calls `mock_func` instead\n3. This applies to ALL usages of the dependency, including sub-dependencies\n4. Clear overrides after tests: `app.dependency_overrides.clear()` or `app.dependency_overrides = {}`\n\n### Common overrides:\n- **Database session**: Replace with a test DB or in-memory SQLite\n- **Authentication**: Return a fake user without actually checking tokens\n- **External APIs**: Return mocked responses without HTTP calls\n- **Settings**: Override configuration for test environment\n\n### Best practices:\n- Override in fixtures, clear in teardown\n- The mock function must accept the same parameters OR fewer (FastAPI resolves what it can)\n- Use pytest fixtures for clean setup/teardown\n\n### Scope:\nOverrides affect the app globally -- all endpoints that use the dependency are affected. Be careful with parallel test execution.",
+          "pseudo_code": "# Original dependency\ndef get_db():\n    db = ProductionDatabase()\n    yield db\n    db.close()\n\ndef get_current_user(token = Depends(get_token)):\n    return lookup_user(token)\n\n# Test overrides\ndef override_get_db():\n    db = TestDatabase()  # In-memory SQLite\n    yield db\n    db.close()\n\ndef override_get_user():\n    return {\"id\": 1, \"name\": \"TestUser\"}  # No auth needed\n\n# Apply overrides\napp.dependency_overrides[get_db] = override_get_db\napp.dependency_overrides[get_current_user] = override_get_user\n\n# Test runs with mock dependencies\nclient = TestClient(app)\nresponse = client.get(\"/items/\")  # Uses test DB, fake user\n\n# Cleanup\napp.dependency_overrides.clear()",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Header, HTTPException\nfrom fastapi.testclient import TestClient\nimport pytest\n\napp = FastAPI()\n\n# Real dependencies\ndef get_db():\n    return {\"type\": \"production\", \"host\": \"prod-db.example.com\"}\n\ndef get_current_user(\n    authorization: Annotated[str, Header()],\n):\n    if authorization != \"Bearer real-token\":\n        raise HTTPException(status_code=401)\n    return {\"id\": 1, \"name\": \"RealUser\"}\n\nDbSession = Annotated[dict, Depends(get_db)]\nCurrentUser = Annotated[dict, Depends(get_current_user)]\n\n@app.get(\"/items/\")\ndef list_items(db: DbSession, user: CurrentUser):\n    return {\"db\": db[\"type\"], \"user\": user[\"name\"], \"items\": []}\n\n# --- Testing with overrides ---\n\n# Mock dependencies\ndef override_get_db():\n    return {\"type\": \"test\", \"host\": \"localhost\"}\n\ndef override_get_user():\n    return {\"id\": 99, \"name\": \"TestUser\"}\n\n# Apply overrides\napp.dependency_overrides[get_db] = override_get_db\napp.dependency_overrides[get_current_user] = override_get_user\n\nclient = TestClient(app)\n\n# Test -- no auth header needed, uses test DB\nresp = client.get(\"/items/\")\nprint(\"With overrides:\", resp.json())\n\n# Clear overrides\napp.dependency_overrides.clear()\n\n# Without overrides -- real deps require auth\nresp = client.get(\"/items/\")\nprint(\"Without overrides:\", resp.status_code)\n\n# Expected Output:\n# With overrides: {'db': 'test', 'user': 'TestUser', 'items': []}\n# Without overrides: 422",
+          "code_language": "python",
+          "key_points": [
+            "app.dependency_overrides[real_dep] = mock_dep replaces dependencies during testing",
+            "Overrides affect ALL endpoints that use the dependency, including sub-dependency chains",
+            "Always clear overrides after tests: app.dependency_overrides.clear()",
+            "Mock functions can be simpler -- they do not need the same parameters as the original"
+          ],
+          "gotchas": [
+            "Overrides are global on the app instance -- parallel tests using the same app can interfere",
+            "The override key must be the exact same function object used in Depends() -- not a copy or import alias",
+            "Overriding a sub-dependency also overrides it for all parent dependencies that use it"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `app.dependency_overrides[real_func] = mock_func` to replace dependencies during testing. This lets you swap DB sessions, auth, and external APIs with test-friendly mocks. Always clear overrides after tests.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\ndef get_db():\n    return {\"type\": \"production\"}\n\n@app.get(\"/\")\ndef root(db=Depends(get_db)):\n    return db\n\n# Test with override\napp.dependency_overrides[get_db] = lambda: {\"type\": \"test\"}\nclient = TestClient(app)\nprint(client.get(\"/\").json())  # {'type': 'test'}\napp.dependency_overrides.clear()",
+          "code_language": "python",
+          "key_points": [
+            "dependency_overrides dict maps real functions to mocks for testing"
+          ],
+          "gotchas": [
+            "The key must be the exact function object -- importing from a different path creates a different object"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you create dependencies that return different types?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "dependency-types",
+        "return-type",
+        "depends",
+        "typing"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dependencies can return any Python type -- simple values, Pydantic models, database sessions, or complex objects. The return type determines what the handler receives.\n\n### Common return type patterns:\n\n### 1. Simple values (str, int, bool)\nUseful for extracted/validated single values like tokens or feature flags.\n\n### 2. Dictionaries\nQuick and flexible but lacks IDE autocomplete.\n\n### 3. Pydantic models\nType-safe with validation and IDE support.\n\n### 4. Custom classes / dataclasses\nFull control over attributes and methods.\n\n### 5. Database sessions\nORM session objects for query execution.\n\n### 6. None (side-effect only)\nDependencies that validate but do not return useful data (auth checks).\n\n### Type annotations:\nAlways annotate the return type of dependencies. This helps FastAPI with documentation and helps type checkers in your handler code.\n\n### Union types:\nDependencies can return different types based on conditions (e.g., `User | None`). The handler must handle both cases.",
+          "pseudo_code": "# String return -- extracted value\ndef get_token(header) -> str:\n    return parse_token(header)\n\n# Pydantic model return -- validated structure\ndef get_current_user(token = Depends(get_token)) -> UserModel:\n    return UserModel(id=1, name=\"Alice\")\n\n# Custom class return -- with methods\ndef get_paginator(skip, limit) -> Paginator:\n    return Paginator(skip, limit)\n    # Handler can call paginator.apply(query)\n\n# Optional return -- may be None\ndef get_optional_user(token = Depends(get_token)) -> User | None:\n    if token:\n        return lookup_user(token)\n    return None",
+          "actual_code": "from typing import Annotated\nfrom dataclasses import dataclass\nfrom fastapi import FastAPI, Depends, Query, Header\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# 1. Returns a simple string\ndef get_api_version(\n    version: Annotated[str, Header(alias=\"X-API-Version\")] = \"v1\",\n) -> str:\n    return version\n\n# 2. Returns a Pydantic model\nclass UserInfo(BaseModel):\n    id: int\n    name: str\n    role: str\n\ndef get_current_user() -> UserInfo:\n    return UserInfo(id=1, name=\"Alice\", role=\"admin\")\n\n# 3. Returns a dataclass with methods\n@dataclass\nclass Paginator:\n    skip: int\n    limit: int\n\n    def apply(self, items: list) -> list:\n        return items[self.skip : self.skip + self.limit]\n\ndef get_paginator(\n    skip: int = Query(default=0, ge=0),\n    limit: int = Query(default=10, le=100),\n) -> Paginator:\n    return Paginator(skip=skip, limit=limit)\n\n# 4. Returns Optional (User | None)\ndef get_optional_user(\n    x_token: Annotated[str | None, Header()] = None,\n) -> UserInfo | None:\n    if x_token == \"valid\":\n        return UserInfo(id=1, name=\"Alice\", role=\"admin\")\n    return None\n\n# Type aliases\nApiVersion = Annotated[str, Depends(get_api_version)]\nCurrentUser = Annotated[UserInfo, Depends(get_current_user)]\nPagination = Annotated[Paginator, Depends(get_paginator)]\nOptionalUser = Annotated[UserInfo | None, Depends(get_optional_user)]\n\n@app.get(\"/items/\")\ndef list_items(version: ApiVersion, user: CurrentUser, page: Pagination):\n    all_items = [f\"item_{i}\" for i in range(50)]\n    return {\n        \"version\": version,\n        \"user\": user.name,\n        \"items\": page.apply(all_items),\n    }\n\n@app.get(\"/public/\")\ndef public_endpoint(user: OptionalUser):\n    if user:\n        return {\"greeting\": f\"Hello, {user.name}!\"}\n    return {\"greeting\": \"Hello, guest!\"}\n\nclient = TestClient(app)\n\nresp = client.get(\"/items/?skip=0&limit=3\", headers={\"X-API-Version\": \"v2\"})\nprint(\"Items:\", resp.json())\n\nprint(\"Authed:\", client.get(\"/public/\", headers={\"X-Token\": \"valid\"}).json())\nprint(\"Guest:\", client.get(\"/public/\").json())\n\n# Expected Output:\n# Items: {'version': 'v2', 'user': 'Alice', 'items': ['item_0', 'item_1', 'item_2']}\n# Authed: {'greeting': 'Hello, Alice!'}\n# Guest: {'greeting': 'Hello, guest!'}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies can return any type: strings, Pydantic models, dataclasses, ORM sessions, or None",
+            "Annotate return types for IDE autocomplete and type checker support in handlers",
+            "Dataclass/class returns can have methods that handlers call (e.g., paginator.apply())",
+            "Optional returns (Type | None) let handlers branch on whether the dependency resolved"
+          ],
+          "gotchas": [
+            "The Annotated type should match the dependency's actual return type for correct type checking",
+            "Returning None from a dependency is valid -- the handler receives None, not an error",
+            "Complex return types (like ORM sessions) are not serializable -- do not return them as API responses"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies can return any type -- strings, Pydantic models, dataclasses, None, or complex objects. Use type annotations on the dependency function and in `Annotated[Type, Depends()]` for correct IDE support.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom dataclasses import dataclass\nfrom fastapi import FastAPI, Depends, Query\n\napp = FastAPI()\n\n@dataclass\nclass Paginator:\n    skip: int\n    limit: int\n    def apply(self, items: list) -> list:\n        return items[self.skip:self.skip + self.limit]\n\ndef get_paginator(skip: int = Query(0), limit: int = Query(10)) -> Paginator:\n    return Paginator(skip, limit)\n\n@app.get(\"/items/\")\ndef items(p: Annotated[Paginator, Depends(get_paginator)]):\n    return p.apply([\"a\", \"b\", \"c\", \"d\"])",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies return any type -- the handler receives exactly what the dependency returns"
+          ],
+          "gotchas": [
+            "Match Annotated[Type] to the actual return type for correct type checking"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do dependencies interact with path operation parameters?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "dependencies",
+        "parameters",
+        "path-operations",
+        "resolution"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dependencies and path operation parameters coexist and are resolved by the same system. FastAPI resolves ALL parameters -- path, query, body, headers, cookies, and dependencies -- before calling the handler.\n\n### Resolution order:\n1. FastAPI inspects the handler's function signature\n2. For each parameter, it determines the source:\n   - Path variable names -> path parameters\n   - Pydantic models -> request body\n   - `Depends()` -> dependency functions\n   - Simple types -> query parameters (default)\n   - `Header()`, `Cookie()`, `Form()` -> respective sources\n3. Dependencies are resolved (including their own parameters)\n4. All resolved values are passed to the handler\n\n### Dependencies can access the same parameters:\nDependencies can declare path, query, header, and body parameters just like handlers. FastAPI resolves them from the same request.\n\n### Dependencies in the `dependencies` list:\nThe decorator's `dependencies=[Depends(...)]` parameter runs dependencies for side effects without injecting their return values into the handler.\n\n### Shared parameters:\nIf a handler and a dependency both need `item_id: int` from the path, FastAPI provides the same value to both. There is no conflict.",
+          "pseudo_code": "# Dependency accessing path and query params\ndef verify_item_access(\n    item_id: int,              # From path (same as handler)\n    token: str = Header(),     # From header\n):\n    if not has_access(token, item_id):\n        raise 403\n\n@app.GET(\"/items/{item_id}\")\ndef get_item(\n    item_id: int,                    # Path parameter\n    q: str = None,                   # Query parameter\n    auth = Depends(verify_item_access), # Dependency (also uses item_id)\n):\n    # item_id is resolved once, shared with dependency\n    return {\"id\": item_id, \"q\": q}",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Path, Query, Header, HTTPException\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Dependency that accesses path and header params\ndef verify_ownership(\n    item_id: Annotated[int, Path()],\n    x_user_id: Annotated[int, Header()],\n):\n    # Check if user owns the item\n    owner_map = {1: 100, 2: 200}\n    if owner_map.get(item_id) != x_user_id:\n        raise HTTPException(status_code=403, detail=\"Not your item\")\n    return True\n\n# Dependency that accesses query params\ndef parse_filters(\n    sort_by: Annotated[str, Query()] = \"id\",\n    order: Annotated[str, Query()] = \"asc\",\n) -> dict:\n    return {\"sort_by\": sort_by, \"order\": order}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: Annotated[int, Path(ge=1)],\n    q: Annotated[str | None, Query()] = None,\n    is_owner: Annotated[bool, Depends(verify_ownership)] = True,\n    filters: Annotated[dict, Depends(parse_filters)] = ...,\n):\n    return {\n        \"item_id\": item_id,\n        \"q\": q,\n        \"is_owner\": is_owner,\n        \"filters\": filters,\n    }\n\n# Side-effect dependency (no injection)\ndef log_access():\n    print(\"  [LOG] Item accessed\")\n\n@app.get(\"/items-logged/{item_id}\", dependencies=[Depends(log_access)])\ndef get_item_logged(item_id: int):\n    return {\"item_id\": item_id}\n\nclient = TestClient(app)\n\n# All params + dependencies resolved together\nresp = client.get(\n    \"/items/1?q=search&sort_by=name&order=desc\",\n    headers={\"X-User-ID\": \"100\"},\n)\nprint(\"Success:\", resp.json())\n\n# Dependency blocks access\nresp = client.get(\"/items/1\", headers={\"X-User-ID\": \"999\"})\nprint(\"Forbidden:\", resp.status_code)\n\n# Side-effect dependency\nresp = client.get(\"/items-logged/42\")\nprint(\"Logged:\", resp.json())\n\n# Expected Output:\n# Success: {'item_id': 1, 'q': 'search', 'is_owner': True, 'filters': {'sort_by': 'name', 'order': 'desc'}}\n# Forbidden: 403\n#   [LOG] Item accessed\n# Logged: {'item_id': 42}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies can declare the same path/query/header parameters as the handler -- resolved from the same request",
+            "FastAPI resolves ALL parameters (path, query, body, deps) before calling the handler",
+            "dependencies=[Depends(...)] in the decorator runs for side effects without injection",
+            "A shared path parameter (like item_id) is resolved once and provided to both handler and dependency"
+          ],
+          "gotchas": [
+            "A dependency that declares a path parameter only works on routes that have that path variable",
+            "Dependencies in the dependencies=[] list cannot have their return values accessed by the handler",
+            "If a dependency and handler both declare the same query param with different defaults, each gets its own default"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies can declare path, query, header, and body parameters just like handlers -- FastAPI resolves them from the same request. Dependencies and handler parameters are all resolved before the handler runs.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Path, Header, HTTPException\n\napp = FastAPI()\n\ndef check_owner(item_id: Annotated[int, Path()], x_user: Annotated[int, Header()]):\n    if x_user != 1:\n        raise HTTPException(403)\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int, _: Annotated[None, Depends(check_owner)]):\n    return {\"item_id\": item_id}",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies access the same request params as handlers -- resolved together"
+          ],
+          "gotchas": [
+            "A dependency with Path() params only works on routes that define those path variables"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use dependencies for authentication/authorization?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "authentication",
+        "authorization",
+        "security",
+        "depends"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dependencies are the primary mechanism for authentication and authorization in FastAPI. The pattern chains dependencies to progressively verify identity and permissions.\n\n### Authentication chain:\n1. **Extract credentials**: Read token from header, cookie, or query param\n2. **Validate credentials**: Decode JWT, verify API key, or check session\n3. **Load user**: Look up the user from the database\n4. **Check permissions**: Verify the user has the required role/scope\n\n### FastAPI security utilities:\nFastAPI provides helper classes that integrate with OpenAPI docs:\n- `OAuth2PasswordBearer` -- Extracts Bearer token from Authorization header\n- `OAuth2PasswordRequestForm` -- Parses username/password from form data\n- `HTTPBearer` -- Generic HTTP Bearer auth\n- `APIKeyHeader` / `APIKeyQuery` / `APIKeyCookie` -- API key extraction\n\nThese are themselves dependencies that extract credentials and add auth info to Swagger UI.\n\n### Role-based access control:\nCreate higher-order dependencies that check specific roles or permissions. The handler only declares the highest-level dependency it needs.",
+          "pseudo_code": "# Auth dependency chain\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/token\")\n\ndef get_current_user(token = Depends(oauth2_scheme)):\n    payload = decode_jwt(token)\n    user = db.get_user(payload[\"sub\"])\n    if not user:\n        raise 401\n    return user\n\ndef require_admin(user = Depends(get_current_user)):\n    if user.role != \"admin\":\n        raise 403 \"Not enough permissions\"\n    return user\n\n# Endpoints declare the level of auth they need\n@app.GET(\"/me\")        -> Depends(get_current_user)  # Any user\n@app.DELETE(\"/users\")  -> Depends(require_admin)      # Admin only",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException, status\nfrom fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm\nfrom fastapi.testclient import TestClient\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\n# OAuth2 scheme -- adds auth button to Swagger docs\noauth2_scheme = OAuth2PasswordBearer(tokenUrl=\"/token\")\n\nclass User(BaseModel):\n    id: int\n    username: str\n    role: str\n\n# Fake user database\nUSERS_DB = {\n    \"alice-token\": User(id=1, username=\"alice\", role=\"admin\"),\n    \"bob-token\": User(id=2, username=\"bob\", role=\"viewer\"),\n}\n\n# Level 1: Extract and validate token\ndef get_current_user(\n    token: Annotated[str, Depends(oauth2_scheme)],\n) -> User:\n    user = USERS_DB.get(token)\n    if not user:\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Invalid token\",\n            headers={\"WWW-Authenticate\": \"Bearer\"},\n        )\n    return user\n\n# Level 2: Require specific role\ndef require_admin(\n    user: Annotated[User, Depends(get_current_user)],\n) -> User:\n    if user.role != \"admin\":\n        raise HTTPException(\n            status_code=status.HTTP_403_FORBIDDEN,\n            detail=\"Admin access required\",\n        )\n    return user\n\n# Type aliases\nCurrentUser = Annotated[User, Depends(get_current_user)]\nAdminUser = Annotated[User, Depends(require_admin)]\n\n# Login endpoint\n@app.post(\"/token\")\ndef login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):\n    # In real code: verify password, create JWT\n    return {\"access_token\": f\"{form_data.username}-token\", \"token_type\": \"bearer\"}\n\n# Any authenticated user\n@app.get(\"/me\")\ndef get_me(user: CurrentUser):\n    return {\"username\": user.username, \"role\": user.role}\n\n# Admin only\n@app.delete(\"/users/{user_id}\")\ndef delete_user(user_id: int, admin: AdminUser):\n    return {\"deleted\": user_id, \"by\": admin.username}\n\nclient = TestClient(app)\n\n# Authenticated request\nresp = client.get(\"/me\", headers={\"Authorization\": \"Bearer alice-token\"})\nprint(\"Me:\", resp.json())\n\n# Admin action\nresp = client.delete(\"/users/2\", headers={\"Authorization\": \"Bearer alice-token\"})\nprint(\"Delete:\", resp.json())\n\n# Non-admin trying admin action\nresp = client.delete(\"/users/1\", headers={\"Authorization\": \"Bearer bob-token\"})\nprint(\"Forbidden:\", resp.status_code, resp.json()[\"detail\"])\n\n# No token\nresp = client.get(\"/me\")\nprint(\"No token:\", resp.status_code)\n\n# Expected Output:\n# Me: {'username': 'alice', 'role': 'admin'}\n# Delete: {'deleted': 2, 'by': 'alice'}\n# Forbidden: 403 Admin access required\n# No token: 401",
+          "code_language": "python",
+          "key_points": [
+            "Chain dependencies: extract token -> validate -> load user -> check permissions",
+            "OAuth2PasswordBearer extracts Bearer tokens and adds auth button to Swagger docs",
+            "Create role-specific dependencies (require_admin) that build on get_current_user",
+            "Type aliases (CurrentUser, AdminUser) make handler signatures clean and declarative"
+          ],
+          "gotchas": [
+            "OAuth2PasswordBearer returns a string (the token), not a User -- you must decode and look up the user",
+            "Always include WWW-Authenticate header in 401 responses per HTTP spec",
+            "Security dependencies should use constant-time comparison for tokens to prevent timing attacks"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Chain dependencies for auth: `OAuth2PasswordBearer` extracts the token, `get_current_user` validates it, and `require_admin` checks the role. Each handler declares the auth level it needs via `Annotated[User, Depends(require_admin)]`.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, HTTPException\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\noauth2 = OAuth2PasswordBearer(tokenUrl=\"/token\")\n\ndef get_user(token: Annotated[str, Depends(oauth2)]):\n    if token != \"valid\":\n        raise HTTPException(401)\n    return {\"name\": \"Alice\", \"role\": \"admin\"}\n\n@app.get(\"/me\")\ndef me(user: Annotated[dict, Depends(get_user)]):\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "OAuth2PasswordBearer + dependency chain = clean auth with Swagger integration"
+          ],
+          "gotchas": [
+            "OAuth2PasswordBearer returns a token string, not a user -- decode and verify it yourself"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the execution order of nested dependencies?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "execution-order",
+        "dependencies",
+        "nested",
+        "lifecycle"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI resolves dependencies in a **depth-first** order, starting from the deepest sub-dependency and working up. For yield dependencies, cleanup runs in **reverse** order after the response.\n\n### Resolution order (depth-first):\n```\nHandler depends on A and B\nA depends on C\nB depends on C and D\n\nResolution: C -> A -> D -> B -> Handler\n```\nNote: C is resolved once (cached) and shared by A and B.\n\n### Yield dependency lifecycle:\n```\nSetup:    C.setup -> A.setup -> D.setup -> B.setup -> Handler runs\nCleanup:  B.cleanup -> D.cleanup -> A.cleanup -> C.cleanup\n```\nCleanup is LIFO (last in, first out) -- like a stack unwinding.\n\n### Parallel vs sequential:\n- Currently, FastAPI resolves dependencies **sequentially**, not in parallel\n- Even if A and B are independent, A is fully resolved before B starts\n- This may change in future versions\n\n### Global, router, and endpoint dependencies:\n1. App-level dependencies (left to right)\n2. Router-level dependencies (left to right)\n3. Endpoint `dependencies=[...]` parameter (left to right)\n4. Handler parameter dependencies (left to right in function signature)",
+          "pseudo_code": "# Dependency tree:\n# Handler\n#   ├── dep_a\n#   │   └── dep_c (shared)\n#   └── dep_b\n#       ├── dep_c (cached, not called again)\n#       └── dep_d\n\n# Setup order (depth-first):\n# 1. dep_c setup (deepest, needed by dep_a)\n# 2. dep_a setup (uses dep_c)\n# 3. dep_d setup (needed by dep_b, dep_c already cached)\n# 4. dep_b setup (uses dep_c cached + dep_d)\n# 5. Handler runs\n\n# Cleanup order (reverse):\n# 1. dep_b cleanup\n# 2. dep_d cleanup\n# 3. dep_a cleanup\n# 4. dep_c cleanup",
+          "actual_code": "from typing import Annotated, Generator\nfrom fastapi import FastAPI, Depends\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\norder_log: list[str] = []\n\ndef dep_c() -> Generator[str, None, None]:\n    order_log.append(\"C setup\")\n    yield \"C\"\n    order_log.append(\"C cleanup\")\n\ndef dep_d() -> Generator[str, None, None]:\n    order_log.append(\"D setup\")\n    yield \"D\"\n    order_log.append(\"D cleanup\")\n\ndef dep_a(\n    c: Annotated[str, Depends(dep_c)],\n) -> Generator[str, None, None]:\n    order_log.append(f\"A setup (has {c})\")\n    yield \"A\"\n    order_log.append(\"A cleanup\")\n\ndef dep_b(\n    c: Annotated[str, Depends(dep_c)],\n    d: Annotated[str, Depends(dep_d)],\n) -> Generator[str, None, None]:\n    order_log.append(f\"B setup (has {c}, {d})\")\n    yield \"B\"\n    order_log.append(\"B cleanup\")\n\n@app.get(\"/\")\ndef handler(\n    a: Annotated[str, Depends(dep_a)],\n    b: Annotated[str, Depends(dep_b)],\n):\n    order_log.append(\"Handler runs\")\n    return {\"a\": a, \"b\": b}\n\nclient = TestClient(app)\n\norder_log.clear()\nresp = client.get(\"/\")\nprint(\"Response:\", resp.json())\nprint(\"\\nExecution order:\")\nfor i, step in enumerate(order_log, 1):\n    print(f\"  {i}. {step}\")\n\n# Expected Output:\n# Response: {'a': 'A', 'b': 'B'}\n#\n# Execution order:\n#   1. C setup\n#   2. A setup (has C)\n#   3. D setup\n#   4. B setup (has C, D)\n#   5. Handler runs\n#   6. B cleanup\n#   7. D cleanup\n#   8. A cleanup\n#   9. C cleanup",
+          "code_language": "python",
+          "key_points": [
+            "Dependencies resolve depth-first: deepest sub-dependency first, then up to the handler",
+            "Yield dependency cleanup runs in reverse order (LIFO) after the response is sent",
+            "Cached dependencies (default) are resolved once and shared, not re-executed",
+            "App-level deps run before router-level, which run before endpoint-level"
+          ],
+          "gotchas": [
+            "Dependencies are resolved sequentially, not in parallel -- slow dependencies add up linearly",
+            "If dep_c fails, dep_a and dep_b never run, but any already-setup yield deps still clean up",
+            "The cleanup order ensures resources opened last are closed first -- like nested context managers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Dependencies resolve depth-first (deepest sub-dependency first). Yield cleanup runs in reverse order (LIFO). Cached dependencies are resolved once and shared across the tree.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated, Generator\nfrom fastapi import FastAPI, Depends\n\napp = FastAPI()\n\ndef dep_c() -> Generator:\n    print(\"C setup\"); yield \"C\"; print(\"C cleanup\")\n\ndef dep_a(c: Annotated[str, Depends(dep_c)]) -> Generator:\n    print(\"A setup\"); yield \"A\"; print(\"A cleanup\")\n\n@app.get(\"/\")\ndef handler(a: Annotated[str, Depends(dep_a)]):\n    print(\"Handler\")\n    return {\"a\": a}\n# Order: C setup -> A setup -> Handler -> A cleanup -> C cleanup",
+          "code_language": "python",
+          "key_points": [
+            "Depth-first setup, reverse-order (LIFO) cleanup -- like nested context managers"
+          ],
+          "gotchas": [
+            "Dependencies resolve sequentially, not in parallel -- each adds to total request time"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle dependency errors gracefully?",
+      "display_order": 13,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "error-handling",
+        "dependencies",
+        "exceptions",
+        "httpexception"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Dependencies can fail in several ways, and FastAPI provides mechanisms to handle each case gracefully.\n\n### 1. HTTPException (recommended for expected errors)\nRaise `HTTPException` with an appropriate status code. FastAPI catches it and returns a JSON error response.\n\n### 2. Validation errors\nIf a dependency's parameters fail validation (e.g., missing header, wrong type), FastAPI returns a 422 automatically.\n\n### 3. Unhandled exceptions\nUnhandled exceptions in dependencies result in a 500 Internal Server Error. Use exception handlers to customize the response.\n\n### 4. Yield dependency error handling\nWrap the yield in `try...except...finally` to catch errors from the handler and clean up resources.\n\n### Error propagation:\n- If a dependency raises HTTPException, the handler never runs\n- If the handler raises an error, yield dependency cleanup still runs\n- Exception handlers (`@app.exception_handler`) catch errors from both dependencies and handlers\n\n### Custom exception classes:\nDefine custom exceptions and register handlers for domain-specific errors. This keeps dependency code clean and error responses consistent.",
+          "pseudo_code": "# Expected error: raise HTTPException\ndef get_user(token):\n    user = lookup(token)\n    if not user:\n        raise HTTPException(status_code=401, detail=\"Invalid token\")\n    return user\n\n# Yield dependency: catch errors from handler\ndef get_db():\n    db = connect()\n    try:\n        yield db\n    except SomeBusinessError:\n        db.rollback()  # Handle specific errors\n    finally:\n        db.close()    # Always cleanup\n\n# Custom exception handler\nclass ItemNotFound(Exception):\n    def __init__(self, item_id): self.item_id = item_id\n\n@app.exception_handler(ItemNotFound)\ndef handle_not_found(request, exc):\n    return JSONResponse(status=404, content={\"error\": f\"Item {exc.item_id} not found\"})",
+          "actual_code": "from typing import Annotated, Generator\nfrom fastapi import FastAPI, Depends, HTTPException, Request, status\nfrom fastapi.responses import JSONResponse\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Custom exception\nclass ItemNotFoundError(Exception):\n    def __init__(self, item_id: int):\n        self.item_id = item_id\n\n# Register custom exception handler\n@app.exception_handler(ItemNotFoundError)\ndef item_not_found_handler(request: Request, exc: ItemNotFoundError):\n    return JSONResponse(\n        status_code=404,\n        content={\"error\": f\"Item {exc.item_id} not found\"},\n    )\n\n# Dependency with HTTPException\ndef get_current_user(x_token: str | None = None) -> dict:\n    if not x_token:\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Authentication required\",\n        )\n    if x_token == \"expired\":\n        raise HTTPException(\n            status_code=status.HTTP_401_UNAUTHORIZED,\n            detail=\"Token expired\",\n        )\n    return {\"name\": \"Alice\"}\n\n# Yield dependency with error handling\ndef get_db() -> Generator[dict, None, None]:\n    db = {\"connected\": True, \"rolled_back\": False}\n    try:\n        yield db\n    except Exception as e:\n        db[\"rolled_back\"] = True\n        print(f\"  DB rolled back due to: {e}\")\n    finally:\n        print(f\"  DB closed (rolled_back={db['rolled_back']})\")\n\n@app.get(\"/items/{item_id}\")\ndef get_item(\n    item_id: int,\n    user: Annotated[dict, Depends(get_current_user)],\n    db: Annotated[dict, Depends(get_db)],\n):\n    items = {1: \"Widget\", 2: \"Gadget\"}\n    if item_id not in items:\n        raise ItemNotFoundError(item_id)  # Custom exception\n    return {\"item\": items[item_id], \"user\": user[\"name\"]}\n\nclient = TestClient(app, raise_server_exceptions=False)\n\n# Success\nprint(\"Success:\", client.get(\"/items/1\", headers={\"x-token\": \"valid\"}).json())\n\n# Auth error (HTTPException from dependency)\nprint(\"No token:\", client.get(\"/items/1\").json())\n\n# Custom exception (from handler, db still cleans up)\nprint(\"Not found:\", client.get(\"/items/99\", headers={\"x-token\": \"valid\"}).json())\n\n# Expected Output:\n#   DB closed (rolled_back=False)\n# Success: {'item': 'Widget', 'user': 'Alice'}\n# No token: {'detail': 'Authentication required'}\n#   DB closed (rolled_back=False)\n# DB closed (rolled_back=False)\n# Not found: {'error': 'Item 99 not found'}",
+          "code_language": "python",
+          "key_points": [
+            "Raise HTTPException in dependencies for expected errors (auth, validation, not found)",
+            "Yield dependencies can catch handler exceptions in try/except for rollback or cleanup",
+            "Register custom exception handlers with @app.exception_handler for domain-specific errors",
+            "Dependency errors prevent the handler from running, but already-setup yield deps still clean up"
+          ],
+          "gotchas": [
+            "HTTPException raised in a dependency cannot be caught by the handler -- it bypasses the handler entirely",
+            "Unhandled exceptions in dependencies return 500 -- always raise HTTPException for expected error cases",
+            "Yield dependency except blocks see handler exceptions, but the response has already started if streaming"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Raise `HTTPException` in dependencies for expected errors (401, 403, 404). Use `try/except/finally` in yield dependencies for cleanup on errors. Register `@app.exception_handler` for custom domain exceptions.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends, HTTPException\nfrom typing import Annotated, Generator\n\napp = FastAPI()\n\ndef require_auth(token: str | None = None):\n    if not token:\n        raise HTTPException(401, \"Auth required\")  # Stops request\n    return {\"user\": \"Alice\"}\n\ndef get_db() -> Generator:\n    db = create_session()\n    try:\n        yield db\n    except Exception:\n        db.rollback()  # Handle handler errors\n    finally:\n        db.close()     # Always cleanup",
+          "code_language": "python",
+          "key_points": [
+            "HTTPException for expected errors; try/except in yield deps for cleanup"
+          ],
+          "gotchas": [
+            "HTTPException in a dependency bypasses the handler entirely -- it cannot be caught by the handler"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you share state across dependencies?",
+      "display_order": 14,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "shared-state",
+        "request-state",
+        "dependencies",
+        "context"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Sharing state across dependencies within a single request can be done in several ways:\n\n### 1. Dependency caching (default)\nThe simplest approach -- use the same dependency in multiple places. It runs once, and the cached result is shared.\n\n### 2. `request.state`\nStarlette's `Request` object has a `state` attribute for attaching arbitrary data. Any dependency or middleware can write to it, and any later dependency or handler can read from it.\n\n### 3. ContextVar (for middleware + dependencies)\nPython's `contextvars.ContextVar` provides thread-safe, task-safe storage. Set it in middleware, read it in dependencies.\n\n### 4. App-level state (`app.state`)\nFor app-wide shared resources (connection pools, caches), use `app.state`. This persists across requests.\n\n### When to use each:\n- **Dependency caching**: When the same computed value is needed in multiple places\n- **request.state**: When middleware needs to pass data to handlers/dependencies\n- **ContextVar**: For implicit context propagation (logging, tracing)\n- **app.state**: For long-lived resources initialized at startup (DB pools, Redis clients)",
+          "pseudo_code": "# Method 1: Dependency caching (simplest)\ndef get_user(token) -> User:\n    return lookup(token)  # Cached per-request\n\ndef dep_a(user = Depends(get_user)):  # Same user\ndef dep_b(user = Depends(get_user)):  # Same user (cached)\n\n# Method 2: request.state\ndef middleware(request, call_next):\n    request.state.request_id = generate_id()\n    response = await call_next(request)\n    return response\n\ndef dep(request: Request):\n    print(request.state.request_id)  # Set by middleware\n\n# Method 3: app.state for shared resources\nasync def lifespan(app):\n    app.state.redis = await create_redis_pool()\n    yield\n    await app.state.redis.close()\n\ndef get_redis(request: Request):\n    return request.app.state.redis",
+          "actual_code": "from typing import Annotated\nfrom contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Depends, Request\nfrom fastapi.testclient import TestClient\nfrom starlette.middleware.base import BaseHTTPMiddleware\nimport uuid\n\n# App-level state via lifespan\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Startup: initialize shared resources\n    app.state.app_name = \"MyApp\"\n    app.state.request_count = 0\n    yield\n    # Shutdown: cleanup\n\napp = FastAPI(lifespan=lifespan)\n\n# Middleware sets request.state\nclass RequestIdMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request: Request, call_next):\n        request.state.request_id = str(uuid.uuid4())[:8]\n        app.state.request_count += 1\n        response = await call_next(request)\n        response.headers[\"X-Request-ID\"] = request.state.request_id\n        return response\n\napp.add_middleware(RequestIdMiddleware)\n\n# Dependency reads request.state\ndef get_request_context(request: Request) -> dict:\n    return {\n        \"request_id\": request.state.request_id,\n        \"app_name\": request.app.state.app_name,\n        \"total_requests\": request.app.state.request_count,\n    }\n\n# Dependency reads app.state\ndef get_app_info(request: Request) -> dict:\n    return {\"name\": request.app.state.app_name}\n\nRequestContext = Annotated[dict, Depends(get_request_context)]\n\n@app.get(\"/info\")\ndef get_info(ctx: RequestContext):\n    return ctx\n\n@app.get(\"/health\")\ndef health(ctx: RequestContext):\n    return {\"status\": \"healthy\", \"request_id\": ctx[\"request_id\"]}\n\nclient = TestClient(app)\n\nresp = client.get(\"/info\")\nprint(\"Info:\", resp.json())\nprint(\"X-Request-ID header:\", resp.headers.get(\"x-request-id\"))\n\nresp = client.get(\"/health\")\nprint(\"Health:\", resp.json())\n\n# Expected Output:\n# Info: {'request_id': '...', 'app_name': 'MyApp', 'total_requests': 1}\n# X-Request-ID header: ...\n# Health: {'status': 'healthy', 'request_id': '...'}",
+          "code_language": "python",
+          "key_points": [
+            "Dependency caching shares the same result across multiple dependencies per-request",
+            "request.state allows middleware to pass data to dependencies and handlers",
+            "app.state stores long-lived resources (DB pools, config) initialized at startup via lifespan",
+            "Access app.state from dependencies using request.app.state"
+          ],
+          "gotchas": [
+            "request.state is per-request -- it does not persist between requests",
+            "app.state is shared across all requests -- use thread-safe types for mutable state",
+            "Do not store request-specific data in app.state -- it will leak between concurrent requests"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Share per-request state via dependency caching (default) or `request.state`. Share app-wide resources via `app.state` initialized in the lifespan. Access both from dependencies using the `Request` object.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Depends, Request\nfrom typing import Annotated\n\napp = FastAPI()\n\n# Middleware sets request.state\n# request.state.user_id = \"123\"\n\ndef get_context(request: Request) -> dict:\n    return {\n        \"app_name\": request.app.state.app_name,  # App-wide\n        \"req_id\": getattr(request.state, \"request_id\", None),  # Per-request\n    }\n\n@app.get(\"/\")\ndef root(ctx: Annotated[dict, Depends(get_context)]):\n    return ctx",
+          "code_language": "python",
+          "key_points": [
+            "request.state for per-request data; app.state for app-wide shared resources"
+          ],
+          "gotchas": [
+            "app.state is shared across all concurrent requests -- use thread-safe types for mutable data"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the difference between Depends() and Security()?",
+      "display_order": 15,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "depends",
+        "security",
+        "openapi",
+        "authentication"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "`Security()` is a specialized version of `Depends()` that adds **OpenAPI security scheme metadata** to the generated documentation. Functionally, they work the same way -- the difference is in how they affect the API docs.\n\n### Depends() vs Security():\n| Aspect | Depends() | Security() |\n|--------|-----------|------------|\n| Functionality | Calls dependency, injects result | Same as Depends() |\n| OpenAPI docs | No security metadata | Adds security scheme |\n| Swagger UI | No auth button | Shows auth/lock button |\n| Use case | General DI | Auth/security specifically |\n| scopes parameter | Not available | Available for OAuth2 |\n\n### When to use Security():\n- With `OAuth2PasswordBearer`, `HTTPBearer`, `APIKeyHeader`, etc.\n- When you want the endpoint to show a lock icon in Swagger docs\n- When you need to declare OAuth2 scopes for an endpoint\n\n### OAuth2 scopes:\n`Security()` accepts a `scopes` parameter that declares which OAuth2 scopes are required. This appears in the OpenAPI docs and can be used for fine-grained permission checks.\n\n### In practice:\nMost FastAPI code uses `Depends()` for everything, including auth. `Security()` is only needed when you want richer OpenAPI security documentation, particularly with OAuth2 scopes.",
+          "pseudo_code": "# Depends() -- works but no security docs\n@app.GET(\"/items/\")\ndef items(user = Depends(get_current_user)):\n    pass  # No lock icon in Swagger\n\n# Security() -- same behavior + OpenAPI security metadata\nfrom fastapi.security import Security\n\n@app.GET(\"/items/\")\ndef items(user = Security(get_current_user, scopes=[\"items:read\"])):\n    pass  # Lock icon in Swagger, scopes documented\n\n# OAuth2 with scopes\noauth2 = OAuth2PasswordBearer(\n    tokenUrl=\"/token\",\n    scopes={\"items:read\": \"Read items\", \"items:write\": \"Write items\"}\n)\n\ndef get_user(token = Security(oauth2, scopes=[\"items:read\"])):\n    # Checks that token has \"items:read\" scope\n    pass",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Security\nfrom fastapi.security import (\n    OAuth2PasswordBearer,\n    SecurityScopes,\n    HTTPBearer,\n    HTTPAuthorizationCredentials,\n)\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# OAuth2 with scopes\noauth2_scheme = OAuth2PasswordBearer(\n    tokenUrl=\"/token\",\n    scopes={\n        \"items:read\": \"Read items\",\n        \"items:write\": \"Create/update items\",\n        \"admin\": \"Admin access\",\n    },\n)\n\n# Dependency using Security() with scopes\ndef get_current_user(\n    security_scopes: SecurityScopes,  # Auto-injected by Security()\n    token: Annotated[str, Depends(oauth2_scheme)],\n) -> dict:\n    # In real code: decode JWT, check scopes\n    token_scopes = [\"items:read\", \"items:write\"]  # From JWT payload\n\n    for scope in security_scopes.scopes:\n        if scope not in token_scopes:\n            from fastapi import HTTPException\n            raise HTTPException(\n                status_code=403,\n                detail=f\"Missing scope: {scope}\",\n            )\n    return {\"name\": \"Alice\", \"scopes\": token_scopes}\n\n# Depends() -- works but no security metadata in docs\n@app.get(\"/basic/\")\ndef basic_endpoint(\n    user: Annotated[dict, Depends(get_current_user)],\n):\n    return {\"user\": user[\"name\"], \"method\": \"Depends\"}\n\n# Security() -- adds security scheme + scopes to docs\n@app.get(\"/items/\")\ndef read_items(\n    user: Annotated[dict, Security(get_current_user, scopes=[\"items:read\"])],\n):\n    return {\"user\": user[\"name\"], \"method\": \"Security\", \"scope\": \"items:read\"}\n\n@app.post(\"/items/\")\ndef create_item(\n    user: Annotated[dict, Security(get_current_user, scopes=[\"items:write\"])],\n):\n    return {\"user\": user[\"name\"], \"method\": \"Security\", \"scope\": \"items:write\"}\n\nclient = TestClient(app)\n\n# Both work the same functionally\nheaders = {\"Authorization\": \"Bearer valid-token\"}\n\nresp = client.get(\"/basic/\", headers=headers)\nprint(\"Depends:\", resp.json())\n\nresp = client.get(\"/items/\", headers=headers)\nprint(\"Security:\", resp.json())\n\n# Check OpenAPI schema for security metadata\nschema = app.openapi()\nitems_get = schema[\"paths\"][\"/items/\"][\"get\"]\nprint(\"Has security in docs:\", \"security\" in items_get)\n\n# Expected Output:\n# Depends: {'user': 'Alice', 'method': 'Depends'}\n# Security: {'user': 'Alice', 'method': 'Security', 'scope': 'items:read'}\n# Has security in docs: True",
+          "code_language": "python",
+          "key_points": [
+            "Security() works identically to Depends() but adds security scheme metadata to OpenAPI docs",
+            "Security() enables OAuth2 scopes parameter for fine-grained permission documentation",
+            "SecurityScopes is auto-injected in dependencies used with Security() -- lists required scopes",
+            "In practice, most code uses Depends() -- Security() is for richer OpenAPI auth documentation"
+          ],
+          "gotchas": [
+            "Security() is only meaningful with FastAPI security classes (OAuth2PasswordBearer, HTTPBearer, etc.)",
+            "SecurityScopes.scopes is populated by the Security() call that invoked the dependency -- not globally",
+            "Using Depends() instead of Security() works functionally but the lock icon and scopes are missing from docs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`Security()` works like `Depends()` but adds security metadata to OpenAPI docs (lock icon, scopes). Use `Security(dep, scopes=[...])` for OAuth2 scope-based auth documentation. `Depends()` works for auth too but without the docs metadata.",
+          "pseudo_code": "",
+          "actual_code": "from typing import Annotated\nfrom fastapi import FastAPI, Depends, Security\nfrom fastapi.security import OAuth2PasswordBearer\n\napp = FastAPI()\noauth2 = OAuth2PasswordBearer(tokenUrl=\"/token\", scopes={\"read\": \"Read\"})\n\ndef get_user(token: Annotated[str, Depends(oauth2)]):\n    return {\"name\": \"Alice\"}\n\n# Security() adds scopes to OpenAPI docs\n@app.get(\"/items/\")\ndef items(user: Annotated[dict, Security(get_user, scopes=[\"read\"])]):\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "Security() = Depends() + OpenAPI security metadata and OAuth2 scopes"
+          ],
+          "gotchas": [
+            "Depends() works for auth but lacks lock icons and scope info in Swagger docs"
+          ]
+        }
+      ]
+    }
+  ]
+}

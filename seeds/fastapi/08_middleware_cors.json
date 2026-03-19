@@ -1,0 +1,545 @@
+{
+  "concept_slug": "middleware-cors",
+  "questions": [
+    {
+      "title": "How do you create custom middleware with @app.middleware(\"http\")?",
+      "display_order": 1,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "http",
+        "request-response",
+        "decorator"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Custom middleware** in FastAPI intercepts every request before it reaches an endpoint and every response before it is sent to the client.\n\n### How @app.middleware(\"http\") works:\n1. You decorate an async function with `@app.middleware(\"http\")`\n2. The function receives the `request` object and a `call_next` callable\n3. You can modify the request, run logic before the endpoint, call `call_next(request)` to pass to the next middleware/endpoint, then modify the response before returning it\n4. You **must** call `call_next(request)` and return a `Response`\n\n### Execution flow:\n```\nRequest → Middleware (before) → Endpoint → Middleware (after) → Response\n```\n\n### Key parameters:\n- `request`: The incoming `Request` object (from Starlette)\n- `call_next`: An async callable that passes the request to the next handler and returns a `Response`\n\n### Use cases:\n- Logging request/response details\n- Adding custom headers to all responses\n- Timing request duration\n- Authentication checks (though dependencies are usually preferred)\n- Request ID injection for distributed tracing",
+          "pseudo_code": "@app.middleware(\"http\")\nasync def my_middleware(request, call_next):\n    # Before endpoint\n    do_something_before()\n    \n    # Pass to next handler\n    response = await call_next(request)\n    \n    # After endpoint\n    do_something_after()\n    \n    return response",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def add_custom_header(request: Request, call_next):\n    \"\"\"Middleware that adds a header and logs request info.\"\"\"\n    print(f\"Before: {request.method} {request.url.path}\")\n    \n    # Call the actual endpoint\n    response = await call_next(request)\n    \n    # Modify response after endpoint runs\n    response.headers[\"X-Process-ID\"] = \"middleware-demo\"\n    print(f\"After: status {response.status_code}\")\n    \n    return response\n\n@app.get(\"/hello\")\ndef hello():\n    return {\"message\": \"Hello, World!\"}\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: int):\n    return {\"item_id\": item_id}\n\n# --- Test ---\nclient = TestClient(app)\n\nresp = client.get(\"/hello\")\nprint(resp.json())\nprint(f\"Custom header: {resp.headers.get('X-Process-ID')}\")\n\nresp = client.get(\"/items/42\")\nprint(resp.json())\nprint(f\"Custom header: {resp.headers.get('X-Process-ID')}\")\n\n# Expected Output:\n# Before: GET /hello\n# After: status 200\n# {'message': 'Hello, World!'}\n# Custom header: middleware-demo\n# Before: GET /items/42\n# After: status 200\n# {'item_id': 42}\n# Custom header: middleware-demo",
+          "code_language": "python",
+          "key_points": [
+            "The middleware function must be async and accept (request, call_next)",
+            "call_next(request) passes the request to the next middleware or endpoint",
+            "Code before call_next runs before the endpoint, code after runs after",
+            "You must return the response from the middleware"
+          ],
+          "gotchas": [
+            "The middleware function must be async even if your endpoints are sync -- call_next is always awaited",
+            "If you forget to return the response, the client gets no response at all",
+            "You cannot read the response body in middleware without consuming the stream -- use a workaround like iterating response.body_iterator"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `@app.middleware(\"http\")` to decorate an async function that receives `request` and `call_next`. Run pre-processing, call `response = await call_next(request)` to reach the endpoint, then run post-processing and return the response.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def my_middleware(request: Request, call_next):\n    # Before endpoint\n    print(f\"Request: {request.method} {request.url.path}\")\n    response = await call_next(request)\n    # After endpoint\n    response.headers[\"X-Custom\"] = \"value\"\n    return response",
+          "code_language": "python",
+          "key_points": [
+            "call_next(request) passes to the next handler and returns the response"
+          ],
+          "gotchas": [
+            "The middleware function must be async -- call_next is always awaited"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does CORSMiddleware work and what are its configuration options?",
+      "display_order": 2,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "cors",
+        "CORSMiddleware",
+        "cross-origin",
+        "security"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**CORSMiddleware** handles Cross-Origin Resource Sharing, allowing your API to accept requests from different domains (e.g., a React frontend on `localhost:3000` calling a FastAPI backend on `localhost:8000`).\n\n### Configuration options:\n\n| Parameter | Type | Description |\n|---|---|---|\n| `allow_origins` | list[str] | Origins allowed to make requests (e.g., `[\"http://localhost:3000\"]`) |\n| `allow_origin_regex` | str | Regex pattern for matching allowed origins |\n| `allow_methods` | list[str] | HTTP methods allowed (e.g., `[\"GET\", \"POST\"]` or `[\"*\"]`) |\n| `allow_headers` | list[str] | Headers the client can send (e.g., `[\"Authorization\"]` or `[\"*\"]`) |\n| `allow_credentials` | bool | Whether cookies/auth headers are allowed (`False` by default) |\n| `expose_headers` | list[str] | Response headers the browser can access via JavaScript |\n| `max_age` | int | Seconds the browser caches preflight responses (600 = 10 minutes) |\n\n### How it works:\n1. Browser sends a request with an `Origin` header\n2. CORSMiddleware checks if that origin is allowed\n3. If allowed, it adds `Access-Control-Allow-Origin` and other CORS headers to the response\n4. For non-simple requests (PUT, DELETE, custom headers), the browser first sends a preflight OPTIONS request\n\n### Security rules:\n- Never use `allow_origins=[\"*\"]` with `allow_credentials=True` -- browsers reject this combination\n- List specific origins in production instead of using wildcards\n- Only expose headers that the frontend actually needs",
+          "pseudo_code": "from starlette.middleware.cors import CORSMiddleware\n\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"https://frontend.com\"],\n    allow_methods=[\"GET\", \"POST\", \"PUT\", \"DELETE\"],\n    allow_headers=[\"Authorization\", \"Content-Type\"],\n    allow_credentials=True,\n    max_age=600,\n)",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Add CORS middleware with specific configuration\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\n        \"http://localhost:3000\",      # React dev server\n        \"https://myapp.example.com\",  # Production frontend\n    ],\n    allow_credentials=True,            # Allow cookies and auth headers\n    allow_methods=[\"GET\", \"POST\", \"PUT\", \"DELETE\"],  # Allowed HTTP methods\n    allow_headers=[\"Authorization\", \"Content-Type\"],  # Allowed request headers\n    expose_headers=[\"X-Total-Count\"],  # Headers frontend JS can read\n    max_age=600,                        # Cache preflight for 10 minutes\n)\n\n@app.get(\"/api/data\")\ndef get_data():\n    return {\"items\": [1, 2, 3]}\n\n# --- Test CORS headers ---\nclient = TestClient(app)\n\n# Request from allowed origin\nresp = client.get(\"/api/data\", headers={\"Origin\": \"http://localhost:3000\"})\nprint(f\"Status: {resp.status_code}\")\nprint(f\"Allow-Origin: {resp.headers.get('access-control-allow-origin')}\")\nprint(f\"Allow-Credentials: {resp.headers.get('access-control-allow-credentials')}\")\n\n# Request from disallowed origin\nresp = client.get(\"/api/data\", headers={\"Origin\": \"http://evil.com\"})\nprint(f\"Allow-Origin (evil): {resp.headers.get('access-control-allow-origin')}\")\n\n# Preflight OPTIONS request\nresp = client.options(\n    \"/api/data\",\n    headers={\n        \"Origin\": \"http://localhost:3000\",\n        \"Access-Control-Request-Method\": \"POST\",\n        \"Access-Control-Request-Headers\": \"Authorization\",\n    },\n)\nprint(f\"Preflight status: {resp.status_code}\")\nprint(f\"Allowed methods: {resp.headers.get('access-control-allow-methods')}\")\n\n# Expected Output:\n# Status: 200\n# Allow-Origin: http://localhost:3000\n# Allow-Credentials: true\n# Allow-Origin (evil): None\n# Preflight status: 200\n# Allowed methods: GET, POST, PUT, DELETE",
+          "code_language": "python",
+          "key_points": [
+            "CORSMiddleware is added via app.add_middleware(), not as a decorator",
+            "allow_origins lists the exact domains that can call your API",
+            "allow_credentials=True enables cookies and Authorization headers across origins",
+            "max_age caches preflight responses to reduce OPTIONS requests"
+          ],
+          "gotchas": [
+            "allow_origins=['*'] with allow_credentials=True is rejected by browsers -- you must list specific origins when using credentials",
+            "Forgetting to include 'Content-Type' in allow_headers blocks JSON POST requests from browsers",
+            "CORSMiddleware must be added before any path-based middleware that might short-circuit the request"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Add `CORSMiddleware` via `app.add_middleware()` with `allow_origins` (list of allowed domains), `allow_methods`, `allow_headers`, and `allow_credentials`. It automatically handles preflight OPTIONS requests and adds CORS headers to responses.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)",
+          "code_language": "python",
+          "key_points": [
+            "allow_origins lists domains that can call your API cross-origin"
+          ],
+          "gotchas": [
+            "allow_origins=['*'] with allow_credentials=True is invalid -- browsers will reject it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is the middleware execution order in FastAPI?",
+      "display_order": 3,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "execution-order",
+        "starlette",
+        "request-lifecycle"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Middleware execution order in FastAPI follows a stack (LIFO) pattern.** The last middleware added wraps the outermost layer, meaning it runs first on the request and last on the response.\n\n### Order rules:\n1. Middleware added **last** via `app.add_middleware()` executes **first** on the request\n2. Middleware added **first** executes **last** on the request (closest to the endpoint)\n3. On the response, the order is reversed\n\n### Why LIFO (Last In, First Out):\nEach `app.add_middleware()` call wraps the existing application. So the last one added is the outermost wrapper:\n\n```\nRequest → Middleware C (added last) → Middleware B → Middleware A (added first) → Endpoint\nResponse ← Middleware C ← Middleware B ← Middleware A ← Endpoint\n```\n\n### Practical implications:\n- **CORS middleware** should be added last (so it is the outermost) to ensure CORS headers are added even when inner middleware raises exceptions\n- **Authentication middleware** should be closer to the endpoint\n- **Logging/timing middleware** should be outermost to capture the full request lifecycle\n\n### Starlette's add_middleware behavior:\nFastAPI inherits Starlette's middleware stack. Each `add_middleware()` call inserts at position 0 in the middleware list, creating the LIFO order.",
+          "pseudo_code": "# Order of add_middleware calls:\napp.add_middleware(A)  # Added first -> runs closest to endpoint\napp.add_middleware(B)  # Added second -> runs in the middle\napp.add_middleware(C)  # Added last -> runs outermost\n\n# Request flow:  C -> B -> A -> endpoint\n# Response flow: endpoint -> A -> B -> C",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\norder_log: list[str] = []\n\n@app.middleware(\"http\")\nasync def middleware_a(request: Request, call_next):\n    \"\"\"Added first -- runs closest to endpoint.\"\"\"\n    order_log.append(\"A-before\")\n    response = await call_next(request)\n    order_log.append(\"A-after\")\n    return response\n\n@app.middleware(\"http\")\nasync def middleware_b(request: Request, call_next):\n    \"\"\"Added second -- runs in the middle.\"\"\"\n    order_log.append(\"B-before\")\n    response = await call_next(request)\n    order_log.append(\"B-after\")\n    return response\n\n@app.middleware(\"http\")\nasync def middleware_c(request: Request, call_next):\n    \"\"\"Added last -- runs outermost (first on request).\"\"\"\n    order_log.append(\"C-before\")\n    response = await call_next(request)\n    order_log.append(\"C-after\")\n    return response\n\n@app.get(\"/test\")\ndef test_endpoint():\n    order_log.append(\"ENDPOINT\")\n    return {\"status\": \"ok\"}\n\n# --- Test ---\nclient = TestClient(app)\norder_log.clear()\nresp = client.get(\"/test\")\n\nprint(\"Execution order:\")\nfor step in order_log:\n    print(f\"  {step}\")\n\n# Expected Output:\n# Execution order:\n#   C-before\n#   B-before\n#   A-before\n#   ENDPOINT\n#   A-after\n#   B-after\n#   C-after",
+          "code_language": "python",
+          "key_points": [
+            "Middleware follows LIFO order -- last added runs first on the request",
+            "Response order is reversed -- first added runs last on the response",
+            "add_middleware() wraps the existing app, making each new middleware the outermost layer",
+            "CORS middleware should be added last to ensure CORS headers are always present"
+          ],
+          "gotchas": [
+            "@app.middleware('http') decorators follow the same LIFO order as app.add_middleware() calls",
+            "If middleware does not call call_next(), all inner middleware and the endpoint are skipped entirely",
+            "Exception handlers run inside the middleware stack -- an outer middleware can catch responses from exception handlers"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "FastAPI middleware follows LIFO (Last In, First Out) order. The last middleware added via `app.add_middleware()` or `@app.middleware(\"http\")` runs first on the request and last on the response. Each middleware wraps the previous one like layers of an onion.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def first_added(request: Request, call_next):   # Runs LAST (closest to endpoint)\n    response = await call_next(request)\n    return response\n\n@app.middleware(\"http\")\nasync def last_added(request: Request, call_next):    # Runs FIRST (outermost)\n    response = await call_next(request)\n    return response\n\n# Request:  last_added -> first_added -> endpoint\n# Response: endpoint -> first_added -> last_added",
+          "code_language": "python",
+          "key_points": [
+            "LIFO order -- last middleware added runs outermost (first on request)"
+          ],
+          "gotchas": [
+            "CORS middleware should be added last so it wraps everything and always adds headers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add request/response logging middleware?",
+      "display_order": 4,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "logging",
+        "debugging",
+        "observability"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Logging middleware** captures request and response details for debugging, monitoring, and auditing. It should be added as the outermost middleware to capture the full request lifecycle.\n\n### What to log:\n- **Request**: method, path, query params, client IP, headers, body (be careful with sensitive data)\n- **Response**: status code, response time, content length\n- **Avoid logging**: passwords, tokens, credit card numbers, PII\n\n### Reading the request body:\nThe request body is a stream that can only be read once. If you consume it in middleware, the endpoint will get an empty body. To read it safely:\n1. Read the body with `await request.body()`\n2. Starlette caches it internally after the first read, so the endpoint can still access it\n\n### Reading the response body:\nThe response body from `call_next()` is a streaming iterator. To read it in middleware, you must consume the stream and create a new `Response` object.\n\n### Best practices:\n- Use Python's `logging` module, not `print()`\n- Set appropriate log levels (INFO for normal requests, WARNING for errors)\n- Include a request ID for distributed tracing\n- Sanitize sensitive headers (Authorization, Cookie) before logging",
+          "pseudo_code": "@app.middleware(\"http\")\nasync def logging_middleware(request, call_next):\n    request_id = generate_id()\n    log_request(request, request_id)\n    \n    start = time.time()\n    response = await call_next(request)\n    duration = time.time() - start\n    \n    log_response(response, duration, request_id)\n    response.headers[\"X-Request-ID\"] = request_id\n    return response",
+          "actual_code": "import logging\nimport time\nimport uuid\nfrom fastapi import FastAPI, Request\nfrom fastapi.testclient import TestClient\n\n# Configure logging\nlogging.basicConfig(level=logging.INFO, format=\"%(levelname)s: %(message)s\")\nlogger = logging.getLogger(\"api\")\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def logging_middleware(request: Request, call_next):\n    \"\"\"Log request/response details with timing.\"\"\"\n    request_id = str(uuid.uuid4())[:8]\n    \n    # Sanitize headers -- do not log auth tokens\n    safe_headers = {\n        k: (\"***\" if k.lower() in (\"authorization\", \"cookie\") else v)\n        for k, v in request.headers.items()\n    }\n    \n    logger.info(\n        f\"[{request_id}] {request.method} {request.url.path} \"\n        f\"client={request.client.host if request.client else 'unknown'}\"\n    )\n    \n    start_time = time.perf_counter()\n    response = await call_next(request)\n    duration_ms = (time.perf_counter() - start_time) * 1000\n    \n    logger.info(\n        f\"[{request_id}] {response.status_code} \"\n        f\"completed in {duration_ms:.1f}ms\"\n    )\n    \n    # Add request ID to response for tracing\n    response.headers[\"X-Request-ID\"] = request_id\n    return response\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int):\n    return {\"user_id\": user_id, \"name\": \"Alice\"}\n\n@app.post(\"/items\")\ndef create_item():\n    return {\"item_id\": 1, \"created\": True}\n\n# --- Test ---\nclient = TestClient(app)\n\nresp = client.get(\"/users/42\")\nprint(f\"Response: {resp.json()}\")\nprint(f\"Request-ID: {resp.headers['X-Request-ID']}\")\n\nresp = client.post(\"/items\")\nprint(f\"Response: {resp.json()}\")\n\n# Expected Output:\n# INFO: [<id>] GET /users/42 client=testclient\n# INFO: [<id>] 200 completed in <N>ms\n# Response: {'user_id': 42, 'name': 'Alice'}\n# Request-ID: <8-char-uuid>\n# INFO: [<id>] POST /items client=testclient\n# INFO: [<id>] 200 completed in <N>ms\n# Response: {'item_id': 1, 'created': True}",
+          "code_language": "python",
+          "key_points": [
+            "Use Python's logging module with structured fields, not print()",
+            "Sanitize sensitive headers (Authorization, Cookie) before logging",
+            "time.perf_counter() gives more accurate timing than time.time()",
+            "Add a unique request ID to both logs and the response header for tracing"
+          ],
+          "gotchas": [
+            "Reading request.body() in middleware is safe -- Starlette caches it for the endpoint to reuse",
+            "Reading the response body in middleware consumes the stream -- you must rebuild the Response object if you do this",
+            "Be careful with log volume in production -- consider sampling or only logging errors"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create middleware that logs the method, path, and status code with timing. Use `time.perf_counter()` for accurate duration, `uuid.uuid4()` for request IDs, and Python's `logging` module instead of `print()`.",
+          "pseudo_code": "",
+          "actual_code": "import logging\nimport time\nimport uuid\nfrom fastapi import FastAPI, Request\n\nlogger = logging.getLogger(\"api\")\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def log_requests(request: Request, call_next):\n    rid = str(uuid.uuid4())[:8]\n    start = time.perf_counter()\n    response = await call_next(request)\n    ms = (time.perf_counter() - start) * 1000\n    logger.info(f\"[{rid}] {request.method} {request.url.path} {response.status_code} {ms:.1f}ms\")\n    response.headers[\"X-Request-ID\"] = rid\n    return response",
+          "code_language": "python",
+          "key_points": [
+            "time.perf_counter() is more accurate than time.time() for measuring durations"
+          ],
+          "gotchas": [
+            "Never log Authorization headers or request bodies containing passwords"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is GZipMiddleware and when should you use it?",
+      "display_order": 5,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "gzip",
+        "compression",
+        "middleware",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**GZipMiddleware** compresses responses using gzip when the client supports it, reducing bandwidth and improving load times for large responses.\n\n### How it works:\n1. The client sends `Accept-Encoding: gzip` in the request header\n2. GZipMiddleware checks if the response body exceeds `minimum_size` bytes\n3. If so, it compresses the response and sets `Content-Encoding: gzip`\n4. The client (browser, HTTP library) decompresses it transparently\n\n### Configuration:\n- `minimum_size` (default: 500): Minimum response size in bytes before compression is applied. Responses smaller than this are sent uncompressed.\n- `compresslevel` (default: 9): Compression level 1-9. Lower = faster but less compression, higher = slower but better compression.\n\n### When to use:\n- Large JSON responses (lists of items, reports)\n- Text-heavy HTML or XML responses\n- APIs serving data to clients over slow networks\n\n### When NOT to use:\n- Already-compressed content (images, videos, binary files)\n- Very small responses (overhead of gzip headers outweighs savings)\n- Real-time streaming endpoints where latency matters more than bandwidth\n- When a reverse proxy (Nginx, Cloudflare) already handles compression",
+          "pseudo_code": "from starlette.middleware.gzip import GZipMiddleware\n\n# Compress responses larger than 1KB\napp.add_middleware(GZipMiddleware, minimum_size=1000)\n\n# Client sends: Accept-Encoding: gzip\n# Server responds with: Content-Encoding: gzip, compressed body",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.gzip import GZipMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Compress responses larger than 500 bytes\napp.add_middleware(GZipMiddleware, minimum_size=500)\n\n@app.get(\"/small\")\ndef small_response():\n    \"\"\"Small response -- will NOT be compressed.\"\"\"\n    return {\"message\": \"hi\"}\n\n@app.get(\"/large\")\ndef large_response():\n    \"\"\"Large response -- will be compressed.\"\"\"\n    return {\"items\": [f\"item-{i}\" for i in range(200)]}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Small response -- no compression\nresp = client.get(\"/small\")\nprint(f\"Small - Encoding: {resp.headers.get('content-encoding', 'none')}\")\nprint(f\"Small - Size: {len(resp.content)} bytes\")\n\n# Large response -- compressed\nresp = client.get(\"/large\", headers={\"Accept-Encoding\": \"gzip\"})\nprint(f\"Large - Encoding: {resp.headers.get('content-encoding', 'none')}\")\nprint(f\"Large - Data items: {len(resp.json()['items'])}\")\n\n# Expected Output:\n# Small - Encoding: none\n# Small - Size: 16 bytes\n# Large - Encoding: gzip\n# Large - Data items: 200",
+          "code_language": "python",
+          "key_points": [
+            "GZipMiddleware compresses responses when client sends Accept-Encoding: gzip",
+            "minimum_size controls the threshold -- smaller responses are sent uncompressed",
+            "Compression is transparent -- clients decompress automatically",
+            "Typical compression ratios for JSON are 70-90% size reduction"
+          ],
+          "gotchas": [
+            "Do not use GZipMiddleware if your reverse proxy (Nginx, Cloudflare) already compresses -- double compression wastes CPU and can cause issues",
+            "Streaming responses (StreamingResponse) may not compress correctly with GZipMiddleware",
+            "compresslevel=9 (default) uses more CPU -- consider level 6 for a good balance in high-traffic APIs"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "GZipMiddleware compresses responses larger than `minimum_size` bytes when the client sends `Accept-Encoding: gzip`. Add it with `app.add_middleware(GZipMiddleware, minimum_size=500)`. The client decompresses transparently.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.gzip import GZipMiddleware\n\napp = FastAPI()\napp.add_middleware(GZipMiddleware, minimum_size=500)  # Compress responses > 500 bytes\n\n@app.get(\"/data\")\ndef data():\n    return {\"items\": list(range(1000))}  # Large response gets compressed",
+          "code_language": "python",
+          "key_points": [
+            "Compresses responses above minimum_size when client accepts gzip"
+          ],
+          "gotchas": [
+            "Skip if your reverse proxy (Nginx) already handles compression"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "What is TrustedHostMiddleware and why is it important?",
+      "display_order": 6,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "security",
+        "TrustedHostMiddleware",
+        "host-header",
+        "middleware"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**TrustedHostMiddleware** validates the `Host` header on incoming requests, protecting against **HTTP Host header attacks**.\n\n### What is a Host header attack?\nAn attacker sends a request with a forged `Host` header (e.g., `Host: evil.com`). If your app uses this header to build URLs (password reset links, redirects, canonical URLs), it can be manipulated to:\n- Redirect users to phishing sites\n- Poison caches with wrong URLs\n- Bypass virtual host routing\n\n### How TrustedHostMiddleware works:\n1. Checks the `Host` header of every incoming request\n2. If the host is not in the `allowed_hosts` list, returns a **400 Bad Request**\n3. Supports wildcard subdomains: `\"*.example.com\"` matches `api.example.com`, `www.example.com`, etc.\n\n### Configuration:\n- `allowed_hosts`: List of valid hostnames\n- Include `\"localhost\"` and `\"127.0.0.1\"` for local development\n- Use `[\"*\"]` to allow all hosts (disables protection -- not recommended)\n\n### When to use:\n- Always in production, especially if your app generates URLs from the Host header\n- Behind reverse proxies that may forward the original Host header\n- When your app serves multiple domains and you want to restrict which ones are valid",
+          "pseudo_code": "from starlette.middleware.trustedhost import TrustedHostMiddleware\n\napp.add_middleware(\n    TrustedHostMiddleware,\n    allowed_hosts=[\"myapp.com\", \"*.myapp.com\", \"localhost\"],\n)\n\n# Request with Host: myapp.com -> allowed\n# Request with Host: evil.com -> 400 Bad Request",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.trustedhost import TrustedHostMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\napp.add_middleware(\n    TrustedHostMiddleware,\n    allowed_hosts=[\"myapp.com\", \"*.myapp.com\", \"testserver\"],\n)\n\n@app.get(\"/\")\ndef home():\n    return {\"message\": \"Welcome\"}\n\n# --- Test ---\nclient = TestClient(app)  # TestClient uses Host: testserver by default\n\n# Allowed host (testserver is the default for TestClient)\nresp = client.get(\"/\")\nprint(f\"Allowed: {resp.status_code} {resp.json()}\")\n\n# Allowed subdomain\nresp = client.get(\"/\", headers={\"Host\": \"api.myapp.com\"})\nprint(f\"Subdomain: {resp.status_code}\")\n\n# Blocked host\nresp = client.get(\"/\", headers={\"Host\": \"evil.com\"})\nprint(f\"Blocked: {resp.status_code}\")\n\n# Expected Output:\n# Allowed: 200 {'message': 'Welcome'}\n# Subdomain: 200\n# Blocked: 400",
+          "code_language": "python",
+          "key_points": [
+            "TrustedHostMiddleware rejects requests with unknown Host headers with 400",
+            "Protects against HTTP Host header attacks used in phishing and cache poisoning",
+            "Supports wildcard subdomains like '*.example.com'",
+            "Always include 'localhost' or 'testserver' in allowed_hosts during development"
+          ],
+          "gotchas": [
+            "Forgetting to add 'testserver' to allowed_hosts breaks TestClient tests",
+            "allowed_hosts=['*'] disables the protection entirely -- do not use in production",
+            "Behind a reverse proxy, the Host header may be rewritten -- ensure allowed_hosts matches what the proxy forwards"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "TrustedHostMiddleware validates the `Host` header and returns 400 for unknown hosts, preventing Host header injection attacks. Use `allowed_hosts` to list valid hostnames, with `\"*.example.com\"` for wildcard subdomains.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.trustedhost import TrustedHostMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    TrustedHostMiddleware,\n    allowed_hosts=[\"myapp.com\", \"*.myapp.com\", \"localhost\"],\n)",
+          "code_language": "python",
+          "key_points": [
+            "Rejects requests with forged Host headers (returns 400 Bad Request)"
+          ],
+          "gotchas": [
+            "Add 'testserver' to allowed_hosts or TestClient tests will fail with 400"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "When should you use middleware vs dependencies?",
+      "display_order": 7,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "dependencies",
+        "architecture",
+        "design-patterns"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Middleware** and **dependencies** both intercept requests, but they serve different purposes and operate at different levels.\n\n### Middleware:\n- Runs on **every request** (all routes, including 404s)\n- Operates at the **ASGI/HTTP level** (raw request/response)\n- Cannot access path parameters or validated request data\n- Runs **before** FastAPI's routing and validation\n- Best for cross-cutting concerns that apply globally\n\n### Dependencies (Depends):\n- Runs on **specific routes** (per-endpoint, per-router, or app-wide)\n- Operates at the **FastAPI level** (after routing and validation)\n- Can access path parameters, query params, request body, other dependencies\n- Participates in **dependency injection** -- return values are injected into endpoints\n- Best for business logic, auth, and per-route configuration\n\n### Decision matrix:\n\n| Concern | Use |\n|---|---|\n| Request timing / logging | Middleware |\n| CORS, compression, security headers | Middleware |\n| Authentication / authorization | Dependencies |\n| Input validation / transformation | Dependencies |\n| Database session management | Dependencies |\n| Rate limiting (per-user) | Dependencies (need user info) |\n| Rate limiting (global) | Middleware |\n| Request ID injection | Middleware |\n\n### Key rule of thumb:\nIf you need **access to route parameters or validated data**, use a dependency. If you need to **wrap every request/response regardless of route**, use middleware.",
+          "pseudo_code": "# Middleware: runs on ALL requests, no access to route data\n@app.middleware(\"http\")\nasync def timing(request, call_next):\n    start = time.time()\n    response = await call_next(request)\n    response.headers[\"X-Time\"] = str(time.time() - start)\n    return response\n\n# Dependency: runs on specific routes, has access to everything\ndef get_db_session():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()\n\n@app.get(\"/users/{user_id}\")\ndef get_user(user_id: int, db = Depends(get_db_session)):\n    ...",
+          "actual_code": "import time\nfrom typing import Annotated\nfrom fastapi import FastAPI, Depends, Request, HTTPException\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# --- MIDDLEWARE: Global concern, no access to route data ---\n@app.middleware(\"http\")\nasync def timing_middleware(request: Request, call_next):\n    \"\"\"Adds timing header to every response, including 404s.\"\"\"\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration = time.perf_counter() - start\n    response.headers[\"X-Process-Time\"] = f\"{duration:.4f}\"\n    return response\n\n# --- DEPENDENCY: Per-route concern, access to validated data ---\ndef verify_item_access(item_id: int) -> int:\n    \"\"\"Dependency that can access path parameters.\"\"\"\n    if item_id > 100:\n        raise HTTPException(status_code=403, detail=\"Access denied for this item\")\n    return item_id\n\nVerifiedItemId = Annotated[int, Depends(verify_item_access)]\n\n@app.get(\"/items/{item_id}\")\ndef get_item(item_id: VerifiedItemId):\n    return {\"item_id\": item_id}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Middleware runs on every request\nresp = client.get(\"/items/42\")\nprint(f\"Status: {resp.status_code}\")\nprint(f\"Has timing: {'X-Process-Time' in resp.headers}\")\nprint(f\"Data: {resp.json()}\")\n\n# Dependency blocks access based on route data\nresp = client.get(\"/items/999\")\nprint(f\"Blocked: {resp.status_code} {resp.json()['detail']}\")\n\n# Middleware runs even on 404\nresp = client.get(\"/nonexistent\")\nprint(f\"404 has timing: {'X-Process-Time' in resp.headers}\")\n\n# Expected Output:\n# Status: 200\n# Has timing: True\n# Data: {'item_id': 42}\n# Blocked: 403 Access denied for this item\n# 404 has timing: True",
+          "code_language": "python",
+          "key_points": [
+            "Middleware runs on every request before routing -- no access to route params",
+            "Dependencies run after routing on specific endpoints -- full access to validated data",
+            "Middleware is for cross-cutting concerns (logging, timing, CORS, headers)",
+            "Dependencies are for business logic (auth, DB sessions, input validation)"
+          ],
+          "gotchas": [
+            "Middleware cannot access path parameters because it runs before routing resolves them",
+            "Dependencies do not run for 404 responses -- only middleware can intercept those",
+            "A dependency used at the app level via app dependency still only runs on matched routes, not 404s"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use **middleware** for global concerns that apply to every request (logging, timing, CORS, headers). Use **dependencies** when you need access to route parameters, validated data, or dependency injection. Middleware runs before routing; dependencies run after routing on matched endpoints.",
+          "pseudo_code": "",
+          "actual_code": "# Middleware: every request, no route data access\n@app.middleware(\"http\")\nasync def add_timing(request, call_next):\n    response = await call_next(request)\n    response.headers[\"X-Time\"] = \"0.01\"\n    return response\n\n# Dependency: specific routes, full data access\ndef check_permission(item_id: int):\n    if item_id > 100:\n        raise HTTPException(403)\n\n@app.get(\"/items/{item_id}\")\ndef item(item_id: int = Depends(check_permission)): ...",
+          "code_language": "python",
+          "key_points": [
+            "Middleware = global + raw HTTP level, Dependencies = per-route + validated data"
+          ],
+          "gotchas": [
+            "Dependencies do not run for 404s -- only middleware intercepts unmatched routes"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you add custom headers to all responses via middleware?",
+      "display_order": 8,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "headers",
+        "security-headers",
+        "http"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Adding custom headers via middleware** is the standard way to ensure every response includes security headers, caching directives, or tracking headers regardless of which endpoint handled the request.\n\n### Common headers to add:\n\n| Header | Purpose |\n|---|---|\n| `X-Request-ID` | Distributed tracing / debugging |\n| `X-Content-Type-Options: nosniff` | Prevents MIME-type sniffing |\n| `X-Frame-Options: DENY` | Prevents clickjacking |\n| `Strict-Transport-Security` | Forces HTTPS |\n| `Cache-Control` | Controls caching behavior |\n| `X-Process-Time` | Performance monitoring |\n\n### Two approaches:\n\n1. **@app.middleware(\"http\")**: Simple decorator-based approach for adding headers\n2. **Starlette BaseHTTPMiddleware subclass**: More structured, reusable as a class\n\n### Why middleware for headers:\n- Applies to **all** responses automatically (including error responses)\n- Single place to manage security headers\n- No risk of forgetting to add headers on individual endpoints",
+          "pseudo_code": "# Approach 1: Decorator\n@app.middleware(\"http\")\nasync def add_headers(request, call_next):\n    response = await call_next(request)\n    response.headers[\"X-Custom\"] = \"value\"\n    return response\n\n# Approach 2: Class-based\nclass HeaderMiddleware(BaseHTTPMiddleware):\n    async def dispatch(self, request, call_next):\n        response = await call_next(request)\n        response.headers[\"X-Custom\"] = \"value\"\n        return response\n\napp.add_middleware(HeaderMiddleware)",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# --- Security headers middleware (class-based for reusability) ---\nclass SecurityHeadersMiddleware(BaseHTTPMiddleware):\n    \"\"\"Adds security headers to every response.\"\"\"\n    \n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n        \n        # Prevent MIME-type sniffing\n        response.headers[\"X-Content-Type-Options\"] = \"nosniff\"\n        # Prevent clickjacking\n        response.headers[\"X-Frame-Options\"] = \"DENY\"\n        # Control referrer information\n        response.headers[\"Referrer-Policy\"] = \"strict-origin-when-cross-origin\"\n        # Disable browser features you do not use\n        response.headers[\"Permissions-Policy\"] = \"camera=(), microphone=()\"\n        \n        return response\n\napp.add_middleware(SecurityHeadersMiddleware)\n\n@app.get(\"/api/data\")\ndef get_data():\n    return {\"data\": [1, 2, 3]}\n\n@app.get(\"/health\")\ndef health():\n    return {\"status\": \"ok\"}\n\n# --- Test ---\nclient = TestClient(app)\n\nfor path in [\"/api/data\", \"/health\"]:\n    resp = client.get(path)\n    print(f\"Path: {path}\")\n    print(f\"  X-Content-Type-Options: {resp.headers.get('X-Content-Type-Options')}\")\n    print(f\"  X-Frame-Options: {resp.headers.get('X-Frame-Options')}\")\n    print(f\"  Referrer-Policy: {resp.headers.get('Referrer-Policy')}\")\n\n# Expected Output:\n# Path: /api/data\n#   X-Content-Type-Options: nosniff\n#   X-Frame-Options: DENY\n#   Referrer-Policy: strict-origin-when-cross-origin\n# Path: /health\n#   X-Content-Type-Options: nosniff\n#   X-Frame-Options: DENY\n#   Referrer-Policy: strict-origin-when-cross-origin",
+          "code_language": "python",
+          "key_points": [
+            "Middleware ensures headers are added to every response, including errors",
+            "BaseHTTPMiddleware subclass is more reusable and testable than the decorator approach",
+            "Security headers like X-Content-Type-Options and X-Frame-Options prevent common attacks",
+            "Headers set in middleware can be overridden by individual endpoints if needed"
+          ],
+          "gotchas": [
+            "response.headers in middleware uses MutableHeaders -- setting a header that already exists overwrites it",
+            "Error responses from exception handlers also pass through middleware, so security headers are added even on 500s",
+            "Some headers like Strict-Transport-Security should only be set in production behind HTTPS"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Add headers to `response.headers` after calling `await call_next(request)` in middleware. Use a class-based `BaseHTTPMiddleware` for reusability, or `@app.middleware(\"http\")` for simplicity. Headers are added to every response, including error responses.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def security_headers(request: Request, call_next):\n    response = await call_next(request)\n    response.headers[\"X-Content-Type-Options\"] = \"nosniff\"\n    response.headers[\"X-Frame-Options\"] = \"DENY\"\n    return response",
+          "code_language": "python",
+          "key_points": [
+            "Set headers on the response object after call_next() to apply to all responses"
+          ],
+          "gotchas": [
+            "Setting a header that already exists will overwrite it, not append to it"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement request timing middleware?",
+      "display_order": 9,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "middleware",
+        "timing",
+        "performance",
+        "monitoring"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Request timing middleware** measures how long each request takes to process, which is essential for performance monitoring, SLA tracking, and identifying slow endpoints.\n\n### Implementation strategy:\n1. Record the start time **before** calling `call_next()`\n2. Record the end time **after** `call_next()` returns\n3. Calculate the duration and expose it via:\n   - A response header (e.g., `X-Process-Time` or `Server-Timing`)\n   - Logging\n   - Metrics system (Prometheus, StatsD)\n\n### Server-Timing header:\nThe `Server-Timing` header is the standard way to expose timing data. Browser DevTools display it natively in the Network tab.\n\n### time.perf_counter() vs time.time():\n- `time.perf_counter()`: High-resolution monotonic clock, not affected by system clock adjustments. **Use this for measuring durations.**\n- `time.time()`: Wall clock time, can go backwards during NTP syncs. Use only for timestamps.\n\n### What the timing includes:\n- Middleware chain execution\n- Request validation and parsing\n- Endpoint execution\n- Response serialization\n- Does **not** include network latency between client and server",
+          "pseudo_code": "@app.middleware(\"http\")\nasync def timing(request, call_next):\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration = time.perf_counter() - start\n    response.headers[\"Server-Timing\"] = f\"total;dur={duration * 1000:.1f}\"\n    return response",
+          "actual_code": "import time\nimport asyncio\nfrom fastapi import FastAPI, Request\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def timing_middleware(request: Request, call_next):\n    \"\"\"Measures request processing time.\"\"\"\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration_ms = (time.perf_counter() - start) * 1000\n    \n    # Standard Server-Timing header (shown in browser DevTools)\n    response.headers[\"Server-Timing\"] = f\"total;dur={duration_ms:.2f}\"\n    # Custom header for easy programmatic access\n    response.headers[\"X-Process-Time-Ms\"] = f\"{duration_ms:.2f}\"\n    \n    return response\n\n@app.get(\"/fast\")\ndef fast_endpoint():\n    return {\"speed\": \"fast\"}\n\n@app.get(\"/slow\")\nasync def slow_endpoint():\n    await asyncio.sleep(0.1)  # Simulate slow operation\n    return {\"speed\": \"slow\"}\n\n# --- Test ---\nclient = TestClient(app)\n\nresp = client.get(\"/fast\")\ntiming = resp.headers[\"Server-Timing\"]\nprocess_ms = float(resp.headers[\"X-Process-Time-Ms\"])\nprint(f\"Fast endpoint: {timing}\")\nprint(f\"Fast < 50ms: {process_ms < 50}\")\n\nresp = client.get(\"/slow\")\ntiming = resp.headers[\"Server-Timing\"]\nprocess_ms = float(resp.headers[\"X-Process-Time-Ms\"])\nprint(f\"Slow endpoint: {timing}\")\nprint(f\"Slow >= 100ms: {process_ms >= 100}\")\n\n# Expected Output:\n# Fast endpoint: total;dur=<N>\n# Fast < 50ms: True\n# Slow endpoint: total;dur=<N>\n# Slow >= 100ms: True",
+          "code_language": "python",
+          "key_points": [
+            "Use time.perf_counter() for high-resolution monotonic timing",
+            "Server-Timing header is the standard and is natively displayed in browser DevTools",
+            "Timing captures everything from middleware entry to response ready, excluding network latency",
+            "Multiply by 1000 to convert seconds to milliseconds for readability"
+          ],
+          "gotchas": [
+            "time.time() can jump backwards during NTP syncs -- always use time.perf_counter() for durations",
+            "Timing includes all middleware processing, not just the endpoint -- factor this in when profiling",
+            "If middleware after the timing middleware adds processing, that time is not captured"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `time.perf_counter()` before and after `await call_next(request)` to measure duration. Add it as a `Server-Timing` header (shown in browser DevTools) or a custom `X-Process-Time` header.",
+          "pseudo_code": "",
+          "actual_code": "import time\nfrom fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.middleware(\"http\")\nasync def timing(request: Request, call_next):\n    start = time.perf_counter()\n    response = await call_next(request)\n    ms = (time.perf_counter() - start) * 1000\n    response.headers[\"Server-Timing\"] = f\"total;dur={ms:.2f}\"\n    return response",
+          "code_language": "python",
+          "key_points": [
+            "time.perf_counter() provides high-resolution monotonic timing"
+          ],
+          "gotchas": [
+            "time.time() can go backwards during NTP syncs -- never use it for durations"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does CORS work with credentials (cookies, auth headers)?",
+      "display_order": 10,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "cors",
+        "credentials",
+        "cookies",
+        "authentication"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**CORS with credentials** requires special configuration because browsers enforce strict rules when cookies or Authorization headers are sent cross-origin.\n\n### Browser rules for credentialed requests:\n1. `Access-Control-Allow-Origin` **cannot** be `*` -- it must be the exact requesting origin\n2. `Access-Control-Allow-Credentials` must be `true`\n3. The frontend must explicitly opt in with `credentials: 'include'` (fetch) or `withCredentials: true` (XMLHttpRequest/Axios)\n4. `Access-Control-Allow-Headers` and `Access-Control-Allow-Methods` cannot be `*` in some browsers\n\n### FastAPI/CORSMiddleware behavior:\nWhen `allow_credentials=True`:\n- If `allow_origins=[\"*\"]`, CORSMiddleware will **not** send `Access-Control-Allow-Origin: *` (browsers would reject it). Instead, it echoes back the requesting origin, which is insecure -- always list specific origins.\n- It automatically adds `Access-Control-Allow-Credentials: true` to responses.\n\n### Frontend code:\n```javascript\n// Fetch API\nfetch('http://api.example.com/data', {\n  credentials: 'include'  // Send cookies cross-origin\n});\n\n// Axios\naxios.get('http://api.example.com/data', {\n  withCredentials: true\n});\n```\n\n### Common use cases:\n- Session-based auth with cookies across domains\n- JWT stored in httpOnly cookies (more secure than localStorage)\n- Single Sign-On (SSO) flows",
+          "pseudo_code": "# Backend (FastAPI)\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"https://frontend.com\"],  # NOT \"*\"\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)\n\n# Frontend (JavaScript)\nfetch(api_url, { credentials: \"include\" })",
+          "actual_code": "from fastapi import FastAPI, Response\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# Credentialed CORS configuration\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\", \"https://myapp.com\"],\n    allow_credentials=True,   # Allow cookies and auth headers\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)\n\n@app.get(\"/api/profile\")\ndef profile():\n    return {\"user\": \"Alice\", \"email\": \"alice@example.com\"}\n\n@app.post(\"/api/login\")\ndef login(response: Response):\n    \"\"\"Set an httpOnly cookie for auth.\"\"\"\n    response.set_cookie(\n        key=\"session_id\",\n        value=\"abc123\",\n        httponly=True,\n        samesite=\"none\",   # Required for cross-origin cookies\n        secure=True,        # Required when samesite=\"none\"\n    )\n    return {\"message\": \"logged in\"}\n\n# --- Test ---\nclient = TestClient(app)\n\n# Request from allowed origin with credentials\nresp = client.get(\"/api/profile\", headers={\"Origin\": \"http://localhost:3000\"})\nprint(f\"Allow-Origin: {resp.headers.get('access-control-allow-origin')}\")\nprint(f\"Allow-Credentials: {resp.headers.get('access-control-allow-credentials')}\")\n\n# Preflight for credentialed POST\nresp = client.options(\n    \"/api/login\",\n    headers={\n        \"Origin\": \"http://localhost:3000\",\n        \"Access-Control-Request-Method\": \"POST\",\n    },\n)\nprint(f\"Preflight Allow-Origin: {resp.headers.get('access-control-allow-origin')}\")\nprint(f\"Preflight Credentials: {resp.headers.get('access-control-allow-credentials')}\")\n\n# Request from disallowed origin\nresp = client.get(\"/api/profile\", headers={\"Origin\": \"http://evil.com\"})\nprint(f\"Evil Allow-Origin: {resp.headers.get('access-control-allow-origin')}\")\n\n# Expected Output:\n# Allow-Origin: http://localhost:3000\n# Allow-Credentials: true\n# Preflight Allow-Origin: http://localhost:3000\n# Preflight Credentials: true\n# Evil Allow-Origin: None",
+          "code_language": "python",
+          "key_points": [
+            "allow_credentials=True enables cookies and Authorization headers cross-origin",
+            "Browsers require a specific origin in Allow-Origin, not * when credentials are used",
+            "The frontend must explicitly opt in with credentials: 'include' (fetch) or withCredentials: true (Axios)",
+            "Cross-origin cookies require SameSite=None and Secure=True attributes"
+          ],
+          "gotchas": [
+            "Modern Starlette (0.20+) raises a ValueError at startup if allow_origins=['*'] is combined with allow_credentials=True -- you must list specific origins when credentials are enabled",
+            "Cross-origin cookies also require SameSite=None and Secure=True on the Set-Cookie header",
+            "Some browsers (Safari) have stricter rules for third-party cookies even with correct CORS configuration"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Set `allow_credentials=True` in CORSMiddleware and list specific origins (not `*`). The frontend must send `credentials: 'include'` (fetch) or `withCredentials: true` (Axios). Cross-origin cookies also need `SameSite=None` and `Secure=True`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"https://myapp.com\"],  # Must be specific, not \"*\"\n    allow_credentials=True,\n    allow_methods=[\"*\"],\n    allow_headers=[\"*\"],\n)",
+          "code_language": "python",
+          "key_points": [
+            "Specific origins required with credentials -- browsers reject wildcard * with credentials"
+          ],
+          "gotchas": [
+            "Cross-origin cookies need SameSite=None and Secure=True on the cookie itself, not just CORS config"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle preflight OPTIONS requests?",
+      "display_order": 11,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "cors",
+        "preflight",
+        "OPTIONS",
+        "http"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Preflight requests** are automatic OPTIONS requests sent by browsers before the actual request when certain conditions are met. CORSMiddleware handles them automatically, but understanding them is critical for debugging CORS issues.\n\n### When browsers send a preflight:\n- HTTP method is not GET, HEAD, or POST\n- POST with Content-Type other than `application/x-www-form-urlencoded`, `multipart/form-data`, or `text/plain`\n- Any custom headers are included (e.g., `Authorization`, `X-Custom-Header`)\n\n### Preflight flow:\n1. Browser sends an OPTIONS request with:\n   - `Origin`: The requesting origin\n   - `Access-Control-Request-Method`: The actual method to be used\n   - `Access-Control-Request-Headers`: Custom headers to be sent\n2. Server responds with:\n   - `Access-Control-Allow-Origin`: Allowed origin\n   - `Access-Control-Allow-Methods`: Allowed methods\n   - `Access-Control-Allow-Headers`: Allowed headers\n   - `Access-Control-Max-Age`: How long to cache this preflight\n3. If the preflight passes, the browser sends the actual request\n4. If it fails, the browser blocks the actual request entirely\n\n### CORSMiddleware handles this automatically:\n- It intercepts OPTIONS requests matching the CORS pattern\n- Returns a 200 response with the appropriate CORS headers\n- You do **not** need to define OPTIONS endpoints manually\n\n### Debugging preflight failures:\n- Check browser DevTools Network tab for the OPTIONS request\n- Look at the response headers for missing Allow-* headers\n- Ensure the origin, method, and headers are all in the allowed lists",
+          "pseudo_code": "# Browser sends automatically:\n# OPTIONS /api/data HTTP/1.1\n# Origin: http://frontend.com\n# Access-Control-Request-Method: DELETE\n# Access-Control-Request-Headers: Authorization\n\n# CORSMiddleware responds:\n# HTTP/1.1 200 OK\n# Access-Control-Allow-Origin: http://frontend.com\n# Access-Control-Allow-Methods: DELETE\n# Access-Control-Allow-Headers: Authorization\n# Access-Control-Max-Age: 600\n\n# Browser then sends the actual DELETE request",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],\n    allow_methods=[\"GET\", \"POST\", \"DELETE\"],\n    allow_headers=[\"Authorization\", \"Content-Type\"],\n    max_age=600,  # Cache preflight for 10 minutes\n)\n\n@app.delete(\"/api/items/{item_id}\")\ndef delete_item(item_id: int):\n    return {\"deleted\": item_id}\n\n# --- Simulate preflight and actual request ---\nclient = TestClient(app)\n\n# Step 1: Preflight OPTIONS request (browser sends this automatically)\npreflight = client.options(\n    \"/api/items/42\",\n    headers={\n        \"Origin\": \"http://localhost:3000\",\n        \"Access-Control-Request-Method\": \"DELETE\",\n        \"Access-Control-Request-Headers\": \"Authorization\",\n    },\n)\nprint(f\"Preflight status: {preflight.status_code}\")\nprint(f\"Allowed methods: {preflight.headers.get('access-control-allow-methods')}\")\nprint(f\"Allowed headers: {preflight.headers.get('access-control-allow-headers')}\")\nprint(f\"Max age: {preflight.headers.get('access-control-max-age')}\")\n\n# Step 2: Actual DELETE request (sent after preflight passes)\nactual = client.delete(\n    \"/api/items/42\",\n    headers={\n        \"Origin\": \"http://localhost:3000\",\n        \"Authorization\": \"Bearer my-token\",\n    },\n)\nprint(f\"Actual status: {actual.status_code}\")\nprint(f\"Response: {actual.json()}\")\n\n# Preflight from disallowed origin\nbad_preflight = client.options(\n    \"/api/items/42\",\n    headers={\n        \"Origin\": \"http://evil.com\",\n        \"Access-Control-Request-Method\": \"DELETE\",\n    },\n)\nprint(f\"Bad preflight allowed: {bad_preflight.headers.get('access-control-allow-origin')}\")\n\n# Expected Output:\n# Preflight status: 200\n# Allowed methods: DELETE\n# Allowed headers: Authorization\n# Max age: 600\n# Actual status: 200\n# Response: {'deleted': 42}\n# Bad preflight allowed: None",
+          "code_language": "python",
+          "key_points": [
+            "Preflight OPTIONS requests are sent automatically by browsers before non-simple requests",
+            "CORSMiddleware handles preflight automatically -- no manual OPTIONS endpoints needed",
+            "max_age tells browsers how long to cache the preflight response",
+            "Preflight checks origin, method, and headers against the CORS configuration"
+          ],
+          "gotchas": [
+            "If CORSMiddleware is not configured, preflight OPTIONS requests may hit your actual endpoint or return 405 Method Not Allowed",
+            "max_age=0 means no caching -- browsers will send a preflight before every non-simple request",
+            "A missing header in allow_headers causes preflight failure even if the method and origin are correct"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Browsers automatically send OPTIONS preflight requests before non-simple requests (DELETE, PUT, custom headers). CORSMiddleware handles these automatically -- it checks the origin, method, and headers, and returns the appropriate CORS headers. Set `max_age` to cache preflight results.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"http://localhost:3000\"],\n    allow_methods=[\"GET\", \"POST\", \"DELETE\"],\n    allow_headers=[\"Authorization\"],\n    max_age=600,  # Cache preflight for 10 minutes\n)\n\n# No manual OPTIONS handler needed -- CORSMiddleware handles it",
+          "code_language": "python",
+          "key_points": [
+            "CORSMiddleware intercepts and responds to preflight OPTIONS automatically"
+          ],
+          "gotchas": [
+            "Missing a header in allow_headers fails the preflight even if origin and method are correct"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use Starlette middleware classes in FastAPI?",
+      "display_order": 12,
+      "difficulty": "intermediate",
+      "tags": [
+        "fastapi",
+        "starlette",
+        "middleware",
+        "BaseHTTPMiddleware",
+        "ASGI"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "FastAPI is built on **Starlette**, so all Starlette middleware classes work directly in FastAPI. There are two approaches to creating class-based middleware.\n\n### Approach 1: BaseHTTPMiddleware (simpler)\n- Subclass `BaseHTTPMiddleware` and override `dispatch()`\n- Works with `Request` and `Response` objects\n- Easier to write but creates a new task for each request\n\n### Approach 2: Pure ASGI middleware (more performant)\n- Implement the ASGI interface directly (`__init__` and `__call__`)\n- Works with raw `scope`, `receive`, `send` parameters\n- More complex but avoids the overhead of BaseHTTPMiddleware\n- Better for high-performance scenarios\n\n### Built-in Starlette middleware:\n- `CORSMiddleware`: Cross-origin resource sharing\n- `GZipMiddleware`: Response compression\n- `TrustedHostMiddleware`: Host header validation\n- `HTTPSRedirectMiddleware`: Redirect HTTP to HTTPS\n- `SessionMiddleware`: Cookie-based sessions\n\n### When to use class-based middleware:\n- Configurable middleware that accepts parameters\n- Reusable middleware shared across projects\n- Middleware with internal state (counters, caches)\n- Complex logic that benefits from class organization",
+          "pseudo_code": "# Approach 1: BaseHTTPMiddleware\nclass MyMiddleware(BaseHTTPMiddleware):\n    def __init__(self, app, custom_param=\"default\"):\n        super().__init__(app)\n        self.custom_param = custom_param\n    \n    async def dispatch(self, request, call_next):\n        response = await call_next(request)\n        return response\n\n# Approach 2: Pure ASGI\nclass MyASGIMiddleware:\n    def __init__(self, app):\n        self.app = app\n    \n    async def __call__(self, scope, receive, send):\n        if scope[\"type\"] == \"http\":\n            # modify or inspect\n            pass\n        await self.app(scope, receive, send)",
+          "actual_code": "from fastapi import FastAPI, Request\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.types import ASGIApp, Receive, Scope, Send\nfrom starlette.responses import Response\nfrom fastapi.testclient import TestClient\n\napp = FastAPI()\n\n# --- Approach 1: BaseHTTPMiddleware (simpler) ---\nclass RateLimitHeaderMiddleware(BaseHTTPMiddleware):\n    \"\"\"Configurable middleware that adds rate limit headers.\"\"\"\n    \n    def __init__(self, app: ASGIApp, limit: int = 100, window: str = \"1h\"):\n        super().__init__(app)\n        self.limit = limit\n        self.window = window\n    \n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n        response.headers[\"X-RateLimit-Limit\"] = str(self.limit)\n        response.headers[\"X-RateLimit-Window\"] = self.window\n        return response\n\n# --- Approach 2: Pure ASGI middleware (more performant) ---\nclass CustomASGIMiddleware:\n    \"\"\"Low-level ASGI middleware that injects a header.\"\"\"\n    \n    def __init__(self, app: ASGIApp, header_value: str = \"asgi-middleware\"):\n        self.app = app\n        self.header_value = header_value\n    \n    async def __call__(self, scope: Scope, receive: Receive, send: Send):\n        if scope[\"type\"] != \"http\":\n            await self.app(scope, receive, send)\n            return\n        \n        async def send_with_header(message):\n            if message[\"type\"] == \"http.response.start\":\n                headers = list(message.get(\"headers\", []))\n                headers.append(\n                    (b\"x-asgi-middleware\", self.header_value.encode())\n                )\n                message[\"headers\"] = headers\n            await send(message)\n        \n        await self.app(scope, receive, send_with_header)\n\n# Add middleware (remember: last added = outermost)\napp.add_middleware(RateLimitHeaderMiddleware, limit=50, window=\"15m\")\napp.add_middleware(CustomASGIMiddleware, header_value=\"active\")\n\n@app.get(\"/test\")\ndef test():\n    return {\"status\": \"ok\"}\n\n# --- Test ---\nclient = TestClient(app)\nresp = client.get(\"/test\")\n\nprint(f\"Status: {resp.status_code}\")\nprint(f\"Rate-Limit: {resp.headers.get('X-RateLimit-Limit')}\")\nprint(f\"Rate-Window: {resp.headers.get('X-RateLimit-Window')}\")\nprint(f\"ASGI-Header: {resp.headers.get('X-ASGI-Middleware')}\")\nprint(f\"Body: {resp.json()}\")\n\n# Expected Output:\n# Status: 200\n# Rate-Limit: 50\n# Rate-Window: 15m\n# ASGI-Header: active\n# Body: {'status': 'ok'}",
+          "code_language": "python",
+          "key_points": [
+            "BaseHTTPMiddleware is simpler -- subclass and override dispatch()",
+            "Pure ASGI middleware is more performant -- implement __init__ and __call__",
+            "Constructor parameters are passed via app.add_middleware(Class, param=value)",
+            "All Starlette middleware (CORS, GZip, TrustedHost) works directly in FastAPI"
+          ],
+          "gotchas": [
+            "BaseHTTPMiddleware creates a new anyio TaskGroup per request, which adds overhead and can cause issues with context variables",
+            "Pure ASGI middleware must check scope['type'] == 'http' -- WebSocket and lifespan events also pass through",
+            "app.add_middleware() passes keyword arguments to the middleware constructor -- the first positional arg (app) is added automatically"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Subclass `BaseHTTPMiddleware` and override `dispatch(self, request, call_next)` for simple class-based middleware. For better performance, implement a pure ASGI middleware with `__init__(self, app)` and `async __call__(self, scope, receive, send)`. Add via `app.add_middleware(MyClass, param=value)`.",
+          "pseudo_code": "",
+          "actual_code": "from starlette.middleware.base import BaseHTTPMiddleware\nfrom fastapi import FastAPI, Request\n\nclass MyMiddleware(BaseHTTPMiddleware):\n    def __init__(self, app, custom_value: str = \"default\"):\n        super().__init__(app)\n        self.custom_value = custom_value\n\n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n        response.headers[\"X-Custom\"] = self.custom_value\n        return response\n\napp = FastAPI()\napp.add_middleware(MyMiddleware, custom_value=\"hello\")",
+          "code_language": "python",
+          "key_points": [
+            "BaseHTTPMiddleware is the simplest way to create class-based middleware"
+          ],
+          "gotchas": [
+            "BaseHTTPMiddleware has per-request overhead -- use pure ASGI middleware for high-throughput APIs"
+          ]
+        }
+      ]
+    }
+  ]
+}

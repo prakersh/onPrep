@@ -1,0 +1,709 @@
+{
+  "concept_slug": "performance-optimization",
+  "questions": [
+    {
+      "title": "How do you implement caching with Redis in FastAPI?",
+      "display_order": 1,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "caching",
+        "redis",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Redis caching in FastAPI involves storing serialized responses or computed values in Redis with a TTL (time-to-live). The pattern is: check cache first, return if hit, otherwise compute, store, and return.\n\n### Integration approach:\n1. Create a Redis client in lifespan and store it on `app.state`\n2. Build a cache dependency or decorator\n3. Use JSON serialization for structured data, or raw bytes for simple values\n\n### Common patterns:\n- **Read-through cache**: Check cache, miss -> compute -> store -> return\n- **Cache-aside**: Application manages cache explicitly\n- **Write-through**: Update cache when data changes\n- **Cache invalidation**: Delete cache keys when underlying data changes\n\n### Libraries:\n- `redis.asyncio` (official async Redis client, formerly `aioredis`)\n- `fastapi-cache2` (decorator-based caching with Redis/Memcached backends)\n\n### Key design decisions:\n- **Key naming**: Use a consistent scheme like `resource:id:field`\n- **TTL**: Balance freshness vs performance (60s-3600s common)\n- **Serialization**: `json.dumps()` for dicts, `pickle` for complex objects (security risk)",
+          "pseudo_code": "# Cache-aside pattern\nasync def get_user(user_id):\n    cached = await redis.get(f\"user:{user_id}\")\n    if cached:\n        return json.loads(cached)\n    user = await db.fetch_user(user_id)\n    await redis.set(f\"user:{user_id}\", json.dumps(user), ex=300)\n    return user",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Depends, Request\nfrom typing import Annotated\nimport redis.asyncio as redis\nimport json\nimport hashlib\nimport functools\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Create Redis connection pool at startup\n    pool = redis.ConnectionPool.from_url(\n        \"redis://localhost:6379\",\n        max_connections=20,\n        decode_responses=True,\n    )\n    app.state.redis = redis.Redis(connection_pool=pool)\n    yield\n    await app.state.redis.aclose()\n    await pool.aclose()\n\napp = FastAPI(lifespan=lifespan)\n\n\n# --- Dependency-based caching ---\nasync def get_redis(request: Request) -> redis.Redis:\n    return request.app.state.redis\n\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(\n    user_id: int,\n    cache: Annotated[redis.Redis, Depends(get_redis)],\n):\n    cache_key = f\"user:{user_id}\"\n\n    # Try cache first\n    cached = await cache.get(cache_key)\n    if cached:\n        return {\"data\": json.loads(cached), \"source\": \"cache\"}\n\n    # Cache miss: fetch from database\n    user = {\"id\": user_id, \"name\": f\"User {user_id}\", \"email\": f\"user{user_id}@example.com\"}\n\n    # Store in cache with 5-minute TTL\n    await cache.set(cache_key, json.dumps(user), ex=300)\n\n    return {\"data\": user, \"source\": \"database\"}\n\n\n@app.put(\"/users/{user_id}\")\nasync def update_user(\n    user_id: int,\n    cache: Annotated[redis.Redis, Depends(get_redis)],\n):\n    # Update database...\n    user = {\"id\": user_id, \"name\": \"Updated\"}\n\n    # Invalidate cache (write-through)\n    await cache.delete(f\"user:{user_id}\")\n\n    return {\"data\": user, \"status\": \"updated\"}\n\n\n# --- Decorator-based caching ---\ndef cached(ttl_seconds: int = 300, prefix: str = \"\"):\n    \"\"\"Decorator that caches endpoint responses in Redis.\"\"\"\n    def decorator(func):\n        @functools.wraps(func)\n        async def wrapper(*args, **kwargs):\n            # Build cache key from function name + args\n            request = kwargs.get(\"request\") or args[0]\n            key_data = f\"{prefix or func.__name__}:{request.url.path}:{request.url.query}\"\n            cache_key = hashlib.md5(key_data.encode()).hexdigest()\n\n            redis_client = request.app.state.redis\n            cached_data = await redis_client.get(cache_key)\n            if cached_data:\n                return json.loads(cached_data)\n\n            result = await func(*args, **kwargs)\n            await redis_client.set(\n                cache_key, json.dumps(result), ex=ttl_seconds\n            )\n            return result\n        return wrapper\n    return decorator\n\n\n@app.get(\"/products\")\n@cached(ttl_seconds=60, prefix=\"products\")\nasync def list_products(request: Request, category: str = \"all\"):\n    # Expensive query\n    return {\"products\": [{\"id\": 1, \"name\": \"Widget\"}], \"category\": category}\n\n\n# --- Bulk cache operations ---\n@app.get(\"/users\")\nasync def list_users(\n    cache: Annotated[redis.Redis, Depends(get_redis)],\n):\n    # Pipeline for multiple cache reads\n    async with cache.pipeline(transaction=False) as pipe:\n        for user_id in range(1, 11):\n            pipe.get(f\"user:{user_id}\")\n        results = await pipe.execute()\n\n    users = [\n        json.loads(r) for r in results if r is not None\n    ]\n    return {\"users\": users, \"cached_count\": len(users)}",
+          "code_language": "python",
+          "key_points": [
+            "Create Redis client in lifespan with a connection pool for efficiency",
+            "Cache-aside pattern: check cache, miss -> compute -> store with TTL",
+            "Invalidate cache on writes to prevent stale data",
+            "Use Redis pipelines for bulk cache operations to reduce round trips"
+          ],
+          "gotchas": [
+            "Cache stampede: many requests miss cache simultaneously -- use locking or staggered TTLs",
+            "JSON serialization cannot handle datetime, set, or custom objects without a custom encoder",
+            "Redis connection failures should be handled gracefully -- fall back to database, do not crash the endpoint",
+            "decode_responses=True returns strings, not bytes -- be consistent across your app"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `redis.asyncio` with a connection pool in lifespan. Check cache before computing, store results with a TTL, and invalidate on writes. Use pipelines for bulk operations.",
+          "pseudo_code": "",
+          "actual_code": "import redis.asyncio as redis\nimport json\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int, cache: redis.Redis = Depends(get_redis)):\n    cached = await cache.get(f\"user:{user_id}\")\n    if cached:\n        return json.loads(cached)\n    user = await fetch_from_db(user_id)\n    await cache.set(f\"user:{user_id}\", json.dumps(user), ex=300)\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "Check cache first, store on miss with TTL",
+            "Invalidate cache on data mutations"
+          ],
+          "gotchas": [
+            "Handle Redis connection failures gracefully -- fall back to database"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement in-memory caching for FastAPI endpoints?",
+      "display_order": 2,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "caching",
+        "in-memory",
+        "lru-cache",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "In-memory caching stores data in the Python process memory, avoiding network round trips to Redis. It is the fastest cache but limited by process memory and not shared across workers.\n\n### Approaches:\n\n1. **`functools.lru_cache`**: Built-in, great for pure functions with hashable arguments. Not TTL-aware.\n\n2. **`cachetools.TTLCache`**: Dict-like cache with TTL expiration and max-size eviction.\n\n3. **Custom dict with timestamps**: Manual TTL implementation.\n\n### When to use in-memory vs Redis:\n| Feature | In-memory | Redis |\n|---------|-----------|-------|\n| Speed | Fastest (no network) | Fast (network hop) |\n| Shared across workers | No | Yes |\n| Survives restart | No | Yes (with persistence) |\n| Memory limit | Process RAM | Redis server RAM |\n| TTL support | Manual or cachetools | Built-in |\n\n### Best for:\n- Configuration that rarely changes\n- Reference data (country codes, categories)\n- Computed values from external APIs (rate limited)",
+          "pseudo_code": "from cachetools import TTLCache\n\ncache = TTLCache(maxsize=1000, ttl=300)\n\nasync def get_data(key):\n    if key in cache:\n        return cache[key]\n    data = await expensive_query(key)\n    cache[key] = data\n    return data",
+          "actual_code": "from fastapi import FastAPI\nfrom functools import lru_cache\nfrom cachetools import TTLCache\nimport time\nimport asyncio\n\napp = FastAPI()\n\n\n# --- 1. functools.lru_cache for config/pure functions ---\n@lru_cache(maxsize=1)\ndef get_settings():\n    \"\"\"Cached settings -- loaded once, reused forever.\"\"\"\n    print(\"Loading settings (this runs only once)\")\n    return {\n        \"db_url\": \"postgresql://localhost/mydb\",\n        \"api_key\": \"secret\",\n        \"debug\": False,\n    }\n\n@app.get(\"/settings\")\nasync def settings():\n    return get_settings()  # Second call returns cached result\n\n\n# --- 2. TTLCache for time-limited caching ---\nuser_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)  # 5 min TTL\n\nasync def fetch_user_from_db(user_id: int) -> dict:\n    \"\"\"Simulates a slow database query.\"\"\"\n    await asyncio.sleep(0.1)\n    return {\"id\": user_id, \"name\": f\"User {user_id}\"}\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int):\n    if user_id in user_cache:\n        return {\"data\": user_cache[user_id], \"source\": \"cache\"}\n\n    user = await fetch_user_from_db(user_id)\n    user_cache[user_id] = user\n    return {\"data\": user, \"source\": \"database\"}\n\n\n# --- 3. Custom cache with manual TTL ---\nclass SimpleCache:\n    \"\"\"Thread-safe cache with TTL.\"\"\"\n\n    def __init__(self, default_ttl: int = 300):\n        self._store: dict[str, tuple[float, any]] = {}\n        self._default_ttl = default_ttl\n\n    def get(self, key: str):\n        if key in self._store:\n            expires_at, value = self._store[key]\n            if time.time() < expires_at:\n                return value\n            del self._store[key]  # Expired\n        return None\n\n    def set(self, key: str, value, ttl: int | None = None):\n        expires_at = time.time() + (ttl or self._default_ttl)\n        self._store[key] = (expires_at, value)\n\n    def delete(self, key: str):\n        self._store.pop(key, None)\n\n    def clear(self):\n        self._store.clear()\n\n\ncache = SimpleCache(default_ttl=60)\n\n@app.get(\"/products/{product_id}\")\nasync def get_product(product_id: int):\n    cached = cache.get(f\"product:{product_id}\")\n    if cached:\n        return {\"data\": cached, \"source\": \"cache\"}\n\n    product = {\"id\": product_id, \"name\": f\"Product {product_id}\"}\n    cache.set(f\"product:{product_id}\", product, ttl=120)\n    return {\"data\": product, \"source\": \"database\"}\n\n\n# --- 4. Async-safe cache with asyncio.Lock ---\nclass AsyncCache:\n    def __init__(self):\n        self._store: dict = {}\n        self._lock = asyncio.Lock()\n\n    async def get_or_set(self, key: str, factory, ttl: int = 300):\n        async with self._lock:\n            if key in self._store:\n                exp, val = self._store[key]\n                if time.time() < exp:\n                    return val\n            value = await factory()\n            self._store[key] = (time.time() + ttl, value)\n            return value\n\nasync_cache = AsyncCache()\n\n@app.get(\"/exchange-rate\")\nasync def exchange_rate():\n    async def fetch_rate():\n        await asyncio.sleep(0.5)  # Simulate API call\n        return {\"USD_EUR\": 0.85}\n\n    rate = await async_cache.get_or_set(\n        \"exchange_rate\", fetch_rate, ttl=3600\n    )\n    return rate",
+          "code_language": "python",
+          "key_points": [
+            "lru_cache is perfect for config and pure functions that never change",
+            "TTLCache from cachetools provides max-size eviction and time-based expiration",
+            "In-memory cache is the fastest option (no network round trip) but per-process only",
+            "Use asyncio.Lock to prevent cache stampedes in async code"
+          ],
+          "gotchas": [
+            "In-memory cache is NOT shared across Uvicorn workers -- each worker has its own copy",
+            "lru_cache has no TTL -- stale data stays forever until process restarts",
+            "TTLCache is not async-safe by default -- wrap access in asyncio.Lock for concurrent endpoints",
+            "Large caches can cause memory pressure -- always set maxsize"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `functools.lru_cache` for config, `cachetools.TTLCache` for time-limited data, or a custom dict with timestamps. In-memory caching is fastest but not shared across workers.",
+          "pseudo_code": "",
+          "actual_code": "from cachetools import TTLCache\n\ncache = TTLCache(maxsize=1000, ttl=300)\n\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int):\n    if user_id in cache:\n        return cache[user_id]\n    user = await db.fetch(user_id)\n    cache[user_id] = user\n    return user",
+          "code_language": "python",
+          "key_points": [
+            "Fastest cache -- no network round trip",
+            "Not shared across Uvicorn workers"
+          ],
+          "gotchas": [
+            "lru_cache has no TTL -- data stays forever until process restarts"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement rate limiting in FastAPI?",
+      "display_order": 3,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "rate-limiting",
+        "security",
+        "middleware",
+        "redis"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Rate limiting restricts the number of requests a client can make in a given time window. Common algorithms:\n\n### Algorithms:\n1. **Fixed window**: Count requests in fixed time slots (e.g., 100/minute). Simple but allows bursts at window boundaries.\n2. **Sliding window**: Weighted average of current and previous window. Smoother than fixed window.\n3. **Token bucket**: Tokens refill at a steady rate. Allows short bursts while maintaining average rate.\n4. **Leaky bucket**: Requests queue and process at a fixed rate.\n\n### Implementation approaches:\n1. **Dependency-based**: A `Depends()` function that checks rate limits per endpoint\n2. **Middleware-based**: Applies rate limiting globally to all routes\n3. **Library**: `slowapi` wraps `limits` library for FastAPI\n\n### Storage backends:\n- **In-memory dict**: Simple, single-worker only\n- **Redis**: Shared across workers, survives restarts\n\n### Client identification:\n- IP address (`request.client.host`)\n- API key from header\n- Authenticated user ID",
+          "pseudo_code": "# Redis-based sliding window\nasync def rate_limit(request, limit=100, window=60):\n    key = f\"rate:{request.client.host}\"\n    count = await redis.incr(key)\n    if count == 1:\n        await redis.expire(key, window)\n    if count > limit:\n        raise HTTPException(429, \"Too many requests\")",
+          "actual_code": "from fastapi import FastAPI, Request, HTTPException, Depends\nfrom typing import Annotated\nimport time\nimport redis.asyncio as redis\nfrom contextlib import asynccontextmanager\n\n\n# --- 1. In-memory rate limiter (single worker) ---\nclass InMemoryRateLimiter:\n    def __init__(self):\n        self._requests: dict[str, list[float]] = {}\n\n    def is_allowed(\n        self, key: str, max_requests: int, window_seconds: int\n    ) -> bool:\n        now = time.time()\n        cutoff = now - window_seconds\n\n        # Clean old entries\n        if key in self._requests:\n            self._requests[key] = [\n                t for t in self._requests[key] if t > cutoff\n            ]\n        else:\n            self._requests[key] = []\n\n        if len(self._requests[key]) >= max_requests:\n            return False\n\n        self._requests[key].append(now)\n        return True\n\nlimiter = InMemoryRateLimiter()\n\n\napp = FastAPI()\n\n\n# Rate limit as a dependency\ndef rate_limit(\n    max_requests: int = 10, window_seconds: int = 60\n):\n    async def check(request: Request):\n        client_ip = request.client.host\n        if not limiter.is_allowed(\n            client_ip, max_requests, window_seconds\n        ):\n            raise HTTPException(\n                status_code=429,\n                detail=\"Too many requests\",\n                headers={\"Retry-After\": str(window_seconds)},\n            )\n    return check\n\n\n@app.get(\n    \"/api/data\",\n    dependencies=[Depends(rate_limit(max_requests=5, window_seconds=60))],\n)\nasync def get_data():\n    return {\"data\": \"Here you go\"}\n\n\n# --- 2. Redis-based rate limiter (multi-worker safe) ---\nclass RedisRateLimiter:\n    def __init__(self, redis_client: redis.Redis):\n        self.redis = redis_client\n\n    async def is_allowed(\n        self, key: str, max_requests: int, window_seconds: int\n    ) -> tuple[bool, int]:\n        \"\"\"Returns (allowed, remaining_requests).\"\"\"\n        pipe = self.redis.pipeline()\n        now = time.time()\n        window_key = f\"ratelimit:{key}\"\n\n        # Sliding window with sorted set\n        pipe.zremrangebyscore(window_key, 0, now - window_seconds)\n        pipe.zadd(window_key, {str(now): now})\n        pipe.zcard(window_key)\n        pipe.expire(window_key, window_seconds)\n        results = await pipe.execute()\n\n        current_count = results[2]\n        remaining = max(0, max_requests - current_count)\n        return current_count <= max_requests, remaining\n\n\n# --- 3. Using slowapi library ---\n# pip install slowapi\n#\n# from slowapi import Limiter, _rate_limit_exceeded_handler\n# from slowapi.util import get_remote_address\n# from slowapi.errors import RateLimitExceeded\n#\n# limiter = Limiter(key_func=get_remote_address)\n# app.state.limiter = limiter\n# app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)\n#\n# @app.get(\"/api/resource\")\n# @limiter.limit(\"5/minute\")\n# async def resource(request: Request):\n#     return {\"data\": \"ok\"}\n\n\n# --- 4. Rate limit middleware (global) ---\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.responses import JSONResponse\n\nclass RateLimitMiddleware(BaseHTTPMiddleware):\n    def __init__(self, app, max_requests: int = 100, window: int = 60):\n        super().__init__(app)\n        self.max_requests = max_requests\n        self.window = window\n        self.limiter = InMemoryRateLimiter()\n\n    async def dispatch(self, request: Request, call_next):\n        client_ip = request.client.host\n        if not self.limiter.is_allowed(\n            client_ip, self.max_requests, self.window\n        ):\n            return JSONResponse(\n                status_code=429,\n                content={\"detail\": \"Too many requests\"},\n                headers={\"Retry-After\": str(self.window)},\n            )\n        response = await call_next(request)\n        return response\n\n# app.add_middleware(RateLimitMiddleware, max_requests=100, window=60)",
+          "code_language": "python",
+          "key_points": [
+            "Dependency-based rate limiting gives per-endpoint control over limits",
+            "Redis sorted sets implement a sliding window algorithm that works across workers",
+            "Always include Retry-After header in 429 responses",
+            "slowapi library provides decorator-based rate limiting with minimal setup"
+          ],
+          "gotchas": [
+            "In-memory rate limiting does not work with multiple Uvicorn workers -- use Redis",
+            "IP-based limiting fails behind a load balancer unless you read X-Forwarded-For",
+            "Rate limit state must be cleaned up to prevent memory leaks (use TTL or periodic cleanup)",
+            "Be careful with rate limiting behind CDNs -- all requests may appear from the CDN IP"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Implement rate limiting as a dependency that tracks request counts per client IP. Use an in-memory dict for single-worker setups or Redis sorted sets for multi-worker. Return HTTP 429 with `Retry-After` header when limit is exceeded.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request, HTTPException, Depends\n\nrequest_counts: dict[str, list[float]] = {}\n\ndef rate_limit(request: Request):\n    import time\n    ip = request.client.host\n    now = time.time()\n    request_counts.setdefault(ip, [])\n    request_counts[ip] = [t for t in request_counts[ip] if t > now - 60]\n    if len(request_counts[ip]) >= 10:\n        raise HTTPException(429, \"Too many requests\")\n    request_counts[ip].append(now)\n\n@app.get(\"/api/data\", dependencies=[Depends(rate_limit)])\nasync def get_data():\n    return {\"data\": \"ok\"}",
+          "code_language": "python",
+          "key_points": [
+            "Track timestamps per client, count within sliding window",
+            "Return 429 status with Retry-After header"
+          ],
+          "gotchas": [
+            "In-memory approach does not work across multiple Uvicorn workers"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does response compression work (GZipMiddleware)?",
+      "display_order": 4,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "compression",
+        "gzip",
+        "middleware",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**GZipMiddleware** compresses response bodies using gzip before sending them to the client. This reduces bandwidth and improves load times, especially for JSON APIs and HTML.\n\n### How it works:\n1. Client sends `Accept-Encoding: gzip` header\n2. GZipMiddleware intercepts the response\n3. If the response body exceeds `minimum_size`, it is compressed\n4. Response gets `Content-Encoding: gzip` header\n5. Client decompresses automatically\n\n### Configuration:\n- `minimum_size`: Minimum response size in bytes to trigger compression (default: 500)\n- Compression ratio varies: JSON typically compresses 70-90%, already compressed content (images, video) barely compresses\n\n### When to use:\n- JSON API responses (high compression ratio)\n- HTML/CSS/JS responses\n- Large text payloads\n\n### When NOT to use:\n- Small responses (< 500 bytes) -- compression overhead exceeds savings\n- Already compressed content (images, video, zip files)\n- Streaming responses (adds latency per chunk)\n- When a reverse proxy (Nginx) already handles compression",
+          "pseudo_code": "from starlette.middleware.gzip import GZipMiddleware\n\napp = FastAPI()\napp.add_middleware(GZipMiddleware, minimum_size=500)\n# All responses > 500 bytes are gzipped if client supports it",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.gzip import GZipMiddleware\n\napp = FastAPI()\n\n# Enable gzip compression for responses > 500 bytes\napp.add_middleware(GZipMiddleware, minimum_size=500)\n\n\n@app.get(\"/small\")\nasync def small_response():\n    \"\"\"Small response -- NOT compressed (below minimum_size).\"\"\"\n    return {\"status\": \"ok\"}\n\n\n@app.get(\"/large\")\nasync def large_response():\n    \"\"\"Large response -- WILL be compressed.\"\"\"\n    # Generate a large JSON response\n    items = [\n        {\"id\": i, \"name\": f\"Item {i}\", \"description\": f\"Description for item {i}\"}\n        for i in range(100)\n    ]\n    return {\"items\": items, \"total\": len(items)}\n\n\n@app.get(\"/users\")\nasync def list_users():\n    \"\"\"Typical API response -- compressed if large enough.\"\"\"\n    users = [\n        {\n            \"id\": i,\n            \"name\": f\"User {i}\",\n            \"email\": f\"user{i}@example.com\",\n            \"bio\": \"A\" * 200,  # Padding to exceed minimum_size\n        }\n        for i in range(50)\n    ]\n    return {\"users\": users}\n\n\n# --- Selective compression with custom middleware ---\nfrom starlette.middleware.base import BaseHTTPMiddleware\nfrom starlette.requests import Request\nimport gzip\n\nclass SelectiveGZipMiddleware(BaseHTTPMiddleware):\n    \"\"\"Only compress specific content types.\"\"\"\n\n    COMPRESSIBLE = {\n        \"application/json\",\n        \"text/html\",\n        \"text/plain\",\n        \"text/css\",\n        \"application/javascript\",\n    }\n\n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n\n        accept_encoding = request.headers.get(\"accept-encoding\", \"\")\n        content_type = response.headers.get(\"content-type\", \"\")\n\n        if (\n            \"gzip\" in accept_encoding\n            and any(ct in content_type for ct in self.COMPRESSIBLE)\n        ):\n            # Let GZipMiddleware handle it\n            pass\n\n        return response\n\n# Test compression with curl:\n# curl -H \"Accept-Encoding: gzip\" -v http://localhost:8000/large\n# Response header: content-encoding: gzip",
+          "code_language": "python",
+          "key_points": [
+            "GZipMiddleware compresses responses automatically when client sends Accept-Encoding: gzip",
+            "minimum_size controls the threshold -- responses below this are not compressed",
+            "JSON typically compresses 70-90%, significantly reducing bandwidth",
+            "Add middleware with one line: app.add_middleware(GZipMiddleware, minimum_size=500)"
+          ],
+          "gotchas": [
+            "Do not double-compress if Nginx or a CDN already handles gzip",
+            "Compression adds CPU overhead per request -- benchmark impact under load",
+            "Already compressed formats (JPEG, PNG, ZIP) should be excluded",
+            "StreamingResponse with GZip buffers the entire stream, adding latency"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "`GZipMiddleware` compresses responses when the client sends `Accept-Encoding: gzip` and the response exceeds `minimum_size`. JSON compresses 70-90%. One-line setup: `app.add_middleware(GZipMiddleware, minimum_size=500)`.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI\nfrom starlette.middleware.gzip import GZipMiddleware\n\napp = FastAPI()\napp.add_middleware(GZipMiddleware, minimum_size=500)\n\n@app.get(\"/data\")\nasync def data():\n    return {\"items\": [{\"id\": i} for i in range(1000)]}",
+          "code_language": "python",
+          "key_points": [
+            "One-line middleware setup compresses responses above minimum_size"
+          ],
+          "gotchas": [
+            "Do not double-compress if your reverse proxy already handles gzip"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you optimize async operations for better performance?",
+      "display_order": 5,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "async",
+        "asyncio",
+        "concurrency",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Optimizing async in FastAPI means maximizing concurrency by avoiding blocking the event loop and running independent I/O operations in parallel.\n\n### Key optimization strategies:\n\n1. **asyncio.gather()**: Run independent async calls concurrently instead of sequentially\n2. **Avoid blocking calls**: Use `run_in_executor` for sync libraries (database drivers, file I/O)\n3. **Use async libraries**: `httpx` instead of `requests`, `asyncpg` instead of `psycopg2`\n4. **Limit concurrency**: Use `asyncio.Semaphore` to prevent overwhelming external services\n5. **async def vs def**: Use `async def` only when doing async I/O. Use `def` for CPU-bound or sync-only work (FastAPI runs them in a thread pool).\n\n### Performance impact:\n- Sequential: 3 API calls x 100ms = 300ms\n- Concurrent with gather: 3 API calls = ~100ms (wall clock)\n\n### Common mistakes:\n- Calling sync code in `async def` (blocks the event loop)\n- Using `time.sleep()` instead of `asyncio.sleep()`\n- Not limiting concurrency for external APIs",
+          "pseudo_code": "# BAD: Sequential (300ms)\nresult1 = await call_service_a()\nresult2 = await call_service_b()\nresult3 = await call_service_c()\n\n# GOOD: Concurrent (100ms)\nresult1, result2, result3 = await asyncio.gather(\n    call_service_a(),\n    call_service_b(),\n    call_service_c(),\n)",
+          "actual_code": "from fastapi import FastAPI\nimport asyncio\nimport httpx\nimport time\nfrom concurrent.futures import ThreadPoolExecutor\n\napp = FastAPI()\n\n\n# --- 1. asyncio.gather for concurrent requests ---\nasync def fetch_user(client: httpx.AsyncClient, user_id: int):\n    response = await client.get(f\"https://jsonplaceholder.typicode.com/users/{user_id}\")\n    return response.json()\n\nasync def fetch_posts(client: httpx.AsyncClient, user_id: int):\n    response = await client.get(\n        f\"https://jsonplaceholder.typicode.com/posts\",\n        params={\"userId\": user_id},\n    )\n    return response.json()\n\n@app.get(\"/users/{user_id}/profile\")\nasync def get_profile(user_id: int):\n    async with httpx.AsyncClient() as client:\n        # BAD: Sequential -- ~200ms\n        # user = await fetch_user(client, user_id)\n        # posts = await fetch_posts(client, user_id)\n\n        # GOOD: Concurrent -- ~100ms\n        user, posts = await asyncio.gather(\n            fetch_user(client, user_id),\n            fetch_posts(client, user_id),\n        )\n    return {\"user\": user, \"posts_count\": len(posts)}\n\n\n# --- 2. Semaphore to limit concurrency ---\nsem = asyncio.Semaphore(10)  # Max 10 concurrent requests\n\nasync def fetch_with_limit(client: httpx.AsyncClient, url: str):\n    async with sem:\n        response = await client.get(url)\n        return response.json()\n\n@app.get(\"/batch-fetch\")\nasync def batch_fetch():\n    urls = [f\"https://jsonplaceholder.typicode.com/posts/{i}\" for i in range(1, 51)]\n    async with httpx.AsyncClient() as client:\n        results = await asyncio.gather(\n            *(fetch_with_limit(client, url) for url in urls)\n        )\n    return {\"fetched\": len(results)}\n\n\n# --- 3. run_in_executor for blocking calls ---\nexecutor = ThreadPoolExecutor(max_workers=4)\n\ndef cpu_intensive_task(data: str) -> str:\n    \"\"\"Simulates CPU-bound work (cannot be made async).\"\"\"\n    time.sleep(0.5)  # Simulated blocking work\n    return data.upper()\n\n@app.post(\"/process\")\nasync def process(data: str = \"hello\"):\n    loop = asyncio.get_event_loop()\n    # Run blocking code in thread pool -- does not block event loop\n    result = await loop.run_in_executor(\n        executor, cpu_intensive_task, data\n    )\n    return {\"result\": result}\n\n\n# --- 4. async def vs def endpoint choice ---\n# Use 'def' for sync-only code -- FastAPI runs it in a thread pool\n@app.get(\"/sync-endpoint\")\ndef sync_endpoint():\n    \"\"\"FastAPI automatically runs this in a threadpool.\"\"\"\n    time.sleep(0.1)  # Blocking call is OK here\n    return {\"mode\": \"sync\"}\n\n# Use 'async def' only for truly async code\n@app.get(\"/async-endpoint\")\nasync def async_endpoint():\n    \"\"\"Runs on the event loop -- must not block.\"\"\"\n    await asyncio.sleep(0.1)  # Non-blocking\n    return {\"mode\": \"async\"}\n\n\n# --- 5. asyncio.TaskGroup (Python 3.11+) ---\n@app.get(\"/taskgroup\")\nasync def with_taskgroup():\n    results = {}\n    async with asyncio.TaskGroup() as tg:\n        async def fetch_and_store(key, coro):\n            results[key] = await coro\n\n        async with httpx.AsyncClient() as client:\n            tg.create_task(fetch_and_store(\n                \"user\", client.get(\"https://jsonplaceholder.typicode.com/users/1\")\n            ))\n            tg.create_task(fetch_and_store(\n                \"post\", client.get(\"https://jsonplaceholder.typicode.com/posts/1\")\n            ))\n    return {\n        \"user_status\": results[\"user\"].status_code,\n        \"post_status\": results[\"post\"].status_code,\n    }",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.gather runs independent I/O concurrently, reducing total wait time",
+            "Use asyncio.Semaphore to limit concurrent requests to external services",
+            "Use run_in_executor for blocking/CPU-bound code in async endpoints",
+            "Use def (not async def) for endpoints with only synchronous code -- FastAPI auto-threads them"
+          ],
+          "gotchas": [
+            "Calling sync/blocking code in async def blocks the entire event loop for all requests",
+            "asyncio.gather does NOT cancel other tasks when one fails -- it propagates the first exception while other tasks continue running. Use asyncio.TaskGroup (Python 3.11+) if you need automatic cancellation of sibling tasks on failure",
+            "Semaphore must be created in an async context or at module level -- not inside a coroutine called from sync code",
+            "run_in_executor adds thread-switching overhead -- only use for truly blocking operations"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use `asyncio.gather()` for concurrent I/O, `run_in_executor` for blocking code, and `asyncio.Semaphore` to limit concurrency. Use `def` (not `async def`) for sync-only endpoints -- FastAPI auto-threads them.",
+          "pseudo_code": "",
+          "actual_code": "import asyncio\n\n@app.get(\"/profile/{user_id}\")\nasync def get_profile(user_id: int):\n    # Concurrent -- both run at the same time\n    user, posts = await asyncio.gather(\n        fetch_user(user_id),\n        fetch_posts(user_id),\n    )\n    return {\"user\": user, \"posts\": posts}",
+          "code_language": "python",
+          "key_points": [
+            "asyncio.gather runs independent calls concurrently",
+            "Use def for sync-only endpoints -- FastAPI threads them"
+          ],
+          "gotchas": [
+            "Sync/blocking code in async def blocks the entire event loop"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How does connection pooling improve FastAPI performance?",
+      "display_order": 6,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "connection-pooling",
+        "database",
+        "sqlalchemy",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**Connection pooling** reuses existing database connections instead of creating a new one for each request. Creating a connection involves DNS resolution, TCP handshake, TLS negotiation, and authentication -- this can take 20-100ms per connection.\n\n### How pooling works:\n1. A pool of N connections is created at startup\n2. Each request borrows a connection from the pool\n3. After the request, the connection is returned (not closed)\n4. If all connections are in use, new requests wait or get an error\n\n### SQLAlchemy pool settings:\n- `pool_size`: Number of persistent connections (default: 5)\n- `max_overflow`: Extra connections allowed beyond pool_size (default: 10)\n- `pool_timeout`: Seconds to wait for a connection (default: 30)\n- `pool_recycle`: Seconds before a connection is recycled (prevents stale connections)\n- `pool_pre_ping`: Test connection health before use\n\n### Impact:\n- Without pooling: 1000 requests = 1000 connection handshakes (~50ms each = 50s overhead)\n- With pooling (size=10): 1000 requests reuse 10 connections (near-zero overhead)",
+          "pseudo_code": "# Create engine with pool settings\nengine = create_async_engine(\n    url,\n    pool_size=10,\n    max_overflow=20,\n    pool_recycle=3600,\n    pool_pre_ping=True,\n)\n\n# Each request borrows a connection\nasync def get_db():\n    async with async_session() as session:\n        yield session  # Connection returned to pool after request",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Depends\nfrom typing import Annotated, AsyncGenerator\nfrom sqlalchemy.ext.asyncio import (\n    AsyncSession,\n    async_sessionmaker,\n    create_async_engine,\n)\nfrom sqlalchemy import text\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\n# --- Async SQLAlchemy with connection pool ---\nengine = create_async_engine(\n    \"sqlite+aiosqlite:///./app.db\",  # Use postgresql+asyncpg in prod\n    pool_size=10,        # 10 persistent connections\n    max_overflow=20,     # Up to 30 total (10 + 20)\n    pool_timeout=30,     # Wait 30s for connection, then error\n    pool_recycle=3600,   # Recycle connections after 1 hour\n    pool_pre_ping=True,  # Verify connection is alive before use\n    echo=False,          # Set True for SQL logging\n)\n\nasync_session = async_sessionmaker(\n    engine,\n    class_=AsyncSession,\n    expire_on_commit=False,\n)\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Pool is created lazily on first use, but we can verify\n    logger.info(\"Database pool initialized\")\n    yield\n    await engine.dispose()  # Close all pooled connections\n    logger.info(\"Database pool closed\")\n\napp = FastAPI(lifespan=lifespan)\n\n\n# Dependency: borrow session from pool\nasync def get_db() -> AsyncGenerator[AsyncSession, None]:\n    async with async_session() as session:\n        try:\n            yield session\n            await session.commit()\n        except Exception:\n            await session.rollback()\n            raise\n    # Connection returned to pool here (not closed)\n\n\n@app.get(\"/users\")\nasync def list_users(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    result = await db.execute(text(\"SELECT 1\"))\n    return {\"status\": \"ok\", \"pool_size\": engine.pool.size()}\n\n\n# --- Monitor pool health ---\n@app.get(\"/pool-status\")\nasync def pool_status():\n    pool = engine.pool\n    return {\n        \"pool_size\": pool.size(),\n        \"checked_in\": pool.checkedin(),   # Available connections\n        \"checked_out\": pool.checkedout(), # In-use connections\n        \"overflow\": pool.overflow(),       # Overflow connections\n    }\n\n\n# --- httpx connection pool for external APIs ---\nimport httpx\n\nhttp_client = httpx.AsyncClient(\n    limits=httpx.Limits(\n        max_connections=100,       # Total pool size\n        max_keepalive_connections=20,  # Idle connections to keep\n        keepalive_expiry=30,       # Seconds before idle close\n    ),\n    timeout=httpx.Timeout(30.0),\n)\n\n@app.get(\"/external\")\nasync def call_external():\n    response = await http_client.get(\"https://httpbin.org/get\")\n    return {\"status\": response.status_code}",
+          "code_language": "python",
+          "key_points": [
+            "Connection pooling reuses connections, avoiding the overhead of repeated handshakes",
+            "pool_pre_ping ensures borrowed connections are alive, preventing stale connection errors",
+            "pool_recycle prevents connections from being held open indefinitely",
+            "httpx.AsyncClient also pools HTTP connections for external API calls"
+          ],
+          "gotchas": [
+            "pool_size too small causes requests to wait (or timeout) for a free connection",
+            "pool_size too large wastes database resources and may hit server connection limits",
+            "Always dispose() the engine on shutdown to cleanly close all pooled connections",
+            "SQLite does not support connection pooling (it is file-based) -- pool_size and max_overflow only work with network databases like PostgreSQL and MySQL"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Connection pooling reuses database connections instead of creating new ones per request. SQLAlchemy's `create_async_engine` manages the pool with `pool_size`, `max_overflow`, and `pool_pre_ping` settings. This avoids the 20-100ms per-connection overhead.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy.ext.asyncio import create_async_engine\n\nengine = create_async_engine(\n    \"postgresql+asyncpg://localhost/mydb\",\n    pool_size=10,\n    max_overflow=20,\n    pool_pre_ping=True,\n)",
+          "code_language": "python",
+          "key_points": [
+            "Reuses connections -- avoids handshake overhead per request",
+            "pool_pre_ping detects and replaces dead connections"
+          ],
+          "gotchas": [
+            "pool_size too small causes request queuing; too large wastes DB resources"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you prevent N+1 query problems in FastAPI?",
+      "display_order": 7,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "n-plus-1",
+        "sqlalchemy",
+        "database",
+        "optimization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "The **N+1 problem** occurs when loading a parent entity triggers N additional queries to load related entities. For example, loading 100 users and their posts: 1 query for users + 100 queries for each user's posts = 101 queries.\n\n### Detection:\n- Enable `echo=True` on the SQLAlchemy engine to see SQL logs\n- Use SQLAlchemy's event system to count queries per request\n- Use profiling tools (py-spy, SQLAlchemy profiling events)\n\n### Solutions with SQLAlchemy:\n\n1. **Eager loading (joinedload)**: JOIN in a single query. Best for one-to-one and small collections.\n2. **Subquery loading (subqueryload)**: Two queries total (one for parents, one for all children). Best for large collections.\n3. **Select-in loading (selectinload)**: Like subqueryload but uses `IN` clause. Often the best balance.\n4. **Explicit joins**: Manual joins with `.options()` for full control.\n\n### Rule of thumb:\n- `joinedload` for to-one relationships (user -> profile)\n- `selectinload` for to-many relationships (user -> posts)\n- Avoid `lazy=\"select\"` (the default) in API endpoints",
+          "pseudo_code": "# N+1 problem (101 queries for 100 users + posts)\nusers = db.query(User).all()\nfor user in users:\n    print(user.posts)  # Lazy load: 1 query per user!\n\n# Fixed with selectinload (2 queries total)\nusers = db.query(User).options(\n    selectinload(User.posts)\n).all()",
+          "actual_code": "from sqlalchemy import ForeignKey, select\nfrom sqlalchemy.orm import (\n    DeclarativeBase,\n    Mapped,\n    mapped_column,\n    relationship,\n    joinedload,\n    selectinload,\n    subqueryload,\n)\nfrom sqlalchemy.ext.asyncio import (\n    AsyncSession,\n    async_sessionmaker,\n    create_async_engine,\n)\nfrom fastapi import FastAPI, Depends\nfrom typing import Annotated\n\n\nclass Base(DeclarativeBase):\n    pass\n\nclass User(Base):\n    __tablename__ = \"users\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str]\n    # Relationship (lazy by default -- causes N+1!)\n    posts: Mapped[list[\"Post\"]] = relationship(back_populates=\"author\")\n    profile: Mapped[\"Profile\"] = relationship(back_populates=\"user\", uselist=False)\n\nclass Post(Base):\n    __tablename__ = \"posts\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    title: Mapped[str]\n    user_id: Mapped[int] = mapped_column(ForeignKey(\"users.id\"))\n    author: Mapped[\"User\"] = relationship(back_populates=\"posts\")\n\nclass Profile(Base):\n    __tablename__ = \"profiles\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    bio: Mapped[str]\n    user_id: Mapped[int] = mapped_column(ForeignKey(\"users.id\"), unique=True)\n    user: Mapped[\"User\"] = relationship(back_populates=\"profile\")\n\n\nengine = create_async_engine(\"sqlite+aiosqlite:///./app.db\", echo=True)\nsession_factory = async_sessionmaker(engine, class_=AsyncSession)\n\napp = FastAPI()\n\nasync def get_db():\n    async with session_factory() as session:\n        yield session\n\n\n# BAD: N+1 -- accessing user.posts triggers a lazy load per user\n@app.get(\"/users/bad\")\nasync def list_users_bad(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    result = await db.execute(select(User))\n    users = result.scalars().all()\n    # Each user.posts access fires a separate query!\n    return [\n        {\"name\": u.name, \"post_count\": len(u.posts)}  # N+1!\n        for u in users\n    ]\n\n\n# GOOD: selectinload -- 2 queries total\n@app.get(\"/users/good\")\nasync def list_users_good(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    result = await db.execute(\n        select(User).options(selectinload(User.posts))\n    )\n    users = result.scalars().all()\n    # Posts already loaded -- no additional queries\n    return [\n        {\"name\": u.name, \"post_count\": len(u.posts)}\n        for u in users\n    ]\n\n\n# joinedload for to-one relationships (single JOIN query)\n@app.get(\"/users/with-profile\")\nasync def users_with_profile(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    result = await db.execute(\n        select(User).options(joinedload(User.profile))\n    )\n    users = result.unique().scalars().all()\n    return [\n        {\"name\": u.name, \"bio\": u.profile.bio if u.profile else None}\n        for u in users\n    ]\n\n\n# Nested eager loading (user -> posts -> comments)\n@app.get(\"/users/full\")\nasync def users_full(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    result = await db.execute(\n        select(User).options(\n            selectinload(User.posts),\n            joinedload(User.profile),\n        )\n    )\n    users = result.unique().scalars().all()\n    return [{\"name\": u.name} for u in users]",
+          "code_language": "python",
+          "key_points": [
+            "N+1 happens when lazy-loaded relationships fire a query per parent entity",
+            "selectinload is best for to-many relationships (users -> posts)",
+            "joinedload is best for to-one relationships (user -> profile)",
+            "Always use .unique() after joinedload to deduplicate parent rows"
+          ],
+          "gotchas": [
+            "Async SQLAlchemy raises an error on lazy loads by default -- you must use eager loading",
+            "joinedload on to-many relationships duplicates parent rows -- always call .unique()",
+            "Nested eager loading can create very large result sets -- profile with EXPLAIN ANALYZE",
+            "selectinload uses an IN clause that can hit database parameter limits for very large result sets"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "The N+1 problem fires a separate query per related entity. Fix it with `selectinload` (for to-many) or `joinedload` (for to-one) in SQLAlchemy's `select().options()`. This reduces 101 queries to 2.",
+          "pseudo_code": "",
+          "actual_code": "from sqlalchemy import select\nfrom sqlalchemy.orm import selectinload, joinedload\n\n# 2 queries instead of N+1\nresult = await db.execute(\n    select(User).options(\n        selectinload(User.posts),     # to-many: 2 queries\n        joinedload(User.profile),     # to-one: 1 JOIN\n    )\n)\nusers = result.unique().scalars().all()",
+          "code_language": "python",
+          "key_points": [
+            "selectinload for to-many, joinedload for to-one",
+            "Reduces N+1 queries to 2 (or 1 with JOIN)"
+          ],
+          "gotchas": [
+            "Always call .unique() after joinedload to deduplicate rows"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement cursor-based and offset-based pagination?",
+      "display_order": 8,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "pagination",
+        "database",
+        "api-design",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pagination breaks large result sets into manageable pages. Two main approaches:\n\n### Offset-based pagination:\n- Uses `LIMIT` and `OFFSET` in SQL\n- Simple: `?page=3&size=20` -> `OFFSET 40 LIMIT 20`\n- Problem: Slow for large offsets (DB must skip N rows), inconsistent if data changes between pages\n\n### Cursor-based pagination:\n- Uses a cursor (usually the last item's ID or timestamp) to fetch the next page\n- `?cursor=abc123&size=20` -> `WHERE id > cursor LIMIT 20`\n- Faster: Uses index directly, no skipping\n- Consistent: Not affected by inserts/deletes between pages\n\n### When to use which:\n| Feature | Offset | Cursor |\n|---------|--------|--------|\n| Jump to page N | Yes | No |\n| Total count | Easy | Expensive |\n| Performance at large offsets | Degrades | Constant |\n| Data consistency | Inconsistent | Consistent |\n| Infinite scroll | Possible | Ideal |",
+          "pseudo_code": "# Offset-based\n@app.get(\"/items?page=1&size=20\")\n# SQL: SELECT * FROM items LIMIT 20 OFFSET 0\n\n# Cursor-based\n@app.get(\"/items?cursor=abc123&size=20\")\n# SQL: SELECT * FROM items WHERE id > cursor LIMIT 20",
+          "actual_code": "from fastapi import FastAPI, Query\nfrom pydantic import BaseModel, field_validator\nfrom typing import Generic, TypeVar\nimport base64\nimport json\n\napp = FastAPI()\n\nT = TypeVar(\"T\")\n\n\n# --- Offset-based pagination ---\nclass PaginatedResponse(BaseModel, Generic[T]):\n    items: list[T]\n    total: int\n    page: int\n    size: int\n    pages: int\n\nclass Item(BaseModel):\n    id: int\n    name: str\n\n# Simulated database\nALL_ITEMS = [Item(id=i, name=f\"Item {i}\") for i in range(1, 101)]\n\n@app.get(\"/items/offset\")\nasync def list_items_offset(\n    page: int = Query(1, ge=1, description=\"Page number\"),\n    size: int = Query(20, ge=1, le=100, description=\"Items per page\"),\n) -> PaginatedResponse[Item]:\n    total = len(ALL_ITEMS)\n    start = (page - 1) * size\n    end = start + size\n    items = ALL_ITEMS[start:end]\n\n    return PaginatedResponse(\n        items=items,\n        total=total,\n        page=page,\n        size=size,\n        pages=(total + size - 1) // size,\n    )\n\n\n# --- Cursor-based pagination ---\nclass CursorPage(BaseModel, Generic[T]):\n    items: list[T]\n    next_cursor: str | None\n    has_more: bool\n\ndef encode_cursor(item_id: int) -> str:\n    \"\"\"Encode cursor as base64 for opaqueness.\"\"\"\n    return base64.urlsafe_b64encode(\n        json.dumps({\"id\": item_id}).encode()\n    ).decode()\n\ndef decode_cursor(cursor: str) -> int:\n    \"\"\"Decode cursor to get the last ID.\"\"\"\n    data = json.loads(base64.urlsafe_b64decode(cursor))\n    return data[\"id\"]\n\n@app.get(\"/items/cursor\")\nasync def list_items_cursor(\n    cursor: str | None = Query(None, description=\"Pagination cursor\"),\n    size: int = Query(20, ge=1, le=100),\n) -> CursorPage[Item]:\n    # Determine starting point\n    if cursor:\n        last_id = decode_cursor(cursor)\n        items = [i for i in ALL_ITEMS if i.id > last_id][:size]\n    else:\n        items = ALL_ITEMS[:size]\n\n    # Build next cursor\n    has_more = len(items) == size and items[-1].id < ALL_ITEMS[-1].id\n    next_cursor = encode_cursor(items[-1].id) if has_more else None\n\n    return CursorPage(\n        items=items,\n        next_cursor=next_cursor,\n        has_more=has_more,\n    )\n\n\n# --- SQLAlchemy cursor-based pagination ---\n# from sqlalchemy import select\n# from sqlalchemy.ext.asyncio import AsyncSession\n#\n# async def paginate_cursor(\n#     db: AsyncSession,\n#     cursor: int | None,\n#     size: int,\n# ):\n#     query = select(ItemModel).order_by(ItemModel.id)\n#     if cursor:\n#         query = query.where(ItemModel.id > cursor)\n#     query = query.limit(size + 1)  # Fetch one extra to check has_more\n#\n#     result = await db.execute(query)\n#     items = result.scalars().all()\n#\n#     has_more = len(items) > size\n#     if has_more:\n#         items = items[:size]\n#\n#     return items, has_more",
+          "code_language": "python",
+          "key_points": [
+            "Offset pagination is simple but degrades for large offsets (DB scans all skipped rows)",
+            "Cursor pagination uses an indexed column for constant-time performance",
+            "Encode cursors as opaque base64 strings so clients cannot manipulate them",
+            "Fetch size+1 items to determine has_more without a separate COUNT query"
+          ],
+          "gotchas": [
+            "Offset pagination with OFFSET 1000000 forces the DB to scan and discard 1 million rows",
+            "Cursor pagination cannot jump to arbitrary pages -- only next/previous",
+            "Cursor must be based on a unique, indexed, sortable column (usually primary key or timestamp)",
+            "If the cursor column has duplicates (e.g., created_at), use a composite cursor (created_at + id)"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "**Offset**: `?page=2&size=20` uses SQL `LIMIT/OFFSET`. Simple but slow for large offsets. **Cursor**: `?cursor=abc&size=20` uses `WHERE id > cursor LIMIT 20`. Constant performance, ideal for infinite scroll. Encode cursors as opaque base64.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Query\n\n@app.get(\"/items\")\nasync def list_items(\n    cursor: int | None = Query(None),\n    size: int = Query(20, le=100),\n):\n    query = select(Item).order_by(Item.id)\n    if cursor:\n        query = query.where(Item.id > cursor)\n    query = query.limit(size + 1)\n    items = (await db.execute(query)).scalars().all()\n    has_more = len(items) > size\n    return {\"items\": items[:size], \"has_more\": has_more}",
+          "code_language": "python",
+          "key_points": [
+            "Cursor pagination has constant performance via indexed lookups",
+            "Fetch size+1 to determine has_more without COUNT"
+          ],
+          "gotchas": [
+            "Cursor columns must be unique and indexed -- use composite cursor for non-unique columns"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you use load testing tools (locust, k6) with FastAPI?",
+      "display_order": 9,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "load-testing",
+        "locust",
+        "k6",
+        "performance",
+        "benchmarking"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Load testing simulates many concurrent users to find performance bottlenecks before they hit production.\n\n### Popular tools:\n\n1. **Locust**: Python-based, write test scenarios as Python classes. Has a web UI for real-time monitoring.\n2. **k6**: Go-based, write scripts in JavaScript. Very high performance, supports thousands of VUs.\n3. **wrk/hey**: Simple CLI tools for basic HTTP benchmarking.\n\n### Testing workflow:\n1. Define realistic user scenarios (browse, search, purchase)\n2. Set target metrics (p95 latency < 200ms, throughput > 1000 rps)\n3. Run tests with increasing load\n4. Monitor CPU, memory, DB connections, error rates\n5. Identify bottlenecks and optimize\n\n### Key metrics:\n- **Throughput**: Requests per second (RPS)\n- **Latency**: p50, p95, p99 response times\n- **Error rate**: Percentage of failed requests\n- **Concurrency**: Number of simultaneous connections",
+          "pseudo_code": "# Locust test flow\nclass WebUser(HttpUser):\n    @task(3)\n    def browse_items(self):\n        self.client.get(\"/items\")\n\n    @task(1)\n    def create_order(self):\n        self.client.post(\"/orders\", json={...})\n\n# Run: locust -f test.py --host=http://localhost:8000",
+          "actual_code": "# --- locustfile.py (Locust load test) ---\nfrom locust import HttpUser, task, between, tag\n\nclass FastAPIUser(HttpUser):\n    \"\"\"Simulates a typical user browsing the API.\"\"\"\n    wait_time = between(1, 3)  # 1-3 seconds between requests\n    host = \"http://localhost:8000\"\n\n    def on_start(self):\n        \"\"\"Runs once when a simulated user starts.\"\"\"\n        # Login and store token\n        response = self.client.post(\"/auth/login\", json={\n            \"username\": \"testuser\",\n            \"password\": \"testpass\",\n        })\n        if response.status_code == 200:\n            token = response.json()[\"access_token\"]\n            self.client.headers.update(\n                {\"Authorization\": f\"Bearer {token}\"}\n            )\n\n    @task(5)  # Weight: 5x more likely than other tasks\n    @tag(\"read\")\n    def list_items(self):\n        self.client.get(\"/items?page=1&size=20\")\n\n    @task(3)\n    @tag(\"read\")\n    def get_item_detail(self):\n        item_id = 1  # Use random IDs in real tests\n        self.client.get(f\"/items/{item_id}\")\n\n    @task(1)\n    @tag(\"write\")\n    def create_item(self):\n        self.client.post(\"/items\", json={\n            \"name\": \"Load Test Item\",\n            \"price\": 29.99,\n        })\n\n    @task(2)\n    @tag(\"read\")\n    def search_items(self):\n        self.client.get(\"/items/search?q=widget\")\n\n# Run Locust:\n# locust -f locustfile.py --host=http://localhost:8000\n# Open http://localhost:8089 for web UI\n# CLI mode: locust -f locustfile.py --headless -u 100 -r 10 --run-time 60s\n\n\n# --- k6 load test (load_test.js) ---\n# Install: brew install k6\n#\n# // load_test.js\n# import http from 'k6/http';\n# import { check, sleep } from 'k6';\n#\n# export const options = {\n#   stages: [\n#     { duration: '30s', target: 50 },   // Ramp up to 50 users\n#     { duration: '1m', target: 50 },    // Stay at 50 users\n#     { duration: '30s', target: 100 },  // Ramp up to 100\n#     { duration: '1m', target: 100 },   // Stay at 100\n#     { duration: '30s', target: 0 },    // Ramp down\n#   ],\n#   thresholds: {\n#     http_req_duration: ['p(95)<200'],  // 95% under 200ms\n#     http_req_failed: ['rate<0.01'],    // <1% errors\n#   },\n# };\n#\n# export default function () {\n#   const res = http.get('http://localhost:8000/items');\n#   check(res, {\n#     'status is 200': (r) => r.status === 200,\n#     'response time < 200ms': (r) => r.timings.duration < 200,\n#   });\n#   sleep(1);\n# }\n#\n# Run: k6 run load_test.js\n\n\n# --- Simple benchmark with hey ---\n# Install: brew install hey\n# hey -n 1000 -c 50 http://localhost:8000/items\n# -n: total requests, -c: concurrent requests",
+          "code_language": "python",
+          "key_points": [
+            "Locust uses Python classes for test scenarios with weighted tasks and a web UI",
+            "k6 is higher-performance (Go-based) with built-in threshold assertions",
+            "Test with increasing load to find the breaking point, not just average performance",
+            "Monitor server-side metrics (CPU, memory, DB connections) alongside client-side latency"
+          ],
+          "gotchas": [
+            "Load test against a staging environment, never production, unless using controlled canary traffic",
+            "Locust's Python HTTP client is slower than k6 -- Locust measures user experience, not max throughput",
+            "Warm up caches before benchmarking to avoid measuring cold-start performance",
+            "A single load test machine can become the bottleneck -- distribute across multiple machines for high concurrency"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use **Locust** (Python) for realistic scenario testing with a web UI, or **k6** (Go/JS) for high-performance benchmarking with threshold assertions. Test with increasing load, monitoring both latency and error rates.",
+          "pseudo_code": "",
+          "actual_code": "# locustfile.py\nfrom locust import HttpUser, task, between\n\nclass APIUser(HttpUser):\n    wait_time = between(1, 3)\n\n    @task(5)\n    def list_items(self):\n        self.client.get(\"/items\")\n\n    @task(1)\n    def create_item(self):\n        self.client.post(\"/items\", json={\"name\": \"test\"})\n\n# locust -f locustfile.py --headless -u 100 -r 10 --run-time 60s",
+          "code_language": "python",
+          "key_points": [
+            "Locust: Python-based, web UI, weighted tasks",
+            "k6: Go-based, high performance, threshold assertions"
+          ],
+          "gotchas": [
+            "Load test staging, not production -- and warm caches before benchmarking"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you profile FastAPI applications?",
+      "display_order": 10,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "profiling",
+        "performance",
+        "debugging",
+        "monitoring"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Profiling identifies where your application spends time and memory. Approaches for FastAPI:\n\n### 1. Request timing middleware:\nMeasure total request duration and log slow endpoints.\n\n### 2. cProfile / yappi:\n`cProfile` is Python's built-in profiler. `yappi` supports async/multithreaded profiling.\n\n### 3. py-spy:\nSampling profiler that attaches to a running process -- no code changes needed.\n\n### 4. SQLAlchemy query profiling:\nLog all SQL queries with execution times to find slow queries.\n\n### 5. OpenTelemetry:\nDistributed tracing for end-to-end request visibility across services.\n\n### What to profile:\n- **CPU hotspots**: Functions that consume the most CPU time\n- **Slow I/O**: Database queries, external API calls\n- **Memory**: Growing objects, memory leaks\n- **Concurrency**: Event loop blocking, thread pool exhaustion",
+          "pseudo_code": "# Timing middleware\n@app.middleware(\"http\")\nasync def timing(request, call_next):\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration = time.perf_counter() - start\n    response.headers[\"X-Process-Time\"] = str(duration)\n    return response",
+          "actual_code": "from fastapi import FastAPI, Request\nimport time\nimport logging\nimport cProfile\nimport pstats\nimport io\n\nlogging.basicConfig(level=logging.INFO)\nlogger = logging.getLogger(__name__)\n\napp = FastAPI()\n\n\n# --- 1. Request timing middleware ---\n@app.middleware(\"http\")\nasync def add_process_time(request: Request, call_next):\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration = time.perf_counter() - start\n\n    # Add timing header\n    response.headers[\"X-Process-Time\"] = f\"{duration:.4f}\"\n\n    # Log slow requests\n    if duration > 0.5:\n        logger.warning(\n            f\"Slow request: {request.method} {request.url.path} \"\n            f\"took {duration:.3f}s\"\n        )\n\n    return response\n\n\n# --- 2. SQL query profiling with SQLAlchemy events ---\nfrom sqlalchemy import event, create_engine\n\ndef setup_query_profiling(engine):\n    \"\"\"Log all SQL queries with execution time.\"\"\"\n\n    @event.listens_for(engine, \"before_cursor_execute\")\n    def before_cursor_execute(\n        conn, cursor, statement, parameters, context, executemany\n    ):\n        conn.info[\"query_start\"] = time.perf_counter()\n\n    @event.listens_for(engine, \"after_cursor_execute\")\n    def after_cursor_execute(\n        conn, cursor, statement, parameters, context, executemany\n    ):\n        duration = time.perf_counter() - conn.info[\"query_start\"]\n        if duration > 0.1:  # Log queries slower than 100ms\n            logger.warning(\n                f\"Slow query ({duration:.3f}s): {statement[:200]}\"\n            )\n\n\n# --- 3. cProfile endpoint (development only) ---\n@app.get(\"/debug/profile\")\nasync def profile_endpoint():\n    \"\"\"Profile a code path and return results.\"\"\"\n    profiler = cProfile.Profile()\n    profiler.enable()\n\n    # Code to profile\n    result = sum(i * i for i in range(100000))\n\n    profiler.disable()\n\n    # Format results\n    stream = io.StringIO()\n    stats = pstats.Stats(profiler, stream=stream)\n    stats.sort_stats(\"cumulative\")\n    stats.print_stats(20)\n\n    return {\"result\": result, \"profile\": stream.getvalue()}\n\n\n# --- 4. Memory profiling ---\n# pip install tracemalloc (built-in) or memory_profiler\nimport tracemalloc\n\n@app.get(\"/debug/memory\")\nasync def memory_snapshot():\n    \"\"\"Get current memory allocation snapshot.\"\"\"\n    if not tracemalloc.is_tracing():\n        tracemalloc.start()\n\n    snapshot = tracemalloc.take_snapshot()\n    top_stats = snapshot.statistics(\"lineno\")\n\n    return {\n        \"top_allocations\": [\n            {\"file\": str(stat.traceback), \"size_kb\": stat.size / 1024}\n            for stat in top_stats[:10]\n        ],\n        \"current_mb\": tracemalloc.get_traced_memory()[0] / 1024 / 1024,\n        \"peak_mb\": tracemalloc.get_traced_memory()[1] / 1024 / 1024,\n    }\n\n\n# --- 5. py-spy (external, no code changes) ---\n# Attach to running Uvicorn process:\n# py-spy top --pid <uvicorn_pid>\n# py-spy record -o profile.svg --pid <uvicorn_pid>\n# Opens a flame graph in the browser\n\n\n@app.get(\"/items\")\nasync def list_items():\n    # Simulated slow endpoint for profiling\n    import asyncio\n    await asyncio.sleep(0.1)\n    return {\"items\": list(range(100))}",
+          "code_language": "python",
+          "key_points": [
+            "Timing middleware measures request duration and logs slow endpoints",
+            "SQLAlchemy events track individual query execution times",
+            "py-spy attaches to running processes with zero code changes",
+            "tracemalloc identifies memory allocation hotspots"
+          ],
+          "gotchas": [
+            "cProfile and debug endpoints must NEVER be exposed in production",
+            "Profiling adds overhead -- do not leave it enabled in production",
+            "py-spy requires the same user (or root) as the target process",
+            "Async profiling with cProfile misses time spent awaiting I/O -- use yappi for async-aware profiling"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Use timing middleware to log slow requests, SQLAlchemy events for query profiling, `py-spy` for zero-code flame graphs, and `tracemalloc` for memory analysis. Never expose profiling endpoints in production.",
+          "pseudo_code": "",
+          "actual_code": "@app.middleware(\"http\")\nasync def timing(request: Request, call_next):\n    start = time.perf_counter()\n    response = await call_next(request)\n    duration = time.perf_counter() - start\n    response.headers[\"X-Process-Time\"] = f\"{duration:.4f}\"\n    if duration > 0.5:\n        logger.warning(f\"Slow: {request.url.path} {duration:.3f}s\")\n    return response",
+          "code_language": "python",
+          "key_points": [
+            "Timing middleware catches slow endpoints automatically",
+            "py-spy creates flame graphs without code changes"
+          ],
+          "gotchas": [
+            "cProfile misses async await time -- use yappi for async profiling"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you optimize Pydantic model serialization?",
+      "display_order": 11,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "pydantic",
+        "serialization",
+        "performance",
+        "optimization"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Pydantic v2 (used by modern FastAPI) is significantly faster than v1 thanks to its Rust-based core (`pydantic-core`). However, there are still optimization opportunities:\n\n### Pydantic v2 performance features:\n- **Rust-based core**: 5-50x faster validation/serialization than v1\n- **model_dump()**: Replaces `.dict()` (deprecated). Use `mode=\"json\"` for JSON-compatible output.\n- **model_validate()**: Replaces `parse_obj()`. Faster than constructing via `__init__`.\n\n### Optimization strategies:\n\n1. **Exclude unused fields**: `model_dump(exclude={\"password\"})` avoids serializing sensitive/unnecessary fields\n2. **Use response_model_exclude**: Let FastAPI exclude fields at the route level\n3. **Avoid nested model creation**: Use `model_construct()` for trusted data (skips validation)\n4. **Use TypeAdapter**: For validating/serializing non-model types (lists, dicts)\n5. **Minimize computed fields**: `@computed_field` runs on every serialization",
+          "pseudo_code": "# Fast: skip validation for trusted data\nuser = User.model_construct(id=1, name=\"Alice\")\n\n# Efficient: exclude fields at serialization\nuser.model_dump(exclude={\"password\", \"internal_id\"})\n\n# Bulk: TypeAdapter for lists\nfrom pydantic import TypeAdapter\nadapter = TypeAdapter(list[User])\nresult = adapter.validate_python(raw_data)",
+          "actual_code": "from fastapi import FastAPI\nfrom pydantic import BaseModel, Field, computed_field, TypeAdapter\nfrom pydantic import field_validator, ConfigDict\nimport time\n\napp = FastAPI()\n\n\n# --- Model with optimization-friendly design ---\nclass UserDB(BaseModel):\n    \"\"\"Internal model with all fields.\"\"\"\n    model_config = ConfigDict(from_attributes=True)\n\n    id: int\n    name: str\n    email: str\n    hashed_password: str\n    is_admin: bool = False\n\n\nclass UserResponse(BaseModel):\n    \"\"\"Public response model -- excludes sensitive fields.\"\"\"\n    id: int\n    name: str\n    email: str\n\n\n# --- 1. response_model excludes fields automatically ---\n@app.get(\"/users/{user_id}\", response_model=UserResponse)\nasync def get_user(user_id: int):\n    # Returns full object, FastAPI serializes only UserResponse fields\n    return UserDB(\n        id=user_id,\n        name=\"Alice\",\n        email=\"alice@example.com\",\n        hashed_password=\"$2b$12$...\",\n        is_admin=True,\n    )\n\n\n# --- 2. model_construct for trusted data (skips validation) ---\n@app.get(\"/users/fast/{user_id}\")\nasync def get_user_fast(user_id: int):\n    # Data from DB is already validated -- skip re-validation\n    user = UserResponse.model_construct(\n        id=user_id,\n        name=\"Alice\",\n        email=\"alice@example.com\",\n    )\n    return user\n\n\n# --- 3. TypeAdapter for bulk operations ---\nuser_list_adapter = TypeAdapter(list[UserResponse])\n\n@app.get(\"/users\")\nasync def list_users():\n    # Simulated DB results\n    raw_users = [\n        {\"id\": i, \"name\": f\"User {i}\", \"email\": f\"user{i}@example.com\"}\n        for i in range(100)\n    ]\n    # TypeAdapter is faster than [UserResponse(**u) for u in raw_users]\n    users = user_list_adapter.validate_python(raw_users)\n    return user_list_adapter.dump_python(users, mode=\"json\")\n\n\n# --- 4. model_dump with include/exclude ---\nclass DetailedUser(BaseModel):\n    id: int\n    name: str\n    email: str\n    bio: str\n    settings: dict\n    login_history: list[str]\n\n@app.get(\"/users/{user_id}/summary\")\nasync def user_summary(user_id: int):\n    user = DetailedUser(\n        id=user_id,\n        name=\"Alice\",\n        email=\"alice@example.com\",\n        bio=\"A long bio...\",\n        settings={\"theme\": \"dark\", \"lang\": \"en\"},\n        login_history=[\"2024-01-01\", \"2024-01-02\"],\n    )\n    # Only serialize needed fields\n    return user.model_dump(include={\"id\", \"name\", \"email\"})\n\n\n# --- 5. Benchmarking serialization ---\ndef benchmark():\n    user = UserResponse(id=1, name=\"Alice\", email=\"alice@example.com\")\n\n    start = time.perf_counter()\n    for _ in range(100_000):\n        user.model_dump(mode=\"json\")\n    elapsed = time.perf_counter() - start\n    print(f\"model_dump: {elapsed:.3f}s for 100k iterations\")\n\n    start = time.perf_counter()\n    for _ in range(100_000):\n        UserResponse.model_construct(id=1, name=\"Alice\", email=\"alice@example.com\")\n    elapsed = time.perf_counter() - start\n    print(f\"model_construct: {elapsed:.3f}s for 100k iterations\")\n\n# benchmark()\n# Expected Output:\n# model_dump: ~0.150s for 100k iterations\n# model_construct: ~0.050s for 100k iterations",
+          "code_language": "python",
+          "key_points": [
+            "Pydantic v2's Rust core is 5-50x faster than v1 out of the box",
+            "model_construct() skips validation for trusted data (DB results)",
+            "TypeAdapter is more efficient than list comprehensions for bulk validation",
+            "Use response_model or include/exclude to avoid serializing unnecessary fields"
+          ],
+          "gotchas": [
+            "model_construct() skips ALL validation -- corrupted data will silently pass through",
+            "model_dump(mode='json') converts datetime/UUID to strings; default mode keeps Python types",
+            "Computed fields run on every serialization -- cache expensive computations",
+            "Do not use .dict() or .json() -- they are deprecated in Pydantic v2, use model_dump() and model_dump_json()"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Pydantic v2 is fast by default (Rust core). Optimize further with `model_construct()` (skip validation for trusted data), `TypeAdapter` for bulk operations, and `include/exclude` in `model_dump()` to skip unnecessary fields.",
+          "pseudo_code": "",
+          "actual_code": "from pydantic import BaseModel, TypeAdapter\n\nclass User(BaseModel):\n    id: int\n    name: str\n    email: str\n\n# Skip validation for trusted DB data\nuser = User.model_construct(id=1, name=\"Alice\", email=\"a@b.com\")\n\n# Bulk validation\nadapter = TypeAdapter(list[User])\nusers = adapter.validate_python(raw_db_rows)",
+          "code_language": "python",
+          "key_points": [
+            "model_construct() skips validation for trusted data",
+            "TypeAdapter is efficient for bulk list validation"
+          ],
+          "gotchas": [
+            "model_construct() provides no validation -- corrupted data passes silently"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement response caching with ETags?",
+      "display_order": 12,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "etag",
+        "caching",
+        "http",
+        "conditional-requests"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "**ETags** (Entity Tags) enable **conditional requests** where the server only sends the response body if the data has changed. This saves bandwidth and reduces server load.\n\n### How ETags work:\n1. Server computes a hash of the response body and sends it as `ETag` header\n2. Client stores the ETag and sends it as `If-None-Match` on subsequent requests\n3. Server compares ETags: if they match, return **304 Not Modified** (no body)\n4. If they differ, return the full response with the new ETag\n\n### ETag types:\n- **Strong ETag**: `\"abc123\"` -- byte-for-byte identical\n- **Weak ETag**: `W/\"abc123\"` -- semantically equivalent but may differ in formatting\n\n### Benefits:\n- Reduces bandwidth (304 has no body)\n- Clients can cache aggressively\n- Works with CDNs and reverse proxies\n- No server-side cache storage needed (unlike Redis)",
+          "pseudo_code": "import hashlib\n\n@app.get(\"/resource\")\nasync def get_resource(request):\n    data = fetch_data()\n    etag = hashlib.md5(json.dumps(data).encode()).hexdigest()\n\n    if request.headers.get(\"if-none-match\") == etag:\n        return Response(status_code=304)\n\n    response = JSONResponse(data)\n    response.headers[\"ETag\"] = etag\n    return response",
+          "actual_code": "from fastapi import FastAPI, Request, Response\nfrom fastapi.responses import JSONResponse\nimport hashlib\nimport json\n\napp = FastAPI()\n\n\ndef compute_etag(data: dict | list) -> str:\n    \"\"\"Compute a strong ETag from response data.\"\"\"\n    content = json.dumps(data, sort_keys=True)\n    return f'\"{hashlib.md5(content.encode()).hexdigest()}\"'\n\n\n# --- Basic ETag implementation ---\n@app.get(\"/items\")\nasync def list_items(request: Request):\n    # Fetch data (from DB, cache, etc.)\n    items = [\n        {\"id\": 1, \"name\": \"Widget\", \"price\": 9.99},\n        {\"id\": 2, \"name\": \"Gadget\", \"price\": 19.99},\n    ]\n\n    etag = compute_etag(items)\n\n    # Check If-None-Match header\n    if_none_match = request.headers.get(\"if-none-match\")\n    if if_none_match == etag:\n        return Response(status_code=304)\n\n    response = JSONResponse(content={\"items\": items})\n    response.headers[\"ETag\"] = etag\n    response.headers[\"Cache-Control\"] = \"max-age=0, must-revalidate\"\n    return response\n\n\n# --- ETag middleware for automatic handling ---\nfrom starlette.middleware.base import BaseHTTPMiddleware\n\nclass ETagMiddleware(BaseHTTPMiddleware):\n    \"\"\"Automatically adds ETags and handles conditional requests.\"\"\"\n\n    async def dispatch(self, request: Request, call_next):\n        response = await call_next(request)\n\n        # Only for GET requests with JSON responses\n        if (\n            request.method != \"GET\"\n            or \"application/json\" not in response.headers.get(\n                \"content-type\", \"\"\n            )\n        ):\n            return response\n\n        # Read response body\n        body = b\"\"\n        async for chunk in response.body_iterator:\n            body += chunk if isinstance(chunk, bytes) else chunk.encode()\n\n        # Compute ETag\n        etag = f'\"{hashlib.md5(body).hexdigest()}\"'\n\n        # Check If-None-Match\n        if_none_match = request.headers.get(\"if-none-match\")\n        if if_none_match == etag:\n            return Response(status_code=304, headers={\"ETag\": etag})\n\n        # Return response with ETag\n        return Response(\n            content=body,\n            status_code=response.status_code,\n            headers={**dict(response.headers), \"ETag\": etag},\n            media_type=response.media_type,\n        )\n\n\n# app.add_middleware(ETagMiddleware)\n\n\n# --- Version-based ETag (DB record) ---\n@app.get(\"/users/{user_id}\")\nasync def get_user(user_id: int, request: Request):\n    # Use DB version/updated_at as ETag instead of hashing\n    user = {\"id\": user_id, \"name\": \"Alice\", \"version\": 5}\n    etag = f'\"user-{user_id}-v{user[\"version\"]}\"'\n\n    if request.headers.get(\"if-none-match\") == etag:\n        return Response(status_code=304)\n\n    response = JSONResponse(content=user)\n    response.headers[\"ETag\"] = etag\n    return response\n\n\n# Test with curl:\n# First request:\n#   curl -v http://localhost:8000/items\n#   → 200 with ETag: \"abc123\"\n#\n# Second request with ETag:\n#   curl -v -H 'If-None-Match: \"abc123\"' http://localhost:8000/items\n#   → 304 Not Modified (no body)",
+          "code_language": "python",
+          "key_points": [
+            "ETags enable conditional requests -- server returns 304 Not Modified when data has not changed",
+            "Compute ETags from content hash or database version numbers",
+            "304 responses have no body, saving bandwidth for unchanged resources",
+            "ETag middleware can automate the pattern for all JSON endpoints"
+          ],
+          "gotchas": [
+            "ETag values must be quoted strings per HTTP spec -- use double quotes",
+            "MD5 hashing the entire response body can be slow for large payloads -- use version-based ETags instead",
+            "ETag middleware buffers the full response body, defeating the purpose of StreamingResponse",
+            "POST/PUT/DELETE responses should not use ETags -- they are for cacheable GET responses"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "ETags let the server return `304 Not Modified` when data has not changed. Compute a hash of the response, send it as `ETag` header. On subsequent requests, compare `If-None-Match` with the current ETag.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, Request, Response\nfrom fastapi.responses import JSONResponse\nimport hashlib, json\n\n@app.get(\"/items\")\nasync def list_items(request: Request):\n    data = {\"items\": [{\"id\": 1}]}\n    etag = f'\"{hashlib.md5(json.dumps(data).encode()).hexdigest()}\"'\n    if request.headers.get(\"if-none-match\") == etag:\n        return Response(status_code=304)\n    resp = JSONResponse(data)\n    resp.headers[\"ETag\"] = etag\n    return resp",
+          "code_language": "python",
+          "key_points": [
+            "304 Not Modified saves bandwidth when data is unchanged",
+            "Use content hash or DB version as ETag value"
+          ],
+          "gotchas": [
+            "ETag values must be quoted strings per HTTP spec"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you handle large file uploads efficiently?",
+      "display_order": 13,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "file-upload",
+        "streaming",
+        "memory",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Handling large file uploads requires streaming the file to disk or object storage without loading the entire file into memory.\n\n### FastAPI file handling options:\n\n1. **`UploadFile`**: Starlette's UploadFile uses a SpooledTemporaryFile that writes to memory for small files (< 1MB) and spills to disk for larger files.\n\n2. **Streaming to disk**: Read the upload in chunks and write directly to a file.\n\n3. **Streaming to object storage**: Stream chunks directly to S3/GCS without local storage.\n\n### Key parameters:\n- `UploadFile.read(size)`: Read `size` bytes at a time\n- `UploadFile.file`: Access the underlying SpooledTemporaryFile\n- `Request.stream()`: Raw ASGI stream for maximum control\n\n### Size limits:\n- Uvicorn default: No explicit limit (limited by memory/disk)\n- Use middleware or reverse proxy (Nginx `client_max_body_size`) to enforce limits\n- Validate file size in the endpoint before processing",
+          "pseudo_code": "# Chunked upload to disk\n@app.post(\"/upload\")\nasync def upload(file: UploadFile):\n    with open(f\"uploads/{file.filename}\", \"wb\") as f:\n        while chunk := await file.read(1024 * 1024):\n            f.write(chunk)\n    return {\"filename\": file.filename}",
+          "actual_code": "from fastapi import FastAPI, UploadFile, HTTPException, Request\nfrom fastapi.responses import JSONResponse\nimport os\nimport hashlib\nimport aiofiles\n\napp = FastAPI()\n\nUPLOAD_DIR = \"/tmp/uploads\"\nos.makedirs(UPLOAD_DIR, exist_ok=True)\nMAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB\n\n\n# --- 1. Chunked upload to disk (memory-efficient) ---\n@app.post(\"/upload\")\nasync def upload_file(file: UploadFile):\n    # Validate file type\n    allowed_types = {\"image/jpeg\", \"image/png\", \"application/pdf\"}\n    if file.content_type not in allowed_types:\n        raise HTTPException(400, f\"File type {file.content_type} not allowed\")\n\n    file_path = os.path.join(UPLOAD_DIR, file.filename)\n    file_size = 0\n    file_hash = hashlib.sha256()\n\n    # Stream to disk in 1MB chunks\n    async with aiofiles.open(file_path, \"wb\") as f:\n        while chunk := await file.read(1024 * 1024):  # 1MB chunks\n            file_size += len(chunk)\n            if file_size > MAX_FILE_SIZE:\n                os.unlink(file_path)  # Clean up partial file\n                raise HTTPException(413, \"File too large\")\n            file_hash.update(chunk)\n            await f.write(chunk)\n\n    return {\n        \"filename\": file.filename,\n        \"size_mb\": round(file_size / 1024 / 1024, 2),\n        \"sha256\": file_hash.hexdigest(),\n    }\n\n\n# --- 2. Multiple file upload ---\n@app.post(\"/upload/multiple\")\nasync def upload_multiple(files: list[UploadFile]):\n    results = []\n    for file in files:\n        file_path = os.path.join(UPLOAD_DIR, file.filename)\n        async with aiofiles.open(file_path, \"wb\") as f:\n            content = await file.read()\n            await f.write(content)\n        results.append({\n            \"filename\": file.filename,\n            \"size\": len(content),\n        })\n    return {\"uploaded\": results}\n\n\n# --- 3. Raw streaming for maximum control ---\n@app.post(\"/upload/stream\")\nasync def stream_upload(request: Request):\n    \"\"\"Stream raw request body without UploadFile parsing.\"\"\"\n    content_length = int(request.headers.get(\"content-length\", 0))\n    if content_length > MAX_FILE_SIZE:\n        raise HTTPException(413, \"File too large\")\n\n    file_path = os.path.join(UPLOAD_DIR, \"streamed_file.bin\")\n    total_bytes = 0\n\n    async with aiofiles.open(file_path, \"wb\") as f:\n        async for chunk in request.stream():\n            total_bytes += len(chunk)\n            if total_bytes > MAX_FILE_SIZE:\n                os.unlink(file_path)\n                raise HTTPException(413, \"File too large\")\n            await f.write(chunk)\n\n    return {\"size_bytes\": total_bytes}\n\n\n# --- 4. Upload with progress tracking ---\n@app.post(\"/upload/progress\")\nasync def upload_with_progress(file: UploadFile):\n    total_size = file.size  # May be None if not provided\n    received = 0\n    file_path = os.path.join(UPLOAD_DIR, file.filename)\n\n    async with aiofiles.open(file_path, \"wb\") as f:\n        while chunk := await file.read(1024 * 1024):\n            received += len(chunk)\n            await f.write(chunk)\n            if total_size:\n                progress = (received / total_size) * 100\n                # In production, push progress via WebSocket or SSE\n\n    return {\n        \"filename\": file.filename,\n        \"size_bytes\": received,\n    }",
+          "code_language": "python",
+          "key_points": [
+            "Read uploads in chunks (1MB) to keep memory usage constant regardless of file size",
+            "UploadFile automatically spills to disk for files > 1MB (SpooledTemporaryFile)",
+            "Validate file type and size early to reject bad uploads quickly",
+            "Use aiofiles for async disk I/O to avoid blocking the event loop"
+          ],
+          "gotchas": [
+            "UploadFile.read() without a size argument loads the ENTIRE file into memory",
+            "file.size may be None if the client does not send Content-Length",
+            "Nginx default client_max_body_size is 1MB -- increase it for large uploads",
+            "Always clean up partial files when rejecting an upload mid-stream"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Read uploads in chunks with `await file.read(1024 * 1024)` to avoid loading the entire file into memory. Validate type and size early. Use `aiofiles` for async disk writes.",
+          "pseudo_code": "",
+          "actual_code": "from fastapi import FastAPI, UploadFile, HTTPException\nimport aiofiles\n\n@app.post(\"/upload\")\nasync def upload(file: UploadFile):\n    async with aiofiles.open(f\"/tmp/{file.filename}\", \"wb\") as f:\n        while chunk := await file.read(1024 * 1024):\n            await f.write(chunk)\n    return {\"filename\": file.filename}",
+          "code_language": "python",
+          "key_points": [
+            "Read in chunks to keep memory constant",
+            "UploadFile spills to disk for files > 1MB"
+          ],
+          "gotchas": [
+            "file.read() without size loads the entire file into memory"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you optimize database queries in FastAPI?",
+      "display_order": 14,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "database",
+        "sqlalchemy",
+        "query-optimization",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "Database queries are usually the biggest performance bottleneck in web applications. Optimizations fall into several categories:\n\n### 1. Select only needed columns:\nFetch specific columns instead of entire rows to reduce data transfer and memory usage.\n\n### 2. Use indexes effectively:\nEnsure queries use indexes by checking execution plans with `EXPLAIN ANALYZE`.\n\n### 3. Batch operations:\nUse bulk inserts/updates instead of individual statements.\n\n### 4. Async queries:\nUse async SQLAlchemy with `asyncpg` or `aiosqlite` to avoid blocking the event loop.\n\n### 5. Read replicas:\nRoute read queries to replicas to distribute load.\n\n### 6. Denormalization:\nFor read-heavy endpoints, denormalize data to avoid complex JOINs.\n\n### 7. Query result caching:\nCache frequently accessed, rarely changed data in Redis or in-memory.",
+          "pseudo_code": "# Select only needed columns\nresult = await db.execute(\n    select(User.id, User.name)  # Not select(User)\n)\n\n# Bulk insert instead of loop\nawait db.execute(\n    insert(Item),\n    [{\"name\": f\"item_{i}\"} for i in range(1000)]\n)",
+          "actual_code": "from sqlalchemy import select, insert, text, func, Index\nfrom sqlalchemy.ext.asyncio import AsyncSession\nfrom sqlalchemy.orm import (\n    DeclarativeBase,\n    Mapped,\n    mapped_column,\n    selectinload,\n)\nfrom fastapi import FastAPI, Depends\nfrom typing import Annotated\nfrom datetime import datetime\n\n\nclass Base(DeclarativeBase):\n    pass\n\nclass Product(Base):\n    __tablename__ = \"products\"\n    id: Mapped[int] = mapped_column(primary_key=True)\n    name: Mapped[str] = mapped_column(index=True)\n    category: Mapped[str] = mapped_column(index=True)\n    price: Mapped[float]\n    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)\n\n    # Composite index for common query patterns\n    __table_args__ = (\n        Index(\"ix_category_price\", \"category\", \"price\"),\n    )\n\n\napp = FastAPI()\n\n\n# --- 1. Select only needed columns ---\n@app.get(\"/products/list\")\nasync def list_products(db: Annotated[AsyncSession, Depends(get_db)]):\n    # GOOD: Fetch only id and name\n    result = await db.execute(\n        select(Product.id, Product.name)\n    )\n    return [{\"id\": r.id, \"name\": r.name} for r in result]\n\n    # BAD: Fetches ALL columns including large text fields\n    # result = await db.execute(select(Product))\n\n\n# --- 2. Efficient filtering with indexes ---\n@app.get(\"/products/search\")\nasync def search_products(\n    db: Annotated[AsyncSession, Depends(get_db)],\n    category: str = \"electronics\",\n    max_price: float = 100.0,\n):\n    # Uses composite index (category, price)\n    result = await db.execute(\n        select(Product)\n        .where(Product.category == category)\n        .where(Product.price <= max_price)\n        .order_by(Product.price)\n        .limit(50)\n    )\n    return result.scalars().all()\n\n\n# --- 3. Bulk insert (much faster than individual inserts) ---\n@app.post(\"/products/bulk\")\nasync def bulk_create(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    products = [\n        {\"name\": f\"Product {i}\", \"category\": \"bulk\", \"price\": i * 1.5}\n        for i in range(1000)\n    ]\n    # Single statement instead of 1000 individual inserts\n    await db.execute(insert(Product), products)\n    await db.commit()\n    return {\"inserted\": len(products)}\n\n\n# --- 4. Aggregation at database level ---\n@app.get(\"/products/stats\")\nasync def product_stats(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    # Do aggregation in the database, not Python\n    result = await db.execute(\n        select(\n            Product.category,\n            func.count(Product.id).label(\"count\"),\n            func.avg(Product.price).label(\"avg_price\"),\n            func.min(Product.price).label(\"min_price\"),\n            func.max(Product.price).label(\"max_price\"),\n        ).group_by(Product.category)\n    )\n    return [\n        {\n            \"category\": r.category,\n            \"count\": r.count,\n            \"avg_price\": round(float(r.avg_price), 2),\n        }\n        for r in result\n    ]\n\n\n# --- 5. Exists check (faster than count) ---\n@app.get(\"/products/{product_id}/exists\")\nasync def product_exists(\n    product_id: int,\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    # GOOD: EXISTS stops at first match\n    result = await db.execute(\n        select(\n            select(Product).where(Product.id == product_id).exists()\n        )\n    )\n    return {\"exists\": result.scalar()}\n\n    # BAD: COUNT scans all matching rows\n    # result = await db.execute(\n    #     select(func.count()).where(Product.id == product_id)\n    # )\n\n\n# --- 6. EXPLAIN ANALYZE for query plans ---\n@app.get(\"/debug/explain\")\nasync def explain_query(\n    db: Annotated[AsyncSession, Depends(get_db)],\n):\n    # PostgreSQL only\n    result = await db.execute(\n        text(\n            \"EXPLAIN ANALYZE SELECT * FROM products \"\n            \"WHERE category = 'electronics' AND price < 50\"\n        )\n    )\n    return {\"plan\": [row[0] for row in result]}",
+          "code_language": "python",
+          "key_points": [
+            "Select only the columns you need -- avoid fetching entire rows",
+            "Use composite indexes that match your query patterns",
+            "Bulk insert/update is orders of magnitude faster than individual operations",
+            "Do aggregation (COUNT, AVG, SUM) in the database, not Python"
+          ],
+          "gotchas": [
+            "Adding too many indexes slows down writes -- only index columns used in WHERE/ORDER BY",
+            "EXPLAIN ANALYZE actually executes the query -- use EXPLAIN alone for production checks",
+            "ORM .all() loads everything into memory -- use .yield_per() or streaming for large result sets",
+            "Composite index (a, b) works for queries on (a) or (a, b) but NOT (b) alone"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Select only needed columns, use composite indexes matching query patterns, batch bulk operations, and do aggregation in SQL not Python. Use `EXPLAIN ANALYZE` to verify queries use indexes.",
+          "pseudo_code": "",
+          "actual_code": "# Select only needed columns\nresult = await db.execute(select(Product.id, Product.name))\n\n# Bulk insert (1 query instead of 1000)\nawait db.execute(insert(Product), [{\"name\": f\"p{i}\"} for i in range(1000)])\n\n# Aggregate in DB, not Python\nresult = await db.execute(\n    select(Product.category, func.count(Product.id))\n    .group_by(Product.category)\n)",
+          "code_language": "python",
+          "key_points": [
+            "Select specific columns, not entire rows",
+            "Bulk operations are orders of magnitude faster"
+          ],
+          "gotchas": [
+            "Too many indexes slow writes -- only index columns used in WHERE/ORDER BY"
+          ]
+        }
+      ]
+    },
+    {
+      "title": "How do you implement connection pooling for external services?",
+      "display_order": 15,
+      "difficulty": "advanced",
+      "tags": [
+        "fastapi",
+        "connection-pooling",
+        "httpx",
+        "external-api",
+        "performance"
+      ],
+      "answers": [
+        {
+          "mode": "detailed",
+          "explanation": "When your FastAPI app calls external services (REST APIs, gRPC, etc.), creating a new HTTP connection per request is wasteful. **Connection pooling** reuses TCP connections across requests.\n\n### How HTTP connection pooling works:\n1. First request to a host opens a TCP connection (+ TLS handshake)\n2. After the response, the connection is kept alive (not closed)\n3. Subsequent requests reuse the existing connection\n4. Idle connections are closed after a timeout\n\n### Key libraries:\n- **httpx.AsyncClient**: Async HTTP client with built-in connection pooling\n- **aiohttp.ClientSession**: Alternative async HTTP client\n\n### Configuration:\n- `max_connections`: Total connections across all hosts\n- `max_keepalive_connections`: Idle connections to keep open\n- `keepalive_expiry`: Seconds before closing idle connections\n- `timeout`: Request timeout to prevent hung connections\n\n### Architecture:\n- Create the client once in lifespan\n- Store on `app.state`\n- Share across all requests via dependency injection\n- Close on shutdown",
+          "pseudo_code": "@asynccontextmanager\nasync def lifespan(app):\n    app.state.http = httpx.AsyncClient(\n        limits=httpx.Limits(max_connections=100),\n        timeout=30.0,\n    )\n    yield\n    await app.state.http.aclose()\n\nasync def get_http(request):\n    return request.app.state.http\n\n@app.get(\"/proxy\")\nasync def proxy(http=Depends(get_http)):\n    resp = await http.get(\"https://api.example.com/data\")\n    return resp.json()",
+          "actual_code": "from contextlib import asynccontextmanager\nfrom fastapi import FastAPI, Depends, Request\nfrom typing import Annotated\nimport httpx\nimport logging\n\nlogger = logging.getLogger(__name__)\n\n\n@asynccontextmanager\nasync def lifespan(app: FastAPI):\n    # Create shared HTTP client with connection pooling\n    client = httpx.AsyncClient(\n        # Connection pool limits\n        limits=httpx.Limits(\n            max_connections=100,          # Max total connections\n            max_keepalive_connections=20, # Max idle connections\n            keepalive_expiry=30,          # Close idle after 30s\n        ),\n        # Timeouts\n        timeout=httpx.Timeout(\n            connect=5.0,    # TCP connection timeout\n            read=30.0,      # Read timeout\n            write=10.0,     # Write timeout\n            pool=10.0,      # Wait for pool connection\n        ),\n        # Default headers for all requests\n        headers={\n            \"User-Agent\": \"MyFastAPIApp/1.0\",\n            \"Accept\": \"application/json\",\n        },\n        # Enable HTTP/2\n        http2=True,\n        # Follow redirects\n        follow_redirects=True,\n    )\n    app.state.http_client = client\n    logger.info(\"HTTP client pool initialized\")\n    yield\n    await client.aclose()\n    logger.info(\"HTTP client pool closed\")\n\n\napp = FastAPI(lifespan=lifespan)\n\n\n# Dependency to access the shared client\nasync def get_http_client(request: Request) -> httpx.AsyncClient:\n    return request.app.state.http_client\n\n\n@app.get(\"/github/{username}\")\nasync def github_profile(\n    username: str,\n    client: Annotated[httpx.AsyncClient, Depends(get_http_client)],\n):\n    \"\"\"Reuses pooled connection to GitHub API.\"\"\"\n    response = await client.get(\n        f\"https://api.github.com/users/{username}\"\n    )\n    response.raise_for_status()\n    data = response.json()\n    return {\"name\": data[\"name\"], \"repos\": data[\"public_repos\"]}\n\n\n# --- Multiple service clients ---\nclass ExternalServices:\n    \"\"\"Manages connection pools for multiple external services.\"\"\"\n\n    def __init__(self):\n        self.payment_client: httpx.AsyncClient | None = None\n        self.notification_client: httpx.AsyncClient | None = None\n\n    async def startup(self):\n        # Separate pool per service for isolation\n        self.payment_client = httpx.AsyncClient(\n            base_url=\"https://payments.example.com\",\n            limits=httpx.Limits(max_connections=50),\n            timeout=httpx.Timeout(60.0),  # Payments can be slow\n            headers={\"X-API-Key\": \"payment-key\"},\n        )\n        self.notification_client = httpx.AsyncClient(\n            base_url=\"https://notify.example.com\",\n            limits=httpx.Limits(max_connections=20),\n            timeout=httpx.Timeout(10.0),  # Notifications should be fast\n            headers={\"X-API-Key\": \"notify-key\"},\n        )\n\n    async def shutdown(self):\n        if self.payment_client:\n            await self.payment_client.aclose()\n        if self.notification_client:\n            await self.notification_client.aclose()\n\n\nservices = ExternalServices()\n\n@asynccontextmanager\nasync def multi_service_lifespan(app: FastAPI):\n    await services.startup()\n    app.state.services = services\n    yield\n    await services.shutdown()\n\n\n# --- Retry with backoff ---\nasync def resilient_request(\n    client: httpx.AsyncClient,\n    method: str,\n    url: str,\n    max_retries: int = 3,\n    **kwargs,\n) -> httpx.Response:\n    \"\"\"HTTP request with retry logic.\"\"\"\n    import asyncio\n    for attempt in range(max_retries):\n        try:\n            response = await client.request(method, url, **kwargs)\n            response.raise_for_status()\n            return response\n        except (httpx.ConnectError, httpx.ReadTimeout) as e:\n            if attempt == max_retries - 1:\n                raise\n            wait = 2 ** attempt\n            logger.warning(f\"Retry {attempt + 1}/{max_retries} after {wait}s: {e}\")\n            await asyncio.sleep(wait)\n    raise httpx.RequestError(\"Max retries exceeded\")",
+          "code_language": "python",
+          "key_points": [
+            "Create httpx.AsyncClient once in lifespan -- it pools TCP connections automatically",
+            "Separate clients per external service provide isolation (different timeouts, limits, auth)",
+            "HTTP/2 multiplexing allows multiple requests on a single connection",
+            "Always aclose() the client on shutdown to release pooled connections"
+          ],
+          "gotchas": [
+            "Creating a new httpx.AsyncClient per request defeats connection pooling entirely",
+            "Pool timeout errors mean all connections are in use -- increase max_connections or optimize request throughput",
+            "DNS changes are not picked up by pooled connections -- set keepalive_expiry to force reconnection",
+            "base_url on the client overrides the URL scheme/host -- relative URLs then work like a browser"
+          ]
+        },
+        {
+          "mode": "quick",
+          "explanation": "Create a single `httpx.AsyncClient` in lifespan and share it via `app.state`. It automatically pools TCP connections, reusing them across requests. Configure `Limits` for pool size and `Timeout` for safety.",
+          "pseudo_code": "",
+          "actual_code": "import httpx\nfrom contextlib import asynccontextmanager\n\n@asynccontextmanager\nasync def lifespan(app):\n    app.state.http = httpx.AsyncClient(\n        limits=httpx.Limits(max_connections=100),\n        timeout=30.0,\n    )\n    yield\n    await app.state.http.aclose()\n\n@app.get(\"/proxy\")\nasync def proxy(client=Depends(get_http)):\n    r = await client.get(\"https://api.example.com/data\")\n    return r.json()",
+          "code_language": "python",
+          "key_points": [
+            "Create client once in lifespan, share via app.state",
+            "httpx.AsyncClient pools connections automatically"
+          ],
+          "gotchas": [
+            "Creating a new client per request defeats pooling entirely"
+          ]
+        }
+      ]
+    }
+  ]
+}
